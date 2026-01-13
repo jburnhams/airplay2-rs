@@ -591,7 +591,6 @@ Each example should have a minimal stub that compiles but notes TODO.
 
 ```
 /target
-Cargo.lock
 *.swp
 *.swo
 .idea/

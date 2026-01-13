@@ -235,7 +235,7 @@ pub struct QueueItem {
 **File:** `src/types/state.rs`
 
 ```rust
-use super::track::TrackInfo;
+use super::track::{TrackInfo, QueueItem};
 
 /// Current playback state of a connected device
 #[derive(Debug, Clone, Default)]
@@ -256,7 +256,7 @@ pub struct PlaybackState {
     pub volume: f32,
 
     /// Current queue
-    pub queue: Vec<TrackInfo>,
+    pub queue: Vec<QueueItem>,
 
     /// Index of current track in queue
     pub queue_index: Option<usize>,
@@ -336,8 +336,7 @@ impl From<&PlaybackState> for PlaybackInfo {
             items: state
                 .queue
                 .iter()
-                .enumerate()
-                .map(|(i, t)| (t.clone(), i as i32))
+                .map(|item| (item.track.clone(), item.item_id))
                 .collect(),
         }
     }
