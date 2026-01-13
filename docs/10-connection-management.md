@@ -183,6 +183,7 @@ use crate::net::{TcpStream, AsyncReadExt, AsyncWriteExt, Runtime};
 
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::net::UdpSocket;
 
 /// Connection manager handles device connections
 pub struct ConnectionManager {
@@ -194,6 +195,8 @@ pub struct ConnectionManager {
     device: RwLock<Option<AirPlayDevice>>,
     /// TCP connection
     stream: Mutex<Option<TcpStream>>,
+    /// UDP sockets (audio, control, timing)
+    sockets: Mutex<Option<UdpSockets>>,
     /// RTSP session
     rtsp_session: Mutex<Option<RtspSession>>,
     /// RTSP codec
@@ -210,6 +213,16 @@ pub struct ConnectionManager {
     pairing_storage: Option<Box<dyn PairingStorage>>,
 }
 
+/// UDP sockets for streaming
+struct UdpSockets {
+    audio: UdpSocket,
+    control: UdpSocket,
+    timing: UdpSocket,
+    server_audio_port: u16,
+    server_control_port: u16,
+    server_timing_port: u16,
+}
+
 impl ConnectionManager {
     /// Create a new connection manager
     pub fn new(config: AirPlayConfig) -> Self {
@@ -220,6 +233,7 @@ impl ConnectionManager {
             state: RwLock::new(ConnectionState::Disconnected),
             device: RwLock::new(None),
             stream: Mutex::new(None),
+            sockets: Mutex::new(None),
             rtsp_session: Mutex::new(None),
             rtsp_codec: Mutex::new(RtspCodec::new()),
             session_keys: Mutex::new(None),
@@ -441,15 +455,148 @@ impl ConnectionManager {
         device: &AirPlayDevice,
         keys: &PairingKeys,
     ) -> Result<SessionKeys, AirPlayError> {
-        // TODO: Implement Pair-Verify
-        Err(AirPlayError::NotImplemented {
-            feature: "Pair-Verify".to_string(),
-        })
+        let mut pairing = PairVerify::new(keys.clone(), &keys.device_public_key)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
+
+        // M1: Start verification
+        let m1 = pairing.start().map_err(|e| AirPlayError::AuthenticationFailed {
+            message: e.to_string(),
+            recoverable: false,
+        })?;
+
+        let m2 = self.send_pairing_data(&m1, "/pair-verify").await?;
+
+        // M2 -> M3
+        let result = pairing.process_m2(&m2).map_err(|e| AirPlayError::AuthenticationFailed {
+            message: e.to_string(),
+            recoverable: false,
+        })?;
+
+        let m3 = match result {
+            crate::protocol::pairing::PairingStepResult::SendData(data) => data,
+            _ => return Err(AirPlayError::AuthenticationFailed {
+                message: "Unexpected pairing state".to_string(),
+                recoverable: false,
+            }),
+        };
+
+        let m4 = self.send_pairing_data(&m3, "/pair-verify").await?;
+
+        // M4 -> Complete
+        let result = pairing.process_m4(&m4).map_err(|e| AirPlayError::AuthenticationFailed {
+            message: e.to_string(),
+            recoverable: false,
+        })?;
+
+        match result {
+            crate::protocol::pairing::PairingStepResult::Complete(keys) => Ok(keys),
+            _ => Err(AirPlayError::AuthenticationFailed {
+                message: "Verification did not complete".to_string(),
+                recoverable: false,
+            }),
+        }
     }
 
     /// Setup RTSP session (SETUP command)
     async fn setup_session(&self) -> Result<(), AirPlayError> {
-        // TODO: Send SETUP request with transport parameters
+        // 1. Bind local UDP ports (0 = random port)
+        let audio_sock = UdpSocket::bind("0.0.0.0:0").await?;
+        let ctrl_sock = UdpSocket::bind("0.0.0.0:0").await?;
+        let time_sock = UdpSocket::bind("0.0.0.0:0").await?;
+
+        let audio_port = audio_sock.local_addr()?.port();
+        let ctrl_port = ctrl_sock.local_addr()?.port();
+        let time_port = time_sock.local_addr()?.port();
+
+        // 2. Create SETUP request with transport parameters
+        // Transport: RTP/AVP/UDP;unicast;mode=record;control_port=...;timing_port=...
+        let transport = format!(
+            "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={};timing_port={}",
+            ctrl_port, time_port
+        );
+
+        let request = {
+            let mut session = self.rtsp_session.lock().await;
+            let session = session.as_mut().ok_or(AirPlayError::InvalidState {
+                message: "No RTSP session".to_string(),
+                current_state: "None".to_string(),
+            })?;
+            session.setup_request(&transport)
+        };
+
+        // 3. Send request
+        let response = self.send_rtsp_request(&request).await?;
+
+        // 4. Update session state
+        {
+            let mut session = self.rtsp_session.lock().await;
+            let session = session.as_mut().unwrap();
+            session.process_response(Method::Setup, &response).map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(response.status.as_u16()),
+            })?;
+        }
+
+        // 5. Parse response transport header to get server ports
+        let transport_header = response.headers.get("Transport").ok_or(AirPlayError::RtspError {
+            message: "Missing Transport header in SETUP response".to_string(),
+            status_code: None,
+        })?;
+
+        // Parse server_port=X, control_port=Y, timing_port=Z
+        // This is a simplified parser - real one would use regex or split
+        let mut server_audio_port = 0;
+        let mut server_ctrl_port = 0;
+        let mut server_time_port = 0;
+
+        for part in transport_header.split(';') {
+            let kv: Vec<&str> = part.split('=').collect();
+            if kv.len() == 2 {
+                match kv[0].trim() {
+                    "server_port" => server_audio_port = kv[1].parse().unwrap_or(0),
+                    "control_port" => server_ctrl_port = kv[1].parse().unwrap_or(0),
+                    "timing_port" => server_time_port = kv[1].parse().unwrap_or(0),
+                    _ => {}
+                }
+            }
+        }
+
+        if server_audio_port == 0 {
+            return Err(AirPlayError::RtspError {
+                message: "Could not determine server audio port".to_string(),
+                status_code: None,
+            });
+        }
+
+        // 6. Connect UDP sockets to server ports
+        let device_ip = {
+            let device = self.device.read().await;
+            device.as_ref().unwrap().address
+        };
+
+        audio_sock.connect((device_ip, server_audio_port)).await?;
+        ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
+        time_sock.connect((device_ip, server_time_port)).await?;
+
+        *self.sockets.lock().await = Some(UdpSockets {
+            audio: audio_sock,
+            control: ctrl_sock,
+            timing: time_sock,
+            server_audio_port,
+            server_control_port: server_ctrl_port,
+            server_timing_port: server_time_port,
+        });
+
+        // 7. Send RECORD to start buffering
+        let record_request = {
+            let mut session = self.rtsp_session.lock().await;
+            session.as_mut().unwrap().record_request()
+        };
+        self.send_rtsp_request(&record_request).await?;
+
         Ok(())
     }
 
@@ -554,6 +701,7 @@ impl ConnectionManager {
 
         // Close connection
         *self.stream.lock().await = None;
+        *self.sockets.lock().await = None;
         *self.rtsp_session.lock().await = None;
         *self.session_keys.lock().await = None;
 

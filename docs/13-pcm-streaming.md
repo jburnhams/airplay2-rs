@@ -460,9 +460,8 @@ impl PcmStreamer {
     }
 
     /// Send an RTP packet
-    async fn send_packet(&self, _packet: &[u8]) -> Result<(), AirPlayError> {
-        // TODO: Send via UDP to device
-        // For now, this is a placeholder
+    async fn send_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        self.connection.send_rtp_audio(packet).await?;
         Ok(())
     }
 

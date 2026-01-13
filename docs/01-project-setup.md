@@ -78,6 +78,9 @@ curve25519-dalek = "4.1"
 # Serialization
 bytes = "1.9"
 
+# Audio processing
+rubato = "0.14"           # Audio resampling
+
 # Persistent storage (optional)
 sled = { version = "0.34", optional = true }
 
