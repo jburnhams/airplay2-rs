@@ -533,7 +533,10 @@ impl ConnectionManager {
         // 4. Update session state
         {
             let mut session = self.rtsp_session.lock().await;
-            let session = session.as_mut().unwrap();
+            let session = session.as_mut().ok_or(AirPlayError::InvalidState {
+                message: "No RTSP session".to_string(),
+                current_state: "None".to_string(),
+            })?;
             session.process_response(Method::Setup, &response).map_err(|e| AirPlayError::RtspError {
                 message: e,
                 status_code: Some(response.status.as_u16()),
@@ -553,12 +556,18 @@ impl ConnectionManager {
         let mut server_time_port = 0;
 
         for part in transport_header.split(';') {
-            let kv: Vec<&str> = part.split('=').collect();
-            if kv.len() == 2 {
-                match kv[0].trim() {
-                    "server_port" => server_audio_port = kv[1].parse().unwrap_or(0),
-                    "control_port" => server_ctrl_port = kv[1].parse().unwrap_or(0),
-                    "timing_port" => server_time_port = kv[1].parse().unwrap_or(0),
+            if let Some((key, value)) = part.trim().split_once('=') {
+                let port = value.parse::<u16>().map_err(|_|
+                    AirPlayError::RtspError {
+                        message: format!("Invalid port value for '{}': {}", key, value),
+                        status_code: None,
+                    }
+                )?;
+
+                match key {
+                    "server_port" => server_audio_port = port,
+                    "control_port" => server_ctrl_port = port,
+                    "timing_port" => server_time_port = port,
                     _ => {}
                 }
             }
@@ -577,9 +586,12 @@ impl ConnectionManager {
             device.as_ref()
                 .ok_or(AirPlayError::Disconnected {
                     device_name: "unknown".to_string()
-                })?
-                .address
-        };
+            let device_guard = self.device.read().await;
+            let device = device_guard.as_ref().ok_or(AirPlayError::InvalidState {
+                message: "Device information is missing.".to_string(),
+                current_state: format!("{:?}", self.state().await),
+            })?;
+            device.address
 
         audio_sock.connect((device_ip, server_audio_port)).await?;
         ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
@@ -601,9 +613,11 @@ impl ConnectionManager {
                 .ok_or(AirPlayError::InvalidState {
                     message: "No RTSP session".to_string(),
                     current_state: "None".to_string(),
-                })?
-                .record_request()
-        };
+            let mut session_guard = self.rtsp_session.lock().await;
+            session_guard.as_mut().ok_or(AirPlayError::InvalidState {
+                message: "No RTSP session".to_string(),
+                current_state: format!("{:?}", self.state().await),
+            })?.record_request()
         self.send_rtsp_request(&record_request).await?;
 
         Ok(())
