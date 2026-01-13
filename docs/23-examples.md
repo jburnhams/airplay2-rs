@@ -93,6 +93,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Playing: {}", url);
 
     player.play_track("Winning Sound", "Demo Artist").await?;
+    // Note: In real implementation, play_track sets metadata
+    // We need to actually load the URL via underlying client
+    // or extend play_track to take URL
 
     // Wait for user input to stop
     println!("\nPress Enter to stop...");
