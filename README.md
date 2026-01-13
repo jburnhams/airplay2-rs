@@ -34,7 +34,9 @@ use std::time::Duration;
 async fn main() -> Result<(), airplay2::AirPlayError> {
     // Quick connect to the first available device
     let player = quick_connect().await?;
-    println!("Connected to: {}", player.device().await.unwrap().name);
+    if let Some(device) = player.device().await {
+        println!("Connected to: {}", device.name);
+    }
 
     // Play a track from URL
     player.play_track(

@@ -324,9 +324,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // In a real implementation, you would now use the group ID
     // to stream audio to the leader device, which syncs with followers.
 
-    println!("Group created with {} members.",
-        manager.get_group(&group_id).await.unwrap().member_count()
-    );
+    if let Some(group) = manager.get_group(&group_id).await {
+        println!("Group created with {} members.", group.member_count());
+    } else {
+        println!("Group not found after creation.");
+    }
 
     Ok(())
 }
