@@ -290,21 +290,18 @@ All protocol implementations (RTSP, RTP, HomeKit pairing) follow the sans-IO pat
 ```rust
 // Protocol logic is pure, no I/O
 pub struct RtspCodec {
-    // internal state
+    // internal state (buffer, parser state)
 }
 
 impl RtspCodec {
     /// Encode a request into bytes (no I/O)
     pub fn encode_request(&self, request: &RtspRequest) -> Vec<u8>;
 
-    /// Decode bytes into a response (no I/O)
-    pub fn decode_response(&mut self, bytes: &[u8]) -> Result<Option<RtspResponse>, DecodeError>;
+    /// Feed received bytes into internal buffer (no I/O)
+    pub fn feed(&mut self, bytes: &[u8]);
 
-    /// Get bytes that need to be written (no I/O)
-    pub fn bytes_to_write(&self) -> &[u8];
-
-    /// Feed received bytes (no I/O)
-    pub fn feed_bytes(&mut self, bytes: &[u8]);
+    /// Try to decode a complete response from internal buffer (no I/O)
+    pub fn decode(&mut self) -> Result<Option<RtspResponse>, DecodeError>;
 }
 ```
 
@@ -329,11 +326,19 @@ impl<T: AsyncRead + AsyncWrite + Unpin> RtspConnection<T> {
         self.transport.write_all(&bytes).await?;
 
         loop {
-            let mut buf = [0u8; 4096];
-            let n = self.transport.read(&mut buf).await?;
-            if let Some(response) = self.codec.decode_response(&buf[..n])? {
+            // Check if we already have a response buffered
+            if let Some(response) = self.codec.decode()? {
                 return Ok(response);
             }
+
+            let mut buf = [0u8; 4096];
+            let n = self.transport.read(&mut buf).await?;
+
+            if n == 0 {
+                return Err(Error::ConnectionClosed);
+            }
+
+            self.codec.feed(&buf[..n]);
         }
     }
 }
