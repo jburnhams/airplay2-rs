@@ -574,7 +574,11 @@ impl ConnectionManager {
         // 6. Connect UDP sockets to server ports
         let device_ip = {
             let device = self.device.read().await;
-            device.as_ref().unwrap().address
+            device.as_ref()
+                .ok_or(AirPlayError::Disconnected {
+                    device_name: "unknown".to_string()
+                })?
+                .address
         };
 
         audio_sock.connect((device_ip, server_audio_port)).await?;
@@ -593,7 +597,12 @@ impl ConnectionManager {
         // 7. Send RECORD to start buffering
         let record_request = {
             let mut session = self.rtsp_session.lock().await;
-            session.as_mut().unwrap().record_request()
+            session.as_mut()
+                .ok_or(AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?
+                .record_request()
         };
         self.send_rtsp_request(&record_request).await?;
 
