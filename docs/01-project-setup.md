@@ -78,6 +78,9 @@ curve25519-dalek = "4.1"
 # Serialization
 bytes = "1.9"
 
+# Audio processing
+rubato = "0.14"           # Audio resampling
+
 # Persistent storage (optional)
 sled = { version = "0.34", optional = true }
 
@@ -588,7 +591,6 @@ Each example should have a minimal stub that compiles but notes TODO.
 
 ```
 /target
-Cargo.lock
 *.swp
 *.swo
 .idea/
