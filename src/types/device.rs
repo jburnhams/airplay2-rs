@@ -1,22 +1,22 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 
-/// Represents a discovered AirPlay 2 device on the network
+/// Represents a discovered `AirPlay` 2 device on the network
 #[derive(Debug, Clone, PartialEq)]
 pub struct AirPlayDevice {
     /// Unique device identifier (from TXT record)
     pub id: String,
 
-    /// Human-readable device name (e.g., "Living Room HomePod")
+    /// Human-readable device name (e.g., "Living Room `HomePod`")
     pub name: String,
 
-    /// Device model identifier (e.g., "AudioAccessory5,1" for HomePod Mini)
+    /// Device model identifier (e.g., "AudioAccessory5,1" for `HomePod` Mini)
     pub model: Option<String>,
 
     /// Resolved IP address
     pub address: IpAddr,
 
-    /// AirPlay service port
+    /// `AirPlay` service port
     pub port: u16,
 
     /// Device capabilities parsed from features flags
@@ -26,10 +26,11 @@ pub struct AirPlayDevice {
     pub(crate) txt_records: HashMap<String, String>,
 }
 
-/// Device capability flags parsed from AirPlay features
+/// Device capability flags parsed from `AirPlay` features
 #[derive(Debug, Clone, Default, PartialEq)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct DeviceCapabilities {
-    /// Supports AirPlay 2 protocol
+    /// Supports `AirPlay` 2 protocol
     pub airplay2: bool,
 
     /// Supports multi-room/grouped playback
@@ -50,7 +51,7 @@ pub struct DeviceCapabilities {
     /// Supports persistent pairing
     pub supports_persistent_pairing: bool,
 
-    /// Supports HomeKit pairing
+    /// Supports `HomeKit` pairing
     pub supports_homekit_pairing: bool,
 
     /// Supports transient pairing
@@ -61,7 +62,7 @@ pub struct DeviceCapabilities {
 }
 
 impl AirPlayDevice {
-    /// Check if this device supports AirPlay 2 features
+    /// Check if this device supports `AirPlay` 2 features
     #[must_use]
     pub fn supports_airplay2(&self) -> bool {
         self.capabilities.airplay2
@@ -81,7 +82,7 @@ impl AirPlayDevice {
 }
 
 impl DeviceCapabilities {
-    /// Parse capabilities from AirPlay features bitmask
+    /// Parse capabilities from `AirPlay` features bitmask
     ///
     /// Features are documented at:
     /// <https://emanuelecozzi.net/docs/airplay2/features>
@@ -110,7 +111,7 @@ mod tests {
     #[test]
     fn test_device_capabilities_from_features() {
         // Test known HomePod Mini features value
-        let features = 0x1C3_4040_5F8A_00;
+        let features = 0x0001_C340_405F_8A00;
         let caps = DeviceCapabilities::from_features(features);
 
         assert!(caps.supports_audio);

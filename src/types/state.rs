@@ -1,4 +1,4 @@
-use super::track::{TrackInfo, QueueItem};
+use super::track::{QueueItem, TrackInfo};
 
 /// Current playback state of a connected device
 #[derive(Debug, Clone, Default)]
@@ -77,7 +77,7 @@ pub struct PlaybackInfo {
     /// Whether currently playing
     pub is_playing: bool,
 
-    /// Queue items with unique IDs: (track, item_id)
+    /// Queue items with unique IDs: (track, `item_id`)
     pub items: Vec<(TrackInfo, i32)>,
 }
 
@@ -85,7 +85,13 @@ impl From<&PlaybackState> for PlaybackInfo {
     fn from(state: &PlaybackState) -> Self {
         Self {
             current_track: state.current_track.clone(),
-            index: state.queue_index.map_or(0, |i| i as u32),
+            // Queue index is likely small enough to fit in u32
+            index: state
+                .queue_index
+                .and_then(|i| u32::try_from(i).ok())
+                .unwrap_or(0),
+            // Position is in seconds, convert to ms. u32 holds ~1193 hours of ms.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             position_ms: (state.position_secs * 1000.0) as u32,
             is_playing: state.is_playing,
             items: state
@@ -106,15 +112,17 @@ mod tests {
         let state = PlaybackState::default();
         assert!(!state.is_playing);
         assert!(state.current_track.is_none());
-        assert_eq!(state.volume, 0.0);
+        assert!((state.volume - 0.0).abs() < f32::EPSILON);
         assert_eq!(state.repeat, RepeatMode::Off);
     }
 
     #[test]
     fn test_playback_info_from_state() {
-        let mut state = PlaybackState::default();
-        state.position_secs = 30.5;
-        state.is_playing = true;
+        let state = PlaybackState {
+            position_secs: 30.5,
+            is_playing: true,
+            ..Default::default()
+        };
 
         let info = PlaybackInfo::from(&state);
 

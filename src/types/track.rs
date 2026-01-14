@@ -33,8 +33,12 @@ pub struct TrackInfo {
 }
 
 impl TrackInfo {
-    /// Create a new TrackInfo with required fields
-    pub fn new(url: impl Into<String>, title: impl Into<String>, artist: impl Into<String>) -> Self {
+    /// Create a new `TrackInfo` with required fields
+    pub fn new(
+        url: impl Into<String>,
+        title: impl Into<String>,
+        artist: impl Into<String>,
+    ) -> Self {
         Self {
             url: url.into(),
             title: title.into(),
@@ -81,13 +85,9 @@ mod tests {
 
     #[test]
     fn test_track_info_builder() {
-        let track = TrackInfo::new(
-            "http://example.com/track.mp3",
-            "Test Track",
-            "Test Artist",
-        )
-        .with_album("Test Album")
-        .with_duration(180.5);
+        let track = TrackInfo::new("http://example.com/track.mp3", "Test Track", "Test Artist")
+            .with_album("Test Album")
+            .with_duration(180.5);
 
         assert_eq!(track.title, "Test Track");
         assert_eq!(track.album, Some("Test Album".to_string()));

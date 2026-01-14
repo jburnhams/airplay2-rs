@@ -1,12 +1,10 @@
-//! Error types
 use std::io;
 use thiserror::Error;
 
-/// Errors that can occur during AirPlay operations
+/// Errors that can occur during `AirPlay` operations
 #[derive(Debug, Error)]
 pub enum AirPlayError {
     // ===== Discovery Errors =====
-
     /// Device was not found during discovery
     #[error("device not found: {device_id}")]
     DeviceNotFound {
@@ -25,7 +23,6 @@ pub enum AirPlayError {
     },
 
     // ===== Connection Errors =====
-
     /// Failed to establish connection to device
     #[error("connection failed to {device_name}: {message}")]
     ConnectionFailed {
@@ -53,7 +50,6 @@ pub enum AirPlayError {
     },
 
     // ===== Authentication Errors =====
-
     /// Pairing/authentication failed
     #[error("authentication failed: {message}")]
     AuthenticationFailed {
@@ -78,7 +74,6 @@ pub enum AirPlayError {
     },
 
     // ===== Protocol Errors =====
-
     /// RTSP protocol error
     #[error("RTSP error: {message}")]
     RtspError {
@@ -112,7 +107,6 @@ pub enum AirPlayError {
     },
 
     // ===== Playback Errors =====
-
     /// Playback error from device
     #[error("playback error: {message}")]
     PlaybackError {
@@ -153,7 +147,6 @@ pub enum AirPlayError {
     },
 
     // ===== I/O Errors =====
-
     /// Network I/O error
     #[error("network error: {0}")]
     NetworkError(#[from] io::Error),
@@ -163,7 +156,6 @@ pub enum AirPlayError {
     Timeout,
 
     // ===== State Errors =====
-
     /// Operation not valid in current state
     #[error("invalid state: {message}")]
     InvalidState {
@@ -178,7 +170,6 @@ pub enum AirPlayError {
     DeviceBusy,
 
     // ===== Internal Errors =====
-
     /// Internal library error
     #[error("internal error: {message}")]
     InternalError {
@@ -219,7 +210,7 @@ impl AirPlayError {
     }
 }
 
-/// Result type alias for AirPlay operations
+/// Result type alias for `AirPlay` operations
 pub type Result<T> = std::result::Result<T, AirPlayError>;
 
 #[cfg(test)]

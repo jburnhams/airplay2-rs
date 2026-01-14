@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-/// Configuration for AirPlay client behavior
+/// Configuration for `AirPlay` client behavior
 #[derive(Debug, Clone)]
 pub struct AirPlayConfig {
     /// Timeout for device discovery scan (default: 5 seconds)
@@ -51,7 +51,7 @@ impl AirPlayConfig {
     }
 }
 
-/// Builder for AirPlayConfig
+/// Builder for `AirPlayConfig`
 #[derive(Debug, Clone, Default)]
 pub struct AirPlayConfigBuilder {
     config: AirPlayConfig,
