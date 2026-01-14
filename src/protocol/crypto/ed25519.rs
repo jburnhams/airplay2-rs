@@ -1,4 +1,4 @@
-use super::{lengths, CryptoError};
+use super::{CryptoError, lengths};
 use ed25519_dalek::{Signer, Verifier};
 
 /// Ed25519 key pair for signing

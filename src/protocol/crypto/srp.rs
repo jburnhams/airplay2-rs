@@ -46,13 +46,12 @@ impl SrpClient {
         salt: &[u8],
         server_public: &[u8],
     ) -> Result<SrpVerifier, CryptoError> {
-        let verifier = self.inner
+        let verifier = self
+            .inner
             .process_reply(username, password, salt, server_public, &self.private_key)
             .map_err(|e| CryptoError::SrpError(format!("{e:?}")))?;
 
-        Ok(SrpVerifier {
-            inner: verifier,
-        })
+        Ok(SrpVerifier { inner: verifier })
     }
 }
 
@@ -66,8 +65,10 @@ impl SrpVerifier {
     }
 
     pub fn verify_server(&self, server_proof: &[u8]) -> Result<SessionKey, CryptoError> {
-        let key = self.inner.verify_server(server_proof)
-             .map_err(|e| CryptoError::SrpError(format!("{e:?}")))?;
+        let key = self
+            .inner
+            .verify_server(server_proof)
+            .map_err(|e| CryptoError::SrpError(format!("{e:?}")))?;
 
         Ok(SessionKey { key: key.to_vec() })
     }
