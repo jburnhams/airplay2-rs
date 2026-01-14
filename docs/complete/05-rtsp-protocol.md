@@ -29,7 +29,7 @@ The AirPlay variant of RTSP extends standard RTSP with:
 
 ### 5.1 RTSP Types
 
-- [ ] **5.1.1** Define RTSP method enum
+- [x] **5.1.1** Define RTSP method enum
 
 **File:** `src/protocol/rtsp/mod.rs`
 
@@ -113,7 +113,7 @@ impl Method {
 }
 ```
 
-- [ ] **5.1.2** Define RTSP headers container
+- [x] **5.1.2** Define RTSP headers container
 
 **File:** `src/protocol/rtsp/headers.rs`
 
@@ -216,7 +216,7 @@ impl FromIterator<(String, String)> for Headers {
 
 ### 5.2 RTSP Request
 
-- [ ] **5.2.1** Implement RTSP request structure
+- [x] **5.2.1** Implement RTSP request structure
 
 **File:** `src/protocol/rtsp/request.rs`
 
@@ -356,7 +356,7 @@ impl RtspRequestBuilder {
 
 ### 5.3 RTSP Response
 
-- [ ] **5.3.1** Implement RTSP response structure
+- [x] **5.3.1** Implement RTSP response structure
 
 **File:** `src/protocol/rtsp/response.rs`
 
@@ -448,7 +448,7 @@ impl RtspResponse {
 
 ### 5.4 Sans-IO Codec
 
-- [ ] **5.4.1** Implement the RTSP codec for encoding/decoding
+- [x] **5.4.1** Implement the RTSP codec for encoding/decoding
 
 **File:** `src/protocol/rtsp/codec.rs`
 
@@ -710,7 +710,7 @@ impl Default for RtspCodec {
 
 ### 5.5 Session State Machine
 
-- [ ] **5.5.1** Implement RTSP session state management
+- [x] **5.5.1** Implement RTSP session state management
 
 **File:** `src/protocol/rtsp/session.rs`
 
@@ -1222,16 +1222,16 @@ fn test_full_session_flow() {
 
 ## Acceptance Criteria
 
-- [ ] RTSP request encoding produces valid protocol messages
-- [ ] RTSP response decoder handles all status codes
-- [ ] Incremental parsing works correctly
-- [ ] Session state machine transitions correctly
-- [ ] CSeq numbering is sequential
-- [ ] Session ID extraction works with timeout suffix
-- [ ] Common AirPlay headers are included
-- [ ] Binary plist bodies are supported
-- [ ] All unit tests pass
-- [ ] Integration tests with real message patterns pass
+- [x] RTSP request encoding produces valid protocol messages
+- [x] RTSP response decoder handles all status codes
+- [x] Incremental parsing works correctly
+- [x] Session state machine transitions correctly
+- [x] CSeq numbering is sequential
+- [x] Session ID extraction works with timeout suffix
+- [x] Common AirPlay headers are included
+- [x] Binary plist bodies are supported
+- [x] All unit tests pass
+- [x] Integration tests with real message patterns pass
 
 ---
 
