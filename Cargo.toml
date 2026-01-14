@@ -14,14 +14,12 @@ readme = "README.md"
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio", "tokio-util"]
-async-std-runtime = ["async-std"]
 persistent-pairing = ["sled"]
 
 [dependencies]
 # Async
 tokio = { version = "1.43", features = ["net", "sync", "time", "rt", "macros"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
-async-std = { version = "1.13", optional = true }
 async-trait = "0.1"
 futures = "0.3"
 
