@@ -27,7 +27,7 @@ While the `plist` crate exists, we implement a focused subset because:
 
 ### 3.1 Plist Value Types
 
-- [ ] **3.1.1** Define `PlistValue` enum
+- [x] **3.1.1** Define `PlistValue` enum
 
 **File:** `src/protocol/plist/mod.rs`
 
@@ -151,7 +151,7 @@ impl PlistValue {
 }
 ```
 
-- [ ] **3.1.2** Implement `From` conversions for common types
+- [x] **3.1.2** Implement `From` conversions for common types
 
 **File:** `src/protocol/plist/mod.rs`
 
@@ -221,7 +221,7 @@ impl<K: Into<String>, V: Into<PlistValue>> FromIterator<(K, V)> for PlistValue {
 }
 ```
 
-- [ ] **3.1.3** Implement dictionary builder for convenient construction
+- [x] **3.1.3** Implement dictionary builder for convenient construction
 
 **File:** `src/protocol/plist/mod.rs`
 
@@ -277,7 +277,7 @@ macro_rules! plist_dict {
 
 ### 3.2 Binary Plist Decoder
 
-- [ ] **3.2.1** Implement decoder error types
+- [x] **3.2.1** Implement decoder error types
 
 **File:** `src/protocol/plist/decode.rs`
 
@@ -316,7 +316,7 @@ pub enum PlistDecodeError {
 }
 ```
 
-- [ ] **3.2.2** Implement trailer parsing
+- [x] **3.2.2** Implement trailer parsing
 
 **File:** `src/protocol/plist/decode.rs`
 
@@ -364,7 +364,7 @@ impl Trailer {
 }
 ```
 
-- [ ] **3.2.3** Implement main decoder
+- [x] **3.2.3** Implement main decoder
 
 **File:** `src/protocol/plist/decode.rs`
 
@@ -497,13 +497,13 @@ impl<'a> Decoder<'a> {
 }
 ```
 
-- [ ] **3.2.4** Implement each decode method (singleton, integer, real, etc.)
+- [x] **3.2.4** Implement each decode method (singleton, integer, real, etc.)
 
 ---
 
 ### 3.3 Binary Plist Encoder
 
-- [ ] **3.3.1** Implement encoder error types
+- [x] **3.3.1** Implement encoder error types
 
 **File:** `src/protocol/plist/encode.rs`
 
@@ -524,7 +524,7 @@ pub enum PlistEncodeError {
 }
 ```
 
-- [ ] **3.3.2** Implement encoder structure
+- [x] **3.3.2** Implement encoder structure
 
 **File:** `src/protocol/plist/encode.rs`
 
@@ -637,13 +637,13 @@ impl Encoder {
 }
 ```
 
-- [ ] **3.3.3** Implement each encode method
+- [x] **3.3.3** Implement each encode method
 
 ---
 
 ### 3.4 AirPlay-Specific Helpers
 
-- [ ] **3.4.1** Implement track info serialization
+- [x] **3.4.1** Implement track info serialization
 
 **File:** `src/protocol/plist/airplay.rs`
 
@@ -1018,15 +1018,15 @@ fn test_decode_airplay_status_response() {
 
 ## Acceptance Criteria
 
-- [ ] Decoder handles all plist types used by AirPlay
-- [ ] Encoder produces valid binary plist output
-- [ ] Round-trip encode/decode preserves all data
-- [ ] Decoder rejects malformed input with clear errors
-- [ ] Circular reference detection works
-- [ ] Unicode strings handled correctly (UTF-8 and UTF-16)
-- [ ] Large integers (64-bit) work correctly
+- [x] Decoder handles all plist types used by AirPlay
+- [x] Encoder produces valid binary plist output
+- [x] Round-trip encode/decode preserves all data
+- [x] Decoder rejects malformed input with clear errors
+- [x] Circular reference detection works
+- [x] Unicode strings handled correctly (UTF-8 and UTF-16)
+- [x] Large integers (64-bit) work correctly
 - [ ] Performance: Decode 10KB plist in < 1ms
-- [ ] All unit tests pass
+- [x] All unit tests pass
 - [ ] Integration tests with captured AirPlay data pass
 
 ---
