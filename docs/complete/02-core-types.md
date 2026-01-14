@@ -21,7 +21,7 @@ This section defines the foundational types used throughout the library: device 
 
 ### 2.1 Device Types
 
-- [ ] **2.1.1** Implement `AirPlayDevice` struct
+- [x] **2.1.1** Implement `AirPlayDevice` struct
 
 **File:** `src/types/device.rs`
 
@@ -108,7 +108,7 @@ impl AirPlayDevice {
 }
 ```
 
-- [ ] **2.1.2** Implement `DeviceCapabilities` parsing from features flags
+- [x] **2.1.2** Implement `DeviceCapabilities` parsing from features flags
 
 **Method in:** `src/types/device.rs`
 
@@ -140,7 +140,7 @@ impl DeviceCapabilities {
 
 ### 2.2 Track and Queue Types
 
-- [ ] **2.2.1** Implement `TrackInfo` struct
+- [x] **2.2.1** Implement `TrackInfo` struct
 
 **File:** `src/types/track.rs`
 
@@ -210,7 +210,7 @@ impl TrackInfo {
 }
 ```
 
-- [ ] **2.2.2** Implement `QueueItem` for internal queue tracking
+- [x] **2.2.2** Implement `QueueItem` for internal queue tracking
 
 **File:** `src/types/track.rs`
 
@@ -230,7 +230,7 @@ pub struct QueueItem {
 
 ### 2.3 Playback State Types
 
-- [ ] **2.3.1** Implement `PlaybackState` struct
+- [x] **2.3.1** Implement `PlaybackState` struct
 
 **File:** `src/types/state.rs`
 
@@ -300,7 +300,7 @@ pub enum ConnectionState {
 }
 ```
 
-- [ ] **2.3.2** Implement `PlaybackInfo` for high-level API
+- [x] **2.3.2** Implement `PlaybackInfo` for high-level API
 
 **File:** `src/types/state.rs`
 
@@ -347,7 +347,7 @@ impl From<&PlaybackState> for PlaybackInfo {
 
 ### 2.4 Configuration
 
-- [ ] **2.4.1** Implement `AirPlayConfig` struct
+- [x] **2.4.1** Implement `AirPlayConfig` struct
 
 **File:** `src/types/config.rs`
 
@@ -405,7 +405,7 @@ impl AirPlayConfig {
 }
 ```
 
-- [ ] **2.4.2** Implement `AirPlayConfigBuilder`
+- [x] **2.4.2** Implement `AirPlayConfigBuilder`
 
 **File:** `src/types/config.rs`
 
@@ -458,7 +458,7 @@ impl AirPlayConfigBuilder {
 
 ### 2.5 Error Types
 
-- [ ] **2.5.1** Implement comprehensive `AirPlayError` enum
+- [x] **2.5.1** Implement comprehensive `AirPlayError` enum
 
 **File:** `src/error.rs`
 
@@ -661,7 +661,7 @@ pub type Result<T> = std::result::Result<T, AirPlayError>;
 
 ### 2.6 Module Organization
 
-- [ ] **2.6.1** Create types module entry point
+- [x] **2.6.1** Create types module entry point
 
 **File:** `src/types/mod.rs`
 
@@ -890,15 +890,15 @@ fn test_track_info_roundtrip() {
 
 ## Acceptance Criteria
 
-- [ ] All type structs compile and have proper derives
-- [ ] All types that should be `Send + Sync` are verified
-- [ ] `AirPlayError` covers all known error cases
-- [ ] `AirPlayError::is_recoverable()` correctly identifies retryable errors
-- [ ] `AirPlayConfig` has sensible defaults
-- [ ] Builder patterns work correctly
-- [ ] All unit tests pass
-- [ ] Documentation examples compile
-- [ ] `cargo doc` generates clean documentation for all types
+- [x] All type structs compile and have proper derives
+- [x] All types that should be `Send + Sync` are verified
+- [x] `AirPlayError` covers all known error cases
+- [x] `AirPlayError::is_recoverable()` correctly identifies retryable errors
+- [x] `AirPlayConfig` has sensible defaults
+- [x] Builder patterns work correctly
+- [x] All unit tests pass
+- [x] Documentation examples compile
+- [x] `cargo doc` generates clean documentation for all types
 
 ---
 
