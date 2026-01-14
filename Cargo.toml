@@ -44,6 +44,8 @@ hkdf = "0.12"
 sha2 = "0.10"
 rand = "0.8"
 curve25519-dalek = "4.1"
+sha2_011 = { package = "sha2", version = "0.11.0-rc.3" }
+zeroize = "1.8"
 
 # Serialization
 bytes = "1.9"
