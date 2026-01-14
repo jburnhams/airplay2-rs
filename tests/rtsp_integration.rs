@@ -43,9 +43,7 @@ fn test_full_session_flow() {
     assert!(record_str.contains("Session: DEADBEEF"));
 
     codec.reset();
-    codec
-        .feed(b"RTSP/1.0 200 OK\r\nCSeq: 3\r\n\r\n")
-        .unwrap();
+    codec.feed(b"RTSP/1.0 200 OK\r\nCSeq: 3\r\n\r\n").unwrap();
     let response = codec.decode().unwrap().unwrap();
     session.process_response(Method::Record, &response).unwrap();
 
@@ -57,9 +55,7 @@ fn test_full_session_flow() {
     assert!(!set_param.encode().is_empty());
 
     codec.reset();
-    codec
-        .feed(b"RTSP/1.0 200 OK\r\nCSeq: 4\r\n\r\n")
-        .unwrap();
+    codec.feed(b"RTSP/1.0 200 OK\r\nCSeq: 4\r\n\r\n").unwrap();
     let response = codec.decode().unwrap().unwrap();
     session
         .process_response(Method::SetParameter, &response)
@@ -72,9 +68,7 @@ fn test_full_session_flow() {
     assert!(!teardown.encode().is_empty());
 
     codec.reset();
-    codec
-        .feed(b"RTSP/1.0 200 OK\r\nCSeq: 5\r\n\r\n")
-        .unwrap();
+    codec.feed(b"RTSP/1.0 200 OK\r\nCSeq: 5\r\n\r\n").unwrap();
     let response = codec.decode().unwrap().unwrap();
     session
         .process_response(Method::Teardown, &response)

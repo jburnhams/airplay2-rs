@@ -60,7 +60,6 @@ impl Method {
             Method::Post => "POST",
         }
     }
-
 }
 
 impl std::str::FromStr for Method {
