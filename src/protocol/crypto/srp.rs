@@ -22,17 +22,17 @@ impl SrpClient {
             .try_fill_bytes(&mut private_key)
             .map_err(|_| CryptoError::RngError)?;
 
-        Self::with_private_key(&private_key)
+        Ok(Self::with_private_key(&private_key))
     }
 
-    pub fn with_private_key(private_key: &[u8]) -> Result<Self, CryptoError> {
+    pub fn with_private_key(private_key: &[u8]) -> SrpClient {
         let inner = srp::Client::new();
         let public_key = inner.compute_public_ephemeral(private_key);
-        Ok(Self {
+        Self {
             inner,
             private_key: private_key.to_vec(),
-            public_key: public_key.to_vec(),
-        })
+            public_key: public_key.clone(),
+        }
     }
 
     pub fn public_key(&self) -> &[u8] {
@@ -48,7 +48,7 @@ impl SrpClient {
     ) -> Result<SrpVerifier, CryptoError> {
         let verifier = self.inner
             .process_reply(username, password, salt, server_public, &self.private_key)
-            .map_err(|e| CryptoError::SrpError(format!("{:?}", e)))?;
+            .map_err(|e| CryptoError::SrpError(format!("{e:?}")))?;
 
         Ok(SrpVerifier {
             inner: verifier,
@@ -67,7 +67,7 @@ impl SrpVerifier {
 
     pub fn verify_server(&self, server_proof: &[u8]) -> Result<SessionKey, CryptoError> {
         let key = self.inner.verify_server(server_proof)
-             .map_err(|e| CryptoError::SrpError(format!("{:?}", e)))?;
+             .map_err(|e| CryptoError::SrpError(format!("{e:?}")))?;
 
         Ok(SessionKey { key: key.to_vec() })
     }

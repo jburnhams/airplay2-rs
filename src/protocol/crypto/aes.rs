@@ -1,4 +1,4 @@
-use super::{lengths, CryptoError};
+use super::{CryptoError, lengths};
 use aes::Aes128;
 use ctr::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
 
@@ -25,8 +25,8 @@ impl Aes128Ctr {
             });
         }
 
-        let cipher = Aes128CtrImpl::new_from_slices(key, iv)
-            .map_err(|_| CryptoError::InvalidKeyLength {
+        let cipher =
+            Aes128CtrImpl::new_from_slices(key, iv).map_err(|_| CryptoError::InvalidKeyLength {
                 expected: 16,
                 actual: key.len(),
             })?;
@@ -69,8 +69,8 @@ impl Aes128Gcm {
             });
         }
 
-        let cipher = aes_gcm::Aes128Gcm::new_from_slice(key)
-            .map_err(|_| CryptoError::InvalidKeyLength {
+        let cipher =
+            aes_gcm::Aes128Gcm::new_from_slice(key).map_err(|_| CryptoError::InvalidKeyLength {
                 expected: 16,
                 actual: key.len(),
             })?;

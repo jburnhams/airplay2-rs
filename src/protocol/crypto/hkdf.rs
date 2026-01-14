@@ -51,9 +51,9 @@ pub fn derive_key(
     HkdfSha512::new(salt, ikm).expand(info, length)
 }
 
-/// Derive AirPlay session keys from shared secret
+/// Derive `AirPlay` session keys from shared secret
 ///
-/// AirPlay uses specific info strings for different keys
+/// `AirPlay` uses specific info strings for different keys
 pub struct AirPlayKeys {
     /// Key for encrypting messages to device
     pub output_key: [u8; 32],

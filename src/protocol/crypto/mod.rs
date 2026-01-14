@@ -1,4 +1,4 @@
-//! Cryptographic primitives for AirPlay authentication and encryption
+//! Cryptographic primitives for `AirPlay` authentication and encryption
 
 #![allow(dead_code)]
 #![allow(unused_imports)]

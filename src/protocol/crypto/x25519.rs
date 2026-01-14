@@ -1,4 +1,4 @@
-use super::{lengths, CryptoError};
+use super::{CryptoError, lengths};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 /// X25519 key pair for Diffie-Hellman key exchange

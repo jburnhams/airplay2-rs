@@ -8,10 +8,10 @@ pub struct Ed25519KeyPair {
 
 impl Ed25519KeyPair {
     /// Generate a new random key pair
-    pub fn generate() -> Result<Self, CryptoError> {
+    pub fn generate() -> Self {
         use rand::rngs::OsRng;
         let signing_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        Ok(Self { signing_key })
+        Self { signing_key }
     }
 
     /// Create key pair from secret key bytes (32 bytes)
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn test_keypair_generation() {
-        let kp = Ed25519KeyPair::generate().unwrap();
+        let kp = Ed25519KeyPair::generate();
         let pk = kp.public_key();
 
         assert_eq!(pk.as_bytes().len(), 32);
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_keypair_from_bytes() {
-        let kp1 = Ed25519KeyPair::generate().unwrap();
+        let kp1 = Ed25519KeyPair::generate();
         let secret = kp1.secret_bytes();
 
         let kp2 = Ed25519KeyPair::from_bytes(&secret).unwrap();
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_sign_verify() {
-        let kp = Ed25519KeyPair::generate().unwrap();
+        let kp = Ed25519KeyPair::generate();
         let message = b"test message";
 
         let signature = kp.sign(message);
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_verify_wrong_message() {
-        let kp = Ed25519KeyPair::generate().unwrap();
+        let kp = Ed25519KeyPair::generate();
 
         let signature = kp.sign(b"original message");
         let result = kp.public_key().verify(b"different message", &signature);
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_signature_roundtrip() {
-        let kp = Ed25519KeyPair::generate().unwrap();
+        let kp = Ed25519KeyPair::generate();
         let signature = kp.sign(b"message");
 
         let bytes = signature.to_bytes();

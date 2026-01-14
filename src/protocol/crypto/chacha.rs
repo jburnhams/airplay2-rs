@@ -1,7 +1,7 @@
-use super::{lengths, CryptoError};
+use super::{CryptoError, lengths};
 use chacha20poly1305::{
-    aead::{Aead, KeyInit},
     ChaCha20Poly1305 as ChaChaImpl, Nonce as ChaChaNonce,
+    aead::{Aead, KeyInit},
 };
 
 /// 12-byte nonce for ChaCha20-Poly1305
@@ -50,8 +50,8 @@ impl ChaCha20Poly1305Cipher {
             });
         }
 
-        let cipher = ChaChaImpl::new_from_slice(key)
-            .map_err(|_| CryptoError::InvalidKeyLength {
+        let cipher =
+            ChaChaImpl::new_from_slice(key).map_err(|_| CryptoError::InvalidKeyLength {
                 expected: 32,
                 actual: key.len(),
             })?;
