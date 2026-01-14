@@ -75,7 +75,7 @@ impl Trailer {
     }
 }
 
-/// Decode binary plist data into a PlistValue
+/// Decode binary plist data into a `PlistValue`
 pub fn decode(data: &[u8]) -> Result<PlistValue, PlistDecodeError> {
     // Check magic header
     if data.len() < 8 {
@@ -116,22 +116,25 @@ impl<'a> Decoder<'a> {
     }
 
     fn parse_offset_table(data: &[u8], trailer: &Trailer) -> Result<Vec<u64>, PlistDecodeError> {
-        let start = trailer.offset_table_offset as usize;
+        let start = usize::try_from(trailer.offset_table_offset)
+            .map_err(|_| PlistDecodeError::InvalidTrailer)?;
         let entry_size = trailer.offset_size as usize;
-        let count = trailer.num_objects as usize;
+        let count =
+            usize::try_from(trailer.num_objects).map_err(|_| PlistDecodeError::InvalidTrailer)?;
 
         if start + count * entry_size > data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: start + count * entry_size, have: data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: start + count * entry_size,
+                have: data.len(),
+            });
         }
 
         let mut offsets = Vec::with_capacity(count);
 
         for i in 0..count {
             let offset_start = start + i * entry_size;
-            let offset = Self::read_sized_int(
-                &data[offset_start..offset_start + entry_size],
-                entry_size,
-            )?;
+            let offset =
+                Self::read_sized_int(&data[offset_start..offset_start + entry_size], entry_size)?;
             offsets.push(offset);
         }
 
@@ -140,9 +143,9 @@ impl<'a> Decoder<'a> {
 
     fn read_sized_int(data: &[u8], size: usize) -> Result<u64, PlistDecodeError> {
         match size {
-            1 => Ok(data[0] as u64),
-            2 => Ok(u16::from_be_bytes(data[..2].try_into().unwrap()) as u64),
-            4 => Ok(u32::from_be_bytes(data[..4].try_into().unwrap()) as u64),
+            1 => Ok(u64::from(data[0])),
+            2 => Ok(u64::from(u16::from_be_bytes(data[..2].try_into().unwrap()))),
+            4 => Ok(u64::from(u32::from_be_bytes(data[..4].try_into().unwrap()))),
             8 => Ok(u64::from_be_bytes(data[..8].try_into().unwrap())),
             _ => Err(PlistDecodeError::InvalidTrailer),
         }
@@ -158,12 +161,17 @@ impl<'a> Decoder<'a> {
             return Err(PlistDecodeError::CircularReference);
         }
 
-        let offset = *self.offset_table.get(index as usize)
+        let index_usize =
+            usize::try_from(index).map_err(|_| PlistDecodeError::InvalidOffset(index))?;
+        let offset = *self
+            .offset_table
+            .get(index_usize)
             .ok_or(PlistDecodeError::InvalidOffset(index))?;
 
+        #[allow(clippy::cast_possible_truncation)]
         let pos = offset as usize;
         if pos >= self.data.len() {
-             return Err(PlistDecodeError::InvalidOffset(offset));
+            return Err(PlistDecodeError::InvalidOffset(offset));
         }
         let marker = self.data[pos];
 
@@ -173,12 +181,17 @@ impl<'a> Decoder<'a> {
         Ok(value)
     }
 
-    fn decode_value(&self, marker: u8, pos: usize, seen: &mut HashSet<u64>) -> Result<PlistValue, PlistDecodeError> {
+    fn decode_value(
+        &self,
+        marker: u8,
+        pos: usize,
+        seen: &mut HashSet<u64>,
+    ) -> Result<PlistValue, PlistDecodeError> {
         let high_nibble = marker >> 4;
         let low_nibble = marker & 0x0F;
 
         match high_nibble {
-            0x0 => self.decode_singleton(low_nibble),
+            0x0 => Self::decode_singleton(low_nibble),
             0x1 => self.decode_integer(pos, low_nibble),
             0x2 => self.decode_real(pos, low_nibble),
             0x3 => self.decode_date(pos),
@@ -192,35 +205,45 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    fn decode_singleton(&self, nibble: u8) -> Result<PlistValue, PlistDecodeError> {
+    fn decode_singleton(nibble: u8) -> Result<PlistValue, PlistDecodeError> {
         match nibble {
-            0x0 => Ok(PlistValue::Data(vec![])),
+            0x0 | 0xF => Ok(PlistValue::Data(vec![])),
             0x8 => Ok(PlistValue::Boolean(false)),
             0x9 => Ok(PlistValue::Boolean(true)),
-            0xF => Ok(PlistValue::Data(vec![])),
-             _ => Err(PlistDecodeError::InvalidObjectMarker(nibble)),
+            _ => Err(PlistDecodeError::InvalidObjectMarker(nibble)),
         }
     }
 
     fn decode_integer(&self, pos: usize, size_exp: u8) -> Result<PlistValue, PlistDecodeError> {
         let bytes_len = 1 << size_exp;
         if pos + bytes_len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall { needed: pos + bytes_len, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: pos + bytes_len,
+                have: self.data.len(),
+            });
         }
         let int_bytes = &self.data[pos..pos + bytes_len];
 
         match bytes_len {
-            1 => Ok(PlistValue::Integer(int_bytes[0] as i8 as i64)),
-            2 => Ok(PlistValue::Integer(i16::from_be_bytes(int_bytes.try_into().unwrap()) as i64)),
-            4 => Ok(PlistValue::Integer(i32::from_be_bytes(int_bytes.try_into().unwrap()) as i64)),
-            8 => Ok(PlistValue::Integer(i64::from_be_bytes(int_bytes.try_into().unwrap()))),
+            #[allow(clippy::cast_possible_wrap)]
+            1 => Ok(PlistValue::Integer(i64::from(int_bytes[0] as i8))),
+            2 => Ok(PlistValue::Integer(i64::from(i16::from_be_bytes(
+                int_bytes.try_into().unwrap(),
+            )))),
+            4 => Ok(PlistValue::Integer(i64::from(i32::from_be_bytes(
+                int_bytes.try_into().unwrap(),
+            )))),
+            8 => Ok(PlistValue::Integer(i64::from_be_bytes(
+                int_bytes.try_into().unwrap(),
+            ))),
             16 => {
-                 let val = u128::from_be_bytes(int_bytes.try_into().unwrap());
-                 if val <= u64::MAX as u128 {
-                     Ok(PlistValue::UnsignedInteger(val as u64))
-                 } else {
-                     Err(PlistDecodeError::IntegerOverflow)
-                 }
+                let val = u128::from_be_bytes(int_bytes.try_into().unwrap());
+                if val <= u128::from(u64::MAX) {
+                    #[allow(clippy::cast_possible_truncation)]
+                    Ok(PlistValue::UnsignedInteger(val as u64))
+                } else {
+                    Err(PlistDecodeError::IntegerOverflow)
+                }
             }
             _ => Err(PlistDecodeError::IntegerOverflow),
         }
@@ -229,20 +252,32 @@ impl<'a> Decoder<'a> {
     fn decode_real(&self, pos: usize, size_exp: u8) -> Result<PlistValue, PlistDecodeError> {
         let bytes_len = 1 << size_exp;
         if pos + bytes_len > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: pos + bytes_len, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: pos + bytes_len,
+                have: self.data.len(),
+            });
         }
         let real_bytes = &self.data[pos..pos + bytes_len];
 
         match bytes_len {
-            4 => Ok(PlistValue::Real(f32::from_be_bytes(real_bytes.try_into().unwrap()) as f64)),
-            8 => Ok(PlistValue::Real(f64::from_be_bytes(real_bytes.try_into().unwrap()))),
-            _ => Err(PlistDecodeError::UnsupportedType("Real size not 4 or 8".into())),
+            4 => Ok(PlistValue::Real(f64::from(f32::from_be_bytes(
+                real_bytes.try_into().unwrap(),
+            )))),
+            8 => Ok(PlistValue::Real(f64::from_be_bytes(
+                real_bytes.try_into().unwrap(),
+            ))),
+            _ => Err(PlistDecodeError::UnsupportedType(
+                "Real size not 4 or 8".into(),
+            )),
         }
     }
 
     fn decode_date(&self, pos: usize) -> Result<PlistValue, PlistDecodeError> {
         if pos + 8 > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: pos + 8, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: pos + 8,
+                have: self.data.len(),
+            });
         }
         let date_bytes = &self.data[pos..pos + 8];
         let val = f64::from_be_bytes(date_bytes.try_into().unwrap());
@@ -250,33 +285,44 @@ impl<'a> Decoder<'a> {
     }
 
     fn decode_size(&self, pos: usize, nibble: u8) -> Result<(usize, usize), PlistDecodeError> {
-        if nibble != 0xF {
-            Ok((nibble as usize, pos))
+        if nibble == 0xF {
+            if pos >= self.data.len() {
+                return Err(PlistDecodeError::BufferTooSmall {
+                    needed: pos + 1,
+                    have: self.data.len(),
+                });
+            }
+            let marker = self.data[pos];
+            let next_nibble = marker & 0x0F;
+            if (marker >> 4) != 0x1 {
+                return Err(PlistDecodeError::InvalidObjectMarker(marker));
+            }
+            let size_exp = next_nibble;
+            let bytes_len = 1 << size_exp;
+
+            if pos + 1 + bytes_len > self.data.len() {
+                return Err(PlistDecodeError::BufferTooSmall {
+                    needed: pos + 1 + bytes_len,
+                    have: self.data.len(),
+                });
+            }
+
+            let int_val = match bytes_len {
+                1 => u64::from(self.data[pos + 1]),
+                2 => u64::from(u16::from_be_bytes(
+                    self.data[pos + 1..pos + 1 + 2].try_into().unwrap(),
+                )),
+                4 => u64::from(u32::from_be_bytes(
+                    self.data[pos + 1..pos + 1 + 4].try_into().unwrap(),
+                )),
+                8 => u64::from_be_bytes(self.data[pos + 1..pos + 1 + 8].try_into().unwrap()),
+                _ => return Err(PlistDecodeError::IntegerOverflow),
+            };
+
+            #[allow(clippy::cast_possible_truncation)]
+            Ok((int_val as usize, pos + 1 + bytes_len))
         } else {
-             if pos >= self.data.len() {
-                 return Err(PlistDecodeError::BufferTooSmall { needed: pos + 1, have: self.data.len() });
-             }
-             let marker = self.data[pos];
-             let next_nibble = marker & 0x0F;
-             if (marker >> 4) != 0x1 {
-                 return Err(PlistDecodeError::InvalidObjectMarker(marker));
-             }
-             let size_exp = next_nibble;
-             let bytes_len = 1 << size_exp;
-
-             if pos + 1 + bytes_len > self.data.len() {
-                 return Err(PlistDecodeError::BufferTooSmall { needed: pos + 1 + bytes_len, have: self.data.len() });
-             }
-
-             let int_val = match bytes_len {
-                 1 => self.data[pos+1] as u64,
-                 2 => u16::from_be_bytes(self.data[pos+1..pos+1+2].try_into().unwrap()) as u64,
-                 4 => u32::from_be_bytes(self.data[pos+1..pos+1+4].try_into().unwrap()) as u64,
-                 8 => u64::from_be_bytes(self.data[pos+1..pos+1+8].try_into().unwrap()),
-                 _ => return Err(PlistDecodeError::IntegerOverflow),
-             };
-
-             Ok((int_val as usize, pos + 1 + bytes_len))
+            Ok((nibble as usize, pos))
         }
     }
 
@@ -284,17 +330,29 @@ impl<'a> Decoder<'a> {
         let (len, data_start) = self.decode_size(pos, length_nibble)?;
 
         if data_start + len > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: data_start + len, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: data_start + len,
+                have: self.data.len(),
+            });
         }
 
-        Ok(PlistValue::Data(self.data[data_start..data_start + len].to_vec()))
+        Ok(PlistValue::Data(
+            self.data[data_start..data_start + len].to_vec(),
+        ))
     }
 
-    fn decode_ascii_string(&self, pos: usize, len_nibble: u8) -> Result<PlistValue, PlistDecodeError> {
+    fn decode_ascii_string(
+        &self,
+        pos: usize,
+        len_nibble: u8,
+    ) -> Result<PlistValue, PlistDecodeError> {
         let (len, str_start) = self.decode_size(pos, len_nibble)?;
 
         if str_start + len > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: str_start + len, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: str_start + len,
+                have: self.data.len(),
+            });
         }
 
         let s = std::str::from_utf8(&self.data[str_start..str_start + len])
@@ -303,13 +361,20 @@ impl<'a> Decoder<'a> {
         Ok(PlistValue::String(s.to_string()))
     }
 
-    fn decode_utf16_string(&self, pos: usize, len_nibble: u8) -> Result<PlistValue, PlistDecodeError> {
+    fn decode_utf16_string(
+        &self,
+        pos: usize,
+        len_nibble: u8,
+    ) -> Result<PlistValue, PlistDecodeError> {
         let (len, str_start) = self.decode_size(pos, len_nibble)?;
 
         let byte_len = len * 2;
 
         if str_start + byte_len > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: str_start + byte_len, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: str_start + byte_len,
+                have: self.data.len(),
+            });
         }
 
         let bytes = &self.data[str_start..str_start + byte_len];
@@ -318,8 +383,7 @@ impl<'a> Decoder<'a> {
             .map(|c| u16::from_be_bytes(c.try_into().unwrap()))
             .collect();
 
-        let s = String::from_utf16(&u16s)
-            .map_err(|_| PlistDecodeError::InvalidUtf8)?;
+        let s = String::from_utf16(&u16s).map_err(|_| PlistDecodeError::InvalidUtf8)?;
 
         Ok(PlistValue::String(s))
     }
@@ -327,31 +391,42 @@ impl<'a> Decoder<'a> {
     fn decode_uid(&self, pos: usize, len_nibble: u8) -> Result<PlistValue, PlistDecodeError> {
         let len = (len_nibble + 1) as usize;
         if pos + len > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: pos + len, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: pos + len,
+                have: self.data.len(),
+            });
         }
 
         let mut val = 0u64;
         for i in 0..len {
-            val = (val << 8) | (self.data[pos + i] as u64);
+            val = (val << 8) | u64::from(self.data[pos + i]);
         }
 
         Ok(PlistValue::Uid(val))
     }
 
-    fn decode_array(&self, pos: usize, count_nibble: u8, seen: &mut HashSet<u64>) -> Result<PlistValue, PlistDecodeError> {
+    fn decode_array(
+        &self,
+        pos: usize,
+        count_nibble: u8,
+        seen: &mut HashSet<u64>,
+    ) -> Result<PlistValue, PlistDecodeError> {
         let (count, refs_start) = self.decode_size(pos, count_nibble)?;
 
         if refs_start + count * self.object_ref_size > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: refs_start + count * self.object_ref_size, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: refs_start + count * self.object_ref_size,
+                have: self.data.len(),
+            });
         }
 
         let mut items = Vec::with_capacity(count);
 
         for i in 0..count {
-            let ref_start = refs_start + i * self.object_ref_size;
+            let curr_ref_offset = refs_start + i * self.object_ref_size;
             let index = Self::read_sized_int(
-                &self.data[ref_start..ref_start + self.object_ref_size],
-                self.object_ref_size
+                &self.data[curr_ref_offset..curr_ref_offset + self.object_ref_size],
+                self.object_ref_size,
             )?;
 
             items.push(self.decode_object(index, seen)?);
@@ -360,11 +435,19 @@ impl<'a> Decoder<'a> {
         Ok(PlistValue::Array(items))
     }
 
-    fn decode_dictionary(&self, pos: usize, count_nibble: u8, seen: &mut HashSet<u64>) -> Result<PlistValue, PlistDecodeError> {
+    fn decode_dictionary(
+        &self,
+        pos: usize,
+        count_nibble: u8,
+        seen: &mut HashSet<u64>,
+    ) -> Result<PlistValue, PlistDecodeError> {
         let (count, refs_start) = self.decode_size(pos, count_nibble)?;
 
         if refs_start + count * 2 * self.object_ref_size > self.data.len() {
-             return Err(PlistDecodeError::BufferTooSmall { needed: refs_start + count * 2 * self.object_ref_size, have: self.data.len() });
+            return Err(PlistDecodeError::BufferTooSmall {
+                needed: refs_start + count * 2 * self.object_ref_size,
+                have: self.data.len(),
+            });
         }
 
         let mut dict = HashMap::with_capacity(count);
@@ -375,18 +458,19 @@ impl<'a> Decoder<'a> {
 
             let key_index = Self::read_sized_int(
                 &self.data[key_ref_start..key_ref_start + self.object_ref_size],
-                self.object_ref_size
+                self.object_ref_size,
             )?;
 
             let val_index = Self::read_sized_int(
                 &self.data[val_ref_start..val_ref_start + self.object_ref_size],
-                self.object_ref_size
+                self.object_ref_size,
             )?;
 
             let key_val = self.decode_object(key_index, seen)?;
-            let key_str = match key_val {
-                PlistValue::String(s) => s,
-                _ => return Err(PlistDecodeError::UnsupportedType("Dictionary key must be a string".into())),
+            let PlistValue::String(key_str) = key_val else {
+                return Err(PlistDecodeError::UnsupportedType(
+                    "Dictionary key must be a string".into(),
+                ));
             };
 
             let val_val = self.decode_object(val_index, seen)?;
@@ -419,6 +503,9 @@ mod tests {
         let data = b"short";
         let result = decode(data);
 
-        assert!(matches!(result, Err(PlistDecodeError::BufferTooSmall { .. })));
+        assert!(matches!(
+            result,
+            Err(PlistDecodeError::BufferTooSmall { .. })
+        ));
     }
 }

@@ -15,7 +15,7 @@ pub enum PlistEncodeError {
     StringEncodingError,
 }
 
-/// Encode a PlistValue to binary plist format
+/// Encode a `PlistValue` to binary plist format
 pub fn encode(value: &PlistValue) -> Result<Vec<u8>, PlistEncodeError> {
     let mut encoder = Encoder::new();
     encoder.encode(value)
@@ -63,7 +63,7 @@ impl Encoder {
 
         // Check if we exceeded object limit for our ref_size
         if self.offsets.len() > 65535 {
-             return Err(PlistEncodeError::TooManyObjects(self.offsets.len()));
+            return Err(PlistEncodeError::TooManyObjects(self.offsets.len()));
         }
 
         // Copy object data
@@ -97,7 +97,7 @@ impl Encoder {
 
     fn encode_value(&mut self, value: &PlistValue) -> Result<usize, PlistEncodeError> {
         // Check cache for primitives
-        if let Some(key) = self.get_object_key(value) {
+        if let Some(key) = Self::get_object_key(value) {
             if let Some(&index) = self.object_cache.get(&key) {
                 return Ok(index);
             }
@@ -111,7 +111,7 @@ impl Encoder {
                     refs.push(self.encode_value(item)?);
                 }
                 Some(self.create_array_body(&refs)?)
-            },
+            }
             PlistValue::Dictionary(dict) => {
                 // Keys must be strings. And we should sort them.
                 // We need to encode keys and values.
@@ -130,7 +130,7 @@ impl Encoder {
                 }
 
                 Some(self.create_dict_body(&key_refs, &val_refs)?)
-            },
+            }
             _ => None,
         };
 
@@ -144,7 +144,7 @@ impl Encoder {
             self.objects.extend_from_slice(&b);
         } else {
             // Encode primitive
-             match value {
+            match value {
                 PlistValue::Boolean(b) => self.encode_boolean(*b),
                 PlistValue::Integer(i) => self.encode_integer(*i),
                 PlistValue::UnsignedInteger(u) => self.encode_unsigned(*u),
@@ -158,14 +158,14 @@ impl Encoder {
         }
 
         // Add to cache if primitive
-        if let Some(key) = self.get_object_key(value) {
+        if let Some(key) = Self::get_object_key(value) {
             self.object_cache.insert(key, index);
         }
 
         Ok(index)
     }
 
-    fn get_object_key(&self, value: &PlistValue) -> Option<ObjectKey> {
+    fn get_object_key(value: &PlistValue) -> Option<ObjectKey> {
         match value {
             PlistValue::String(s) => Some(ObjectKey::String(s.clone())),
             PlistValue::Data(d) => Some(ObjectKey::Data(d.clone())),
@@ -190,34 +190,39 @@ impl Encoder {
     fn encode_integer(&mut self, value: i64) {
         // Determine size needed
         if value >= 0 {
-             if value <= 127 {
-                 self.objects.push(0x10);
-                 self.objects.push(value as u8);
-             } else if value <= 32767 {
-                 self.objects.push(0x11);
-                 self.objects.extend_from_slice(&(value as u16).to_be_bytes());
-             } else if value <= 2147483647 {
-                 self.objects.push(0x12);
-                 self.objects.extend_from_slice(&(value as u32).to_be_bytes());
-             } else {
-                 self.objects.push(0x13);
-                 self.objects.extend_from_slice(&value.to_be_bytes());
-             }
+            if value <= 127 {
+                self.objects.push(0x10);
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                self.objects.push(value as u8);
+            } else if value <= 32767 {
+                self.objects.push(0x11);
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                self.objects
+                    .extend_from_slice(&(value as u16).to_be_bytes());
+            } else if value <= 2_147_483_647 {
+                self.objects.push(0x12);
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                self.objects
+                    .extend_from_slice(&(value as u32).to_be_bytes());
+            } else {
+                self.objects.push(0x13);
+                self.objects.extend_from_slice(&value.to_be_bytes());
+            }
         } else {
-             // Negative integers are always 8 bytes in bplist
-             self.objects.push(0x13);
-             self.objects.extend_from_slice(&value.to_be_bytes());
+            // Negative integers are always 8 bytes in bplist
+            self.objects.push(0x13);
+            self.objects.extend_from_slice(&value.to_be_bytes());
         }
     }
 
     fn encode_unsigned(&mut self, value: u64) {
-         // Treat as signed if it fits, else... bplist integer is signed.
-         // If it's too big for i64, we might need 128 bit support or it's just raw bytes?
-         // Standard bplist parsers interpret ints as signed i64.
-         // If u64 > i64::MAX, it will be negative if read as i64.
-         // We'll write it as 8 bytes.
-         self.objects.push(0x13);
-         self.objects.extend_from_slice(&value.to_be_bytes());
+        // Treat as signed if it fits, else... bplist integer is signed.
+        // If it's too big for i64, we might need 128 bit support or it's just raw bytes?
+        // Standard bplist parsers interpret ints as signed i64.
+        // If u64 > i64::MAX, it will be negative if read as i64.
+        // We'll write it as 8 bytes.
+        self.objects.push(0x13);
+        self.objects.extend_from_slice(&value.to_be_bytes());
     }
 
     fn encode_real(&mut self, value: f64) {
@@ -256,18 +261,25 @@ impl Encoder {
             1
         } else if value <= 0xFFFF {
             2
-        } else if value <= 0xFFFFFFFF {
+        } else if value <= 0xFFFF_FFFF {
             4
         } else {
             8
         };
 
+        // We know bytes is small, safe cast
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let marker = 0x80 | (bytes - 1) as u8;
         self.objects.push(marker);
         match bytes {
-            1 => self.objects.push(value as u8),
-            2 => self.objects.extend_from_slice(&(value as u16).to_be_bytes()),
-            4 => self.objects.extend_from_slice(&(value as u32).to_be_bytes()),
+            // Using try_from here would be safer
+            1 => self.objects.push(u8::try_from(value).unwrap()),
+            2 => self
+                .objects
+                .extend_from_slice(&u16::try_from(value).unwrap().to_be_bytes()),
+            4 => self
+                .objects
+                .extend_from_slice(&u32::try_from(value).unwrap().to_be_bytes()),
             8 => self.objects.extend_from_slice(&value.to_be_bytes()),
             _ => unreachable!(),
         }
@@ -283,7 +295,11 @@ impl Encoder {
         Ok(body)
     }
 
-    fn create_dict_body(&self, key_refs: &[usize], val_refs: &[usize]) -> Result<Vec<u8>, PlistEncodeError> {
+    fn create_dict_body(
+        &self,
+        key_refs: &[usize],
+        val_refs: &[usize],
+    ) -> Result<Vec<u8>, PlistEncodeError> {
         let mut body = Vec::new();
         Self::write_header_to(&mut body, 0xD, key_refs.len());
 
@@ -300,6 +316,8 @@ impl Encoder {
 
     fn write_header_to(output: &mut Vec<u8>, kind: u8, len: usize) {
         if len < 15 {
+            // len < 15 fits in u8
+            #[allow(clippy::cast_possible_truncation)]
             output.push((kind << 4) | len as u8);
         } else {
             output.push((kind << 4) | 0xF);
@@ -311,25 +329,40 @@ impl Encoder {
     fn write_int_to(output: &mut Vec<u8>, value: u64) {
         // This is for the count following 0xF. It looks like an Integer object (0x1n...)
         if value <= 0xFF {
-             output.push(0x10);
-             output.push(value as u8);
+            output.push(0x10);
+            // value <= 0xFF fits in u8
+            #[allow(clippy::cast_possible_truncation)]
+            output.push(value as u8);
         } else if value <= 0xFFFF {
-             output.push(0x11);
-             output.extend_from_slice(&(value as u16).to_be_bytes());
-        } else if value <= 0xFFFFFFFF {
-             output.push(0x12);
-             output.extend_from_slice(&(value as u32).to_be_bytes());
+            output.push(0x11);
+            // value <= 0xFFFF fits in u16
+            #[allow(clippy::cast_possible_truncation)]
+            output.extend_from_slice(&(value as u16).to_be_bytes());
+        } else if value <= 0xFFFF_FFFF {
+            output.push(0x12);
+            // value <= 0xFFFFFFFF fits in u32
+            #[allow(clippy::cast_possible_truncation)]
+            output.extend_from_slice(&(value as u32).to_be_bytes());
         } else {
-             output.push(0x13);
-             output.extend_from_slice(&value.to_be_bytes());
+            output.push(0x13);
+            output.extend_from_slice(&value.to_be_bytes());
         }
     }
 
     fn write_ref(&self, output: &mut Vec<u8>, index: usize) -> Result<(), PlistEncodeError> {
         // Write index using self.ref_size bytes
         match self.ref_size {
-            1 => output.push(index as u8),
-            2 => output.extend_from_slice(&(index as u16).to_be_bytes()),
+            // we check if index fits in ref_size?
+            // self.ref_size is fixed to 2.
+            // But we checked number of objects <= 65535 in encode().
+            1 => {
+                #[allow(clippy::cast_possible_truncation)]
+                output.push(index as u8);
+            }
+            2 => {
+                #[allow(clippy::cast_possible_truncation)]
+                output.extend_from_slice(&(index as u16).to_be_bytes());
+            }
             _ => return Err(PlistEncodeError::ValueTooLarge), // Not supporting > 65535 yet
         }
         Ok(())
@@ -337,9 +370,18 @@ impl Encoder {
 
     fn write_sized_int(output: &mut Vec<u8>, value: u64, size: u8) {
         match size {
-            1 => output.push(value as u8),
-            2 => output.extend_from_slice(&(value as u16).to_be_bytes()),
-            4 => output.extend_from_slice(&(value as u32).to_be_bytes()),
+            1 => {
+                #[allow(clippy::cast_possible_truncation)]
+                output.push(value as u8);
+            }
+            2 => {
+                #[allow(clippy::cast_possible_truncation)]
+                output.extend_from_slice(&(value as u16).to_be_bytes());
+            }
+            4 => {
+                #[allow(clippy::cast_possible_truncation)]
+                output.extend_from_slice(&(value as u32).to_be_bytes());
+            }
             8 => output.extend_from_slice(&value.to_be_bytes()),
             _ => panic!("Invalid size"),
         }
@@ -350,14 +392,21 @@ impl Encoder {
             1
         } else if max_offset <= 0xFFFF {
             2
-        } else if max_offset <= 0xFFFFFFFF {
+        } else if max_offset <= 0xFFFF_FFFF {
             4
         } else {
             8
         }
     }
 
-    fn write_trailer(&self, output: &mut Vec<u8>, offset_size: u8, num_objects: usize, root: usize, offset_table_offset: usize) {
+    fn write_trailer(
+        &self,
+        output: &mut Vec<u8>,
+        offset_size: u8,
+        num_objects: usize,
+        root: usize,
+        offset_table_offset: usize,
+    ) {
         // 32 bytes
         // 5 unused
         output.extend_from_slice(&[0; 5]);
@@ -389,11 +438,23 @@ mod tests {
 
     #[test]
     fn test_encode_integers() {
-        for value in [0i64, 1, 127, 128, 255, 256, 65535, -1, -128, i64::MAX, i64::MIN] {
+        for value in [
+            0i64,
+            1,
+            127,
+            128,
+            255,
+            256,
+            65535,
+            -1,
+            -128,
+            i64::MAX,
+            i64::MIN,
+        ] {
             let plist = PlistValue::Integer(value);
             let encoded = encode(&plist).unwrap();
             let decoded = crate::protocol::plist::decode::decode(&encoded).expect("Decode failed");
-            assert_eq!(decoded.as_i64(), Some(value), "Failed for value: {}", value);
+            assert_eq!(decoded.as_i64(), Some(value), "Failed for value: {value}");
         }
     }
 
@@ -431,7 +492,13 @@ mod tests {
         let decoded = crate::protocol::plist::decode::decode(&encoded).unwrap();
 
         let d = decoded.as_dict().unwrap();
-        assert_eq!(d.get("key1").and_then(|v| v.as_i64()), Some(42));
-        assert_eq!(d.get("key2").and_then(|v| v.as_str()), Some("value"));
+        assert_eq!(
+            d.get("key1").and_then(super::super::PlistValue::as_i64),
+            Some(42)
+        );
+        assert_eq!(
+            d.get("key2").and_then(super::super::PlistValue::as_str),
+            Some("value")
+        );
     }
 }

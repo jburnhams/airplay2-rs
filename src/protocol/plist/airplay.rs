@@ -1,7 +1,7 @@
-use super::{PlistValue, DictBuilder};
-use crate::types::{TrackInfo, PlaybackInfo};
+use super::{DictBuilder, PlistValue};
+use crate::types::{PlaybackInfo, TrackInfo};
 
-/// Convert TrackInfo to plist dictionary for AirPlay protocol
+/// Convert `TrackInfo` to plist dictionary for `AirPlay` protocol
 pub fn track_info_to_plist(track: &TrackInfo) -> PlistValue {
     DictBuilder::new()
         .insert("Content-Location", track.url.as_str())
@@ -10,8 +10,8 @@ pub fn track_info_to_plist(track: &TrackInfo) -> PlistValue {
         .insert_opt("album", track.album.as_deref())
         .insert_opt("artworkURL", track.artwork_url.as_deref())
         .insert_opt("duration", track.duration_secs)
-        .insert_opt("trackNumber", track.track_number.map(|n| n as i64))
-        .insert_opt("discNumber", track.disc_number.map(|n| n as i64))
+        .insert_opt("trackNumber", track.track_number.map(i64::from))
+        .insert_opt("discNumber", track.disc_number.map(i64::from))
         .build()
 }
 
@@ -38,7 +38,14 @@ mod tests {
         let plist = track_info_to_plist(&track);
         let dict = plist.as_dict().unwrap();
 
-        assert_eq!(dict.get("title").and_then(|v| v.as_str()), Some("Title"));
-        assert_eq!(dict.get("duration").and_then(|v| v.as_f64()), Some(123.0));
+        assert_eq!(
+            dict.get("title").and_then(super::super::PlistValue::as_str),
+            Some("Title")
+        );
+        assert_eq!(
+            dict.get("duration")
+                .and_then(super::super::PlistValue::as_f64),
+            Some(123.0)
+        );
     }
 }

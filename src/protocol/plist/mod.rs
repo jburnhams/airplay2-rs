@@ -1,13 +1,13 @@
-//! Binary plist codec for AirPlay protocol messages
+//! Binary plist codec for `AirPlay` protocol messages
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+pub mod airplay;
 pub mod decode;
 pub mod encode;
-pub mod airplay;
 
-pub use decode::{decode, PlistDecodeError};
-pub use encode::{encode, PlistEncodeError};
+pub use decode::{PlistDecodeError, decode};
+pub use encode::{PlistEncodeError, encode};
 
 use std::collections::HashMap;
 
@@ -76,6 +76,7 @@ impl PlistValue {
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             PlistValue::Real(f) => Some(*f),
+            #[allow(clippy::cast_precision_loss)]
             PlistValue::Integer(i) => Some(*i as f64),
             _ => None,
         }
@@ -127,7 +128,7 @@ impl From<bool> for PlistValue {
 
 impl From<i32> for PlistValue {
     fn from(v: i32) -> Self {
-        PlistValue::Integer(v as i64)
+        PlistValue::Integer(i64::from(v))
     }
 }
 
@@ -178,7 +179,7 @@ impl<K: Into<String>, V: Into<PlistValue>> FromIterator<(K, V)> for PlistValue {
         PlistValue::Dictionary(
             iter.into_iter()
                 .map(|(k, v)| (k.into(), v.into()))
-                .collect()
+                .collect(),
         )
     }
 }
@@ -246,8 +247,9 @@ mod tests {
         assert!(matches!(PlistValue::from(true), PlistValue::Boolean(true)));
         assert!(matches!(PlistValue::from(42i64), PlistValue::Integer(42)));
         // Approximate float comparison
-        match PlistValue::from(3.14f64) {
-            PlistValue::Real(f) => assert!((f - 3.14).abs() < f64::EPSILON),
+        match PlistValue::from(std::f64::consts::PI) {
+            #[allow(clippy::approx_constant)]
+            PlistValue::Real(f) => assert!((f - std::f64::consts::PI).abs() < f64::EPSILON),
             _ => panic!("Expected Real"),
         }
 
@@ -282,7 +284,7 @@ mod tests {
         };
 
         let d = dict.as_dict().unwrap();
-        assert_eq!(d.get("name").and_then(|v| v.as_str()), Some("test"));
-        assert_eq!(d.get("count").and_then(|v| v.as_i64()), Some(5));
+        assert_eq!(d.get("name").and_then(PlistValue::as_str), Some("test"));
+        assert_eq!(d.get("count").and_then(PlistValue::as_i64), Some(5));
     }
 }
