@@ -36,7 +36,9 @@
 #![allow(clippy::module_name_repetitions)]
 
 // Public modules
+/// Error types
 pub mod error;
+/// Core types
 pub mod types;
 
 // Internal modules
