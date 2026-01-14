@@ -19,11 +19,11 @@ pub enum SessionState {
 
 /// RTSP session manager (sans-IO)
 ///
-/// Manages session state, CSeq numbering, and session ID tracking.
+/// Manages session state, `CSeq` numbering, and session ID tracking.
 pub struct RtspSession {
     /// Current session state
     state: SessionState,
-    /// CSeq counter
+    /// `CSeq` counter
     cseq: u32,
     /// Session ID (from server)
     session_id: Option<String>,
@@ -70,7 +70,7 @@ impl RtspSession {
         self.session_id.as_deref()
     }
 
-    /// Get next CSeq and increment counter
+    /// Get next `CSeq` and increment counter
     fn next_cseq(&mut self) -> u32 {
         self.cseq += 1;
         self.cseq
@@ -100,8 +100,7 @@ impl RtspSession {
     /// Create OPTIONS request
     #[must_use]
     pub fn options_request(&mut self) -> RtspRequest {
-        self.request_builder(Method::Options, "*")
-            .build()
+        self.request_builder(Method::Options, "*").build()
     }
 
     /// Create SETUP request
@@ -121,24 +120,19 @@ impl RtspSession {
             .build()
     }
 
-    /// Create SET_PARAMETER request
+    /// Create `SET_PARAMETER` request
     #[must_use]
-    pub fn set_parameter_request(
-        &mut self,
-        content_type: &str,
-        body: Vec<u8>,
-    ) -> RtspRequest {
+    pub fn set_parameter_request(&mut self, content_type: &str, body: Vec<u8>) -> RtspRequest {
         self.request_builder(Method::SetParameter, "")
             .content_type(content_type)
             .body(body)
             .build()
     }
 
-    /// Create GET_PARAMETER request
+    /// Create `GET_PARAMETER` request
     #[must_use]
     pub fn get_parameter_request(&mut self) -> RtspRequest {
-        self.request_builder(Method::GetParameter, "")
-            .build()
+        self.request_builder(Method::GetParameter, "").build()
     }
 
     /// Create FLUSH request
@@ -152,8 +146,7 @@ impl RtspSession {
     /// Create TEARDOWN request
     #[must_use]
     pub fn teardown_request(&mut self) -> RtspRequest {
-        self.request_builder(Method::Teardown, "")
-            .build()
+        self.request_builder(Method::Teardown, "").build()
     }
 
     /// Process a response and update session state
@@ -210,21 +203,25 @@ impl RtspSession {
 
     /// Check if a method is valid in current state
     #[must_use]
+    #[allow(clippy::match_same_arms)]
     pub fn can_send(&self, method: Method) -> bool {
         match (self.state, method) {
-            (SessionState::Init, Method::Options) | (SessionState::Init, Method::Post) => true,
-            (SessionState::Ready, Method::Setup) | (SessionState::Ready, Method::Post) => true,
-            (SessionState::Setup, Method::Record) | (SessionState::Setup, Method::Play) => true,
-            (SessionState::Playing, Method::Pause) |
-            (SessionState::Playing, Method::Flush) |
-            (SessionState::Playing, Method::SetParameter) |
-            (SessionState::Playing, Method::GetParameter) |
-            (SessionState::Playing, Method::Teardown) => true,
-            (SessionState::Paused, Method::Record) |
-            (SessionState::Paused, Method::Play) |
-            (SessionState::Paused, Method::Teardown) |
-            (SessionState::Paused, Method::SetParameter) => true,
-            (_, Method::Options) | (_, Method::Teardown) => true, // OPTIONS and TEARDOWN always allowed
+            (SessionState::Init, Method::Options | Method::Post) => true,
+            (SessionState::Ready, Method::Setup | Method::Post) => true,
+            (SessionState::Setup, Method::Record | Method::Play) => true,
+            (
+                SessionState::Playing,
+                Method::Pause
+                | Method::Flush
+                | Method::SetParameter
+                | Method::GetParameter
+                | Method::Teardown,
+            ) => true,
+            (
+                SessionState::Paused,
+                Method::Record | Method::Play | Method::Teardown | Method::SetParameter,
+            ) => true,
+            (_, Method::Options | Method::Teardown) => true, // OPTIONS and TEARDOWN always allowed
             _ => false,
         }
     }
@@ -267,7 +264,9 @@ mod tests {
             body: Vec::new(),
         };
 
-        session.process_response(Method::Options, &response).unwrap();
+        session
+            .process_response(Method::Options, &response)
+            .unwrap();
         assert_eq!(session.state(), SessionState::Ready);
     }
 

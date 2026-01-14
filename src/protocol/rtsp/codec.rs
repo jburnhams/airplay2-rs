@@ -108,9 +108,9 @@ impl RtspCodec {
                             status,
                             reason,
                         };
-                    } else {
-                        return Ok(None);
+                        continue;
                     }
+                    return Ok(None);
                 }
 
                 ParseState::Headers {
@@ -144,9 +144,9 @@ impl RtspCodec {
                             headers,
                             content_length,
                         };
-                    } else {
-                        return Ok(None);
+                        continue;
                     }
+                    return Ok(None);
                 }
 
                 ParseState::Body {
@@ -169,9 +169,8 @@ impl RtspCodec {
 
                         self.state = ParseState::StatusLine;
                         return Ok(Some(response));
-                    } else {
-                        return Ok(None);
                     }
+                    return Ok(None);
                 }
             }
         }
@@ -192,9 +191,7 @@ impl RtspCodec {
     // Helper methods
 
     fn find_line_end(&self) -> Option<usize> {
-        self.buffer
-            .windows(2)
-            .position(|w| w == b"\r\n")
+        self.buffer.windows(2).position(|w| w == b"\r\n")
     }
 
     fn parse_status_line(line: &str) -> Result<(String, StatusCode, String), RtspCodecError> {
@@ -219,13 +216,10 @@ impl RtspCodec {
 
     fn parse_headers(&self) -> Result<Option<(Headers, usize)>, RtspCodecError> {
         // Find end of headers (blank line)
-        let header_end = self.buffer
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n");
+        let header_end = self.buffer.windows(4).position(|w| w == b"\r\n\r\n");
 
-        let header_end = match header_end {
-            Some(pos) => pos,
-            None => return Ok(None),
+        let Some(header_end) = header_end else {
+            return Ok(None);
         };
 
         let header_bytes = &self.buffer[..header_end];
@@ -267,9 +261,13 @@ mod tests {
     fn test_decode_simple_response() {
         let mut codec = RtspCodec::new();
 
-        codec.feed(b"RTSP/1.0 200 OK\r\n\
+        codec
+            .feed(
+                b"RTSP/1.0 200 OK\r\n\
                      CSeq: 1\r\n\
-                     \r\n").unwrap();
+                     \r\n",
+            )
+            .unwrap();
 
         let response = codec.decode().unwrap().unwrap();
 
@@ -284,11 +282,15 @@ mod tests {
     fn test_decode_response_with_body() {
         let mut codec = RtspCodec::new();
 
-        codec.feed(b"RTSP/1.0 200 OK\r\n\
+        codec
+            .feed(
+                b"RTSP/1.0 200 OK\r\n\
                      CSeq: 2\r\n\
                      Content-Length: 5\r\n\
                      \r\n\
-                     hello").unwrap();
+                     hello",
+            )
+            .unwrap();
 
         let response = codec.decode().unwrap().unwrap();
 
@@ -314,8 +316,12 @@ mod tests {
     fn test_decode_multiple_responses() {
         let mut codec = RtspCodec::new();
 
-        codec.feed(b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n\
-                     RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n").unwrap();
+        codec
+            .feed(
+                b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n\
+                     RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n",
+            )
+            .unwrap();
 
         let r1 = codec.decode().unwrap().unwrap();
         assert_eq!(r1.cseq(), Some(1));
@@ -353,6 +359,9 @@ mod tests {
 
         let result = codec.feed(&[0u8; 200]);
 
-        assert!(matches!(result, Err(RtspCodecError::ResponseTooLarge { .. })));
+        assert!(matches!(
+            result,
+            Err(RtspCodecError::ResponseTooLarge { .. })
+        ));
     }
 }

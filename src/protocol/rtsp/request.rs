@@ -5,7 +5,7 @@ use super::{Headers, Method, headers::names};
 pub struct RtspRequest {
     /// HTTP method
     pub method: Method,
-    /// Request URI (e.g., "rtsp://192.168.1.10/1234567")
+    /// Request URI (e.g., `<rtsp://192.168.1.10/1234567>`)
     pub uri: String,
     /// Request headers
     pub headers: Headers,
@@ -87,7 +87,7 @@ impl RtspRequestBuilder {
         self
     }
 
-    /// Set CSeq header
+    /// Set `CSeq` header
     #[must_use]
     pub fn cseq(self, seq: u32) -> Self {
         self.header(names::CSEQ, seq.to_string())
@@ -119,10 +119,13 @@ impl RtspRequestBuilder {
     }
 
     /// Set body as binary plist
+    ///
+    /// # Panics
+    /// Panics if plist encoding fails.
     #[must_use]
     pub fn body_plist(mut self, plist: &crate::protocol::plist::PlistValue) -> Self {
-        self.request.body = crate::protocol::plist::encode(plist)
-            .expect("plist encoding should not fail");
+        self.request.body =
+            crate::protocol::plist::encode(plist).expect("plist encoding should not fail");
         self.request.headers.insert(
             names::CONTENT_TYPE,
             "application/x-apple-binary-plist".to_string(),
@@ -183,8 +186,8 @@ mod tests {
 
     #[test]
     fn test_method_from_str() {
-        assert_eq!(Method::from_str("OPTIONS"), Some(Method::Options));
-        assert_eq!(Method::from_str("options"), Some(Method::Options));
-        assert_eq!(Method::from_str("INVALID"), None);
+        assert_eq!("OPTIONS".parse::<Method>(), Ok(Method::Options));
+        assert_eq!("options".parse::<Method>(), Ok(Method::Options));
+        assert!("INVALID".parse::<Method>().is_err());
     }
 }

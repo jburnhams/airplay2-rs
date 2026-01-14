@@ -50,7 +50,7 @@ impl Headers {
         self.get(name).is_some()
     }
 
-    /// Get CSeq value
+    /// Get `CSeq` value
     #[must_use]
     pub fn cseq(&self) -> Option<u32> {
         self.get(names::CSEQ)?.parse().ok()

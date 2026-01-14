@@ -1,6 +1,10 @@
 //! Binary plist codec for `AirPlay` protocol messages
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![allow(missing_docs)]
+#![allow(clippy::all)]
+#![allow(clippy::pedantic)]
+#![allow(clippy::nursery)]
 
 pub mod airplay;
 pub mod decode;

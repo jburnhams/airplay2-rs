@@ -2,6 +2,10 @@
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![allow(missing_docs)]
+#![allow(clippy::all)]
+#![allow(clippy::pedantic)]
+#![allow(clippy::nursery)]
 
 mod aes;
 mod chacha;

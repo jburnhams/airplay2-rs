@@ -16,25 +16,25 @@ impl StatusCode {
 
     /// Check if this is a success status (2xx)
     #[must_use]
-    pub fn is_success(&self) -> bool {
+    pub fn is_success(self) -> bool {
         self.0 >= 200 && self.0 < 300
     }
 
     /// Check if this is a client error (4xx)
     #[must_use]
-    pub fn is_client_error(&self) -> bool {
+    pub fn is_client_error(self) -> bool {
         self.0 >= 400 && self.0 < 500
     }
 
     /// Check if this is a server error (5xx)
     #[must_use]
-    pub fn is_server_error(&self) -> bool {
+    pub fn is_server_error(self) -> bool {
         self.0 >= 500 && self.0 < 600
     }
 
     /// Get status code as u16
     #[must_use]
-    pub fn as_u16(&self) -> u16 {
+    pub fn as_u16(self) -> u16 {
         self.0
     }
 }
@@ -61,7 +61,7 @@ impl RtspResponse {
         self.status.is_success()
     }
 
-    /// Get CSeq from response
+    /// Get `CSeq` from response
     #[must_use]
     pub fn cseq(&self) -> Option<u32> {
         self.headers.cseq()
@@ -77,15 +77,17 @@ impl RtspResponse {
     ///
     /// # Errors
     /// Returns `PlistDecodeError` if the body cannot be decoded as a binary plist.
-    pub fn body_as_plist(&self) -> Result<crate::protocol::plist::PlistValue, crate::protocol::plist::PlistDecodeError> {
+    pub fn body_as_plist(
+        &self,
+    ) -> Result<crate::protocol::plist::PlistValue, crate::protocol::plist::PlistDecodeError> {
         crate::protocol::plist::decode(&self.body)
     }
 
     /// Check if body is binary plist
     #[must_use]
     pub fn is_plist(&self) -> bool {
-        self.headers
-            .content_type()
-            .map_or(false, |ct| ct.contains("apple-binary-plist") || ct.contains("application/x-plist"))
+        self.headers.content_type().is_some_and(|ct| {
+            ct.contains("apple-binary-plist") || ct.contains("application/x-plist")
+        })
     }
 }
