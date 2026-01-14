@@ -21,7 +21,7 @@ This section establishes the project structure, build configuration, CI/CD pipel
 
 ### 1.1 Project Initialization
 
-- [ ] **1.1.1** Create Cargo.toml with proper metadata
+- [x] **1.1.1** Create Cargo.toml with proper metadata
 
 **File:** `Cargo.toml`
 
@@ -97,7 +97,7 @@ name = "protocol_benchmarks"
 harness = false
 ```
 
-- [ ] **1.1.2** Create initial `src/lib.rs` with module structure stubs
+- [x] **1.1.2** Create initial `src/lib.rs` with module structure stubs
 
 **File:** `src/lib.rs`
 
@@ -168,7 +168,7 @@ pub use group::AirPlayGroup;
 pub use discovery::{discover, scan};
 ```
 
-- [ ] **1.1.3** Create placeholder modules for all components
+- [x] **1.1.3** Create placeholder modules for all components
 
 **Files to create (empty mod.rs or stub files):**
 - `src/types/mod.rs`
@@ -195,7 +195,7 @@ Each stub should contain minimal code to allow compilation:
 
 ### 1.2 Development Tooling
 
-- [ ] **1.2.1** Create `rustfmt.toml` for consistent formatting
+- [x] **1.2.1** Create `rustfmt.toml` for consistent formatting
 
 **File:** `rustfmt.toml`
 
@@ -218,7 +218,7 @@ comment_width = 100
 normalize_comments = true
 ```
 
-- [ ] **1.2.2** Create `clippy.toml` for linting configuration
+- [x] **1.2.2** Create `clippy.toml` for linting configuration
 
 **File:** `clippy.toml`
 
@@ -228,7 +228,7 @@ too-many-arguments-threshold = 8
 type-complexity-threshold = 300
 ```
 
-- [ ] **1.2.3** Create `.cargo/config.toml` for build configuration
+- [x] **1.2.3** Create `.cargo/config.toml` for build configuration
 
 **File:** `.cargo/config.toml`
 
@@ -252,7 +252,7 @@ rustflags = ["-D", "warnings"]
 rustflags = ["-D", "warnings"]
 ```
 
-- [ ] **1.2.4** Create `deny.toml` for dependency auditing
+- [x] **1.2.4** Create `deny.toml` for dependency auditing
 
 **File:** `deny.toml`
 
@@ -292,7 +292,7 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 
 ### 1.3 GitHub Actions CI/CD
 
-- [ ] **1.3.1** Create main CI workflow
+- [x] **1.3.1** Create main CI workflow
 
 **File:** `.github/workflows/ci.yml`
 
@@ -388,7 +388,7 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v1
 ```
 
-- [ ] **1.3.2** Create security audit workflow
+- [x] **1.3.2** Create security audit workflow
 
 **File:** `.github/workflows/security.yml`
 
@@ -414,7 +414,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-- [ ] **1.3.3** Create release workflow
+- [x] **1.3.3** Create release workflow
 
 **File:** `.github/workflows/release.yml`
 
@@ -442,7 +442,7 @@ jobs:
 
 ### 1.4 Project Documentation
 
-- [ ] **1.4.1** Create README.md
+- [x] **1.4.1** Create README.md
 
 **File:** `README.md`
 
@@ -507,15 +507,15 @@ async fn main() -> Result<(), airplay2::AirPlayError> {
 Licensed under either of Apache License, Version 2.0 or MIT license at your option.
 ```
 
-- [ ] **1.4.2** Create CONTRIBUTING.md
+- [x] **1.4.2** Create CONTRIBUTING.md
 
-- [ ] **1.4.3** Create LICENSE-MIT and LICENSE-APACHE files
+- [x] **1.4.3** Create LICENSE-MIT and LICENSE-APACHE files
 
 ---
 
 ### 1.5 Test Infrastructure
 
-- [ ] **1.5.1** Create test utilities module
+- [x] **1.5.1** Create test utilities module
 
 **File:** `tests/common/mod.rs`
 
@@ -551,7 +551,7 @@ pub fn test_config() -> airplay2::AirPlayConfig {
 }
 ```
 
-- [ ] **1.5.2** Create benchmark harness
+- [x] **1.5.2** Create benchmark harness
 
 **File:** `benches/protocol_benchmarks.rs`
 
@@ -571,7 +571,7 @@ criterion_group!(benches, rtsp_encoding_benchmark);
 criterion_main!(benches);
 ```
 
-- [ ] **1.5.3** Set up example programs structure
+- [x] **1.5.3** Set up example programs structure
 
 **Files:**
 - `examples/discover.rs` - Device discovery example
@@ -585,7 +585,7 @@ Each example should have a minimal stub that compiles but notes TODO.
 
 ### 1.6 Git Configuration
 
-- [ ] **1.6.1** Create `.gitignore`
+- [x] **1.6.1** Create `.gitignore`
 
 **File:** `.gitignore`
 
@@ -602,7 +602,7 @@ coverage/
 *.profraw
 ```
 
-- [ ] **1.6.2** Create `.gitattributes`
+- [x] **1.6.2** Create `.gitattributes`
 
 **File:** `.gitattributes`
 
@@ -668,16 +668,16 @@ cargo doc --no-deps
 
 ## Acceptance Criteria
 
-- [ ] `cargo build` succeeds with default features
-- [ ] `cargo build --all-features` succeeds
-- [ ] `cargo build --no-default-features` succeeds
-- [ ] `cargo test` runs (even if tests are TODO)
-- [ ] `cargo clippy` passes with no warnings
-- [ ] `cargo fmt --check` passes
-- [ ] `cargo doc` generates documentation
-- [ ] GitHub Actions CI workflow passes
-- [ ] All placeholder modules exist and compile
-- [ ] README has basic usage example
+- [x] `cargo build` succeeds with default features
+- [x] `cargo build --all-features` succeeds
+- [x] `cargo build --no-default-features` succeeds
+- [x] `cargo test` runs (even if tests are TODO)
+- [x] `cargo clippy` passes with no warnings
+- [x] `cargo fmt --check` passes
+- [x] `cargo doc` generates documentation
+- [x] GitHub Actions CI workflow passes
+- [x] All placeholder modules exist and compile
+- [x] README has basic usage example
 
 ---
 
