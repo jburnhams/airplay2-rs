@@ -364,4 +364,53 @@ mod tests {
             Err(RtspCodecError::ResponseTooLarge { .. })
         ));
     }
+
+    #[test]
+    fn test_decode_byte_by_byte() {
+        let mut codec = RtspCodec::new();
+        let data = b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n";
+
+        let mut response = None;
+        for byte in data {
+            codec.feed(&[*byte]).unwrap();
+            if let Some(r) = codec.decode().unwrap() {
+                response = Some(r);
+                break;
+            }
+        }
+
+        assert!(response.is_some());
+        assert_eq!(response.unwrap().cseq(), Some(1));
+    }
+
+    #[test]
+    fn test_decode_split_body() {
+        let mut codec = RtspCodec::new();
+        let header = b"RTSP/1.0 200 OK\r\nContent-Length: 5\r\n\r\n";
+        let body_part1 = b"he";
+        let body_part2 = b"llo";
+
+        codec.feed(header).unwrap();
+        assert!(codec.decode().unwrap().is_none());
+
+        codec.feed(body_part1).unwrap();
+        assert!(codec.decode().unwrap().is_none());
+
+        codec.feed(body_part2).unwrap();
+        let response = codec.decode().unwrap().unwrap();
+
+        assert_eq!(response.body, b"hello");
+    }
+
+    #[test]
+    fn test_header_case_insensitivity() {
+        let mut codec = RtspCodec::new();
+        let data = b"RTSP/1.0 200 OK\r\nCONTENT-LENGTH: 0\r\ncseq: 99\r\n\r\n";
+
+        codec.feed(data).unwrap();
+        let response = codec.decode().unwrap().unwrap();
+
+        assert_eq!(response.cseq(), Some(99));
+        assert_eq!(response.headers.content_length(), Some(0));
+    }
 }

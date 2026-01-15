@@ -309,4 +309,41 @@ mod tests {
         assert!(request.headers.get("X-Apple-Session-ID").is_some());
         assert!(request.headers.get("User-Agent").is_some());
     }
+
+    #[test]
+    fn test_invalid_state_transitions() {
+        let session = RtspSession::new("192.168.1.10", 7000);
+
+        // Cannot send SETUP before OPTIONS
+        assert!(!session.can_send(Method::Setup));
+
+        // Cannot send RECORD before SETUP
+        assert!(!session.can_send(Method::Record));
+    }
+
+    #[test]
+    fn test_process_response_error() {
+        let mut session = RtspSession::new("192.168.1.10", 7000);
+
+        let response = RtspResponse {
+            version: "RTSP/1.0".to_string(),
+            status: StatusCode::INTERNAL_ERROR,
+            reason: "Internal Error".to_string(),
+            headers: Headers::new(),
+            body: Vec::new(),
+        };
+
+        // Should return error
+        let result = session.process_response(Method::Options, &response);
+        assert!(result.is_err());
+
+        // State should not change on error
+        assert_eq!(session.state(), SessionState::Init);
+    }
+
+    #[test]
+    fn test_teardown_always_allowed() {
+        let session = RtspSession::new("192.168.1.10", 7000);
+        assert!(session.can_send(Method::Teardown));
+    }
 }
