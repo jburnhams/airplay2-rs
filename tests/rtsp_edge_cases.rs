@@ -7,9 +7,7 @@ fn test_recovery_from_bad_response() {
 
     // 1. Good OPTIONS
     let _ = session.options_request();
-    codec
-        .feed(b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n")
-        .unwrap();
+    codec.feed(b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n").unwrap();
     let response = codec.decode().unwrap().unwrap();
     session
         .process_response(Method::Options, &response)
