@@ -50,7 +50,7 @@ mod discovery;
 mod group;
 mod net;
 mod player;
-mod protocol;
+pub mod protocol;
 
 // Re-exports
 pub use client::AirPlayClient;
