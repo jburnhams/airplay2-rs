@@ -29,7 +29,7 @@ This section implements sans-IO RTP packet encoding/decoding for audio streaming
 
 ### 6.1 RTP Packet Types
 
-- [ ] **6.1.1** Define RTP header structure
+- [x] **6.1.1** Define RTP header structure
 
 **File:** `src/protocol/rtp/mod.rs`
 
@@ -69,7 +69,7 @@ pub mod constants {
 }
 ```
 
-- [ ] **6.1.2** Implement RTP packet structure
+- [x] **6.1.2** Implement RTP packet structure
 
 **File:** `src/protocol/rtp/packet.rs`
 
@@ -287,7 +287,7 @@ impl RtpPacket {
 
 ### 6.2 Timing Synchronization
 
-- [ ] **6.2.1** Implement timing packets
+- [x] **6.2.1** Implement timing packets
 
 **File:** `src/protocol/rtp/timing.rs`
 
@@ -466,7 +466,7 @@ pub enum TimingPacket {
 
 ### 6.3 Control Channel
 
-- [ ] **6.3.1** Implement retransmit request handling
+- [x] **6.3.1** Implement retransmit request handling
 
 **File:** `src/protocol/rtp/control.rs`
 
@@ -579,7 +579,7 @@ impl ControlPacket {
 
 ### 6.4 Audio Packet Codec
 
-- [ ] **6.4.1** Implement audio packet encoding with encryption
+- [x] **6.4.1** Implement audio packet encoding with encryption
 
 **File:** `src/protocol/rtp/codec.rs`
 
@@ -1049,16 +1049,16 @@ fn test_audio_streaming_simulation() {
 
 ## Acceptance Criteria
 
-- [ ] RTP header encodes/decodes correctly
-- [ ] Audio packets contain correct payload type
-- [ ] Sequence numbers increment correctly
-- [ ] Timestamps increment by samples-per-packet
-- [ ] Timing packets encode/decode correctly
-- [ ] Clock offset calculation is accurate
-- [ ] AES-CTR encryption works correctly
-- [ ] Retransmit requests encode/decode
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] RTP header encodes/decodes correctly
+- [x] Audio packets contain correct payload type
+- [x] Sequence numbers increment correctly
+- [x] Timestamps increment by samples-per-packet
+- [x] Timing packets encode/decode correctly
+- [x] Clock offset calculation is accurate
+- [x] AES-CTR encryption works correctly
+- [x] Retransmit requests encode/decode
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
