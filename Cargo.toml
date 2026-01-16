@@ -18,8 +18,8 @@ persistent-pairing = ["sled"]
 
 [dependencies]
 # Async
-# Pinned to 1.38.1 to align socket2 dependency (0.5) with mdns-sd
-tokio = { version = "=1.38.1", features = ["net", "sync", "time", "rt", "macros"], optional = true }
+# Pinned to 1.38.2 to align socket2 dependency (0.5) with mdns-sd
+tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
 async-trait = "0.1"
 futures = "0.3"
@@ -58,7 +58,7 @@ rubato = "0.14"           # Audio resampling
 sled = { version = "0.34", optional = true }
 
 [dev-dependencies]
-tokio = { version = "=1.38.1", features = ["full", "test-util"] }
+tokio = { version = "=1.38.2", features = ["full", "test-util"] }
 tokio-test = "0.4"
 # Pinned to 1.5.0 to align rand dependency (0.8)
 proptest = "=1.5.0"
