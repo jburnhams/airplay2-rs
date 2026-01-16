@@ -8,6 +8,8 @@ pub mod headers;
 pub mod request;
 pub mod response;
 pub mod session;
+#[cfg(test)]
+mod tests;
 
 pub use codec::{RtspCodec, RtspCodecError};
 pub use headers::Headers;

@@ -22,6 +22,15 @@ confidence-threshold = 0.8
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
+# Skip checks for duplicates caused by srp 0.7.0-pre.2 dependencies
+skip = [
+    { name = "block-buffer" },
+    { name = "crypto-common" },
+    { name = "digest" },
+    { name = "getrandom" },
+    { name = "rand_core" },
+    { name = "sha2" },
+]
 
 [sources]
 unknown-registry = "deny"
