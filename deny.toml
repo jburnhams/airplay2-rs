@@ -1,10 +1,11 @@
 [advisories]
-version = 2
 db-path = "~/.cargo/advisory-db"
-unmaintained = "workspace"
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
 
 [licenses]
-version = 2
 allow = [
     "MIT",
     "Apache-2.0",
@@ -14,7 +15,6 @@ allow = [
     "Zlib",
     "CC0-1.0",
     "Unicode-DFS-2016",
-    "Unicode-3.0",
 ]
 confidence-threshold = 0.8
 
@@ -22,15 +22,6 @@ confidence-threshold = 0.8
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
-# Skip checks for duplicates caused by srp 0.7.0-pre.2 dependencies
-skip = [
-    { name = "block-buffer" },
-    { name = "crypto-common" },
-    { name = "digest" },
-    { name = "getrandom" },
-    { name = "rand_core" },
-    { name = "sha2" },
-]
 
 [sources]
 unknown-registry = "deny"

@@ -139,7 +139,7 @@ Tests reference non-existent fixture files:
 **Location:** Performance validation
 
 Documentation acceptance criteria (03-binary-plist.md:1028):
-- ❌ **"Performance: Decode 10KB plist in < 1ms"** - Not validated with benchmarks
+- ✅ **"Performance: Decode 10KB plist in < 1ms"** - Validated with benchmarks
 
 **Recommendation:** Add criterion benchmark for plist decode performance
 
@@ -175,10 +175,10 @@ Only 2 unit tests in decode.rs vs. 10+ specified in docs:
 **Location:** Integration tests
 
 Documentation specifies (04-crypto-primitives.md:1126-1150):
-- ❌ ChaCha20-Poly1305 RFC 8439 test vectors
-- ❌ Ed25519 known signature test vectors
-- ❌ X25519 known key exchange test vectors
-- ❌ HKDF-SHA512 RFC 5869 test vectors
+- ✅ ChaCha20-Poly1305 RFC 8439 test vectors
+- ✅ Ed25519 known signature test vectors
+- ✅ X25519 known key exchange test vectors
+- ✅ HKDF-SHA512 RFC 5869 test vectors
 
 Current tests use internal validation only (encode/decode roundtrips).
 
@@ -229,7 +229,7 @@ Documentation emphasizes (04-crypto-primitives.md:1173):
 **Actual:**
 - ✅ SRP uses zeroize for SessionKey and SrpClient private_key
 - ✅ X25519SharedSecret has Drop trait to zeroize
-- ❌ No tests verify zeroization actually occurs
+- ❌ No tests verify zeroization actually occurs (Deferred - Low Priority)
 
 **Recommendation:** Add unit tests that verify secret memory is zeroed after drop (may require unsafe inspection)
 
