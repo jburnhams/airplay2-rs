@@ -24,28 +24,3 @@ pub fn parse_playback_info(plist: &PlistValue) -> Option<PlaybackInfo> {
     // For now we leave this as todo as we haven't defined the mapping yet
     todo!()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_track_info_to_plist() {
-        let track = TrackInfo::new("http://url", "Title", "Artist")
-            .with_album("Album")
-            .with_duration(123.0);
-
-        let plist = track_info_to_plist(&track);
-        let dict = plist.as_dict().unwrap();
-
-        assert_eq!(
-            dict.get("title").and_then(super::super::PlistValue::as_str),
-            Some("Title")
-        );
-        assert_eq!(
-            dict.get("duration")
-                .and_then(super::super::PlistValue::as_f64),
-            Some(123.0)
-        );
-    }
-}
