@@ -19,7 +19,7 @@ pub use self::aes::{Aes128Ctr, Aes128Gcm};
 pub use self::chacha::{ChaCha20Poly1305Cipher, Nonce};
 pub use self::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature};
 pub use self::error::CryptoError;
-pub use self::hkdf::{HkdfSha512, derive_key};
+pub use self::hkdf::{AirPlayKeys, HkdfSha512, derive_key};
 pub use self::srp::{SrpClient, SrpVerifier};
 pub use self::x25519::{X25519KeyPair, X25519PublicKey, X25519SharedSecret};
 

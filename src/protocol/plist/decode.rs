@@ -549,4 +549,134 @@ mod tests {
             Err(PlistDecodeError::InvalidObjectMarker(0xFF))
         ));
     }
+
+    #[test]
+    fn test_decode_boolean() {
+        let val = PlistValue::Boolean(true);
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(decoded, PlistValue::Boolean(true)));
+
+        let val = PlistValue::Boolean(false);
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(decoded, PlistValue::Boolean(false)));
+    }
+
+    #[test]
+    fn test_decode_empty_dict() {
+        let val = PlistValue::Dictionary(HashMap::new());
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        match decoded {
+            PlistValue::Dictionary(d) => assert!(d.is_empty()),
+            _ => panic!("Expected dictionary"),
+        }
+    }
+
+    #[test]
+    fn test_decode_integers() {
+        for &i in &[0, 42, 127, 255, 65535, 100_000, -1, -100] {
+            let val = PlistValue::Integer(i);
+            let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+            let decoded = decode(&bytes).unwrap();
+            match decoded {
+                PlistValue::Integer(v) => assert_eq!(v, i),
+                _ => panic!("Expected integer"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_decode_string_ascii() {
+        let s = "Hello World";
+        let val = PlistValue::String(s.to_string());
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        match decoded {
+            PlistValue::String(v) => assert_eq!(v, s),
+            _ => panic!("Expected string"),
+        }
+    }
+
+    #[test]
+    fn test_decode_string_unicode() {
+        let s = "Hello 🌍";
+        let val = PlistValue::String(s.to_string());
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        match decoded {
+            PlistValue::String(v) => assert_eq!(v, s),
+            _ => panic!("Expected string"),
+        }
+    }
+
+    #[test]
+    fn test_decode_array() {
+        let val = PlistValue::Array(vec![
+            PlistValue::Integer(1),
+            PlistValue::String("two".to_string()),
+        ]);
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        match decoded {
+            PlistValue::Array(arr) => {
+                assert_eq!(arr.len(), 2);
+                assert!(matches!(arr[0], PlistValue::Integer(1)));
+                assert!(matches!(arr[1], PlistValue::String(ref s) if s == "two"));
+            }
+            _ => panic!("Expected array"),
+        }
+    }
+
+    #[test]
+    fn test_decode_nested_dict() {
+        let mut inner = HashMap::new();
+        inner.insert("a".to_string(), PlistValue::Integer(1));
+        let mut outer = HashMap::new();
+        outer.insert("inner".to_string(), PlistValue::Dictionary(inner));
+
+        let val = PlistValue::Dictionary(outer);
+        let bytes = crate::protocol::plist::encode::encode(&val).unwrap();
+        let decoded = decode(&bytes).unwrap();
+
+        // Validation logic
+        if let PlistValue::Dictionary(d) = decoded {
+            if let Some(PlistValue::Dictionary(inner_d)) = d.get("inner") {
+                assert_eq!(inner_d.get("a").and_then(|v| v.as_i64()), Some(1));
+            } else {
+                panic!("Nested dictionary missing");
+            }
+        } else {
+            panic!("Expected dictionary");
+        }
+    }
+
+    #[test]
+    fn test_decode_circular_reference() {
+        // Hand-crafted circular reference: Array containing itself
+        let mut data = Vec::new();
+        data.extend_from_slice(b"bplist00"); // 0-8
+
+        // Object 0: Array (0xA1), Ref to 0 (0x00)
+        let obj0_offset = data.len();
+        data.push(0xA1);
+        data.push(0x00);
+
+        // Offset table
+        let offset_table_offset = data.len();
+        data.push(obj0_offset as u8); // Offset 8
+
+        // Trailer
+        data.extend_from_slice(&[0; 5]); // unused
+        data.push(0); // sort
+        data.push(1); // offset_size
+        data.push(1); // ref_size
+        data.extend_from_slice(&1u64.to_be_bytes()); // num_objects
+        data.extend_from_slice(&0u64.to_be_bytes()); // root_index (0)
+        data.extend_from_slice(&(offset_table_offset as u64).to_be_bytes());
+
+        let result = decode(&data);
+        assert!(matches!(result, Err(PlistDecodeError::CircularReference)));
+    }
 }
