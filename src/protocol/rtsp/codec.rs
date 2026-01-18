@@ -215,6 +215,11 @@ impl RtspCodec {
     }
 
     fn parse_headers(&self) -> Result<Option<(Headers, usize)>, RtspCodecError> {
+        // Check for empty headers (just a blank line)
+        if self.buffer.starts_with(b"\r\n") {
+            return Ok(Some((Headers::new(), 2)));
+        }
+
         // Find end of headers (blank line)
         let header_end = self.buffer.windows(4).position(|w| w == b"\r\n\r\n");
 

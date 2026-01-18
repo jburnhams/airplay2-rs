@@ -13,6 +13,8 @@ mod ed25519;
 mod error;
 mod hkdf;
 mod srp;
+#[cfg(test)]
+mod tests;
 mod x25519;
 
 pub use self::aes::{Aes128Ctr, Aes128Gcm};

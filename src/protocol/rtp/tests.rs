@@ -59,6 +59,16 @@ mod packet_tests {
         assert_eq!(samples[0], (0x0100, 0x0302));
         assert_eq!(samples[1], (0x0504, 0x0706));
     }
+
+    #[test]
+    fn test_packet_buffer_too_small() {
+        let buf = [0u8; 5];
+        let result = RtpHeader::decode(&buf);
+        assert!(matches!(
+            result,
+            Err(crate::protocol::rtp::packet::RtpDecodeError::BufferTooSmall { .. })
+        ));
+    }
 }
 
 mod timing_tests {
@@ -130,6 +140,54 @@ mod timing_tests {
         // RTT = (40-0) - (20-10) = 40 - 10 = 30ms ≈ 30000 microseconds
         // Allow some tolerance for floating point
         assert!(rtt > 25000 && rtt < 35000, "RTT was {}", rtt);
+    }
+
+    #[test]
+    fn test_offset_calculation() {
+        // Simulate clock skew
+        // Client time: 100.000
+        // Server time: 105.000 (offset +5s)
+
+        // T1 (Client send): 100.000
+        // T2 (Server recv): 105.010 (+5s + 10ms delay)
+        // T3 (Server send): 105.020 (+5s + 20ms delay)
+        // T4 (Client recv): 100.040 (+40ms delay)
+
+        let t1 = NtpTimestamp {
+            seconds: 100,
+            fraction: 0,
+        };
+        let t2 = NtpTimestamp {
+            seconds: 105,
+            fraction: 0x028F5C28,
+        }; // 10ms
+        let t3 = NtpTimestamp {
+            seconds: 105,
+            fraction: 0x051EB851,
+        }; // 20ms
+        let t4 = NtpTimestamp {
+            seconds: 100,
+            fraction: 0x0A3D70A3,
+        }; // 40ms
+
+        let response = TimingResponse {
+            reference_time: t1,
+            receive_time: t2,
+            send_time: t3,
+        };
+
+        let offset = response.calculate_offset(t4);
+        // ((105.010 - 100.000) + (105.020 - 100.040)) / 2
+        // (5.010 + 4.980) / 2 = 9.990 / 2 = 4.995s = 4995000us
+
+        let expected = 4_995_000;
+        let tolerance = 5_000; // 5ms tolerance
+
+        assert!(
+            (offset - expected).abs() < tolerance,
+            "Offset was {}",
+            offset
+        );
     }
 }
 
@@ -225,5 +283,13 @@ mod codec_tests {
 
         let decoded = decoder.decode_audio(&packet).unwrap();
         assert_eq!(decoded.payload, original);
+    }
+
+    #[test]
+    fn test_packet_builder() {
+        let builder = AudioPacketBuilder::new(0x1234);
+        let packets = builder.add_audio(&vec![0u8; 352 * 4]).unwrap().build();
+
+        assert_eq!(packets.len(), 1);
     }
 }
