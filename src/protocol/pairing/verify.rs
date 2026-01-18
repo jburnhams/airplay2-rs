@@ -4,8 +4,8 @@
 //! without requiring PIN entry again.
 
 use super::{
-    tlv::{TlvDecoder, TlvEncoder, TlvType, errors},
     PairingError, PairingKeys, PairingState, PairingStepResult, SessionKeys,
+    tlv::{TlvDecoder, TlvEncoder, TlvType, errors},
 };
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, HkdfSha512, Nonce,
@@ -189,10 +189,13 @@ impl PairVerify {
         }
 
         // Derive final session keys
-        let shared_secret = self.shared_secret.as_ref().ok_or(PairingError::InvalidState {
-            expected: "shared_secret".to_string(),
-            actual: "none".to_string(),
-        })?;
+        let shared_secret = self
+            .shared_secret
+            .as_ref()
+            .ok_or(PairingError::InvalidState {
+                expected: "shared_secret".to_string(),
+                actual: "none".to_string(),
+            })?;
 
         let hkdf = HkdfSha512::new(Some(b"Control-Salt"), shared_secret);
 

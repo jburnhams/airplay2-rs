@@ -190,10 +190,7 @@ impl TlvDecoder {
             pos += length;
 
             // Concatenate fragmented values
-            items
-                .entry(tlv_type)
-                .or_default()
-                .extend_from_slice(value);
+            items.entry(tlv_type).or_default().extend_from_slice(value);
         }
 
         Ok(Self { items })

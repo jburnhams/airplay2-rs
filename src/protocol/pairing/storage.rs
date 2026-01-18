@@ -114,12 +114,15 @@ impl FileStorage {
         Ok(Self { path, cache })
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn load_all(_path: &std::path::Path) -> Result<HashMap<String, PairingKeys>, StorageError> {
         // Implementation would read from file/database
         // For now, return empty map
         Ok(HashMap::new())
     }
 
+    #[allow(clippy::unused_self)]
+    #[allow(clippy::unnecessary_wraps)]
     fn save_all(&self) -> Result<(), StorageError> {
         // Implementation would write to file/database
         Ok(())

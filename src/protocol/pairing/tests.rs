@@ -1,14 +1,11 @@
 use super::{
-    tlv::{TlvDecoder, TlvEncoder, TlvError, TlvType, errors},
     PairingError, PairingStepResult, TransientPairing,
+    tlv::{TlvDecoder, TlvEncoder, TlvError, TlvType, errors},
 };
 
 #[test]
 fn test_tlv_encode_simple() {
-    let encoded = TlvEncoder::new()
-        .add_state(1)
-        .add_method(0)
-        .build();
+    let encoded = TlvEncoder::new().add_state(1).add_method(0).build();
 
     assert_eq!(
         encoded,
@@ -39,8 +36,8 @@ fn test_tlv_fragmentation() {
     // Should have two TLV entries
     assert_eq!(encoded[0], TlvType::PublicKey as u8);
     assert_eq!(encoded[1], 255); // First chunk is max size
-                                 // 255 bytes of data
-                                 // Then next chunk
+    // 255 bytes of data
+    // Then next chunk
     assert_eq!(encoded[255 + 2], TlvType::PublicKey as u8);
     assert_eq!(encoded[255 + 3], 45); // 300 - 255 = 45
 
@@ -129,7 +126,9 @@ fn test_transient_pairing_flow() {
         Some(b"Pair-Verify-Encrypt-Salt"),
         shared_secret.as_bytes(),
     );
-    let session_key = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info").unwrap();
+    let session_key = hkdf
+        .expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")
+        .unwrap();
 
     // Device signs: device_public || client_public
     let mut proof_data = Vec::new();
@@ -226,7 +225,9 @@ fn test_pair_verify_flow() {
     let shared = device_ephemeral.diffie_hellman(&client_ephemeral);
 
     let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), shared.as_bytes());
-    let session_key = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info").unwrap();
+    let session_key = hkdf
+        .expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")
+        .unwrap();
 
     // Device signs: device_ephemeral || client_ephemeral
     let mut sign_data = Vec::new();
@@ -246,10 +247,7 @@ fn test_pair_verify_flow() {
 
     let m2 = TlvEncoder::new()
         .add_state(2)
-        .add(
-            TlvType::PublicKey,
-            device_ephemeral.public_key().as_bytes(),
-        )
+        .add(TlvType::PublicKey, device_ephemeral.public_key().as_bytes())
         .add(TlvType::EncryptedData, &encrypted)
         .build();
 

@@ -5,8 +5,8 @@
 //! - We don't need to store keys for later
 
 use super::{
-    tlv::{TlvDecoder, TlvEncoder, TlvType},
     PairingError, PairingState, PairingStepResult, SessionKeys,
+    tlv::{TlvDecoder, TlvEncoder, TlvType},
 };
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, X25519KeyPair, X25519PublicKey,
@@ -70,10 +70,7 @@ impl TransientPairing {
         let m1 = TlvEncoder::new()
             .add_state(1)
             .add_byte(TlvType::Method, 0)
-            .add(
-                TlvType::PublicKey,
-                self.our_keypair.public_key().as_bytes(),
-            )
+            .add(TlvType::PublicKey, self.our_keypair.public_key().as_bytes())
             .build();
 
         self.state = PairingState::WaitingResponse;
@@ -118,10 +115,7 @@ impl TransientPairing {
         let shared_secret = self.our_keypair.diffie_hellman(&device_public);
 
         // Derive session keys using HKDF
-        let hkdf = HkdfSha512::new(
-            Some(b"Pair-Verify-Encrypt-Salt"),
-            shared_secret.as_bytes(),
-        );
+        let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), shared_secret.as_bytes());
 
         let session_key = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")?;
 
@@ -187,10 +181,13 @@ impl TransientPairing {
         }
 
         // Derive final session keys
-        let shared_secret = self.shared_secret.as_ref().ok_or(PairingError::InvalidState {
-            expected: "shared_secret set".to_string(),
-            actual: "none".to_string(),
-        })?;
+        let shared_secret = self
+            .shared_secret
+            .as_ref()
+            .ok_or(PairingError::InvalidState {
+                expected: "shared_secret set".to_string(),
+                actual: "none".to_string(),
+            })?;
 
         let hkdf = HkdfSha512::new(Some(b"Control-Salt"), shared_secret);
 
