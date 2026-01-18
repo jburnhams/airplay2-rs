@@ -161,6 +161,25 @@ fn test_header_case_insensitivity() {
     assert_eq!(response.headers.content_length(), Some(0));
 }
 
+#[test]
+fn test_decode_incomplete_header() {
+    let mut codec = RtspCodec::new();
+    codec.feed(b"RTSP/1.0 200 OK\r\nContent-Len").unwrap();
+    assert!(codec.decode().unwrap().is_none());
+}
+
+#[test]
+fn test_decode_reset() {
+    let mut codec = RtspCodec::new();
+    codec.feed(b"RTSP/1.0 200 OK").unwrap(); // Incomplete
+    codec.reset();
+    assert_eq!(codec.buffered_len(), 0);
+
+    // Should be able to decode fresh packet
+    codec.feed(b"RTSP/1.0 200 OK\r\n\r\n").unwrap();
+    assert!(codec.decode().unwrap().is_some());
+}
+
 // --- session.rs tests ---
 
 #[test]
@@ -325,6 +344,16 @@ fn test_method_from_str() {
     assert_eq!("OPTIONS".parse::<Method>(), Ok(Method::Options));
     assert_eq!("options".parse::<Method>(), Ok(Method::Options));
     assert!("INVALID".parse::<Method>().is_err());
+}
+
+#[test]
+fn test_request_builder_methods() {
+    let request = RtspRequest::builder(Method::Play, "rtsp://test")
+        .header("Custom", "Value")
+        .build();
+
+    assert_eq!(request.method, Method::Play);
+    assert_eq!(request.headers.get("Custom"), Some("Value"));
 }
 
 // --- response.rs tests ---

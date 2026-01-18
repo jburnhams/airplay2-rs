@@ -3,7 +3,6 @@
 #![allow(missing_docs)]
 
 pub mod crypto;
-pub mod pairing;
 pub mod plist;
 pub mod rtp;
 pub mod rtsp;
