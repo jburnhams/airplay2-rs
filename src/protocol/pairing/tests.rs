@@ -42,9 +42,9 @@ fn test_tlv_fragmentation() {
     assert_eq!(encoded[255 + 3], 45); // 300 - 255 = 45
 
     // Decode should reassemble
-    let decoder = TlvDecoder::decode(&encoded).unwrap();
-    let decoded = decoder.get(TlvType::PublicKey).unwrap();
-    assert_eq!(decoded, &long_data[..]);
+    let tlv_decoder = TlvDecoder::decode(&encoded).unwrap();
+    let decoded_bytes = tlv_decoder.get(TlvType::PublicKey).unwrap();
+    assert_eq!(decoded_bytes, &long_data[..]);
 }
 
 #[test]
@@ -188,8 +188,8 @@ fn test_transient_pairing_flow() {
                 _ => panic!("Expected Complete"),
             }
         }
-        Ok(res) => panic!("Expected SendData, got {:?}", res),
-        Err(e) => panic!("Error processing M2: {:?}", e),
+        Ok(res) => panic!("Expected SendData, got {res:?}"),
+        Err(e) => panic!("Error processing M2: {e:?}"),
     }
 }
 
@@ -207,8 +207,8 @@ fn test_pair_verify_flow() {
     let our_keys = PairingKeys {
         identifier: b"client-id".to_vec(),
         secret_key: client_long_term.secret_bytes(),
-        public_key: client_long_term.public_key().as_bytes().clone(),
-        device_public_key: device_long_term.public_key().as_bytes().clone(),
+        public_key: *client_long_term.public_key().as_bytes(),
+        device_public_key: *device_long_term.public_key().as_bytes(),
     };
 
     let mut client = PairVerify::new(our_keys, device_long_term.public_key().as_bytes()).unwrap();
