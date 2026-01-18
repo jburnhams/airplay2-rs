@@ -1,19 +1,19 @@
 use super::{
+    PairingError, PairingStepResult, TransientPairing,
     tlv::{TlvDecoder, TlvEncoder, TlvError, TlvType, errors},
-    PairingError, TransientPairing, PairingStepResult,
 };
 
 #[test]
 fn test_tlv_encode_simple() {
-    let encoded = TlvEncoder::new()
-        .add_state(1)
-        .add_method(0)
-        .build();
+    let encoded = TlvEncoder::new().add_state(1).add_method(0).build();
 
-    assert_eq!(encoded, vec![
-        0x06, 0x01, 0x01,  // State = 1
-        0x00, 0x01, 0x00,  // Method = 0
-    ]);
+    assert_eq!(
+        encoded,
+        vec![
+            0x06, 0x01, 0x01, // State = 1
+            0x00, 0x01, 0x00, // Method = 0
+        ]
+    );
 }
 
 #[test]
@@ -110,7 +110,8 @@ fn test_transient_pairing_flow() {
     let m1 = client.start().unwrap();
     let tlv_m1 = TlvDecoder::decode(&m1).unwrap();
     let client_pub_bytes = tlv_m1.get_required(TlvType::PublicKey).unwrap();
-    let client_public = crate::protocol::crypto::X25519PublicKey::from_bytes(client_pub_bytes).unwrap();
+    let client_public =
+        crate::protocol::crypto::X25519PublicKey::from_bytes(client_pub_bytes).unwrap();
 
     // 2. Device Response (M2) simulation
     // Device generates its own keypair
@@ -125,7 +126,9 @@ fn test_transient_pairing_flow() {
         Some(b"Pair-Verify-Encrypt-Salt"),
         shared_secret.as_bytes(),
     );
-    let session_key = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info").unwrap();
+    let session_key = hkdf
+        .expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")
+        .unwrap();
 
     // Device signs: device_public || client_public
     let mut proof_data = Vec::new();
@@ -169,22 +172,22 @@ fn test_transient_pairing_flow() {
             // Client used nonce 0. Device used nonce 0. This is bad for security if same key.
             // But this is implementing spec.
 
-            let decrypted_m3 = cipher.decrypt(&nonce, m3_encrypted).expect("Device failed to decrypt M3");
+            let decrypted_m3 = cipher
+                .decrypt(&nonce, m3_encrypted)
+                .expect("Device failed to decrypt M3");
             let tlv_inner_m3 = TlvDecoder::decode(&decrypted_m3).unwrap();
             let _client_sig = tlv_inner_m3.get_required(TlvType::Signature).unwrap();
 
             // 5. Device sends M4 (OK)
-            let m4 = TlvEncoder::new()
-                .add_state(4)
-                .build();
+            let m4 = TlvEncoder::new().add_state(4).build();
 
             match client.process_m4(&m4) {
                 Ok(PairingStepResult::Complete(keys)) => {
                     assert_ne!(keys.encrypt_key, [0u8; 32]);
-                },
+                }
                 _ => panic!("Expected Complete"),
             }
-        },
+        }
         Ok(res) => panic!("Expected SendData, got {:?}", res),
         Err(e) => panic!("Error processing M2: {:?}", e),
     }
@@ -192,8 +195,10 @@ fn test_transient_pairing_flow() {
 
 #[test]
 fn test_pair_verify_flow() {
+    use crate::protocol::crypto::{
+        ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519Signature, HkdfSha512, Nonce, X25519KeyPair,
+    };
     use crate::protocol::pairing::{PairVerify, PairingKeys};
-    use crate::protocol::crypto::{Ed25519KeyPair, X25519KeyPair, HkdfSha512, ChaCha20Poly1305Cipher, Nonce, Ed25519Signature};
 
     // 0. Setup existing keys (previously paired)
     let client_long_term = Ed25519KeyPair::generate();
@@ -212,17 +217,17 @@ fn test_pair_verify_flow() {
     let m1 = client.start().unwrap();
     let tlv_m1 = TlvDecoder::decode(&m1).unwrap();
     let client_ephemeral_bytes = tlv_m1.get_required(TlvType::PublicKey).unwrap();
-    let client_ephemeral = crate::protocol::crypto::X25519PublicKey::from_bytes(client_ephemeral_bytes).unwrap();
+    let client_ephemeral =
+        crate::protocol::crypto::X25519PublicKey::from_bytes(client_ephemeral_bytes).unwrap();
 
     // 2. Device Process M1 -> M2
     let device_ephemeral = X25519KeyPair::generate();
     let shared = device_ephemeral.diffie_hellman(&client_ephemeral);
 
-    let hkdf = HkdfSha512::new(
-        Some(b"Pair-Verify-Encrypt-Salt"),
-        shared.as_bytes(),
-    );
-    let session_key = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info").unwrap();
+    let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), shared.as_bytes());
+    let session_key = hkdf
+        .expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")
+        .unwrap();
 
     // Device signs: device_ephemeral || client_ephemeral
     let mut sign_data = Vec::new();
@@ -250,36 +255,39 @@ fn test_pair_verify_flow() {
     match client.process_m2(&m2) {
         Ok(PairingStepResult::SendData(m3)) => {
             // 4. Device processes M3
-             let tlv_m3 = TlvDecoder::decode(&m3).unwrap();
-             let m3_encrypted = tlv_m3.get_required(TlvType::EncryptedData).unwrap();
+            let tlv_m3 = TlvDecoder::decode(&m3).unwrap();
+            let m3_encrypted = tlv_m3.get_required(TlvType::EncryptedData).unwrap();
 
-             // Decrypt M3
-             // Spec says client uses nonce [0..01] for M3?
-             // "let nonce = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])?;"
-             let nonce_m3 = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap();
-             let decrypted_m3 = cipher.decrypt(&nonce_m3, m3_encrypted).expect("Device failed to decrypt M3");
+            // Decrypt M3
+            // Spec says client uses nonce [0..01] for M3?
+            // "let nonce = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])?;"
+            let nonce_m3 = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap();
+            let decrypted_m3 = cipher
+                .decrypt(&nonce_m3, m3_encrypted)
+                .expect("Device failed to decrypt M3");
 
-             let tlv_inner = TlvDecoder::decode(&decrypted_m3).unwrap();
-             let client_sig_bytes = tlv_inner.get_required(TlvType::Signature).unwrap();
+            let tlv_inner = TlvDecoder::decode(&decrypted_m3).unwrap();
+            let client_sig_bytes = tlv_inner.get_required(TlvType::Signature).unwrap();
 
-             // Verify client signature: client_ephemeral || device_ephemeral
-             let mut verify_data = Vec::new();
-             verify_data.extend_from_slice(client_ephemeral_bytes);
-             verify_data.extend_from_slice(device_ephemeral.public_key().as_bytes());
+            // Verify client signature: client_ephemeral || device_ephemeral
+            let mut verify_data = Vec::new();
+            verify_data.extend_from_slice(client_ephemeral_bytes);
+            verify_data.extend_from_slice(device_ephemeral.public_key().as_bytes());
 
-             let client_sig = Ed25519Signature::from_bytes(client_sig_bytes).unwrap();
-             client_long_term.public_key().verify(&verify_data, &client_sig).unwrap();
+            let client_sig = Ed25519Signature::from_bytes(client_sig_bytes).unwrap();
+            client_long_term
+                .public_key()
+                .verify(&verify_data, &client_sig)
+                .unwrap();
 
-             // 5. Device sends M4
-             let m4 = TlvEncoder::new()
-                .add_state(4)
-                .build();
+            // 5. Device sends M4
+            let m4 = TlvEncoder::new().add_state(4).build();
 
-             match client.process_m4(&m4) {
-                 Ok(PairingStepResult::Complete(_)) => {},
-                 _ => panic!("Expected Complete"),
-             }
-        },
+            match client.process_m4(&m4) {
+                Ok(PairingStepResult::Complete(_)) => {}
+                _ => panic!("Expected Complete"),
+            }
+        }
         _ => panic!("Expected SendData for M3"),
     }
 }

@@ -4,8 +4,8 @@
 //! The user must enter a PIN displayed on the device.
 
 use super::{
-    tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods},
     PairingError, PairingState, PairingStepResult, SessionKeys,
+    tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods},
 };
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpClient, SrpVerifier,
@@ -104,12 +104,9 @@ impl PairSetup {
         let server_public = tlv.get_required(TlvType::PublicKey)?;
 
         // Get PIN (must be set before this step)
-        let pin = self
-            .pin
-            .as_ref()
-            .ok_or(PairingError::AuthenticationFailed(
-                "PIN not set".to_string(),
-            ))?;
+        let pin = self.pin.as_ref().ok_or(PairingError::AuthenticationFailed(
+            "PIN not set".to_string(),
+        ))?;
 
         // Create SRP client and process challenge
         let srp_client = SrpClient::new()?;
@@ -236,10 +233,13 @@ impl PairSetup {
         // Decrypt device info
         let encrypted = tlv.get_required(TlvType::EncryptedData)?;
 
-        let session_key = self.session_key.as_ref().ok_or(PairingError::InvalidState {
-            expected: "session_key".to_string(),
-            actual: "none".to_string(),
-        })?;
+        let session_key = self
+            .session_key
+            .as_ref()
+            .ok_or(PairingError::InvalidState {
+                expected: "session_key".to_string(),
+                actual: "none".to_string(),
+            })?;
 
         let hkdf = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key);
         let decrypt_key = hkdf.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")?;

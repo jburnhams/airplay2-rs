@@ -190,10 +190,7 @@ impl TlvDecoder {
             pos += length;
 
             // Concatenate fragmented values
-            items
-                .entry(tlv_type)
-                .or_default()
-                .extend_from_slice(value);
+            items.entry(tlv_type).or_default().extend_from_slice(value);
         }
 
         Ok(Self { items })
@@ -202,7 +199,9 @@ impl TlvDecoder {
     /// Get a value by type
     #[must_use]
     pub fn get(&self, tlv_type: TlvType) -> Option<&[u8]> {
-        self.items.get(&(tlv_type as u8)).map(std::vec::Vec::as_slice)
+        self.items
+            .get(&(tlv_type as u8))
+            .map(std::vec::Vec::as_slice)
     }
 
     /// Get a required value
