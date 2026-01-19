@@ -103,32 +103,3 @@ impl DeviceCapabilities {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_device_capabilities_from_features() {
-        // Test known HomePod Mini features value
-        let features = 0x0001_C340_405F_8A00;
-        let caps = DeviceCapabilities::from_features(features);
-
-        assert!(caps.supports_audio);
-        assert!(caps.airplay2);
-    }
-
-    #[test]
-    fn test_device_capabilities_empty() {
-        let caps = DeviceCapabilities::from_features(0);
-
-        assert!(!caps.supports_audio);
-        assert!(!caps.airplay2);
-    }
-
-    #[test]
-    fn test_device_send_sync() {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<AirPlayDevice>();
-    }
-}

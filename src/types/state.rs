@@ -102,37 +102,3 @@ impl From<&PlaybackState> for PlaybackInfo {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_playback_state_default() {
-        let state = PlaybackState::default();
-        assert!(!state.is_playing);
-        assert!(state.current_track.is_none());
-        assert!((state.volume - 0.0).abs() < f32::EPSILON);
-        assert_eq!(state.repeat, RepeatMode::Off);
-    }
-
-    #[test]
-    fn test_playback_info_from_state() {
-        let state = PlaybackState {
-            position_secs: 30.5,
-            is_playing: true,
-            ..Default::default()
-        };
-
-        let info = PlaybackInfo::from(&state);
-
-        assert_eq!(info.position_ms, 30500);
-        assert!(info.is_playing);
-    }
-
-    #[test]
-    fn test_repeat_mode_equality() {
-        assert_eq!(RepeatMode::Off, RepeatMode::Off);
-        assert_ne!(RepeatMode::Off, RepeatMode::All);
-    }
-}

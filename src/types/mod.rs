@@ -5,6 +5,9 @@ mod device;
 mod state;
 mod track;
 
+#[cfg(test)]
+mod tests;
+
 pub use config::{AirPlayConfig, AirPlayConfigBuilder};
 pub use device::{AirPlayDevice, DeviceCapabilities};
 pub use state::{ConnectionState, PlaybackInfo, PlaybackState, RepeatMode};

@@ -99,28 +99,3 @@ impl AirPlayConfigBuilder {
         self.config
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_config_defaults() {
-        let config = AirPlayConfig::default();
-
-        assert_eq!(config.discovery_timeout, Duration::from_secs(5));
-        assert_eq!(config.connection_timeout, Duration::from_secs(10));
-        assert!(!config.debug_protocol);
-    }
-
-    #[test]
-    fn test_config_builder() {
-        let config = AirPlayConfig::builder()
-            .discovery_timeout(Duration::from_secs(10))
-            .debug_protocol(true)
-            .build();
-
-        assert_eq!(config.discovery_timeout, Duration::from_secs(10));
-        assert!(config.debug_protocol);
-    }
-}

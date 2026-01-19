@@ -5,6 +5,8 @@
 
 pub mod codec;
 pub mod headers;
+#[cfg(test)]
+mod headers_tests;
 pub mod request;
 pub mod response;
 pub mod session;

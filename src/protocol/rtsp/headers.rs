@@ -30,8 +30,14 @@ impl Headers {
     }
 
     /// Insert a header (case-insensitive key storage)
+    ///
+    /// If a header with the same name (case-insensitive) already exists, it is replaced.
+    /// The new key casing is preserved.
     pub fn insert(&mut self, name: impl Into<String>, value: impl Into<String>) {
-        self.inner.insert(name.into(), value.into());
+        let name_str = name.into();
+        // Remove existing key if any (case-insensitive)
+        self.inner.retain(|k, _| !k.eq_ignore_ascii_case(&name_str));
+        self.inner.insert(name_str, value.into());
     }
 
     /// Get header value (case-insensitive)
@@ -94,8 +100,10 @@ impl Headers {
 
 impl FromIterator<(String, String)> for Headers {
     fn from_iter<I: IntoIterator<Item = (String, String)>>(iter: I) -> Self {
-        Self {
-            inner: iter.into_iter().collect(),
+        let mut headers = Headers::new();
+        for (k, v) in iter {
+            headers.insert(k, v);
         }
+        headers
     }
 }
