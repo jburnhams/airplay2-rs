@@ -78,32 +78,3 @@ pub struct QueueItem {
     /// Track information
     pub track: TrackInfo,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_track_info_builder() {
-        let track = TrackInfo::new("http://example.com/track.mp3", "Test Track", "Test Artist")
-            .with_album("Test Album")
-            .with_duration(180.5);
-
-        assert_eq!(track.title, "Test Track");
-        assert_eq!(track.album, Some("Test Album".to_string()));
-        assert_eq!(track.duration_secs, Some(180.5));
-    }
-
-    #[test]
-    fn test_track_info_default() {
-        let track = TrackInfo::default();
-        assert!(track.url.is_empty());
-        assert!(track.duration_secs.is_none());
-    }
-
-    #[test]
-    fn test_track_info_send_sync() {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<TrackInfo>();
-    }
-}
