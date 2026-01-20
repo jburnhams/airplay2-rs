@@ -46,7 +46,7 @@ mod audio;
 mod client;
 mod connection;
 mod control;
-mod discovery;
+pub mod discovery;
 mod group;
 mod net;
 mod player;
