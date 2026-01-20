@@ -22,7 +22,7 @@ AirPlay devices advertise themselves via mDNS (multicast DNS) / DNS-SD (Service 
 
 ### 8.1 Discovery Module Structure
 
-- [ ] **8.1.1** Define discovery module
+- [x] **8.1.1** Define discovery module
 
 **File:** `src/discovery/mod.rs`
 
@@ -157,7 +157,7 @@ pub async fn scan_with_config(
 
 ### 8.2 Device Browser
 
-- [ ] **8.2.1** Implement the mDNS browser
+- [x] **8.2.1** Implement the mDNS browser
 
 **File:** `src/discovery/browser.rs`
 
@@ -390,7 +390,7 @@ impl Drop for DeviceBrowserStream {
 
 ### 8.3 TXT Record Parser
 
-- [ ] **8.3.1** Implement TXT record parsing
+- [x] **8.3.1** Implement TXT record parsing
 
 **File:** `src/discovery/parser.rs`
 
@@ -699,15 +699,15 @@ async fn test_discover_real_devices() {
 
 ## Acceptance Criteria
 
-- [ ] `discover()` returns a stream of device events
-- [ ] `scan()` returns a list of devices within timeout
-- [ ] TXT records are parsed correctly
-- [ ] Features flags are parsed (both formats)
-- [ ] Device capabilities are derived from features
-- [ ] Device appearance/removal is detected
-- [ ] Multiple addresses per device are handled
-- [ ] All unit tests pass
-- [ ] Integration test works with real devices (manual)
+- [x] `discover()` returns a stream of device events
+- [x] `scan()` returns a list of devices within timeout
+- [x] TXT records are parsed correctly
+- [x] Features flags are parsed (both formats)
+- [x] Device capabilities are derived from features
+- [x] Device appearance/removal is detected
+- [x] Multiple addresses per device are handled
+- [x] All unit tests pass
+- [x] Integration test works with real devices (manual)
 
 ---
 
