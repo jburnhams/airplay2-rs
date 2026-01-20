@@ -24,12 +24,12 @@ pub fn parse_txt_records(records: &[String]) -> HashMap<String, String> {
 #[must_use]
 pub fn parse_features(features_str: &str) -> Option<DeviceCapabilities> {
     let features = if features_str.contains(',') {
-        // Comma-separated format: "0x1234,0x5678"
+        // Comma-separated format: "low,high" (e.g. "0x1234,0x5678")
         // Combine into single 64-bit value
         let parts: Vec<&str> = features_str.split(',').collect();
         if parts.len() >= 2 {
-            let hi = parse_hex(parts[0])?;
-            let lo = parse_hex(parts[1])?;
+            let lo = parse_hex(parts[0])?;
+            let hi = parse_hex(parts[1])?;
             (hi << 32) | lo
         } else {
             parse_hex(parts[0])?

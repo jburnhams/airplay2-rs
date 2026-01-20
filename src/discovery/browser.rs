@@ -45,26 +45,14 @@ struct DeviceBrowserStream {
     // Config is stored for potential future use or to keep the API consistent,
     // even though mdns-sd configuration is limited.
     config: AirPlayConfig,
-    mdns: Option<mdns_sd::ServiceDaemon>,
-    receiver: Option<mdns_sd::Receiver<mdns_sd::ServiceEvent>>,
+    mdns: mdns_sd::ServiceDaemon,
+    stream: Box<dyn Stream<Item = mdns_sd::ServiceEvent> + Send + Unpin>,
     known_devices: HashMap<String, AirPlayDevice>,
     fullname_map: HashMap<String, String>,
 }
 
 impl DeviceBrowserStream {
     fn new(config: AirPlayConfig) -> Result<Self, AirPlayError> {
-        let mut stream = Self {
-            config,
-            mdns: None,
-            receiver: None,
-            known_devices: HashMap::new(),
-            fullname_map: HashMap::new(),
-        };
-        stream.init()?;
-        Ok(stream)
-    }
-
-    fn init(&mut self) -> Result<(), AirPlayError> {
         let mdns = mdns_sd::ServiceDaemon::new().map_err(|e| AirPlayError::DiscoveryFailed {
             message: format!("Failed to create mDNS daemon: {e}"),
             source: None,
@@ -77,10 +65,17 @@ impl DeviceBrowserStream {
             }
         })?;
 
-        self.mdns = Some(mdns);
-        self.receiver = Some(receiver);
+        // Convert receiver to stream and box it
+        // mdns-sd receiver supports .stream() which returns a RecvStream
+        let stream = Box::new(receiver.into_stream());
 
-        Ok(())
+        Ok(Self {
+            config,
+            mdns,
+            stream,
+            known_devices: HashMap::new(),
+            fullname_map: HashMap::new(),
+        })
     }
 
     fn process_event(&mut self, event: mdns_sd::ServiceEvent) -> Option<DiscoveryEvent> {
@@ -175,17 +170,10 @@ impl Stream for DeviceBrowserStream {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
-            let event = {
-                let Some(receiver) = &mut self.receiver else {
-                    return Poll::Ready(None);
-                };
-
-                let mut stream = receiver.stream();
-                match Pin::new(&mut stream).poll_next(cx) {
-                    Poll::Ready(Some(event)) => event,
-                    Poll::Ready(None) => return Poll::Ready(None),
-                    Poll::Pending => return Poll::Pending,
-                }
+            let event = match Pin::new(&mut self.stream).poll_next(cx) {
+                Poll::Ready(Some(event)) => event,
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => return Poll::Pending,
             };
 
             if let Some(discovery_event) = self.process_event(event) {
@@ -198,9 +186,7 @@ impl Stream for DeviceBrowserStream {
 impl Drop for DeviceBrowserStream {
     fn drop(&mut self) {
         // Stop browsing
-        if let Some(mdns) = self.mdns.take() {
-            let _ = mdns.stop_browse(super::AIRPLAY_SERVICE_TYPE);
-            let _ = mdns.shutdown();
-        }
+        let _ = self.mdns.stop_browse(super::AIRPLAY_SERVICE_TYPE);
+        let _ = self.mdns.shutdown();
     }
 }

@@ -60,9 +60,10 @@ fn test_parse_features_single() {
 #[test]
 fn test_parse_features_comma() {
     let caps = parser::parse_features("0x1C340,0x405F8A00").unwrap();
-    // Check that features from both parts are combined
-    // 0x1C340 << 32 | 0x405F8A00
-    let expected = (0x1C340_u64 << 32) | 0x405F_8A00_u64;
+    // Check that features from both parts are combined. Format is low,high.
+    // So 0x1C340 is low, 0x405F8A00 is high.
+    // 0x405F8A00 << 32 | 0x1C340
+    let expected = (0x405F_8A00_u64 << 32) | 0x1C340_u64;
     assert_eq!(caps.raw_features, expected);
 }
 

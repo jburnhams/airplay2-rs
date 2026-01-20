@@ -30,8 +30,8 @@ pub const RAOP_SERVICE_TYPE: &str = "_raop._tcp.local.";
 /// use airplay2::discovery::{discover, DiscoveryEvent};
 /// use futures::StreamExt;
 ///
-/// # async fn example() {
-/// let mut devices = discover().await;
+/// # async fn example() -> Result<(), airplay2::AirPlayError> {
+/// let mut devices = discover().await?;
 ///
 /// while let Some(event) = devices.next().await {
 ///     match event {
@@ -44,6 +44,7 @@ pub const RAOP_SERVICE_TYPE: &str = "_raop._tcp.local.";
 ///         _ => {}
 ///     }
 /// }
+/// # Ok(())
 /// # }
 /// ```
 ///

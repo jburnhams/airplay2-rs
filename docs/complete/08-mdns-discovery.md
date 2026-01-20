@@ -705,7 +705,7 @@ async fn test_discover_real_devices() {
 - [x] Features flags are parsed (both formats)
 - [x] Device capabilities are derived from features
 - [x] Device appearance/removal is detected
-- [x] Multiple addresses per device are handled
+- [x] Multiple addresses per device are handled (picks first available)
 - [x] All unit tests pass
 - [x] Integration test works with real devices (manual)
 
