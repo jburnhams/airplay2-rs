@@ -46,14 +46,24 @@ pub const RAOP_SERVICE_TYPE: &str = "_raop._tcp.local.";
 /// }
 /// # }
 /// ```
+///
+/// # Errors
+///
+/// Returns an error if the mDNS daemon cannot be initialized.
 #[allow(clippy::unused_async)]
-pub async fn discover() -> impl Stream<Item = DiscoveryEvent> {
+pub async fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
     discover_with_config(AirPlayConfig::default()).await
 }
 
 /// Discover devices with custom configuration
+///
+/// # Errors
+///
+/// Returns an error if the mDNS daemon cannot be initialized.
 #[allow(clippy::unused_async)]
-pub async fn discover_with_config(config: AirPlayConfig) -> impl Stream<Item = DiscoveryEvent> {
+pub async fn discover_with_config(
+    config: AirPlayConfig,
+) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
     let browser = DeviceBrowser::new(config);
     browser.browse()
 }
@@ -102,7 +112,7 @@ pub async fn scan_with_config(
     use std::collections::HashMap;
 
     let browser = DeviceBrowser::new(config);
-    let stream = browser.browse();
+    let stream = browser.browse()?;
 
     let mut devices: HashMap<String, AirPlayDevice> = HashMap::new();
 

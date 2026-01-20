@@ -30,7 +30,11 @@ impl DeviceBrowser {
     }
 
     /// Start browsing for devices
-    pub fn browse(self) -> impl Stream<Item = DiscoveryEvent> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mDNS daemon cannot be initialized.
+    pub fn browse(self) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
         DeviceBrowserStream::new(self.config)
     }
 }
@@ -38,6 +42,8 @@ impl DeviceBrowser {
 /// Stream implementation for device discovery
 struct DeviceBrowserStream {
     #[allow(dead_code)]
+    // Config is stored for potential future use or to keep the API consistent,
+    // even though mdns-sd configuration is limited.
     config: AirPlayConfig,
     mdns: Option<mdns_sd::ServiceDaemon>,
     receiver: Option<mdns_sd::Receiver<mdns_sd::ServiceEvent>>,
@@ -46,14 +52,16 @@ struct DeviceBrowserStream {
 }
 
 impl DeviceBrowserStream {
-    fn new(config: AirPlayConfig) -> Self {
-        Self {
+    fn new(config: AirPlayConfig) -> Result<Self, AirPlayError> {
+        let mut stream = Self {
             config,
             mdns: None,
             receiver: None,
             known_devices: HashMap::new(),
             fullname_map: HashMap::new(),
-        }
+        };
+        stream.init()?;
+        Ok(stream)
     }
 
     fn init(&mut self) -> Result<(), AirPlayError> {
@@ -105,8 +113,7 @@ impl DeviceBrowserStream {
             .unwrap_or_else(|| name.clone());
 
         // Update map
-        self.fullname_map
-            .insert(name.clone(), device_id.clone());
+        self.fullname_map.insert(name.clone(), device_id.clone());
 
         // Parse capabilities from features flag
         let capabilities = txt_records
@@ -167,14 +174,6 @@ impl Stream for DeviceBrowserStream {
     type Item = DiscoveryEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Initialize on first poll
-        if self.mdns.is_none() {
-            if let Err(e) = self.init() {
-                tracing::error!("Discovery init failed: {}", e);
-                return Poll::Ready(None);
-            }
-        }
-
         loop {
             let event = {
                 let Some(receiver) = &mut self.receiver else {

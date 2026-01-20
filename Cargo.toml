@@ -56,7 +56,6 @@ rubato = "0.14"           # Audio resampling
 
 # Persistent storage (optional)
 sled = { version = "0.34", optional = true }
-flume = "0.11.1"
 
 [dev-dependencies]
 tokio = { version = "=1.38.2", features = ["full", "test-util"] }
