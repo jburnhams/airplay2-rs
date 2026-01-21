@@ -424,8 +424,14 @@ fn test_fixture_nested_dict() {
         let decoded = super::decode(&data).unwrap();
         let d = decoded.as_dict().unwrap();
         let parent = d.get("parent").unwrap().as_dict().unwrap();
-        assert_eq!(parent.get("child").and_then(PlistValue::as_str), Some("hello"));
-        assert_eq!(parent.get("grandchild").and_then(PlistValue::as_i64), Some(123));
+        assert_eq!(
+            parent.get("child").and_then(PlistValue::as_str),
+            Some("hello")
+        );
+        assert_eq!(
+            parent.get("grandchild").and_then(PlistValue::as_i64),
+            Some(123)
+        );
     }
 }
 

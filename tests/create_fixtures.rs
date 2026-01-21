@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use airplay2::protocol::plist::{self, PlistValue};
     use airplay2::plist_dict;
+    use airplay2::protocol::plist::{self, PlistValue};
+    use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
-    use std::collections::HashMap;
 
     #[test]
     fn generate_plist_fixtures() {
@@ -48,7 +48,10 @@ mod tests {
 
         // 5. Data Types
         let mut data_map = HashMap::new();
-        data_map.insert("data".to_string(), PlistValue::Data(vec![0xCA, 0xFE, 0xBA, 0xBE]));
+        data_map.insert(
+            "data".to_string(),
+            PlistValue::Data(vec![0xCA, 0xFE, 0xBA, 0xBE]),
+        );
         data_map.insert("date".to_string(), PlistValue::Date(0.0)); // 2001-01-01
         #[allow(clippy::approx_constant)]
         data_map.insert("real".to_string(), PlistValue::Real(3.14159));
