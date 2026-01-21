@@ -48,7 +48,7 @@ mod connection;
 mod control;
 pub mod discovery;
 mod group;
-mod net;
+pub mod net;
 mod player;
 pub mod protocol;
 
