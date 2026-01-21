@@ -33,8 +33,8 @@ fn test_mock_reader() {
 #[cfg(feature = "tokio-runtime")]
 mod tokio_tests {
     use super::*;
-    use crate::net::tokio_impl::{connect_tcp, spawn};
     use crate::net::Runtime;
+    use crate::net::tokio_impl::{connect_tcp, spawn};
 
     #[tokio::test]
     async fn test_tcp_connect_invalid() {

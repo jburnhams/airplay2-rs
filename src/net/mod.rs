@@ -14,7 +14,9 @@ mod tokio_impl;
 #[cfg(test)]
 mod tests;
 
-pub use traits::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Flush, Read, ReadExact, WriteAll};
+pub use traits::{
+    AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Flush, Read, ReadExact, WriteAll,
+};
 
 // Re-export the active runtime's types
 #[cfg(feature = "tokio-runtime")]
@@ -32,7 +34,7 @@ impl Runtime {
     /// Sleep for the specified duration
     #[cfg(feature = "tokio-runtime")]
     pub async fn sleep(duration: std::time::Duration) {
-        tokio::time::sleep(duration).await
+        tokio::time::sleep(duration).await;
     }
 
     /*
@@ -43,6 +45,10 @@ impl Runtime {
     */
 
     /// Run a future with a timeout
+    ///
+    /// # Errors
+    ///
+    /// Returns `TimeoutError` if the future does not complete within the specified duration.
     #[cfg(feature = "tokio-runtime")]
     pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, TimeoutError>
     where
@@ -66,6 +72,7 @@ impl Runtime {
     */
 
     /// Get current timestamp
+    #[must_use]
     pub fn now() -> std::time::Instant {
         std::time::Instant::now()
     }

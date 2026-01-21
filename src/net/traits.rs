@@ -18,21 +18,14 @@ macro_rules! ready {
 /// Async read trait
 pub trait AsyncRead {
     /// Poll for read readiness
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize>>;
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8])
+    -> Poll<Result<usize>>;
 }
 
 /// Async write trait
 pub trait AsyncWrite {
     /// Poll for write readiness
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize>>;
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>>;
 
     /// Poll for flush completion
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>>;

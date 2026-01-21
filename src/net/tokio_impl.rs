@@ -8,7 +8,7 @@ use std::task::{Context, Poll};
 // Re-export tokio types for convenience
 pub use tokio::net::TcpStream;
 pub use tokio::net::UdpSocket;
-pub use tokio::time::{sleep, timeout, Instant};
+pub use tokio::time::{Instant, sleep, timeout};
 
 // We don't re-export Duration here to avoid shadowing std::time::Duration if both are imported
 // users can use std::time::Duration
@@ -29,11 +29,7 @@ impl AsyncRead for TcpStream {
 }
 
 impl AsyncWrite for TcpStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize>> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         tokio::io::AsyncWrite::poll_write(self, cx, buf)
     }
 
@@ -47,11 +43,19 @@ impl AsyncWrite for TcpStream {
 }
 
 /// TCP connection helper
+///
+/// # Errors
+///
+/// Returns an error if connection fails.
 pub async fn connect_tcp(addr: &str) -> Result<TcpStream> {
     TcpStream::connect(addr).await
 }
 
 /// UDP socket helper
+///
+/// # Errors
+///
+/// Returns an error if binding fails.
 pub async fn bind_udp(addr: &str) -> Result<UdpSocket> {
     UdpSocket::bind(addr).await
 }
