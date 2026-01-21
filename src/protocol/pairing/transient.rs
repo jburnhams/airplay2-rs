@@ -29,22 +29,19 @@ pub struct TransientPairing {
 
 impl TransientPairing {
     /// Create a new transient pairing session
-    ///
-    /// # Errors
-    ///
-    /// Returns error if key generation fails
-    pub fn new() -> Result<Self, PairingError> {
+    #[must_use]
+    pub fn new() -> Self {
         let our_keypair = X25519KeyPair::generate();
         let signing_keypair = Ed25519KeyPair::generate();
 
-        Ok(Self {
+        Self {
             state: PairingState::Init,
             our_keypair,
             signing_keypair,
             device_public: None,
             shared_secret: None,
             session_keys: None,
-        })
+        }
     }
 
     /// Get current state
@@ -250,6 +247,6 @@ impl TransientPairing {
 
 impl Default for TransientPairing {
     fn default() -> Self {
-        Self::new().expect("failed to create transient pairing")
+        Self::new()
     }
 }

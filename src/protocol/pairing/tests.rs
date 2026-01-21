@@ -67,7 +67,7 @@ fn test_tlv_missing_field() {
 
 #[test]
 fn test_transient_start() {
-    let mut pairing = TransientPairing::new().unwrap();
+    let mut pairing = TransientPairing::new();
     let m1 = pairing.start().unwrap();
 
     let decoder = TlvDecoder::decode(&m1).unwrap();
@@ -77,7 +77,7 @@ fn test_transient_start() {
 
 #[test]
 fn test_transient_invalid_state() {
-    let mut pairing = TransientPairing::new().unwrap();
+    let mut pairing = TransientPairing::new();
 
     // Try to process M2 without starting
     let result = pairing.process_m2(&[]);
@@ -86,7 +86,7 @@ fn test_transient_invalid_state() {
 
 #[test]
 fn test_transient_device_error() {
-    let mut pairing = TransientPairing::new().unwrap();
+    let mut pairing = TransientPairing::new();
     pairing.start().unwrap();
 
     // Simulate device error response
@@ -104,7 +104,7 @@ fn test_transient_pairing_flow() {
     // This tests the client side of Transient Pairing.
     // To test properly, we need to simulate the Device side.
 
-    let mut client = TransientPairing::new().unwrap();
+    let mut client = TransientPairing::new();
 
     // 1. Client Start (M1)
     let m1 = client.start().unwrap();
