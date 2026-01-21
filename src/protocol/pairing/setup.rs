@@ -29,16 +29,19 @@ pub struct PairSetup {
     device_ltpk: Option<Vec<u8>>,
 }
 
+impl Default for PairSetup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PairSetup {
     /// Create a new Pair-Setup session
-    ///
-    /// # Errors
-    ///
-    /// Returns error if key generation fails
-    pub fn new() -> Result<Self, PairingError> {
+    #[must_use]
+    pub fn new() -> Self {
         let signing_keypair = Ed25519KeyPair::generate();
 
-        Ok(Self {
+        Self {
             state: PairingState::Init,
             pin: None,
             srp_client: None,
@@ -46,7 +49,7 @@ impl PairSetup {
             signing_keypair,
             session_key: None,
             device_ltpk: None,
-        })
+        }
     }
 
     /// Set the PIN for authentication
