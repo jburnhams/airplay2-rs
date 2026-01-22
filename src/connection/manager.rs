@@ -408,31 +408,8 @@ impl ConnectionManager {
                     status_code: None,
                 })?;
 
-        // Parse server_port=X, control_port=Y, timing_port=Z
-        // This is a simplified parser - real one would use regex or split
-        let mut server_audio_port = 0;
-        let mut server_ctrl_port = 0;
-        let mut server_time_port = 0;
-
-        for part in transport_header.split(';') {
-            if let Some((key, value)) = part.trim().split_once('=') {
-                if let Ok(port) = value.parse::<u16>() {
-                    match key {
-                        "server_port" => server_audio_port = port,
-                        "control_port" => server_ctrl_port = port,
-                        "timing_port" => server_time_port = port,
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        if server_audio_port == 0 {
-            return Err(AirPlayError::RtspError {
-                message: "Could not determine server audio port".to_string(),
-                status_code: None,
-            });
-        }
+        let (server_audio_port, server_ctrl_port, server_time_port) =
+            Self::parse_transport_ports(transport_header)?;
 
         // 6. Connect UDP sockets to server ports
         let device_ip = {
@@ -663,5 +640,33 @@ impl ConnectionManager {
     #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<ConnectionEvent> {
         self.event_tx.subscribe()
+    }
+
+    fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {
+        let mut server_audio_port = 0;
+        let mut server_ctrl_port = 0;
+        let mut server_time_port = 0;
+
+        for part in transport_header.split(';') {
+            if let Some((key, value)) = part.trim().split_once('=') {
+                if let Ok(port) = value.parse::<u16>() {
+                    match key {
+                        "server_port" => server_audio_port = port,
+                        "control_port" => server_ctrl_port = port,
+                        "timing_port" => server_time_port = port,
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        if server_audio_port == 0 {
+            return Err(AirPlayError::RtspError {
+                message: "Could not determine server audio port".to_string(),
+                status_code: None,
+            });
+        }
+
+        Ok((server_audio_port, server_ctrl_port, server_time_port))
     }
 }
