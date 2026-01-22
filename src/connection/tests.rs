@@ -34,7 +34,8 @@ mod parsing_tests {
         // we will verify the logic via inspection or integration tests.
         // However, I can create a small test that mimics the parsing logic here to ensure it works.
 
-        let transport_header = "RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;timing_port=6002";
+        let transport_header =
+            "RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;timing_port=6002";
         let mut server_audio_port = 0;
         let mut server_ctrl_port = 0;
         let mut server_time_port = 0;

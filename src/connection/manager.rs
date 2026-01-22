@@ -10,7 +10,7 @@ use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSe
 use crate::types::{AirPlayConfig, AirPlayDevice};
 
 use tokio::net::UdpSocket;
-use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast};
 
 /// Connection manager handles device connections
 pub struct ConnectionManager {
@@ -151,13 +151,14 @@ impl ConnectionManager {
         let addr = format!("{}:{}", device.address, device.port);
         tracing::debug!("Connecting to {}", addr);
 
-        let stream = TcpStream::connect(&addr).await.map_err(|e| {
-            AirPlayError::ConnectionFailed {
-                device_name: device.name.clone(),
-                message: e.to_string(),
-                source: Some(Box::new(e)),
-            }
-        })?;
+        let stream =
+            TcpStream::connect(&addr)
+                .await
+                .map_err(|e| AirPlayError::ConnectionFailed {
+                    device_name: device.name.clone(),
+                    message: e.to_string(),
+                    source: Some(Box::new(e)),
+                })?;
 
         *self.stream.lock().await = Some(stream);
 
@@ -184,10 +185,12 @@ impl ConnectionManager {
     async fn send_options(&self) -> Result<(), AirPlayError> {
         let request = {
             let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard.as_mut().ok_or_else(|| AirPlayError::InvalidState {
-                message: "No RTSP session".to_string(),
-                current_state: "None".to_string(),
-            })?;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
             session.options_request()
         };
 
@@ -195,10 +198,12 @@ impl ConnectionManager {
 
         {
             let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard.as_mut().ok_or_else(|| AirPlayError::InvalidState {
-                message: "RTSP session closed during OPTIONS request".to_string(),
-                current_state: "Disconnected".to_string(),
-            })?;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "RTSP session closed during OPTIONS request".to_string(),
+                    current_state: "Disconnected".to_string(),
+                })?;
 
             session
                 .process_response(Method::Options, &response)
@@ -241,18 +246,22 @@ impl ConnectionManager {
         let mut pairing = TransientPairing::new();
 
         // M1: Start pairing
-        let m1 = pairing.start().map_err(|e| AirPlayError::AuthenticationFailed {
-            message: e.to_string(),
-            recoverable: false,
-        })?;
+        let m1 = pairing
+            .start()
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
 
         let m2 = self.send_pairing_data(&m1, "/pair-setup").await?;
 
         // M2 -> M3
-        let result = pairing.process_m2(&m2).map_err(|e| AirPlayError::AuthenticationFailed {
-            message: e.to_string(),
-            recoverable: false,
-        })?;
+        let result = pairing
+            .process_m2(&m2)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
 
         if let PairingStepResult::Complete(keys) = result {
             return Ok(keys);
@@ -268,10 +277,12 @@ impl ConnectionManager {
         let m4 = self.send_pairing_data(&m3, "/pair-setup").await?;
 
         // M4 -> Complete
-        let result = pairing.process_m4(&m4).map_err(|e| AirPlayError::AuthenticationFailed {
-            message: e.to_string(),
-            recoverable: false,
-        })?;
+        let result = pairing
+            .process_m4(&m4)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
 
         match result {
             PairingStepResult::Complete(keys) => Ok(keys),
@@ -288,25 +299,30 @@ impl ConnectionManager {
         _device: &AirPlayDevice,
         keys: &PairingKeys,
     ) -> Result<SessionKeys, AirPlayError> {
-        let mut pairing = PairVerify::new(keys.clone(), &keys.device_public_key)
+        let mut pairing = PairVerify::new(keys.clone(), &keys.device_public_key).map_err(|e| {
+            AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            }
+        })?;
+
+        // M1: Start verification
+        let m1 = pairing
+            .start()
             .map_err(|e| AirPlayError::AuthenticationFailed {
                 message: e.to_string(),
                 recoverable: false,
             })?;
 
-        // M1: Start verification
-        let m1 = pairing.start().map_err(|e| AirPlayError::AuthenticationFailed {
-            message: e.to_string(),
-            recoverable: false,
-        })?;
-
         let m2 = self.send_pairing_data(&m1, "/pair-verify").await?;
 
         // M2 -> M3
-        let result = pairing.process_m2(&m2).map_err(|e| AirPlayError::AuthenticationFailed {
-            message: e.to_string(),
-            recoverable: false,
-        })?;
+        let result = pairing
+            .process_m2(&m2)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
 
         let PairingStepResult::SendData(m3) = result else {
             return Err(AirPlayError::AuthenticationFailed {
@@ -318,10 +334,12 @@ impl ConnectionManager {
         let m4 = self.send_pairing_data(&m3, "/pair-verify").await?;
 
         // M4 -> Complete
-        let result = pairing.process_m4(&m4).map_err(|e| AirPlayError::AuthenticationFailed {
-            message: e.to_string(),
-            recoverable: false,
-        })?;
+        let result = pairing
+            .process_m4(&m4)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
 
         match result {
             PairingStepResult::Complete(keys) => Ok(keys),
@@ -351,10 +369,12 @@ impl ConnectionManager {
 
         let request = {
             let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard.as_mut().ok_or_else(|| AirPlayError::InvalidState {
-                message: "No RTSP session".to_string(),
-                current_state: "None".to_string(),
-            })?;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
             session.setup_request(&transport)
         };
 
@@ -364,10 +384,12 @@ impl ConnectionManager {
         // 4. Update session state
         {
             let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard.as_mut().ok_or_else(|| AirPlayError::InvalidState {
-                message: "No RTSP session".to_string(),
-                current_state: "None".to_string(),
-            })?;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
             session
                 .process_response(Method::Setup, &response)
                 .map_err(|e| AirPlayError::RtspError {
@@ -377,10 +399,14 @@ impl ConnectionManager {
         }
 
         // 5. Parse response transport header to get server ports
-        let transport_header = response.headers.get("Transport").ok_or(AirPlayError::RtspError {
-            message: "Missing Transport header in SETUP response".to_string(),
-            status_code: None,
-        })?;
+        let transport_header =
+            response
+                .headers
+                .get("Transport")
+                .ok_or(AirPlayError::RtspError {
+                    message: "Missing Transport header in SETUP response".to_string(),
+                    status_code: None,
+                })?;
 
         // Parse server_port=X, control_port=Y, timing_port=Z
         // This is a simplified parser - real one would use regex or split
@@ -412,10 +438,12 @@ impl ConnectionManager {
         let device_ip = {
             let current_state = self.state().await;
             let device_guard = self.device.read().await;
-            let device = device_guard.as_ref().ok_or_else(|| AirPlayError::InvalidState {
-                message: "Device information is missing.".to_string(),
-                current_state: format!("{current_state:?}"),
-            })?;
+            let device = device_guard
+                .as_ref()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "Device information is missing.".to_string(),
+                    current_state: format!("{current_state:?}"),
+                })?;
             device.address
         };
 
@@ -462,9 +490,11 @@ impl ConnectionManager {
         );
 
         let mut stream_guard = self.stream.lock().await;
-        let stream = stream_guard.as_mut().ok_or_else(|| AirPlayError::Disconnected {
-            device_name: "unknown".to_string(),
-        })?;
+        let stream = stream_guard
+            .as_mut()
+            .ok_or_else(|| AirPlayError::Disconnected {
+                device_name: "unknown".to_string(),
+            })?;
 
         // Send request
         stream.write_all(request.as_bytes()).await?;
@@ -493,7 +523,7 @@ impl ConnectionManager {
             }
 
             if buf.len() > 4096 {
-                 return Err(AirPlayError::RtspError {
+                return Err(AirPlayError::RtspError {
                     message: "Headers too large".to_string(),
                     status_code: None,
                 });
@@ -501,17 +531,18 @@ impl ConnectionManager {
         }
 
         // Parse Content-Length
-        let headers = std::str::from_utf8(&buf[..body_start]).map_err(|_| AirPlayError::RtspError {
-             message: "Invalid UTF-8 in headers".to_string(),
-             status_code: None,
-        })?;
+        let headers =
+            std::str::from_utf8(&buf[..body_start]).map_err(|_| AirPlayError::RtspError {
+                message: "Invalid UTF-8 in headers".to_string(),
+                status_code: None,
+            })?;
 
         let mut content_length = 0;
         for line in headers.lines() {
             if let Some(rest) = line.strip_prefix("Content-Length:") {
-                 content_length = rest.trim().parse::<usize>().unwrap_or(0);
+                content_length = rest.trim().parse::<usize>().unwrap_or(0);
             } else if let Some(rest) = line.strip_prefix("content-length:") {
-                 content_length = rest.trim().parse::<usize>().unwrap_or(0);
+                content_length = rest.trim().parse::<usize>().unwrap_or(0);
             }
         }
 
@@ -527,9 +558,11 @@ impl ConnectionManager {
         let encoded = request.encode();
 
         let mut stream_guard = self.stream.lock().await;
-        let stream = stream_guard.as_mut().ok_or_else(|| AirPlayError::Disconnected {
-            device_name: "unknown".to_string(),
-        })?;
+        let stream = stream_guard
+            .as_mut()
+            .ok_or_else(|| AirPlayError::Disconnected {
+                device_name: "unknown".to_string(),
+            })?;
 
         // Send request
         stream.write_all(&encoded).await?;

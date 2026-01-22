@@ -45,7 +45,10 @@ impl ConnectionState {
     /// Check if in a failed state
     #[must_use]
     pub fn is_failed(self) -> bool {
-        matches!(self, ConnectionState::Failed | ConnectionState::Disconnected)
+        matches!(
+            self,
+            ConnectionState::Failed | ConnectionState::Disconnected
+        )
     }
 }
 
