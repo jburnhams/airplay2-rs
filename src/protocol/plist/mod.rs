@@ -86,6 +86,14 @@ impl PlistValue {
         }
     }
 
+    /// Try to get as date (f64 seconds since 2001-01-01)
+    pub fn as_date(&self) -> Option<f64> {
+        match self {
+            PlistValue::Date(d) => Some(*d),
+            _ => None,
+        }
+    }
+
     /// Try to get as string reference
     pub fn as_str(&self) -> Option<&str> {
         match self {
