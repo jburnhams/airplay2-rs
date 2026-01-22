@@ -1,3 +1,10 @@
-//! Connection management module
+//! Connection management
 
-// TODO: Implement in Section 10
+mod manager;
+mod state;
+
+pub use manager::ConnectionManager;
+pub use state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
+
+#[cfg(test)]
+mod tests;
