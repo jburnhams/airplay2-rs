@@ -44,7 +44,7 @@ pub mod types;
 // Internal modules
 mod audio;
 mod client;
-mod connection;
+pub mod connection;
 mod control;
 pub mod discovery;
 mod group;
