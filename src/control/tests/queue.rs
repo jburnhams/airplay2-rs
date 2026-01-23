@@ -53,7 +53,7 @@ fn test_shuffle() {
     let mut queue = PlaybackQueue::new();
 
     for i in 0..10 {
-        queue.add(test_track(&format!("Track {}", i)));
+        queue.add(test_track(&format!("Track {i}")));
     }
 
     queue.set_current(5);
