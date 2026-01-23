@@ -1,7 +1,8 @@
 //! Multi-room support module
 
-/// Manages a group of `AirPlay` devices for synchronized playback.
-#[derive(Debug)]
-pub struct AirPlayGroup;
+mod manager;
 
-// TODO: Implement in Section 19
+#[cfg(test)]
+mod tests;
+
+pub use manager::*;
