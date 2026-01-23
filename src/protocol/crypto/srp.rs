@@ -1,9 +1,11 @@
 use super::CryptoError;
-use sha2_011::Sha512;
+use sha2::Sha512;
+use srp::client::{SrpClient as InnerClient, SrpClientVerifier as InnerVerifier};
+use srp::groups::G_3072;
 use zeroize::Zeroize;
 
 pub struct SrpClient {
-    inner: srp::Client<srp::groups::G3072, Sha512>,
+    inner: InnerClient<'static, Sha512>,
     private_key: Vec<u8>,
     public_key: Vec<u8>,
 }
@@ -26,12 +28,12 @@ impl SrpClient {
     }
 
     pub fn with_private_key(private_key: &[u8]) -> SrpClient {
-        let inner = srp::Client::new();
+        let inner = InnerClient::new(&G_3072);
         let public_key = inner.compute_public_ephemeral(private_key);
         Self {
             inner,
             private_key: private_key.to_vec(),
-            public_key: public_key.clone(),
+            public_key,
         }
     }
 
@@ -56,7 +58,7 @@ impl SrpClient {
 }
 
 pub struct SrpVerifier {
-    inner: srp::ClientVerifier<Sha512>,
+    inner: InnerVerifier<Sha512>,
 }
 
 impl SrpVerifier {
@@ -65,12 +67,13 @@ impl SrpVerifier {
     }
 
     pub fn verify_server(&self, server_proof: &[u8]) -> Result<SessionKey, CryptoError> {
-        let key = self
-            .inner
+        self.inner
             .verify_server(server_proof)
             .map_err(|e| CryptoError::SrpError(format!("{e:?}")))?;
 
-        Ok(SessionKey { key: key.to_vec() })
+        Ok(SessionKey {
+            key: self.inner.key().to_vec(),
+        })
     }
 }
 

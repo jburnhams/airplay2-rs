@@ -254,10 +254,10 @@ fn test_srp_handshake() {
     let salt = b"randomsalt";
 
     // Use Client to compute verifier (simulating registration)
-    let helper_client = ::srp::Client::<::srp::groups::G3072, sha2_011::Sha512>::new();
+    let helper_client = ::srp::client::SrpClient::<sha2::Sha512>::new(&::srp::groups::G_3072);
     let verifier = helper_client.compute_verifier(username, password, salt);
 
-    let server = ::srp::Server::<::srp::groups::G3072, sha2_011::Sha512>::new();
+    let server = ::srp::server::SrpServer::<sha2::Sha512>::new(&::srp::groups::G_3072);
 
     // Server generates ephemeral B
     let mut b_bytes = [0u8; 32];
@@ -274,12 +274,13 @@ fn test_srp_handshake() {
 
     // 5. Server verifies client
     let server_verifier = server
-        .process_reply(username, salt, &b_bytes, &verifier, client_a)
+        .process_reply(&b_bytes, &verifier, client_a)
         .expect("Server failed to process reply");
 
-    let server_key = server_verifier
+    server_verifier
         .verify_client(client_m1)
         .expect("Server failed to verify client");
+    let server_key = server_verifier.key();
 
     let server_m2 = server_verifier.proof();
 
@@ -299,11 +300,11 @@ fn test_srp_invalid_password_fails() {
     let salt = b"salt";
 
     // Helper for registration
-    let helper_client = ::srp::Client::<::srp::groups::G3072, sha2_011::Sha512>::new();
+    let helper_client = ::srp::client::SrpClient::<sha2::Sha512>::new(&::srp::groups::G_3072);
     // Server registered with "wrong" password
     let verifier = helper_client.compute_verifier(username, b"wrong", salt);
 
-    let server = ::srp::Server::<::srp::groups::G3072, sha2_011::Sha512>::new();
+    let server = ::srp::server::SrpServer::<sha2::Sha512>::new(&::srp::groups::G_3072);
     let mut b_bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut b_bytes);
     let server_b_pub = server.compute_public_ephemeral(&b_bytes, &verifier);
@@ -316,7 +317,7 @@ fn test_srp_invalid_password_fails() {
     let client_m1 = client_verifier.client_proof();
 
     let server_verifier = server
-        .process_reply(username, salt, &b_bytes, &verifier, client.public_key())
+        .process_reply(&b_bytes, &verifier, client.public_key())
         .unwrap();
 
     // Verification should fail
