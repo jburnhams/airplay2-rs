@@ -1,9 +1,11 @@
 //! Playback control module
 
 pub mod playback;
-// Other modules will be added in future sections (queue, volume, events)
+pub mod queue;
+// Other modules will be added in future sections (volume, events)
 
 #[cfg(test)]
 mod tests;
 
 pub use playback::{PlaybackController, PlaybackProgress, ShuffleMode};
+pub use queue::PlaybackQueue;

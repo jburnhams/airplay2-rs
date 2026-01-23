@@ -11,4 +11,4 @@ mod tests;
 pub use config::{AirPlayConfig, AirPlayConfigBuilder};
 pub use device::{AirPlayDevice, DeviceCapabilities};
 pub use state::{ConnectionState, PlaybackInfo, PlaybackState, RepeatMode};
-pub use track::{QueueItem, TrackInfo};
+pub use track::{QueueItem, QueueItemId, TrackInfo};

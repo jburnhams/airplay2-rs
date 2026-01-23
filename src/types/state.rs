@@ -97,7 +97,10 @@ impl From<&PlaybackState> for PlaybackInfo {
             items: state
                 .queue
                 .iter()
-                .map(|item| (item.track.clone(), item.item_id))
+                .map(|item| {
+                    #[allow(clippy::cast_possible_truncation)]
+                    (item.track.clone(), item.id.0 as i32)
+                })
                 .collect(),
         }
     }

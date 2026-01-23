@@ -160,12 +160,14 @@ fn test_playback_info_from_state_queue_items() {
     let track = TrackInfo::new("url", "title", "artist");
     let queue = vec![
         QueueItem {
-            item_id: 10,
+            id: QueueItemId(10),
             track: track.clone(),
+            original_position: 0,
         },
         QueueItem {
-            item_id: 20,
+            id: QueueItemId(20),
             track: track.clone(),
+            original_position: 1,
         },
     ];
 
@@ -215,10 +217,11 @@ fn test_track_info_default() {
 fn test_queue_item() {
     let track = TrackInfo::new("u", "t", "a");
     let item = QueueItem {
-        item_id: 123,
+        id: QueueItemId(123),
         track: track.clone(),
+        original_position: 0,
     };
 
-    assert_eq!(item.item_id, 123);
+    assert_eq!(item.id, QueueItemId(123));
     assert_eq!(item.track, track);
 }
