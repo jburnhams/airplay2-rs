@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 /// Information about a track for playback
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TrackInfo {
@@ -69,12 +71,45 @@ impl TrackInfo {
     }
 }
 
+/// Unique identifier for a queue item
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QueueItemId(pub u64);
+
+impl QueueItemId {
+    /// Generate a new unique ID
+    pub fn new() -> Self {
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Default for QueueItemId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A track in the playback queue with unique identifier
 #[derive(Debug, Clone)]
 pub struct QueueItem {
     /// Unique identifier for this queue position
-    pub item_id: i32,
+    pub id: QueueItemId,
 
     /// Track information
     pub track: TrackInfo,
+
+    /// Original position (before shuffle)
+    pub original_position: usize,
+}
+
+impl QueueItem {
+    /// Create a new queue item
+    #[must_use]
+    pub fn new(track: TrackInfo, position: usize) -> Self {
+        Self {
+            id: QueueItemId::new(),
+            track,
+            original_position: position,
+        }
+    }
 }

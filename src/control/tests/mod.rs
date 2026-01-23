@@ -1,3 +1,5 @@
+mod queue;
+
 use super::playback::{PlaybackProgress, ShuffleMode};
 use crate::connection::ConnectionManager;
 use crate::types::AirPlayConfig;
