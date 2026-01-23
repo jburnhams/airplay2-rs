@@ -38,6 +38,8 @@
 // Public modules
 /// Error types
 pub mod error;
+/// State management
+pub mod state;
 /// Core types
 pub mod types;
 
