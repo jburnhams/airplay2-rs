@@ -59,7 +59,7 @@ pub mod streaming;
 // Re-exports
 pub use client::AirPlayClient;
 pub use error::AirPlayError;
-pub use group::AirPlayGroup;
+pub use group::{DeviceGroup, GroupId, GroupManager};
 pub use player::AirPlayPlayer;
 pub use types::{AirPlayConfig, AirPlayDevice, PlaybackInfo, PlaybackState, RepeatMode, TrackInfo};
 
