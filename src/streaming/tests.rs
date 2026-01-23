@@ -125,3 +125,17 @@ async fn test_streaming_loop() {
     let sent = packets.lock().unwrap();
     assert!(!sent.is_empty());
 }
+
+#[tokio::test]
+async fn test_url_streamer_creation() {
+    use crate::connection::ConnectionManager;
+    use crate::streaming::url::UrlStreamer;
+    use crate::types::AirPlayConfig;
+    use std::sync::Arc;
+
+    let config = AirPlayConfig::default();
+    let connection = Arc::new(ConnectionManager::new(config));
+
+    let streamer = UrlStreamer::new(connection);
+    assert!(!streamer.is_playing());
+}

@@ -120,6 +120,15 @@ impl RtspSession {
             .build()
     }
 
+    /// Create PLAY request
+    #[must_use]
+    pub fn play_request(&mut self, content_type: &str, body: Vec<u8>) -> RtspRequest {
+        self.request_builder(Method::Play, "")
+            .content_type(content_type)
+            .body(body)
+            .build()
+    }
+
     /// Create `SET_PARAMETER` request
     #[must_use]
     pub fn set_parameter_request(&mut self, content_type: &str, body: Vec<u8>) -> RtspRequest {
