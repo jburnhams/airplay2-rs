@@ -45,7 +45,7 @@ pub mod types;
 mod audio;
 mod client;
 pub mod connection;
-mod control;
+pub mod control;
 pub mod discovery;
 mod group;
 pub mod net;

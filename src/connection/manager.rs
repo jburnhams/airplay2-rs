@@ -636,6 +636,7 @@ impl ConnectionManager {
                 }
                 Method::GetParameter => session.get_parameter_request(),
                 Method::Teardown => session.teardown_request(),
+                Method::Pause => session.pause_request(),
                 _ => {
                     return Err(AirPlayError::InvalidParameter {
                         name: "method".to_string(),
@@ -657,6 +658,50 @@ impl ConnectionManager {
                         status_code: Some(response.status.as_u16()),
                     }
                 })?;
+            }
+        }
+
+        Ok(response.body)
+    }
+
+    /// Send a POST request (for DACP or other controls)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if command creation or sending fails
+    pub async fn send_post_command(
+        &self,
+        path: &str,
+        body: Option<Vec<u8>>,
+        content_type: Option<String>,
+    ) -> Result<Vec<u8>, AirPlayError> {
+        let request = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+
+            let body = body.unwrap_or_default();
+            let content_type =
+                content_type.unwrap_or_else(|| "application/x-apple-binary-plist".to_string());
+            session.post_request(path, &content_type, body)
+        };
+
+        let response = self.send_rtsp_request(&request).await?;
+
+        // Update session state
+        {
+            let mut session_guard = self.rtsp_session.lock().await;
+            if let Some(session) = session_guard.as_mut() {
+                session
+                    .process_response(Method::Post, &response)
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: e,
+                        status_code: Some(response.status.as_u16()),
+                    })?;
             }
         }
 

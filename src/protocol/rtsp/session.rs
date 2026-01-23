@@ -158,6 +158,21 @@ impl RtspSession {
         self.request_builder(Method::Teardown, "").build()
     }
 
+    /// Create PAUSE request
+    #[must_use]
+    pub fn pause_request(&mut self) -> RtspRequest {
+        self.request_builder(Method::Pause, "").build()
+    }
+
+    /// Create POST request
+    #[must_use]
+    pub fn post_request(&mut self, path: &str, content_type: &str, body: Vec<u8>) -> RtspRequest {
+        self.request_builder(Method::Post, path)
+            .content_type(content_type)
+            .body(body)
+            .build()
+    }
+
     /// Process a response and update session state
     ///
     /// Returns Ok(()) if response is valid, Err with description otherwise.
