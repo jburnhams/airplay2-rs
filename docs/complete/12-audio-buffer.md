@@ -26,7 +26,7 @@ This section implements audio buffering and timing synchronization for AirPlay s
 
 ### 12.1 Ring Buffer
 
-- [ ] **12.1.1** Implement lock-free ring buffer
+- [x] **12.1.1** Implement lock-free ring buffer
 
 **File:** `src/audio/buffer.rs`
 
@@ -294,7 +294,7 @@ mod tests {
 
 ### 12.2 Jitter Buffer
 
-- [ ] **12.2.1** Implement jitter buffer for network compensation
+- [x] **12.2.1** Implement jitter buffer for network compensation
 
 **File:** `src/audio/jitter.rs`
 
@@ -542,7 +542,7 @@ mod tests {
 
 ### 12.3 Audio Clock
 
-- [ ] **12.3.1** Implement audio clock for timing
+- [x] **12.3.1** Implement audio clock for timing
 
 **File:** `src/audio/clock.rs`
 
@@ -736,12 +736,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Ring buffer handles wrap-around correctly
-- [ ] Jitter buffer reorders out-of-order packets
-- [ ] Jitter buffer detects gaps and duplicates
-- [ ] Audio clock tracks position accurately
-- [ ] Timing sync calculates offsets
-- [ ] All unit tests pass
+- [x] Ring buffer handles wrap-around correctly
+- [x] Jitter buffer reorders out-of-order packets
+- [x] Jitter buffer detects gaps and duplicates
+- [x] Audio clock tracks position accurately
+- [x] Timing sync calculates offsets
+- [x] All unit tests pass
 
 ---
 
