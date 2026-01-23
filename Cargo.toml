@@ -34,7 +34,7 @@ tracing = "0.1"
 mdns-sd = "0.12"
 
 # Crypto
-srp = { version = "0.7.0-pre.2" }
+srp = "0.6"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 chacha20poly1305 = "0.10"
@@ -45,7 +45,6 @@ hkdf = "0.12"
 sha2 = "0.10"
 rand = "0.8"
 curve25519-dalek = "4.1"
-sha2_011 = { package = "sha2", version = "0.11.0-rc.3" }
 zeroize = "1.8"
 
 # Serialization
