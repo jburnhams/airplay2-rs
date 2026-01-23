@@ -9,7 +9,7 @@ use crate::protocol::rtp::RtpCodec;
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// RTP packet sender trait
 #[async_trait]
@@ -169,6 +169,9 @@ impl PcmStreamer {
         // The first tick completes immediately
         interval.tick().await;
 
+        // Reusable buffer for refills
+        let mut refill_buffer = vec![0u8; bytes_per_packet * 4];
+
         loop {
             // Wait for next tick
             interval.tick().await;
@@ -248,10 +251,9 @@ impl PcmStreamer {
 
             // Refill buffer in background
             if self.buffer.is_underrunning() {
-                let mut temp = vec![0u8; bytes_per_packet * 4];
-                if let Ok(n) = source.read(&mut temp) {
+                if let Ok(n) = source.read(&mut refill_buffer) {
                     if n > 0 {
-                        self.buffer.write(&temp[..n]);
+                        self.buffer.write(&refill_buffer[..n]);
                     }
                 }
             }

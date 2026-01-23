@@ -63,7 +63,7 @@ async fn test_pcm_streamer_creation() {
 }
 
 use crate::error::AirPlayError;
-use crate::streaming::pcm::RtpSender;
+use crate::streaming::RtpSender;
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
 use tokio::time::Duration;
