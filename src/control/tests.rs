@@ -29,7 +29,7 @@ async fn test_seek_not_implemented() {
     let result = controller.seek(Duration::from_secs(10)).await;
     assert!(result.is_err());
     // verify state didn't change (position is 0.0)
-    assert_eq!(controller.state().await.position_secs, 0.0);
+    assert!(controller.state().await.position_secs.abs() < f64::EPSILON);
 }
 
 #[test]
@@ -40,7 +40,7 @@ fn test_playback_progress() {
         rate: 1.0,
     };
 
-    assert_eq!(progress.progress(), 0.25);
+    assert!((progress.progress() - 0.25).abs() < f64::EPSILON);
     assert_eq!(progress.remaining(), Duration::from_secs(90));
 }
 
@@ -52,7 +52,7 @@ fn test_progress_zero_duration() {
         rate: 0.0,
     };
 
-    assert_eq!(progress.progress(), 0.0);
+    assert!(progress.progress().abs() < f64::EPSILON);
 }
 
 #[test]
