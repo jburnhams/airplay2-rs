@@ -1,5 +1,6 @@
 //! `HomeKit` pairing protocol implementation
 
+pub mod auth_setup;
 pub mod setup;
 pub mod storage;
 pub mod tlv;
@@ -9,6 +10,7 @@ pub mod verify;
 #[cfg(test)]
 mod tests;
 
+pub use auth_setup::AuthSetup;
 pub use setup::PairSetup;
 pub use storage::{PairingKeys, PairingStorage};
 pub use tlv::{TlvDecoder, TlvEncoder, TlvError, TlvType};

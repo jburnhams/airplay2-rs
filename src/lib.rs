@@ -48,7 +48,7 @@ pub mod types;
 pub mod testing;
 
 // Internal modules
-mod audio;
+pub mod audio;
 mod client;
 pub mod connection;
 pub mod control;

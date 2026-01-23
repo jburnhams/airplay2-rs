@@ -44,6 +44,8 @@ pub enum Method {
     GetParameter,
     /// POST for pairing/auth
     Post,
+    /// GET for info
+    Get,
 }
 
 impl Method {
@@ -62,6 +64,7 @@ impl Method {
             Method::SetParameter => "SET_PARAMETER",
             Method::GetParameter => "GET_PARAMETER",
             Method::Post => "POST",
+            Method::Get => "GET",
         }
     }
 }
@@ -82,6 +85,7 @@ impl std::str::FromStr for Method {
             "SET_PARAMETER" => Ok(Method::SetParameter),
             "GET_PARAMETER" => Ok(Method::GetParameter),
             "POST" => Ok(Method::Post),
+            "GET" => Ok(Method::Get),
             _ => Err(()),
         }
     }

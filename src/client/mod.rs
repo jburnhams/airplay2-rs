@@ -7,7 +7,7 @@ use crate::control::volume::{Volume, VolumeController};
 use crate::discovery::{DiscoveryEvent, discover, scan};
 use crate::error::AirPlayError;
 use crate::state::{ClientEvent, ClientState, EventBus, StateContainer};
-use crate::streaming::{AudioSource, PcmStreamer};
+use crate::streaming::{AudioSource, PcmStreamer, UrlStreamer};
 use crate::types::{
     AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
 };
@@ -15,7 +15,7 @@ use crate::types::{
 use futures::Stream;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
 mod tests;
@@ -40,7 +40,7 @@ mod tests;
 ///     client.connect(device).await?;
 ///
 ///     // Stream audio
-///     // client.play_url("https://example.com/audio.mp3").await?;
+///     client.play_url("https://example.com/audio.mp3").await?;
 ///
 ///     // Disconnect
 ///     client.disconnect().await?;
@@ -62,6 +62,8 @@ pub struct AirPlayClient {
     queue: Arc<RwLock<PlaybackQueue>>,
     /// PCM streamer
     streamer: Option<Arc<PcmStreamer>>,
+    /// URL streamer
+    url_streamer: Arc<Mutex<Option<UrlStreamer>>>,
     /// State container
     state: Arc<StateContainer>,
     /// Event bus
@@ -78,6 +80,7 @@ impl AirPlayClient {
         let queue = Arc::new(RwLock::new(PlaybackQueue::new()));
         let state = Arc::new(StateContainer::new());
         let events = Arc::new(EventBus::new());
+        let url_streamer = Arc::new(Mutex::new(None));
 
         Self {
             config,
@@ -86,6 +89,7 @@ impl AirPlayClient {
             volume,
             queue,
             streamer: None,
+            url_streamer,
             state,
             events,
         }
@@ -407,6 +411,32 @@ impl AirPlayClient {
     }
 
     // === Streaming ===
+
+    /// Play a URL
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback fails or device is disconnected.
+    pub async fn play_url(&self, url: &str) -> Result<(), AirPlayError> {
+        if !self.is_connected().await {
+            return Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            });
+        }
+
+        let mut url_streamer_lock = self.url_streamer.lock().await;
+
+        if url_streamer_lock.is_none() {
+            *url_streamer_lock = Some(UrlStreamer::new(self.connection.clone()));
+        }
+
+        if let Some(streamer) = url_streamer_lock.as_mut() {
+            streamer.play(url).await?;
+            self.state.update(|s| s.playback.is_playing = true).await;
+        }
+
+        Ok(())
+    }
 
     /// Stream raw PCM audio from a source
     ///

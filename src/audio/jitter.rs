@@ -62,11 +62,17 @@ pub enum NextPacket<T> {
     /// Need to wait (not enough buffered)
     Wait,
     /// Gap detected (missing packet)
-    Gap { expected: u16, available: u16 },
+    Gap {
+        /// Sequence number expected
+        expected: u16,
+        /// Next available sequence number
+        available: u16,
+    },
 }
 
 impl<T> JitterBuffer<T> {
     /// Create a new jitter buffer
+    #[must_use] 
     pub fn new(target_depth: usize, max_size: usize) -> Self {
         Self {
             packets: BTreeMap::new(),
@@ -158,6 +164,7 @@ impl<T> JitterBuffer<T> {
     }
 
     /// Get current statistics
+    #[must_use] 
     pub fn stats(&self) -> JitterStats {
         JitterStats {
             current_depth: self.packets.len(),
@@ -177,6 +184,7 @@ impl<T> JitterBuffer<T> {
     }
 
     /// Get buffer depth in packets
+    #[must_use] 
     pub fn depth(&self) -> usize {
         self.packets.len()
     }

@@ -15,6 +15,7 @@ pub enum SampleFormat {
 
 impl SampleFormat {
     /// Get bytes per sample
+    #[must_use] 
     pub fn bytes_per_sample(self) -> usize {
         match self {
             SampleFormat::I16 => 2,
@@ -24,6 +25,7 @@ impl SampleFormat {
     }
 
     /// Get bits per sample
+    #[must_use] 
     pub fn bits_per_sample(self) -> u8 {
         match self {
             SampleFormat::I16 => 16,
@@ -49,6 +51,7 @@ pub enum SampleRate {
 
 impl SampleRate {
     /// Get the rate as u32
+    #[must_use] 
     pub fn as_u32(self) -> u32 {
         match self {
             SampleRate::Hz44100 => 44100,
@@ -59,6 +62,7 @@ impl SampleRate {
     }
 
     /// Create from Hz value
+    #[must_use] 
     pub fn from_hz(hz: u32) -> Option<Self> {
         match hz {
             44100 => Some(SampleRate::Hz44100),
@@ -86,6 +90,7 @@ pub enum ChannelConfig {
 
 impl ChannelConfig {
     /// Get number of channels
+    #[must_use] 
     pub fn channels(self) -> u8 {
         match self {
             ChannelConfig::Mono => 1,
@@ -116,6 +121,7 @@ impl AudioFormat {
     };
 
     /// Create a new audio format
+    #[must_use] 
     pub fn new(
         sample_format: SampleFormat,
         sample_rate: SampleRate,
@@ -129,17 +135,20 @@ impl AudioFormat {
     }
 
     /// Get bytes per frame (all channels for one sample)
+    #[must_use] 
     pub fn bytes_per_frame(self) -> usize {
         self.sample_format.bytes_per_sample() * usize::from(self.channels.channels())
     }
 
     /// Get bytes per second
+    #[must_use] 
     pub fn bytes_per_second(self) -> usize {
         self.bytes_per_frame() * self.sample_rate.as_u32() as usize
     }
 
     /// Calculate duration for given number of frames
     #[allow(clippy::cast_precision_loss)]
+    #[must_use] 
     pub fn frames_to_duration(self, frames: usize) -> std::time::Duration {
         std::time::Duration::from_secs_f64(frames as f64 / f64::from(self.sample_rate.as_u32()))
     }
@@ -147,11 +156,13 @@ impl AudioFormat {
     /// Calculate frames for given duration
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
+    #[must_use] 
     pub fn duration_to_frames(self, duration: std::time::Duration) -> usize {
         (duration.as_secs_f64() * f64::from(self.sample_rate.as_u32())) as usize
     }
 
     /// Calculate bytes for given duration
+    #[must_use] 
     pub fn duration_to_bytes(self, duration: std::time::Duration) -> usize {
         self.duration_to_frames(duration) * self.bytes_per_frame()
     }

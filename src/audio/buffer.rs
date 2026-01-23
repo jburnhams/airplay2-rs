@@ -27,6 +27,7 @@ pub struct AudioRingBuffer {
 
 impl AudioRingBuffer {
     /// Create a new ring buffer with given capacity
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         Self {
             data: UnsafeCell::new(vec![0u8; capacity]),
@@ -39,6 +40,11 @@ impl AudioRingBuffer {
     }
 
     /// Create with custom watermarks
+    ///
+    /// # Panics
+    ///
+    /// Panics if `low >= high` or `high > capacity`.
+    #[must_use]
     pub fn with_watermarks(capacity: usize, low: usize, high: usize) -> Self {
         assert!(low < high && high <= capacity);
         Self {

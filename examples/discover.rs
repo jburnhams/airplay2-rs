@@ -2,19 +2,23 @@
 
 use airplay2::scan;
 use std::time::Duration;
+use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Discovering AirPlay devices (requires Section 08 implementation)...");
+    tracing_subscriber::fmt::init();
 
-    // This will currently return an empty list as discovery is not implemented
-    let devices = scan(Duration::from_secs(2)).await?;
+    println!("Discovering AirPlay devices...");
+
+    // Scan for longer
+    let devices = scan(Duration::from_secs(5)).await?;
 
     if devices.is_empty() {
-        println!("No devices found (Discovery module stubbed).");
+        println!("No devices found.");
     } else {
+        println!("Found {} devices:", devices.len());
         for device in devices {
-            println!("Found: {:?}", device);
+            println!("  - {} ({}): {:?}", device.name, device.id, device.address);
         }
     }
     Ok(())

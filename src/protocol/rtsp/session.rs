@@ -54,7 +54,7 @@ impl RtspSession {
             device_id: format!("{device_id:016X}"),
             client_session_id: format!("{session_id:016X}"),
             base_uri: format!("rtsp://{device_address}:{port}"),
-            user_agent: format!("airplay2-rs/{}", env!("CARGO_PKG_VERSION")),
+            user_agent: "AirPlay/540.31".to_string(),
         }
     }
 
@@ -68,6 +68,24 @@ impl RtspSession {
     #[must_use]
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
+    }
+
+    /// Get client session ID
+    #[must_use]
+    pub fn client_session_id(&self) -> &str {
+        &self.client_session_id
+    }
+
+    /// Get device ID
+    #[must_use]
+    pub fn device_id(&self) -> &str {
+        &self.device_id
+    }
+
+    /// Get user agent
+    #[must_use]
+    pub fn user_agent(&self) -> &str {
+        &self.user_agent
     }
 
     /// Get next `CSeq` and increment counter
@@ -88,7 +106,9 @@ impl RtspSession {
             .cseq(self.next_cseq())
             .user_agent(&self.user_agent)
             .header(names::X_APPLE_DEVICE_ID, &self.device_id)
-            .header(names::X_APPLE_SESSION_ID, &self.client_session_id);
+            .header(names::X_APPLE_SESSION_ID, &self.client_session_id)
+            .header(names::ACTIVE_REMOTE, "4294967295")
+            .header(names::DACP_ID, &self.device_id);
 
         if let Some(ref session) = self.session_id {
             builder = builder.session(session);
@@ -187,6 +207,12 @@ impl RtspSession {
             .build()
     }
 
+    /// Create GET request
+    #[must_use]
+    pub fn get_request(&mut self, path: &str) -> RtspRequest {
+        self.request_builder(Method::Get, path).build()
+    }
+
     /// Process a response and update session state
     ///
     /// Returns Ok(()) if response is valid, Err with description otherwise.
@@ -259,7 +285,7 @@ impl RtspSession {
                 SessionState::Paused,
                 Method::Record | Method::Play | Method::Teardown | Method::SetParameter,
             ) => true,
-            (_, Method::Options | Method::Teardown) => true, // OPTIONS and TEARDOWN always allowed
+            (_, Method::Options | Method::Teardown | Method::Get) => true, // OPTIONS, TEARDOWN, GET always allowed
             _ => false,
         }
     }

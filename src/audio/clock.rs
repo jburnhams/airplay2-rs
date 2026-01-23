@@ -19,6 +19,7 @@ pub struct AudioClock {
 
 impl AudioClock {
     /// Create a new audio clock
+    #[must_use] 
     pub fn new(sample_rate: u32) -> Self {
         Self {
             sample_rate,
@@ -123,6 +124,7 @@ pub struct TimingSync {
 
 impl TimingSync {
     /// Create a new timing synchronizer
+    #[must_use] 
     pub fn new(sample_rate: u32) -> Self {
         Self {
             clock: AudioClock::new(sample_rate),

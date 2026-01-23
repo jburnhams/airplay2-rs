@@ -1,10 +1,12 @@
 //! Connection manager for `AirPlay` devices
+#![allow(dead_code)]
 
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::{
-    PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys, TransientPairing,
+    AuthSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
+    TransientPairing,
 };
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice};
@@ -170,12 +172,37 @@ impl ConnectionManager {
         self.set_state(ConnectionState::SettingUp).await;
         self.send_options().await?;
 
+        // 3.5. Try GET /info to check connectivity/auth state
+        tracing::debug!("Sending GET /info...");
+        match self.send_get_command("/info").await {
+            Ok(body) => {
+                if let Ok(plist) = crate::protocol::plist::decode(&body) {
+                    tracing::debug!("GET /info success. Parsed plist: {:#?}", plist);
+                } else {
+                    tracing::debug!("GET /info success (binary): {} bytes", body.len());
+                }
+            }
+            Err(e) => tracing::warn!("GET /info failed: {}", e),
+        }
+
         // 4. Authenticate if required
         self.set_state(ConnectionState::Authenticating).await;
+
+        // 4.1 Perform Auth-Setup (MFi handshake)
+        // Some devices (like Sonos) fail 403 on pair-setup if this is not done first.
+        match self.auth_setup().await {
+            Ok(()) => tracing::info!("Auth-Setup succeeded"),
+            Err(e) => tracing::warn!(
+                "Auth-Setup failed (might be optional for some devices): {}",
+                e
+            ),
+        }
+
         self.authenticate(device).await?;
 
         // 5. Setup RTSP session
         self.set_state(ConnectionState::SettingUp).await;
+
         self.setup_session().await?;
 
         Ok(())
@@ -216,6 +243,38 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Perform Auth-Setup handshake
+    async fn auth_setup(&self) -> Result<(), AirPlayError> {
+        let auth = AuthSetup::new();
+        let body = auth.start();
+
+        tracing::debug!("Sending POST /auth-setup...");
+        let response = self
+            .send_post_command(
+                "/auth-setup",
+                Some(body),
+                Some("application/octet-stream".to_string()),
+            )
+            .await
+            .map_err(|e| {
+                // Some devices might not support/require auth-setup, or return 404 if not needed
+                // But usually AirPlay 2 devices do.
+                tracing::warn!("Auth-Setup failed: {}", e);
+                e
+            })?;
+
+        tracing::debug!("Received Auth-Setup response: {} bytes", response.len());
+
+        auth.process_response(&response)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: format!("Auth-Setup response invalid: {e}"),
+                recoverable: false,
+            })?;
+
+        tracing::info!("Auth-Setup completed successfully.");
+        Ok(())
+    }
+
     /// Authenticate with the device
     async fn authenticate(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
         // Check if we have stored keys
@@ -253,7 +312,9 @@ impl ConnectionManager {
                 recoverable: false,
             })?;
 
+        tracing::debug!("Starting Transient Pairing (M1)...");
         let m2 = self.send_pairing_data(&m1, "/pair-setup").await?;
+        tracing::debug!("Received M2 ({} bytes)", m2.len());
 
         // M2 -> M3
         let result = pairing
@@ -274,7 +335,9 @@ impl ConnectionManager {
             });
         };
 
+        tracing::debug!("Sending M3...");
         let m4 = self.send_pairing_data(&m3, "/pair-setup").await?;
+        tracing::debug!("Received M4 ({} bytes)", m4.len());
 
         // M4 -> Complete
         let result = pairing
@@ -285,7 +348,10 @@ impl ConnectionManager {
             })?;
 
         match result {
-            PairingStepResult::Complete(keys) => Ok(keys),
+            PairingStepResult::Complete(keys) => {
+                tracing::info!("Transient Pairing completed successfully.");
+                Ok(keys)
+            }
             _ => Err(AirPlayError::AuthenticationFailed {
                 message: "Pairing did not complete".to_string(),
                 recoverable: false,
@@ -457,16 +523,63 @@ impl ConnectionManager {
     /// Send pairing data to device
     async fn send_pairing_data(&self, data: &[u8], path: &str) -> Result<Vec<u8>, AirPlayError> {
         // Send as HTTP POST
-        let request = format!(
-            "POST {} HTTP/1.1\r\n\
+        // Note: We need to include the standard RTSP/AirPlay headers here too,
+        // as some devices reject bare HTTP POSTs without the correct User-Agent/identifiers.
+
+        let (device_id, session_id, user_agent) = {
+            let session_guard = self.rtsp_session.lock().await;
+            if let Some(session) = session_guard.as_ref() {
+                (
+                    session.device_id().to_string(),
+                    session.client_session_id().to_string(),
+                    session.user_agent().to_string(),
+                )
+            } else {
+                (String::new(), String::new(), "AirPlay/540.31".to_string())
+            }
+        };
+
+        // Get device address for Host header (required for HTTP/1.1)
+        let host = {
+            let device_guard = self.device.read().await;
+            if let Some(device) = device_guard.as_ref() {
+                format!("{}:{}", device.address, device.port)
+            } else {
+                "127.0.0.1:7000".to_string()
+            }
+        };
+
+        // Construct request with all headers
+        let mut request = format!(
+            "POST {path} HTTP/1.1\r\n\
+             Host: {host}\r\n\
              Content-Type: application/octet-stream\r\n\
              Content-Length: {}\r\n\
-             \r\n",
-            path,
+             User-Agent: {user_agent}\r\n\
+             Active-Remote: 4294967295\r\n",
             data.len()
         );
 
+        // HACK: Re-enable these if we can access them cleanly.
+        // For now, they are stripped because I don't want to re-add the logic to fetch them from private session fields
+        // without adding accessors again (which I did, but I want to keep this clean).
+        // Wait, I DID add accessors to RtspSession.
+
+        if !device_id.is_empty() {
+            use std::fmt::Write;
+            let _ = write!(request, "DACP-ID: {device_id}\r\n");
+            let _ = write!(request, "X-Apple-Device-ID: {device_id}\r\n");
+        }
+
+        if !session_id.is_empty() {
+            use std::fmt::Write;
+            let _ = write!(request, "X-Apple-Session-ID: {session_id}\r\n");
+        }
+
+        request.push_str("\r\n");
+
         let mut stream_guard = self.stream.lock().await;
+
         let stream = stream_guard
             .as_mut()
             .ok_or_else(|| AirPlayError::Disconnected {
@@ -508,14 +621,16 @@ impl ConnectionManager {
         }
 
         // Parse Content-Length
-        let headers =
+        let headers_str =
             std::str::from_utf8(&buf[..body_start]).map_err(|_| AirPlayError::RtspError {
                 message: "Invalid UTF-8 in headers".to_string(),
                 status_code: None,
             })?;
 
+        tracing::debug!("<< Pairing Response Headers:\n{}", headers_str.trim());
+
         let mut content_length = 0;
-        for line in headers.lines() {
+        for line in headers_str.lines() {
             if let Some(rest) = line.strip_prefix("Content-Length:") {
                 content_length = rest.trim().parse::<usize>().unwrap_or(0);
             } else if let Some(rest) = line.strip_prefix("content-length:") {
@@ -527,12 +642,26 @@ impl ConnectionManager {
         let mut body = vec![0u8; content_length];
         stream.read_exact(&mut body).await?;
 
+        // Log pairing response body
+        tracing::debug!(
+            "<< Received Pairing Data ({} bytes): {:02X?}",
+            body.len(),
+            body
+        );
+
         Ok(body)
     }
 
     /// Send RTSP request and get response
     async fn send_rtsp_request(&self, request: &RtspRequest) -> Result<RtspResponse, AirPlayError> {
         let encoded = request.encode();
+
+        // Log outgoing request
+        if let Ok(s) = std::str::from_utf8(&encoded) {
+            tracing::debug!(">> Sending RTSP request:\n{}", s.trim());
+        } else {
+            tracing::debug!(">> Sending RTSP request (binary): {} bytes", encoded.len());
+        }
 
         let mut stream_guard = self.stream.lock().await;
         let stream = stream_guard
@@ -558,6 +687,13 @@ impl ConnectionManager {
                 return Err(AirPlayError::Disconnected {
                     device_name: "unknown".to_string(),
                 });
+            }
+
+            // Log incoming data
+            if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                tracing::debug!("<< Received RTSP data:\n{}", s.trim());
+            } else {
+                tracing::debug!("<< Received RTSP data (binary): {} bytes", n);
             }
 
             self.stats.write().await.record_received(n);
@@ -705,6 +841,33 @@ impl ConnectionManager {
                         status_code: Some(response.status.as_u16()),
                     })?;
             }
+        }
+
+        Ok(response.body)
+    }
+
+    /// Send a GET request
+    ///
+    /// # Errors
+    ///
+    /// Returns error if command creation or sending fails
+    pub async fn send_get_command(&self, path: &str) -> Result<Vec<u8>, AirPlayError> {
+        let request = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            session.get_request(path)
+        };
+
+        let response = self.send_rtsp_request(&request).await?;
+
+        // Log response
+        if let Ok(s) = std::str::from_utf8(&response.body) {
+            tracing::debug!("GET {} response:\n{}", path, s);
         }
 
         Ok(response.body)
