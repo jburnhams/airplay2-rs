@@ -40,6 +40,8 @@
 pub mod error;
 /// Core types
 pub mod types;
+/// State management
+pub mod state;
 
 // Internal modules
 mod audio;
