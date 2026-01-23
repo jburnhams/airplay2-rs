@@ -1,8 +1,8 @@
 use super::CryptoError;
 use sha2::Sha512;
-use zeroize::Zeroize;
 use srp::client::{SrpClient as InnerClient, SrpClientVerifier as InnerVerifier};
 use srp::groups::G_3072;
+use zeroize::Zeroize;
 
 pub struct SrpClient {
     inner: InnerClient<'static, Sha512>,
