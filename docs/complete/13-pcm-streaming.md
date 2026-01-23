@@ -27,7 +27,7 @@ This section implements raw PCM audio streaming to AirPlay devices. It handles:
 
 ### 13.1 Audio Source Trait
 
-- [ ] **13.1.1** Define audio source abstraction
+- [x] **13.1.1** Define audio source abstraction
 
 **File:** `src/streaming/source.rs`
 
@@ -230,7 +230,7 @@ mod tests {
 
 ### 13.2 PCM Streamer
 
-- [ ] **13.2.1** Implement PCM streaming pipeline
+- [x] **13.2.1** Implement PCM streaming pipeline
 
 **File:** `src/streaming/pcm.rs`
 
@@ -515,7 +515,7 @@ mod tests {
 
 ### 13.3 Module Entry Point
 
-- [ ] **13.3.1** Create streaming module
+- [x] **13.3.1** Create streaming module
 
 **File:** `src/streaming/mod.rs`
 
@@ -533,12 +533,12 @@ pub use pcm::{PcmStreamer, StreamerState};
 
 ## Acceptance Criteria
 
-- [ ] AudioSource trait defined with implementations
-- [ ] PCM streamer encodes audio to RTP
-- [ ] Buffer management prevents underruns
-- [ ] Pause/resume works correctly
-- [ ] Seek works for seekable sources
-- [ ] All unit tests pass
+- [x] AudioSource trait defined with implementations
+- [x] PCM streamer encodes audio to RTP
+- [x] Buffer management prevents underruns
+- [x] Pause/resume works correctly
+- [x] Seek works for seekable sources
+- [x] All unit tests pass
 
 ---
 
