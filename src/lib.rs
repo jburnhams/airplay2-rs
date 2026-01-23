@@ -38,10 +38,10 @@
 // Public modules
 /// Error types
 pub mod error;
-/// Core types
-pub mod types;
 /// State management
 pub mod state;
+/// Core types
+pub mod types;
 
 // Internal modules
 mod audio;

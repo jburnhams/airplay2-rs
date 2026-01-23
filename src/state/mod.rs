@@ -5,6 +5,6 @@ mod events;
 #[cfg(test)]
 mod tests;
 
+pub use crate::types::RepeatMode;
 pub use container::{ClientState, StateContainer};
 pub use events::{ClientEvent, ErrorCode, EventBus, EventFilter};
-pub use crate::types::RepeatMode;
