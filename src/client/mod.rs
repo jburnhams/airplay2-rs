@@ -1,51 +1,15 @@
-# Section 21: AirPlayClient Implementation
-
-## Dependencies
-- **Section 08**: mDNS Discovery (must be complete)
-- **Section 10**: Connection Management (must be complete)
-- **Section 13**: PCM Streaming (must be complete)
-- **Section 15**: Playback Control (must be complete)
-- **Section 17**: State and Events (must be complete)
-- **Section 18**: Volume Control (must be complete)
-
-## Overview
-
-This is the main client implementation that ties together all components into a cohesive API. The `AirPlayClient` provides:
-- Device discovery
-- Connection management
-- Audio streaming
-- Playback control
-- Event subscription
-
-## Objectives
-
-- Create unified client interface
-- Manage component lifecycle
-- Provide ergonomic API
-- Handle errors gracefully
-
----
-
-## Tasks
-
-### 21.1 AirPlayClient
-
-- [ ] **21.1.1** Implement the main client
-
-**File:** `src/client.rs`
-
-```rust
-//! Main AirPlay client implementation
+//! Main `AirPlay` client implementation
 
 use crate::discovery::{discover, scan, DiscoveryEvent};
-use crate::connection::{ConnectionManager, ConnectionState, ConnectionEvent};
+use crate::connection::{ConnectionManager, ConnectionState};
 use crate::streaming::{AudioSource, PcmStreamer};
-use crate::control::playback::{PlaybackController, RepeatMode, ShuffleMode};
-use crate::control::queue::{PlaybackQueue, QueueItem, QueueItemId};
+use crate::control::playback::{PlaybackController, ShuffleMode};
+use crate::control::queue::PlaybackQueue;
 use crate::control::volume::{Volume, VolumeController};
 use crate::state::{ClientState, StateContainer, EventBus, ClientEvent};
-use crate::types::{AirPlayDevice, AirPlayConfig, TrackInfo, PlaybackState};
-use crate::audio::AudioFormat;
+use crate::types::{
+    AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
+};
 use crate::error::AirPlayError;
 
 use std::sync::Arc;
@@ -53,7 +17,10 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use futures::Stream;
 
-/// AirPlay client for streaming audio to devices
+#[cfg(test)]
+mod tests;
+
+/// `AirPlay` client for streaming audio to devices
 ///
 /// # Example
 ///
@@ -83,6 +50,7 @@ use futures::Stream;
 /// ```
 pub struct AirPlayClient {
     /// Configuration
+    #[allow(dead_code)]
     config: AirPlayConfig,
     /// Connection manager
     connection: Arc<ConnectionManager>,
@@ -101,7 +69,8 @@ pub struct AirPlayClient {
 }
 
 impl AirPlayClient {
-    /// Create a new AirPlay client
+    /// Create a new `AirPlay` client
+    #[must_use]
     pub fn new(config: AirPlayConfig) -> Self {
         let connection = Arc::new(ConnectionManager::new(config.clone()));
         let playback = Arc::new(PlaybackController::new(connection.clone()));
@@ -123,6 +92,7 @@ impl AirPlayClient {
     }
 
     /// Create with default configuration
+    #[must_use]
     pub fn default_client() -> Self {
         Self::new(AirPlayConfig::default())
     }
@@ -130,18 +100,30 @@ impl AirPlayClient {
     // === Discovery ===
 
     /// Scan for devices with timeout
+    ///
+    /// # Errors
+    ///
+    /// Returns error if mDNS discovery fails.
     pub async fn scan(&self, timeout: Duration) -> Result<Vec<AirPlayDevice>, AirPlayError> {
         scan(timeout).await
     }
 
     /// Discover devices continuously
-    pub async fn discover(&self) -> impl Stream<Item = DiscoveryEvent> {
+    ///
+    /// # Errors
+    ///
+    /// Returns error if mDNS discovery fails.
+    pub async fn discover(&self) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
         discover().await
     }
 
     // === Connection ===
 
     /// Connect to a device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if connection fails.
     pub async fn connect(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
         self.connection.connect(device).await?;
 
@@ -155,6 +137,10 @@ impl AirPlayClient {
     }
 
     /// Disconnect from current device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network operation fails.
     pub async fn disconnect(&self) -> Result<(), AirPlayError> {
         let device = self.state.get().await.device;
 
@@ -186,32 +172,57 @@ impl AirPlayClient {
     // === Playback ===
 
     /// Play (resume if paused)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn play(&self) -> Result<(), AirPlayError> {
         self.playback.play().await?;
-        self.state.set_playback(PlaybackState::Playing).await;
+        self.state.update(|s| s.playback.is_playing = true).await;
         Ok(())
     }
 
     /// Pause playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn pause(&self) -> Result<(), AirPlayError> {
         self.playback.pause().await?;
-        self.state.set_playback(PlaybackState::Paused).await;
+        self.state.update(|s| s.playback.is_playing = false).await;
         Ok(())
     }
 
     /// Toggle play/pause
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn toggle_playback(&self) -> Result<(), AirPlayError> {
         self.playback.toggle().await
     }
 
     /// Stop playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn stop(&self) -> Result<(), AirPlayError> {
         self.playback.stop().await?;
-        self.state.set_playback(PlaybackState::Stopped).await;
+        self.state
+            .update(|s| {
+                s.playback.is_playing = false;
+                s.playback.position_secs = 0.0;
+            })
+            .await;
         Ok(())
     }
 
     /// Skip to next track
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn next(&self) -> Result<(), AirPlayError> {
         self.playback.next().await?;
 
@@ -226,6 +237,10 @@ impl AirPlayClient {
     }
 
     /// Go to previous track
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn previous(&self) -> Result<(), AirPlayError> {
         self.playback.previous().await?;
 
@@ -239,6 +254,10 @@ impl AirPlayClient {
     }
 
     /// Seek to position
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn seek(&self, position: Duration) -> Result<(), AirPlayError> {
         self.playback.seek(position).await
     }
@@ -256,6 +275,10 @@ impl AirPlayClient {
     }
 
     /// Set volume (0.0 - 1.0)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails.
     pub async fn set_volume(&self, level: f32) -> Result<(), AirPlayError> {
         self.volume.set(Volume::new(level)).await?;
         self.state.set_volume(level).await;
@@ -264,6 +287,10 @@ impl AirPlayClient {
     }
 
     /// Increase volume
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails.
     pub async fn volume_up(&self) -> Result<(), AirPlayError> {
         let new_vol = self.volume.step_up().await?;
         self.state.set_volume(new_vol.as_f32()).await;
@@ -271,6 +298,10 @@ impl AirPlayClient {
     }
 
     /// Decrease volume
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails.
     pub async fn volume_down(&self) -> Result<(), AirPlayError> {
         let new_vol = self.volume.step_down().await?;
         self.state.set_volume(new_vol.as_f32()).await;
@@ -278,6 +309,10 @@ impl AirPlayClient {
     }
 
     /// Mute
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails.
     pub async fn mute(&self) -> Result<(), AirPlayError> {
         self.volume.mute().await?;
         self.state.set_muted(true).await;
@@ -285,6 +320,10 @@ impl AirPlayClient {
     }
 
     /// Unmute
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails.
     pub async fn unmute(&self) -> Result<(), AirPlayError> {
         self.volume.unmute().await?;
         self.state.set_muted(false).await;
@@ -292,6 +331,10 @@ impl AirPlayClient {
     }
 
     /// Toggle mute
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails.
     pub async fn toggle_mute(&self) -> Result<bool, AirPlayError> {
         let muted = self.volume.toggle_mute().await?;
         self.state.set_muted(muted).await;
@@ -338,6 +381,10 @@ impl AirPlayClient {
     }
 
     /// Enable/disable shuffle
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn set_shuffle(&self, enabled: bool) -> Result<(), AirPlayError> {
         if enabled {
             self.queue.write().await.shuffle();
@@ -350,6 +397,10 @@ impl AirPlayClient {
     }
 
     /// Set repeat mode
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
     pub async fn set_repeat(&self, mode: RepeatMode) -> Result<(), AirPlayError> {
         self.playback.set_repeat(mode).await
     }
@@ -357,6 +408,10 @@ impl AirPlayClient {
     // === Streaming ===
 
     /// Stream raw PCM audio from a source
+    ///
+    /// # Errors
+    ///
+    /// Returns error if streaming fails or device is disconnected.
     pub async fn stream_audio<S: AudioSource + 'static>(
         &mut self,
         source: S,
@@ -377,6 +432,7 @@ impl AirPlayClient {
     // === Events ===
 
     /// Subscribe to client events
+    #[must_use]
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<ClientEvent> {
         self.events.subscribe()
     }
@@ -387,63 +443,8 @@ impl AirPlayClient {
     }
 
     /// Subscribe to state changes
+    #[must_use]
     pub fn subscribe_state(&self) -> tokio::sync::watch::Receiver<ClientState> {
         self.state.subscribe()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_client_creation() {
-        let client = AirPlayClient::default_client();
-        assert!(!client.is_connected().await);
-    }
-
-    #[tokio::test]
-    async fn test_queue_operations() {
-        let client = AirPlayClient::default_client();
-
-        let track = TrackInfo {
-            title: Some("Test Track".to_string()),
-            artist: Some("Test Artist".to_string()),
-            album: None,
-            duration: Some(Duration::from_secs(180)),
-            artwork_url: None,
-        };
-
-        let id = client.add_to_queue(track.clone()).await;
-        let queue = client.queue().await;
-
-        assert_eq!(queue.len(), 1);
-        assert_eq!(queue[0].track.title, track.title);
-
-        client.remove_from_queue(id).await;
-        assert!(client.queue().await.is_empty());
-    }
-}
-```
-
----
-
-## Acceptance Criteria
-
-- [ ] Client can be created with config
-- [ ] Discovery methods work
-- [ ] Connection lifecycle is managed
-- [ ] Playback controls work
-- [ ] Volume controls work
-- [ ] Queue management works
-- [ ] Events are emitted
-- [ ] All unit tests pass
-
----
-
-## Notes
-
-- Client is the main entry point for users
-- All methods should be async
-- Consider adding builder pattern
-- May need cleanup on drop
