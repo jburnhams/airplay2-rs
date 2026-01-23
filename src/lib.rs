@@ -43,6 +43,9 @@ pub mod state;
 /// Core types
 pub mod types;
 
+/// Testing utilities
+pub mod testing;
+
 // Internal modules
 mod audio;
 mod client;
