@@ -272,6 +272,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_playback_info_defaults() {
         let info = PlaybackInfo {
             position: 0.0,
@@ -289,6 +290,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_parse_playback_info() {
         use crate::plist_dict;
         // Construct a sample plist dictionary
