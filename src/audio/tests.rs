@@ -132,3 +132,143 @@ fn test_resample_linear_upsample() {
     assert!((output[1] - 0.5).abs() < 1e-6);
     assert!((output[2] - 1.0).abs() < 1e-6);
 }
+
+mod buffer_tests {
+    use crate::audio::buffer::*;
+
+    #[test]
+    fn test_write_read_simple() {
+        let buffer = AudioRingBuffer::new(1024);
+
+        let data = vec![1u8, 2, 3, 4, 5];
+        let written = buffer.write(&data);
+        assert_eq!(written, 5);
+        assert_eq!(buffer.available(), 5);
+
+        let mut output = vec![0u8; 5];
+        let read = buffer.read(&mut output);
+        assert_eq!(read, 5);
+        assert_eq!(output, data);
+    }
+
+    #[test]
+    fn test_wraparound() {
+        let buffer = AudioRingBuffer::new(8);
+
+        // Write 5 bytes
+        buffer.write(&[1, 2, 3, 4, 5]);
+        // Read 3 bytes
+        let mut out = vec![0u8; 3];
+        buffer.read(&mut out);
+        assert_eq!(out, vec![1, 2, 3]);
+
+        // Write 5 more (should wrap)
+        buffer.write(&[6, 7, 8, 9, 10]);
+
+        // Read all
+        let mut out = vec![0u8; 7];
+        let n = buffer.read(&mut out);
+        assert_eq!(n, 7);
+        assert_eq!(out, vec![4, 5, 6, 7, 8, 9, 10]);
+    }
+
+    #[test]
+    fn test_peek() {
+        let buffer = AudioRingBuffer::new(1024);
+        buffer.write(&[1, 2, 3, 4, 5]);
+
+        let mut out = vec![0u8; 3];
+        let peeked = buffer.peek(&mut out);
+        assert_eq!(peeked, 3);
+        assert_eq!(out, vec![1, 2, 3]);
+
+        // Data should still be there
+        assert_eq!(buffer.available(), 5);
+    }
+}
+
+mod jitter_tests {
+    use crate::audio::jitter::*;
+
+    #[test]
+    fn test_in_order_packets() {
+        let mut buffer = JitterBuffer::new(2, 10);
+
+        buffer.push(0, "packet0");
+        buffer.push(1, "packet1");
+        buffer.push(2, "packet2");
+
+        assert!(matches!(buffer.pop(), NextPacket::Ready("packet0")));
+        assert!(matches!(buffer.pop(), NextPacket::Ready("packet1")));
+    }
+
+    #[test]
+    fn test_out_of_order_packets() {
+        let mut buffer = JitterBuffer::new(2, 10);
+
+        // Packets arrive out of order
+        buffer.push(1, "packet1");
+        buffer.push(0, "packet0");
+        buffer.push(2, "packet2");
+
+        // Should still come out in order
+        assert!(matches!(buffer.pop(), NextPacket::Ready("packet0")));
+        assert!(matches!(buffer.pop(), NextPacket::Ready("packet1")));
+    }
+
+    #[test]
+    fn test_duplicate_detection() {
+        let mut buffer = JitterBuffer::new(2, 10);
+
+        buffer.push(0, "packet0");
+        let result = buffer.push(0, "duplicate");
+
+        assert!(matches!(result, JitterResult::Duplicate));
+    }
+
+    #[test]
+    fn test_gap_detection() {
+        let mut buffer = JitterBuffer::new(1, 10);
+
+        buffer.push(0, "packet0");
+        buffer.push(2, "packet2"); // Skip 1
+
+        buffer.pop(); // Get packet0, next expected is 1
+
+        // Next pop should detect gap
+        match buffer.pop() {
+            NextPacket::Gap {
+                expected: 1,
+                available: 2,
+            } => {}
+            other => panic!("Expected Gap, got {other:?}"),
+        }
+    }
+}
+
+mod clock_tests {
+    use crate::audio::clock::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_clock_advance() {
+        let clock = AudioClock::new(44100);
+
+        clock.advance(44100);
+        assert_eq!(clock.position(), 44100);
+
+        let duration = clock.time_position();
+        assert!((duration.as_secs_f64() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_frame_duration_conversion() {
+        let clock = AudioClock::new(48000);
+
+        let frames = clock.duration_to_frames(Duration::from_secs(2));
+        assert_eq!(frames, 96000);
+
+        let duration = clock.frames_to_duration(48000);
+        assert_eq!(duration.as_secs(), 1);
+    }
+}

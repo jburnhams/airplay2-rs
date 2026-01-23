@@ -3,13 +3,19 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+pub mod buffer;
+pub mod clock;
 pub mod convert;
 pub mod format;
+pub mod jitter;
 
 #[cfg(test)]
 mod tests;
 
+pub use buffer::AudioRingBuffer;
+pub use clock::{AudioClock, TimingSync};
 pub use convert::{convert_channels, convert_samples, from_f32, resample_linear, to_f32};
 pub use format::{
     AacProfile, AudioCodec, AudioFormat, ChannelConfig, CodecParams, SampleFormat, SampleRate,
 };
+pub use jitter::{JitterBuffer, JitterResult, JitterStats, NextPacket};
