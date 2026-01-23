@@ -15,10 +15,10 @@ fn test_volume_percent() {
 #[test]
 fn test_volume_db() {
     let vol = Volume::MAX;
-    assert_eq!(vol.to_db(), 0.0);
+    assert!((vol.to_db() - 0.0).abs() < f32::EPSILON);
 
     let vol = Volume::MIN;
-    assert_eq!(vol.to_db(), -144.0);
+    assert!((vol.to_db() - -144.0).abs() < f32::EPSILON);
 
     // Test roundtrip
     let vol = Volume::new(0.5);
