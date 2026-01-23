@@ -51,6 +51,8 @@ mod group;
 pub mod net;
 mod player;
 pub mod protocol;
+/// Streaming support
+pub mod streaming;
 
 // Re-exports
 pub use client::AirPlayClient;

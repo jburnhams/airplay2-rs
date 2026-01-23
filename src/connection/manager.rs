@@ -576,6 +576,31 @@ impl ConnectionManager {
         }
     }
 
+    /// Send RTP audio packet
+    ///
+    /// # Errors
+    ///
+    /// Returns error if sockets are not connected or send fails
+    pub async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        let sockets = self.sockets.lock().await;
+        if let Some(ref socks) = *sockets {
+            socks
+                .audio
+                .send(packet)
+                .await
+                .map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to send RTP audio: {e}"),
+                    status_code: None,
+                })?;
+            Ok(())
+        } else {
+            Err(AirPlayError::InvalidState {
+                message: "RTP sockets not connected".to_string(),
+                current_state: "Disconnected".to_string(),
+            })
+        }
+    }
+
     /// Disconnect from device
     ///
     /// # Errors

@@ -183,6 +183,25 @@ pub enum AirPlayError {
         /// The feature that is not implemented
         feature: String,
     },
+
+    /// Invalid parameter provided
+    #[error("invalid parameter: {name} - {message}")]
+    InvalidParameter {
+        /// The name of the parameter
+        name: String,
+        /// Description of the error
+        message: String,
+    },
+
+    /// General I/O error
+    #[error("I/O error: {message}")]
+    IoError {
+        /// Description of the error
+        message: String,
+        /// The underlying source of the error
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 impl AirPlayError {
