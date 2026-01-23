@@ -117,3 +117,60 @@ impl ChaCha20Poly1305Cipher {
             .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chacha_encrypt_decrypt() {
+        let key = [0u8; 32];
+        let nonce = Nonce([1u8; 12]);
+        let data = b"hello world";
+
+        let cipher = ChaCha20Poly1305Cipher::new(&key).unwrap();
+        let encrypted = cipher.encrypt(&nonce, data).unwrap();
+
+        // Tag is 16 bytes
+        assert_eq!(encrypted.len(), data.len() + 16);
+
+        let decrypted = cipher.decrypt(&nonce, &encrypted).unwrap();
+        assert_eq!(decrypted, data);
+    }
+
+    #[test]
+    fn test_chacha_aad() {
+        let key = [0u8; 32];
+        let nonce = Nonce([1u8; 12]);
+        let data = b"hello world";
+        let aad = b"header data";
+
+        let cipher = ChaCha20Poly1305Cipher::new(&key).unwrap();
+        let encrypted = cipher.encrypt_with_aad(&nonce, aad, data).unwrap();
+
+        let decrypted = cipher.decrypt_with_aad(&nonce, aad, &encrypted).unwrap();
+        assert_eq!(decrypted, data);
+
+        // Wrong AAD should fail
+        assert!(
+            cipher
+                .decrypt_with_aad(&nonce, b"wrong", &encrypted)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_chacha_tamper() {
+        let key = [0u8; 32];
+        let nonce = Nonce([1u8; 12]);
+        let data = b"hello world";
+
+        let cipher = ChaCha20Poly1305Cipher::new(&key).unwrap();
+        let mut encrypted = cipher.encrypt(&nonce, data).unwrap();
+
+        // Tamper with data
+        encrypted[0] ^= 0xFF;
+
+        assert!(cipher.decrypt(&nonce, &encrypted).is_err());
+    }
+}

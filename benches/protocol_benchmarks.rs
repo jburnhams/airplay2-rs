@@ -1,5 +1,6 @@
+use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
 
 fn plist_benchmark(c: &mut Criterion) {
@@ -41,6 +42,29 @@ fn plist_benchmark(c: &mut Criterion) {
     });
 }
 
+fn crypto_benchmark(c: &mut Criterion) {
+    let key = [0u8; 16];
+    let iv = [0u8; 16];
+    let mut cipher = Aes128Ctr::new(&key, &iv).unwrap();
+
+    let size = 1024 * 16; // 16KB buffer
+    let mut data = vec![0u8; size];
+
+    let mut group = c.benchmark_group("aes_ctr");
+    group.throughput(Throughput::Bytes(size as u64));
+
+    group.bench_function("encrypt_16k", |b| {
+        b.iter(|| {
+            // CTR is stateful, so typically we'd reset, but for pure throughput
+            // continuously processing is fine or we can clone.
+            // Resetting seek is cheaper.
+            cipher.seek(0);
+            cipher.apply_keystream(black_box(&mut data));
+        })
+    });
+    group.finish();
+}
+
 fn rtsp_encoding_benchmark(c: &mut Criterion) {
     // Stub for now until we have RTSP types available here
     c.bench_function("rtsp_encode_request_stub", |b| {
@@ -50,5 +74,10 @@ fn rtsp_encoding_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, plist_benchmark, rtsp_encoding_benchmark);
+criterion_group!(
+    benches,
+    plist_benchmark,
+    crypto_benchmark,
+    rtsp_encoding_benchmark
+);
 criterion_main!(benches);

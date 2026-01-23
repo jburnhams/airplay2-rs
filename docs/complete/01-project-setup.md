@@ -30,7 +30,7 @@ This section establishes the project structure, build configuration, CI/CD pipel
 name = "airplay2"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.83"
+rust-version = "1.85"
 authors = ["Your Name <email@example.com>"]
 description = "Pure Rust library for streaming audio to AirPlay 2 devices"
 license = "MIT OR Apache-2.0"
@@ -42,7 +42,6 @@ readme = "README.md"
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio", "tokio-util"]
-async-std-runtime = ["async-std"]
 persistent-pairing = ["sled"]
 
 [dependencies]
