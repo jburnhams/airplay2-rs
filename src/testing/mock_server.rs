@@ -15,7 +15,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 /// Configuration for the Mock `AirPlay` Server.
 #[derive(Debug, Clone)]
@@ -295,7 +295,9 @@ impl MockServer {
                 StatusCode::OK,
                 cseq,
                 None,
-                Some("Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST"),
+                Some(
+                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST",
+                ),
             ),
             Method::Setup => {
                 let mut state = state.write().await;
@@ -304,12 +306,18 @@ impl MockServer {
 
                 let body = format!(
                     "Transport: RTP/AVP/UDP;unicast;mode=record;server_port={}-{};control_port={};timing_port={}",
-                    config.audio_port, config.audio_port + 1,
+                    config.audio_port,
+                    config.audio_port + 1,
                     config.control_port,
                     config.timing_port
                 );
 
-                Self::response(StatusCode::OK, cseq, state.session_id.as_deref(), Some(&body))
+                Self::response(
+                    StatusCode::OK,
+                    cseq,
+                    state.session_id.as_deref(),
+                    Some(&body),
+                )
             }
             Method::Record => {
                 state.write().await.streaming = true;
@@ -355,10 +363,7 @@ impl MockServer {
     }
 
     /// Handles pairing requests (POST).
-    async fn handle_pairing(
-        request: &RtspRequest,
-        state: &Arc<RwLock<ServerState>>,
-    ) -> Vec<u8> {
+    async fn handle_pairing(request: &RtspRequest, state: &Arc<RwLock<ServerState>>) -> Vec<u8> {
         let cseq = request.headers.cseq().unwrap_or(0);
 
         // Parse TLV from body
@@ -381,9 +386,7 @@ impl MockServer {
                 // M3 -> M4: Accept and complete
                 state.write().await.pairing_state = 4;
                 state.write().await.paired = true;
-                TlvEncoder::new()
-                    .add_state(4)
-                    .build()
+                TlvEncoder::new().add_state(4).build()
             }
             _ => {
                 return Self::response(StatusCode::NOT_ACCEPTABLE, cseq, None, None);
@@ -395,7 +398,8 @@ impl MockServer {
             "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: {}\r\n\r\n",
             cseq,
             response_body.len()
-        ).into_bytes();
+        )
+        .into_bytes();
 
         response_vec.extend_from_slice(&response_body);
         response_vec

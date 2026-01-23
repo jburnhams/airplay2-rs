@@ -117,7 +117,11 @@ async fn test_set_parameter_volume() {
 
     let mut stream = TcpStream::connect(addr).await.unwrap();
     let volume_cmd = "volume: -10.5";
-    let request = format!("SET_PARAMETER rtsp://localhost/stream RTSP/1.0\r\nCSeq: 1\r\nContent-Length: {}\r\n\r\n{}", volume_cmd.len(), volume_cmd);
+    let request = format!(
+        "SET_PARAMETER rtsp://localhost/stream RTSP/1.0\r\nCSeq: 1\r\nContent-Length: {}\r\n\r\n{}",
+        volume_cmd.len(),
+        volume_cmd
+    );
 
     stream.write_all(request.as_bytes()).await.unwrap();
 
