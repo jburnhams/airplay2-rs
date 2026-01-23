@@ -2,10 +2,11 @@
 
 pub mod playback;
 pub mod queue;
-// Other modules will be added in future sections (volume, events)
+pub mod volume;
 
 #[cfg(test)]
 mod tests;
 
 pub use playback::{PlaybackController, PlaybackProgress, ShuffleMode};
 pub use queue::PlaybackQueue;
+pub use volume::{DeviceVolume, GroupVolumeController, Volume, VolumeController};

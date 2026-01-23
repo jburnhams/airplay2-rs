@@ -140,8 +140,22 @@ impl RtspSession {
 
     /// Create `GET_PARAMETER` request
     #[must_use]
-    pub fn get_parameter_request(&mut self) -> RtspRequest {
-        self.request_builder(Method::GetParameter, "").build()
+    pub fn get_parameter_request(
+        &mut self,
+        content_type: Option<&str>,
+        body: Option<Vec<u8>>,
+    ) -> RtspRequest {
+        let mut builder = self.request_builder(Method::GetParameter, "");
+
+        if let Some(ct) = content_type {
+            builder = builder.content_type(ct);
+        }
+
+        if let Some(b) = body {
+            builder = builder.body(b);
+        }
+
+        builder.build()
     }
 
     /// Create FLUSH request
