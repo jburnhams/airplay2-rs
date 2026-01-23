@@ -464,3 +464,94 @@ fn test_fixture_types() {
         assert!((real_val - 3.14159).abs() < 1e-5);
     }
 }
+
+// --- Enhanced Tests ---
+
+#[test]
+fn test_decode_deeply_nested_recursion_limit() {
+    // We don't have a recursion limit implemented yet (except stack limit).
+    // Let's create a nested dict 500 levels deep.
+    // If it overflows stack, we should probably implement a limit, but for now just test robust encoding/decoding.
+
+    let mut val = PlistValue::Integer(0);
+    for _ in 0..500 {
+        let mut map = HashMap::new();
+        map.insert("n".to_string(), val);
+        val = PlistValue::Dictionary(map);
+    }
+
+    let encoded = super::encode(&val).unwrap();
+    let decoded = super::decode(&encoded).unwrap();
+
+    // Verify depth?
+    let mut curr = &decoded;
+    for _ in 0..500 {
+        if let PlistValue::Dictionary(d) = curr {
+            curr = d.get("n").unwrap();
+        } else {
+            panic!("Expected dictionary");
+        }
+    }
+    assert!(matches!(curr, PlistValue::Integer(0)));
+}
+
+#[test]
+fn test_decode_integer_overflow_edge_cases() {
+    // Test u64 max.
+    let val = PlistValue::UnsignedInteger(u64::MAX);
+    let encoded = super::encode(&val).unwrap();
+    let decoded = super::decode(&encoded).unwrap();
+
+    assert_eq!(decoded, val);
+}
+
+#[test]
+fn test_decode_invalid_utf8() {
+    // 0x5 string with invalid utf8
+    let mut data = b"bplist00".to_vec();
+    // Object: ASCII string of length 1
+    // 0x51
+    data.push(0x51);
+    // Invalid byte 0xFF
+    data.push(0xFF);
+
+    // Construct trailer...
+    let offset_table_start = data.len();
+    data.push(8); // Offset of object 0 is 8
+
+    // Trailer
+    data.extend_from_slice(&[0; 5]); // unused
+    data.push(0); // sort
+    data.push(1); // offset_size
+    data.push(1); // ref_size
+    data.extend_from_slice(&1u64.to_be_bytes()); // num_objects
+    data.extend_from_slice(&0u64.to_be_bytes()); // root
+    data.extend_from_slice(&(offset_table_start as u64).to_be_bytes()); // offset table
+
+    let result = super::decode(&data);
+    assert!(matches!(result, Err(PlistDecodeError::InvalidUtf8)));
+}
+
+#[test]
+fn test_decode_unknown_marker() {
+    let mut data = b"bplist00".to_vec();
+    data.push(0x70); // 0x7 is not a standard marker type in our implementation
+
+    let offset_table_start = data.len();
+    data.push(8); // Offset of object 0 is 8
+
+    // Trailer
+    data.extend_from_slice(&[0; 5]);
+    data.push(0);
+    data.push(1);
+    data.push(1);
+    data.extend_from_slice(&1u64.to_be_bytes());
+    data.extend_from_slice(&0u64.to_be_bytes());
+    data.extend_from_slice(&(offset_table_start as u64).to_be_bytes());
+
+    let result = super::decode(&data);
+    assert!(matches!(
+        result,
+        Err(PlistDecodeError::InvalidObjectMarker(0x70))
+    ));
+}

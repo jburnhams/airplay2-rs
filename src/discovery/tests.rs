@@ -85,3 +85,53 @@ async fn test_scan_with_timeout() {
     let result = scan(Duration::from_millis(100)).await;
     assert!(result.is_ok());
 }
+
+// --- Enhanced Tests ---
+
+#[test]
+fn test_parse_txt_records_edge_cases() {
+    let records = vec![
+        "key1=val1".to_string(),
+        "key2=".to_string(), // Empty value
+        "key3".to_string(),  // Missing equals
+        "=".to_string(),     // Empty key and value
+        "=val".to_string(),  // Empty key
+    ];
+
+    let parsed = parser::parse_txt_records(&records);
+
+    assert_eq!(parsed.get("key1"), Some(&"val1".to_string()));
+    assert_eq!(parsed.get("key2"), Some(&String::new()));
+    // "key3" -> parts: ["key3"] -> key="key3", val=""
+    assert_eq!(parsed.get("key3"), Some(&String::new()));
+
+    // "=".to_string() -> key="", value=""
+    // "=val" -> key="", value="val"
+    // The last one overwrites.
+    assert!(parsed.contains_key(""));
+    // Depends on iteration order or if it's deterministic. Vec iteration is deterministic.
+    // "=" comes first, then "=val". So empty key should have "val".
+    assert_eq!(parsed.get(""), Some(&"val".to_string()));
+}
+
+#[test]
+fn test_parse_features_malformed() {
+    assert!(parser::parse_features("invalid").is_none());
+    assert!(parser::parse_features("0xGG").is_none());
+    assert!(parser::parse_features("").is_none());
+
+    // Partial valid
+    assert!(parser::parse_features("0x1,invalid").is_none());
+
+    // Extra spaces
+    let caps = parser::parse_features(" 0x1 ").unwrap();
+    assert_eq!(caps.raw_features, 1);
+}
+
+#[test]
+fn test_parse_features_large_values() {
+    // Max u64
+    let max_hex = format!("0x{:X}", u64::MAX);
+    let caps = parser::parse_features(&max_hex).unwrap();
+    assert_eq!(caps.raw_features, u64::MAX);
+}
