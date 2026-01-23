@@ -273,10 +273,13 @@ impl GroupManager {
 
     /// Delete a group
     pub async fn delete_group(&self, id: &GroupId) -> Option<DeviceGroup> {
-        let group = self.groups.write().await.remove(id)?;
+        // Lock order: groups -> device_groups
+        let mut groups = self.groups.write().await;
+        let mut device_groups = self.device_groups.write().await;
+
+        let group = groups.remove(id)?;
 
         // Remove device mappings
-        let mut device_groups = self.device_groups.write().await;
         for member in &group.members {
             device_groups.remove(&member.device.id);
         }
@@ -342,10 +345,11 @@ impl GroupManager {
     ///
     /// Returns error if internal state is inconsistent (rare)
     pub async fn remove_device_from_group(&self, device_id: &str) -> Result<(), AirPlayError> {
-        let group_id = self.device_groups.write().await.remove(device_id);
+        // Lock order: groups -> device_groups
+        let mut groups = self.groups.write().await;
+        let mut device_groups = self.device_groups.write().await;
 
-        if let Some(group_id) = group_id {
-            let mut groups = self.groups.write().await;
+        if let Some(group_id) = device_groups.remove(device_id) {
             if let Some(group) = groups.get_mut(&group_id) {
                 group.remove_member(device_id);
 

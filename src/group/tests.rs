@@ -1,16 +1,17 @@
 use super::manager::*;
 use crate::control::volume::Volume;
-use crate::types::AirPlayDevice;
+use crate::types::{AirPlayDevice, DeviceCapabilities};
+use std::collections::HashMap;
 
 fn test_device(id: &str) -> AirPlayDevice {
     AirPlayDevice {
         id: id.to_string(),
-        name: format!("Device {}", id),
+        name: format!("Device {id}"),
         model: None,
         address: "127.0.0.1".parse().unwrap(),
         port: 7000,
-        capabilities: Default::default(),
-        txt_records: Default::default(),
+        capabilities: DeviceCapabilities::default(),
+        txt_records: HashMap::default(),
     }
 }
 
