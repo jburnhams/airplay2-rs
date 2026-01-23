@@ -1,45 +1,11 @@
-# Section 19: Multi-room Grouping
-
-## Dependencies
-- **Section 08**: mDNS Discovery (must be complete)
-- **Section 10**: Connection Management (must be complete)
-- **Section 18**: Volume Control (must be complete)
-
-## Overview
-
-AirPlay 2 supports multi-room audio where multiple devices can be grouped to play audio in sync. This section implements:
-- Device group management
-- Synchronized playback
-- Per-device volume control
-- Group discovery
-
-## Objectives
-
-- Implement device grouping
-- Handle clock synchronization
-- Support adding/removing devices from groups
-- Manage per-device settings
-
----
-
-## Tasks
-
-### 19.1 Group Manager
-
-- [ ] **19.1.1** Implement device grouping
-
-**File:** `src/multiroom/group.rs`
-
-```rust
 //! Multi-room group management
 
-use crate::types::AirPlayDevice;
-use crate::connection::ConnectionManager;
-use crate::control::volume::{Volume, VolumeController};
+use crate::control::volume::Volume;
 use crate::error::AirPlayError;
+use crate::types::AirPlayDevice;
 
+use rand::Rng;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Unique identifier for a group
@@ -48,18 +14,20 @@ pub struct GroupId(String);
 
 impl GroupId {
     /// Create a new random group ID
+    #[must_use]
     pub fn new() -> Self {
-        use rand::Rng;
-        let id: u128 = rand::thread_rng().gen();
-        Self(format!("{:032X}", id))
+        let id: u128 = rand::thread_rng().r#gen();
+        Self(format!("{id:032X}"))
     }
 
     /// Create from string
+    #[must_use]
     pub fn from_string(s: impl Into<String>) -> Self {
         Self(s.into())
     }
 
     /// Get as string
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -84,8 +52,8 @@ pub struct GroupMember {
     pub connected: bool,
 }
 
-/// A group of AirPlay devices
-#[derive(Debug)]
+/// A group of `AirPlay` devices
+#[derive(Debug, Clone)]
 pub struct DeviceGroup {
     /// Group identifier
     pub id: GroupId,
@@ -101,6 +69,7 @@ pub struct DeviceGroup {
 
 impl DeviceGroup {
     /// Create a new empty group
+    #[must_use]
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             id: GroupId::new(),
@@ -112,6 +81,7 @@ impl DeviceGroup {
     }
 
     /// Create a group with a leader device
+    #[must_use]
     pub fn with_leader(name: impl Into<String>, device: AirPlayDevice) -> Self {
         let leader_id = device.id.clone();
         let member = GroupMember {
@@ -166,16 +136,19 @@ impl DeviceGroup {
     }
 
     /// Get the group leader
+    #[must_use]
     pub fn leader(&self) -> Option<&GroupMember> {
         self.members.iter().find(|m| m.is_leader)
     }
 
     /// Get all members
+    #[must_use]
     pub fn members(&self) -> &[GroupMember] {
         &self.members
     }
 
     /// Get member by device ID
+    #[must_use]
     pub fn member(&self, device_id: &str) -> Option<&GroupMember> {
         self.members.iter().find(|m| m.device.id == device_id)
     }
@@ -193,6 +166,7 @@ impl DeviceGroup {
     }
 
     /// Get group volume
+    #[must_use]
     pub fn volume(&self) -> Volume {
         self.volume
     }
@@ -203,30 +177,33 @@ impl DeviceGroup {
     }
 
     /// Get effective volume for a device
+    #[must_use]
     pub fn effective_volume(&self, device_id: &str) -> Volume {
-        let member_vol = self.member(device_id)
-            .map(|m| m.volume)
-            .unwrap_or(Volume::MAX);
+        let member_vol = self.member(device_id).map_or(Volume::MAX, |m| m.volume);
 
         Volume::new(self.volume.as_f32() * member_vol.as_f32())
     }
 
     /// Check if group is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.members.is_empty()
     }
 
     /// Get member count
+    #[must_use]
     pub fn member_count(&self) -> usize {
         self.members.len()
     }
 
     /// Check if all members are connected
+    #[must_use]
     pub fn all_connected(&self) -> bool {
         self.members.iter().all(|m| m.connected)
     }
 
     /// Get connected member count
+    #[must_use]
     pub fn connected_count(&self) -> usize {
         self.members.iter().filter(|m| m.connected).count()
     }
@@ -242,6 +219,7 @@ pub struct GroupManager {
 
 impl GroupManager {
     /// Create a new group manager
+    #[must_use]
     pub fn new() -> Self {
         Self {
             groups: RwLock::new(HashMap::new()),
@@ -258,30 +236,50 @@ impl GroupManager {
     }
 
     /// Create a group with initial devices
+    ///
+    /// # Errors
+    ///
+    /// Returns error if any device is already in a group
     pub async fn create_group_with_devices(
         &self,
         name: impl Into<String>,
         devices: Vec<AirPlayDevice>,
-    ) -> GroupId {
+    ) -> Result<GroupId, AirPlayError> {
+        let mut groups = self.groups.write().await;
+        let mut device_groups = self.device_groups.write().await;
+
+        // Check availability
+        for device in &devices {
+            if device_groups.contains_key(&device.id) {
+                return Err(AirPlayError::InvalidState {
+                    message: format!("Device {} is already in a group", device.id),
+                    current_state: "grouped".to_string(),
+                });
+            }
+        }
+
         let mut group = DeviceGroup::new(name);
 
         for device in devices {
             let device_id = device.id.clone();
             group.add_member(device);
-            self.device_groups.write().await.insert(device_id, group.id.clone());
+            device_groups.insert(device_id, group.id.clone());
         }
 
         let id = group.id.clone();
-        self.groups.write().await.insert(id.clone(), group);
-        id
+        groups.insert(id.clone(), group);
+        Ok(id)
     }
 
     /// Delete a group
     pub async fn delete_group(&self, id: &GroupId) -> Option<DeviceGroup> {
-        let group = self.groups.write().await.remove(id)?;
+        // Lock order: groups -> device_groups
+        let mut groups = self.groups.write().await;
+        let mut device_groups = self.device_groups.write().await;
+
+        let group = groups.remove(id)?;
 
         // Remove device mappings
-        let mut device_groups = self.device_groups.write().await;
         for member in &group.members {
             device_groups.remove(&member.device.id);
         }
@@ -305,6 +303,10 @@ impl GroupManager {
     }
 
     /// Add device to a group
+    ///
+    /// # Errors
+    ///
+    /// Returns error if device is already in a group or group is not found
     pub async fn add_device_to_group(
         &self,
         group_id: &GroupId,
@@ -312,8 +314,12 @@ impl GroupManager {
     ) -> Result<(), AirPlayError> {
         let device_id = device.id.clone();
 
+        // Lock order: groups -> device_groups
+        let mut groups = self.groups.write().await;
+        let mut device_groups = self.device_groups.write().await;
+
         // Check if device is already in a group
-        if self.device_groups.read().await.contains_key(&device_id) {
+        if device_groups.contains_key(&device_id) {
             return Err(AirPlayError::InvalidState {
                 message: "Device is already in a group".to_string(),
                 current_state: "grouped".to_string(),
@@ -321,23 +327,29 @@ impl GroupManager {
         }
 
         // Add to group
-        let mut groups = self.groups.write().await;
-        let group = groups.get_mut(group_id).ok_or(AirPlayError::DeviceNotFound {
-            device_id: group_id.as_str().to_string(),
-        })?;
+        let group = groups
+            .get_mut(group_id)
+            .ok_or(AirPlayError::DeviceNotFound {
+                device_id: group_id.as_str().to_string(),
+            })?;
 
         group.add_member(device);
-        self.device_groups.write().await.insert(device_id, group_id.clone());
+        device_groups.insert(device_id, group_id.clone());
 
         Ok(())
     }
 
     /// Remove device from its group
+    ///
+    /// # Errors
+    ///
+    /// Returns error if internal state is inconsistent (rare)
     pub async fn remove_device_from_group(&self, device_id: &str) -> Result<(), AirPlayError> {
-        let group_id = self.device_groups.write().await.remove(device_id);
+        // Lock order: groups -> device_groups
+        let mut groups = self.groups.write().await;
+        let mut device_groups = self.device_groups.write().await;
 
-        if let Some(group_id) = group_id {
-            let mut groups = self.groups.write().await;
+        if let Some(group_id) = device_groups.remove(device_id) {
             if let Some(group) = groups.get_mut(&group_id) {
                 group.remove_member(device_id);
 
@@ -352,21 +364,31 @@ impl GroupManager {
     }
 
     /// Set group volume
+    ///
+    /// # Errors
+    ///
+    /// Returns error if group not found
     pub async fn set_group_volume(
         &self,
         group_id: &GroupId,
         volume: Volume,
     ) -> Result<(), AirPlayError> {
         let mut groups = self.groups.write().await;
-        let group = groups.get_mut(group_id).ok_or(AirPlayError::DeviceNotFound {
-            device_id: group_id.as_str().to_string(),
-        })?;
+        let group = groups
+            .get_mut(group_id)
+            .ok_or(AirPlayError::DeviceNotFound {
+                device_id: group_id.as_str().to_string(),
+            })?;
 
         group.set_volume(volume);
         Ok(())
     }
 
     /// Set member volume
+    ///
+    /// # Errors
+    ///
+    /// Returns error if group not found
     pub async fn set_member_volume(
         &self,
         group_id: &GroupId,
@@ -374,9 +396,11 @@ impl GroupManager {
         volume: Volume,
     ) -> Result<(), AirPlayError> {
         let mut groups = self.groups.write().await;
-        let group = groups.get_mut(group_id).ok_or(AirPlayError::DeviceNotFound {
-            device_id: group_id.as_str().to_string(),
-        })?;
+        let group = groups
+            .get_mut(group_id)
+            .ok_or(AirPlayError::DeviceNotFound {
+                device_id: group_id.as_str().to_string(),
+            })?;
 
         group.set_member_volume(device_id, volume);
         Ok(())
@@ -388,84 +412,3 @@ impl Default for GroupManager {
         Self::new()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::net::IpAddr;
-
-    fn test_device(id: &str) -> AirPlayDevice {
-        AirPlayDevice {
-            id: id.to_string(),
-            name: format!("Device {}", id),
-            model: None,
-            address: "127.0.0.1".parse().unwrap(),
-            port: 7000,
-            capabilities: Default::default(),
-            txt_records: Default::default(),
-        }
-    }
-
-    #[test]
-    fn test_group_add_remove() {
-        let mut group = DeviceGroup::new("Test Group");
-
-        group.add_member(test_device("device1"));
-        group.add_member(test_device("device2"));
-
-        assert_eq!(group.member_count(), 2);
-        assert!(group.members()[0].is_leader);
-        assert!(!group.members()[1].is_leader);
-
-        // Remove leader
-        group.remove_member("device1");
-        assert_eq!(group.member_count(), 1);
-        assert!(group.members()[0].is_leader);
-    }
-
-    #[test]
-    fn test_effective_volume() {
-        let mut group = DeviceGroup::new("Test");
-        group.add_member(test_device("d1"));
-
-        group.set_volume(Volume::from_percent(50));
-        group.set_member_volume("d1", Volume::from_percent(80));
-
-        let effective = group.effective_volume("d1");
-        // 50% * 80% = 40%
-        assert_eq!(effective.as_percent(), 40);
-    }
-
-    #[tokio::test]
-    async fn test_group_manager() {
-        let manager = GroupManager::new();
-
-        let group_id = manager.create_group("Living Room").await;
-        manager.add_device_to_group(&group_id, test_device("speaker1")).await.unwrap();
-        manager.add_device_to_group(&group_id, test_device("speaker2")).await.unwrap();
-
-        let group = manager.get_group(&group_id).await.unwrap();
-        assert_eq!(group.member_count(), 2);
-    }
-}
-```
-
----
-
-## Acceptance Criteria
-
-- [ ] Groups can be created/deleted
-- [ ] Devices can be added/removed from groups
-- [ ] Per-device volume works
-- [ ] Group volume affects all members
-- [ ] Leader promotion works
-- [ ] All unit tests pass
-
----
-
-## Notes
-
-- Clock synchronization is critical for multi-room
-- Consider PTP (Precision Time Protocol) support
-- Network latency varies per device
-- May need to buffer audio to compensate
