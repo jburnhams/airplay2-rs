@@ -180,6 +180,42 @@ fn test_decode_reset() {
     assert!(codec.decode().unwrap().is_some());
 }
 
+#[test]
+fn test_decode_split_status_line() {
+    let mut codec = RtspCodec::new();
+    codec.feed(b"RTSP/1.").unwrap();
+    assert!(codec.decode().unwrap().is_none());
+    codec.feed(b"0 200 OK\r\nCSeq: 1\r\n\r\n").unwrap();
+    let response = codec.decode().unwrap().unwrap();
+    assert_eq!(response.status, StatusCode::OK);
+}
+
+#[test]
+fn test_decode_lenient_whitespace() {
+    let mut codec = RtspCodec::new();
+    // Extra spaces
+    let data = b"RTSP/1.0   200   OK\r\nCSeq:   1\r\nContent-Length:   0\r\n\r\n";
+    codec.feed(data).unwrap();
+    let response = codec.decode().unwrap().unwrap();
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.cseq(), Some(1));
+}
+
+#[test]
+fn test_random_garbage_robustness() {
+    use rand::RngCore;
+    let mut codec = RtspCodec::new();
+    let mut rng = rand::thread_rng();
+    let mut data = [0u8; 100];
+
+    for _ in 0..100 {
+        rng.fill_bytes(&mut data);
+        let _ = codec.feed(&data);
+        let _ = codec.decode(); // Should not panic
+        codec.reset();
+    }
+}
+
 // --- session.rs tests ---
 
 #[test]

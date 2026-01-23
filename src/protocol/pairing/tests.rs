@@ -291,3 +291,109 @@ fn test_pair_verify_flow() {
         _ => panic!("Expected SendData for M3"),
     }
 }
+
+// --- Enhanced Tests ---
+
+#[test]
+fn test_pair_setup_failures() {
+    // Test that PairSetup correctly handles device error codes
+    use crate::protocol::pairing::setup::PairSetup;
+
+    let mut setup = PairSetup::new();
+    setup.set_pin("1234");
+    let _ = setup.start().unwrap();
+
+    // Simulate M2 error from device
+    let m2 = TlvEncoder::new()
+        .add_state(2)
+        .add_byte(TlvType::Error, errors::BUSY)
+        .build();
+
+    let result = setup.process_m2(&m2);
+    assert!(matches!(result, Err(PairingError::DeviceError { code: 7 }))); // BUSY is 0x07
+}
+
+#[test]
+fn test_pair_verify_invalid_signature() {
+    use crate::protocol::crypto::{
+        ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, X25519KeyPair,
+    };
+    use crate::protocol::pairing::{PairVerify, PairingKeys};
+
+    // Setup keys
+    let client_long_term = Ed25519KeyPair::generate();
+    let device_long_term = Ed25519KeyPair::generate();
+
+    let our_keys = PairingKeys {
+        identifier: b"client-id".to_vec(),
+        secret_key: client_long_term.secret_bytes(),
+        public_key: *client_long_term.public_key().as_bytes(),
+        device_public_key: *device_long_term.public_key().as_bytes(),
+    };
+
+    let mut client = PairVerify::new(our_keys, device_long_term.public_key().as_bytes()).unwrap();
+    let m1 = client.start().unwrap();
+    let tlv_m1 = TlvDecoder::decode(&m1).unwrap();
+    let client_ephemeral_bytes = tlv_m1.get_required(TlvType::PublicKey).unwrap();
+    let client_ephemeral =
+        crate::protocol::crypto::X25519PublicKey::from_bytes(client_ephemeral_bytes).unwrap();
+
+    // Device side simulation
+    let device_ephemeral = X25519KeyPair::generate();
+    let shared = device_ephemeral.diffie_hellman(&client_ephemeral);
+
+    let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), shared.as_bytes());
+    let session_key = hkdf
+        .expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")
+        .unwrap();
+
+    // Device signs: device_ephemeral || client_ephemeral
+    let mut sign_data = Vec::new();
+    sign_data.extend_from_slice(device_ephemeral.public_key().as_bytes());
+    sign_data.extend_from_slice(client_ephemeral_bytes);
+
+    // !!! Malicious device uses wrong key to sign !!!
+    let bad_key = Ed25519KeyPair::generate();
+    let signature = bad_key.sign(&sign_data);
+
+    // Encrypt
+    let inner_tlv = TlvEncoder::new()
+        .add(TlvType::Identifier, b"device-id")
+        .add(TlvType::Signature, &signature.to_bytes())
+        .build();
+
+    let cipher = ChaCha20Poly1305Cipher::new(&session_key).unwrap();
+    let nonce = Nonce::from_bytes(&[0u8; 12]).unwrap();
+    let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
+
+    let m2 = TlvEncoder::new()
+        .add_state(2)
+        .add(TlvType::PublicKey, device_ephemeral.public_key().as_bytes())
+        .add(TlvType::EncryptedData, &encrypted)
+        .build();
+
+    // Client process M2 should fail signature verification
+    let result = client.process_m2(&m2);
+    assert!(matches!(result, Err(PairingError::CryptoError(_))));
+}
+
+#[test]
+fn test_tlv_fragmentation_multiple() {
+    // 3 fragments: 255 + 255 + 10
+    let long_data = vec![0xAA; 520];
+
+    let encoded = TlvEncoder::new()
+        .add(TlvType::PublicKey, &long_data)
+        .build();
+
+    // Check structure
+    // Frag 1: Type + Len(255) + 255 bytes
+    // Frag 2: Type + Len(255) + 255 bytes
+    // Frag 3: Type + Len(10) + 10 bytes
+    // Total len: (1+1+255) * 2 + (1+1+10) = 514 + 12 = 526 bytes.
+    assert_eq!(encoded.len(), 526);
+
+    let decoder = TlvDecoder::decode(&encoded).unwrap();
+    let decoded_data = decoder.get(TlvType::PublicKey).unwrap();
+    assert_eq!(decoded_data, &long_data[..]);
+}

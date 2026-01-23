@@ -196,7 +196,8 @@ impl RtspCodec {
 
     fn parse_status_line(line: &str) -> Result<(String, StatusCode, String), RtspCodecError> {
         // Format: "RTSP/1.0 200 OK"
-        let mut parts = line.splitn(3, ' ');
+        // We use split_whitespace to be lenient about spacing
+        let mut parts = line.split_whitespace();
 
         let version = parts
             .next()
@@ -209,7 +210,8 @@ impl RtspCodec {
             .parse::<u16>()
             .map_err(|_| RtspCodecError::InvalidStatusLine(line.to_string()))?;
 
-        let reason = parts.next().unwrap_or("").to_string();
+        // Reconstruct reason phrase from remaining parts
+        let reason = parts.collect::<Vec<&str>>().join(" ");
 
         Ok((version, StatusCode(status), reason))
     }

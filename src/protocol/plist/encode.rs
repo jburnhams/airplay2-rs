@@ -216,13 +216,17 @@ impl Encoder {
     }
 
     fn encode_unsigned(&mut self, value: u64) {
-        // Treat as signed if it fits, else... bplist integer is signed.
-        // If it's too big for i64, we might need 128 bit support or it's just raw bytes?
-        // Standard bplist parsers interpret ints as signed i64.
-        // If u64 > i64::MAX, it will be negative if read as i64.
-        // We'll write it as 8 bytes.
-        self.objects.push(0x13);
-        self.objects.extend_from_slice(&value.to_be_bytes());
+        // If it fits in i64, encode as standard integer
+        #[allow(clippy::cast_possible_wrap)]
+        if value <= i64::MAX as u64 {
+            self.encode_integer(value as i64);
+        } else {
+            // Use 16 bytes to represent large unsigned as positive integer
+            // This ensures it decodes as UnsignedInteger
+            self.objects.push(0x14); // 2^4 = 16 bytes
+            self.objects.extend_from_slice(&[0u8; 8]); // Upper 64 bits zero
+            self.objects.extend_from_slice(&value.to_be_bytes());
+        }
     }
 
     fn encode_real(&mut self, value: f64) {
