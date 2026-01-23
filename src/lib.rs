@@ -22,7 +22,8 @@
 //!
 //! if let Some(device) = devices.first() {
 //!     // Connect to device
-//!     let client = AirPlayClient::connect(device).await?;
+//!     let client = AirPlayClient::new(airplay2::AirPlayConfig::default());
+//!     client.connect(device).await?;
 //!
 //!     // Stream audio...
 //! }
