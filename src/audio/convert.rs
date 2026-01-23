@@ -143,12 +143,7 @@ pub fn convert_channels(
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_sign_loss)]
-pub fn resample_linear(
-    input: &[f32],
-    input_rate: u32,
-    output_rate: u32,
-    channels: u8,
-) -> Vec<f32> {
+pub fn resample_linear(input: &[f32], input_rate: u32, output_rate: u32, channels: u8) -> Vec<f32> {
     if input_rate == output_rate {
         return input.to_vec();
     }

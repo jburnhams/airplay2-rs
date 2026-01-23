@@ -54,7 +54,7 @@ fn test_i24_to_f32_roundtrip() {
         0x00, 0x00, 0x40, // 0.5
         0x00, 0x00, 0xC0, // -0.5
         0xFF, 0xFF, 0x7F, // Max pos
-        0x00, 0x00, 0x80  // Max neg
+        0x00, 0x00, 0x80, // Max neg
     ];
 
     let f32_samples = to_f32(&original, SampleFormat::I24);
@@ -82,7 +82,6 @@ fn test_i24_to_f32_roundtrip() {
         assert_eq!(orig, b, "Mismatch at byte index {i}");
     }
 }
-
 
 #[test]
 fn test_mono_to_stereo() {
