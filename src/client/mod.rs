@@ -1,21 +1,21 @@
 //! Main `AirPlay` client implementation
 
-use crate::discovery::{discover, scan, DiscoveryEvent};
 use crate::connection::{ConnectionManager, ConnectionState};
-use crate::streaming::{AudioSource, PcmStreamer};
 use crate::control::playback::{PlaybackController, ShuffleMode};
 use crate::control::queue::PlaybackQueue;
 use crate::control::volume::{Volume, VolumeController};
-use crate::state::{ClientState, StateContainer, EventBus, ClientEvent};
+use crate::discovery::{DiscoveryEvent, discover, scan};
+use crate::error::AirPlayError;
+use crate::state::{ClientEvent, ClientState, EventBus, StateContainer};
+use crate::streaming::{AudioSource, PcmStreamer};
 use crate::types::{
     AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
 };
-use crate::error::AirPlayError;
 
+use futures::Stream;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use futures::Stream;
 
 #[cfg(test)]
 mod tests;
@@ -282,7 +282,8 @@ impl AirPlayClient {
     pub async fn set_volume(&self, level: f32) -> Result<(), AirPlayError> {
         self.volume.set(Volume::new(level)).await?;
         self.state.set_volume(level).await;
-        self.events.emit(ClientEvent::VolumeChanged { volume: level });
+        self.events
+            .emit(ClientEvent::VolumeChanged { volume: level });
         Ok(())
     }
 
