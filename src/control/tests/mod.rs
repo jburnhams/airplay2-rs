@@ -1,4 +1,5 @@
 mod queue;
+mod volume;
 
 use super::playback::{PlaybackProgress, ShuffleMode};
 use crate::connection::ConnectionManager;

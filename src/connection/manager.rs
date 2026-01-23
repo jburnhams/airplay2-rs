@@ -634,7 +634,9 @@ impl ConnectionManager {
                         .unwrap_or_else(|| "application/x-apple-binary-plist".to_string());
                     session.set_parameter_request(&content_type, body)
                 }
-                Method::GetParameter => session.get_parameter_request(),
+                Method::GetParameter => {
+                    session.get_parameter_request(content_type.as_deref(), body)
+                }
                 Method::Teardown => session.teardown_request(),
                 Method::Pause => session.pause_request(),
                 _ => {
