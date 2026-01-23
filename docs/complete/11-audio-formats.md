@@ -26,7 +26,7 @@ For this implementation, we focus on PCM as the canonical internal format.
 
 ### 11.1 Audio Format Types
 
-- [ ] **11.1.1** Define audio format enums and types
+- [x] **11.1.1** Define audio format enums and types
 
 **File:** `src/audio/format.rs`
 
@@ -284,7 +284,7 @@ mod tests {
 
 ### 11.2 Format Conversion
 
-- [ ] **11.2.1** Implement format conversion utilities
+- [x] **11.2.1** Implement format conversion utilities
 
 **File:** `src/audio/convert.rs`
 
@@ -513,7 +513,7 @@ mod tests {
 
 ### 11.3 Module Entry Point
 
-- [ ] **11.3.1** Create audio module
+- [x] **11.3.1** Create audio module
 
 **File:** `src/audio/mod.rs`
 
@@ -538,12 +538,12 @@ pub use convert::{
 
 ## Acceptance Criteria
 
-- [ ] Audio format types are defined
-- [ ] Sample format conversion works
-- [ ] Channel conversion (mono/stereo) works
-- [ ] Basic resampling works
-- [ ] CD quality format is the default
-- [ ] All unit tests pass
+- [x] Audio format types are defined
+- [x] Sample format conversion works
+- [x] Channel conversion (mono/stereo) works
+- [x] Basic resampling works
+- [x] CD quality format is the default
+- [x] All unit tests pass
 
 ---
 
