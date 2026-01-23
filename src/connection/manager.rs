@@ -601,6 +601,68 @@ impl ConnectionManager {
         }
     }
 
+    /// Send an arbitrary RTSP command
+    ///
+    /// # Errors
+    ///
+    /// Returns error if command creation or sending fails
+    pub async fn send_command(
+        &self,
+        method: Method,
+        body: Option<Vec<u8>>,
+        content_type: Option<String>,
+    ) -> Result<Vec<u8>, AirPlayError> {
+        let request = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+
+            match method {
+                Method::Play => {
+                    let body = body.unwrap_or_default();
+                    let content_type = content_type
+                        .unwrap_or_else(|| "application/x-apple-binary-plist".to_string());
+                    session.play_request(&content_type, body)
+                }
+                Method::SetParameter => {
+                    let body = body.unwrap_or_default();
+                    let content_type = content_type
+                        .unwrap_or_else(|| "application/x-apple-binary-plist".to_string());
+                    session.set_parameter_request(&content_type, body)
+                }
+                Method::GetParameter => session.get_parameter_request(),
+                Method::Teardown => session.teardown_request(),
+                _ => {
+                    return Err(AirPlayError::InvalidParameter {
+                        name: "method".to_string(),
+                        message: format!("Unsupported method for send_command: {method:?}"),
+                    });
+                }
+            }
+        };
+
+        let response = self.send_rtsp_request(&request).await?;
+
+        // Update session state
+        {
+            let mut session_guard = self.rtsp_session.lock().await;
+            if let Some(session) = session_guard.as_mut() {
+                session.process_response(method, &response).map_err(|e| {
+                    AirPlayError::RtspError {
+                        message: e,
+                        status_code: Some(response.status.as_u16()),
+                    }
+                })?;
+            }
+        }
+
+        Ok(response.body)
+    }
+
     /// Disconnect from device
     ///
     /// # Errors
