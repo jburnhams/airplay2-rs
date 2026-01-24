@@ -5,7 +5,7 @@ use super::format::{ChannelConfig, SampleFormat};
 /// Convert between sample formats
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
-#[must_use] 
+#[must_use]
 pub fn convert_samples(
     input: &[u8],
     input_format: SampleFormat,
@@ -22,7 +22,7 @@ pub fn convert_samples(
 
 /// Convert bytes to f32 samples
 #[allow(clippy::cast_precision_loss)]
-#[must_use] 
+#[must_use]
 pub fn to_f32(input: &[u8], format: SampleFormat) -> Vec<f32> {
     match format {
         SampleFormat::I16 => input
@@ -57,7 +57,7 @@ pub fn to_f32(input: &[u8], format: SampleFormat) -> Vec<f32> {
 /// Convert f32 samples to bytes in target format
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
-#[must_use] 
+#[must_use]
 pub fn from_f32(input: &[f32], format: SampleFormat) -> Vec<u8> {
     match format {
         SampleFormat::I16 => input
@@ -99,7 +99,7 @@ pub fn from_f32(input: &[f32], format: SampleFormat) -> Vec<u8> {
 }
 
 /// Convert channel configuration
-#[must_use] 
+#[must_use]
 pub fn convert_channels(
     input: &[f32],
     input_channels: ChannelConfig,
@@ -147,7 +147,7 @@ pub fn convert_channels(
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_sign_loss)]
-#[must_use] 
+#[must_use]
 pub fn resample_linear(input: &[f32], input_rate: u32, output_rate: u32, channels: u8) -> Vec<f32> {
     if input_rate == output_rate {
         return input.to_vec();

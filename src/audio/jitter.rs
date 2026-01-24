@@ -72,7 +72,7 @@ pub enum NextPacket<T> {
 
 impl<T> JitterBuffer<T> {
     /// Create a new jitter buffer
-    #[must_use] 
+    #[must_use]
     pub fn new(target_depth: usize, max_size: usize) -> Self {
         Self {
             packets: BTreeMap::new(),
@@ -164,7 +164,7 @@ impl<T> JitterBuffer<T> {
     }
 
     /// Get current statistics
-    #[must_use] 
+    #[must_use]
     pub fn stats(&self) -> JitterStats {
         JitterStats {
             current_depth: self.packets.len(),
@@ -184,7 +184,7 @@ impl<T> JitterBuffer<T> {
     }
 
     /// Get buffer depth in packets
-    #[must_use] 
+    #[must_use]
     pub fn depth(&self) -> usize {
         self.packets.len()
     }
