@@ -1,8 +1,8 @@
-# AirPlay 2 Rust Library - Developer Overview
+# AirPlay Rust Library - Developer Overview
 
 ## Introduction
 
-This document provides an overview for developers working on the `airplay2-rs` library, a pure Rust implementation for streaming audio to AirPlay 2 compatible devices.
+This document provides an overview for developers working on the `airplay2-rs` library, a pure Rust implementation for streaming audio to AirPlay compatible devices. The library supports both **AirPlay 2** (modern protocol) and **AirPlay 1/RAOP** (legacy protocol) for maximum device compatibility.
 
 ## Project Goals
 
@@ -11,6 +11,7 @@ This document provides an overview for developers working on the `airplay2-rs` l
 - **Modern Rust**: Current stable toolchain, idiomatic patterns
 - **Quality First**: Comprehensive testing, documentation, and best practices
 - **Extensible**: Designed for future FairPlay support without major refactoring
+- **Protocol Flexibility**: Unified API supporting both AirPlay 1 and AirPlay 2 protocols
 
 ## Architecture Overview
 
@@ -175,7 +176,8 @@ airplay2-rs/
 │
 └── docs/
     ├── 00-overview.md            # This document
-    └── NN-*.md                   # Section documents
+    ├── 01-23-*.md                # AirPlay 2 section documents
+    └── 24-33-*.md                # AirPlay 1 (RAOP) section documents
 ```
 
 ## Section Dependencies
@@ -262,6 +264,84 @@ The following diagram shows dependencies between implementation sections:
                     └─────────────────────────┘
 ```
 
+## AirPlay 1 (RAOP) Support
+
+The library includes comprehensive documentation for AirPlay 1 (RAOP - Remote Audio Output Protocol) support, enabling compatibility with older AirPlay receivers. The implementation leverages shared components with AirPlay 2 where possible.
+
+### AirPlay 1 Section Dependencies
+
+```
+                    ┌──────────────────┐
+                    │ 24: AirPlay 1    │
+                    │ Overview         │
+                    └────────┬─────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+┌───────▼───────┐   ┌────────▼────────┐   ┌──────▼───────┐
+│ 25: RAOP      │   │ 26: RSA         │   │ 29: RAOP     │
+│ Discovery     │   │ Authentication  │   │ Encryption   │
+└───────┬───────┘   └────────┬────────┘   └──────┬───────┘
+        │                    │                   │
+        │           ┌────────┴────────┐          │
+        │           │                 │          │
+        └───────────▼─────────────────▼──────────┘
+                    │
+           ┌────────▼────────┐
+           │ 27: RTSP/RAOP   │
+           │ Session Mgmt    │
+           └────────┬────────┘
+                    │
+           ┌────────▼────────┐
+           │ 28: RTP/RAOP    │
+           │ Streaming       │
+           └────────┬────────┘
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+┌───────▼───────┐   │   ┌───────▼───────┐
+│ 30: DACP      │   │   │ 31: DAAP      │
+│ Remote Ctrl   │   │   │ Metadata      │
+└───────────────┘   │   └───────────────┘
+                    │
+           ┌────────▼────────┐
+           │ 32: AirPlay 1   │
+           │ Integration     │
+           └────────┬────────┘
+                    │
+           ┌────────▼────────┐
+           │ 33: AirPlay 1   │
+           │ Testing         │
+           └─────────────────┘
+```
+
+### AirPlay 1 Documentation Sections
+
+| Section | Title | Description |
+|---------|-------|-------------|
+| 24 | AirPlay 1 Overview | Architecture comparison, unified client design |
+| 25 | RAOP Discovery | mDNS `_raop._tcp` service discovery and TXT record parsing |
+| 26 | RSA Authentication | RSA-OAEP key exchange and Apple-Challenge response |
+| 27 | RTSP/RAOP Session | SDP-based session establishment and RTSP extensions |
+| 28 | RTP/RAOP Streaming | Audio streaming with timing sync and retransmission |
+| 29 | RAOP Encryption | AES-128-CTR encryption for audio payloads |
+| 30 | DACP Remote Control | Digital Audio Control Protocol for playback commands |
+| 31 | DAAP Metadata | DMAP encoding for track info and artwork |
+| 32 | AirPlay 1 Integration | Unified API design with AirPlay 2 |
+| 33 | AirPlay 1 Testing | Mock server, test suites, and CI/CD |
+
+### Shared Components
+
+The following components are shared between AirPlay 1 and AirPlay 2:
+
+| Component | AirPlay 1 Usage | AirPlay 2 Usage |
+|-----------|-----------------|-----------------|
+| RTSP Codec | SDP bodies, RAOP headers | Binary plist bodies |
+| RTP Streaming | Timing/sync packets | Similar with extensions |
+| mDNS Discovery | `_raop._tcp` service | `_airplay._tcp` service |
+| Audio Codecs | AAC, ALAC, PCM | Same codecs |
+| AES Encryption | AES-128-CTR | AES-GCM, ChaCha20-Poly1305 |
+
 ## Parallel Work Streams
 
 Based on dependencies, here are recommended parallel work streams:
@@ -280,6 +360,11 @@ Based on dependencies, here are recommended parallel work streams:
 
 ### Convergence Point
 After Streams A, B, C complete → Section 09, 10 → remaining sections
+
+### Stream E: AirPlay 1 Support
+1. Section 24 (Overview) → 25, 26, 29 (parallel) → 27 → 28 → 30, 31 (parallel) → 32 → 33
+
+Note: Stream E can proceed in parallel with Streams A-D as it shares foundation components but has distinct protocol implementations.
 
 ## Key Design Principles
 
@@ -440,7 +525,13 @@ persistent-pairing = ["sled"]  # Or similar for key storage
 
 ## References
 
+### AirPlay 2
 - [AirPlay 2 Internals](https://emanuelecozzi.net/docs/airplay2)
 - [openairplay/airplay2-receiver](https://github.com/openairplay/airplay2-receiver)
 - [mikebrady/shairport-sync](https://github.com/mikebrady/shairport-sync)
 - [pyatv](https://pyatv.dev/)
+
+### AirPlay 1 / RAOP
+- [OpenAirPlay Specification](https://openairplay.github.io/airplay-spec/audio/index.html)
+- [Unofficial AirPlay Protocol Specification](https://nto.github.io/AirPlay.html)
+- [RAOP Protocol Analysis](https://git.zx2c4.com/Airtunes2/about/)
