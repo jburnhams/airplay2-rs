@@ -1,47 +1,38 @@
-//! URL playback example
+//! Example: Play a URL on an AirPlay device
 
-use airplay2::{AirPlayClient, AirPlayConfig, scan};
-use std::time::Duration;
+use airplay2::quick_connect;
+use tokio::io::{self, AsyncBufReadExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging (optional)
-    tracing_subscriber::fmt::init();
+    println!("Connecting to first available device...");
 
-    println!("Scanning for AirPlay devices...");
-    let devices = scan(Duration::from_secs(2)).await?;
+    // Quick connect helper
+    let player = quick_connect().await?;
 
-    if devices.is_empty() {
-        println!("No devices found.");
-        return Ok(());
+    if let Some(device) = player.device().await {
+        println!("Connected to: {}", device.name);
     }
 
-    println!("Found {} devices.", devices.len());
-    let device = &devices[0];
-    println!("Connecting to: {} ({})", device.name, device.address);
+    // Play a sample track
+    let url =
+        "http://commondatastorage.googleapis.com/codeskulptor-demos/riceracer_assets/music/win.ogg";
+    println!("Playing: {}", url);
 
-    let client = AirPlayClient::new(AirPlayConfig::default());
-    client.connect(device).await?;
-    println!("Connected.");
+    // Fixed: Added url as first argument
+    player
+        .play_track(url, "Winning Sound", "Demo Artist")
+        .await?;
 
-    let url = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-    println!("Playing URL: {}", url);
+    // Wait for user input to stop
+    println!("\nPress Enter to stop...");
+    let mut stdin = io::BufReader::new(io::stdin());
+    let mut line = String::new();
+    stdin.read_line(&mut line).await?;
 
-    match client.play_url(url).await {
-        Ok(_) => {
-            println!("Playback started. Waiting for 10 seconds...");
-            tokio::time::sleep(Duration::from_secs(10)).await;
-
-            println!("Stopping...");
-            client.stop().await?;
-        }
-        Err(e) => {
-            println!("Failed to play: {}", e);
-        }
-    }
-
-    println!("Disconnecting...");
-    client.disconnect().await?;
+    println!("Stopping...");
+    player.stop().await?;
+    player.disconnect().await?;
 
     Ok(())
 }

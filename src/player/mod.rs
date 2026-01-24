@@ -169,12 +169,20 @@ impl AirPlayPlayer {
     ) -> Result<(), AirPlayError> {
         self.client.clear_queue().await;
 
-        for (url, title, artist) in tracks {
+        for (url, title, artist) in &tracks {
             let track = TrackInfo::new(url, title, artist);
             self.client.add_to_queue(track).await;
         }
 
-        self.client.play().await
+        // Explicitly start streaming the first track using play_url
+        // because client.play() only resumes/starts if state is already primed,
+        // and doesn't automatically pull from queue to start streaming yet.
+        if let Some((url, _, _)) = tracks.first() {
+            self.client.play_url(url).await
+        } else {
+            // Empty tracks, just try to play/resume whatever state has
+            self.client.play().await
+        }
     }
 
     /// Play a single track

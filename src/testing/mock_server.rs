@@ -7,7 +7,7 @@
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use crate::protocol::rtp::RtpPacket;
-use crate::protocol::rtsp::{Headers, Method, RtspCodec, RtspRequest, StatusCode};
+use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
 
 use std::fmt::Write;
 use std::net::SocketAddr;
@@ -186,100 +186,107 @@ impl MockServer {
         state: Arc<RwLock<ServerState>>,
         config: MockServerConfig,
     ) {
-        let mut codec = RtspCodec::new();
-        let mut buf = vec![0u8; 4096];
+        let mut buffer = Vec::new();
+        let mut temp_buf = vec![0u8; 4096];
 
         loop {
             // Read data from the stream
-            let n = match stream.read(&mut buf).await {
-                Ok(0) | Err(_) => break, // Connection closed or error
+            let n = match stream.read(&mut temp_buf).await {
+                Ok(0) | Err(_) => break, // Connection closed or Error
                 Ok(n) => n,
             };
 
-            // Feed data to the codec
-            if codec.feed(&buf[..n]).is_err() {
-                break;
-            }
+            buffer.extend_from_slice(&temp_buf[..n]);
 
-            // Process complete requests
-            // Note: We use `if` instead of `while` because `parse_request` does not consume
-            // the buffer, so `while` would loop infinitely on the same data.
-            // This assumes one request per packet, which is sufficient for current tests.
-            if let Ok(Some(request)) = Self::parse_request(&mut codec, &buf[..n]) {
-                // Simulate latency if configured
-                if config.latency_ms > 0 {
-                    tokio::time::sleep(Duration::from_millis(u64::from(config.latency_ms))).await;
-                }
+            // Try to parse requests loop (in case multiple requests are buffered)
+            loop {
+                match Self::try_parse_request(&buffer) {
+                    Ok(Some((request, consumed))) => {
+                        // Remove consumed bytes
+                        buffer.drain(..consumed);
 
-                let response = Self::handle_request(&request, &state, &config).await;
+                        // Simulate latency if configured
+                        if config.latency_ms > 0 {
+                            tokio::time::sleep(Duration::from_millis(u64::from(config.latency_ms)))
+                                .await;
+                        }
 
-                // Write the response back to the stream
-                if stream.write_all(&response).await.is_err() {
-                    break;
+                        let response = Self::handle_request(&request, &state, &config).await;
+
+                        // Write the response back to the stream
+                        if stream.write_all(&response).await.is_err() {
+                            return;
+                        }
+                    }
+                    Ok(None) => break, // Need more data
+                    Err(()) => {
+                        // Parse error, clear buffer or disconnect?
+                        // For now disconnect
+                        return;
+                    }
                 }
             }
         }
     }
 
-    /// Parses an RTSP request from raw bytes using the codec.
+    /// Tries to parse an RTSP request from the buffer.
     ///
-    /// Note: The `RtspCodec` does most of the heavy lifting, but we also do some manual parsing here
-    /// because the provided `RtspCodec` might be sans-IO and we need to reconstruct the request object.
-    /// The logic here simplifies things by re-parsing the text from the buffer which might be inefficient
-    /// but acceptable for a mock server.
-    fn parse_request(_codec: &mut RtspCodec, data: &[u8]) -> Result<Option<RtspRequest>, ()> {
-        // In a real implementation, we would use codec.decode().
-        // Here we attempt a simplified parse for the mock.
-        // However, `RtspCodec` should be used if possible.
-        // Let's see if we can use the `RtspCodec` properly.
-        // The original code passed `&buf[..n]` which is redundant if `feed` was called.
-        // Assuming `codec.decode()` works on internal buffer.
+    /// Returns `Ok(Some((request, consumed_bytes)))` if a complete request is found.
+    /// Returns `Ok(None)` if more data is needed.
+    /// Returns `Err(())` if parsing fails.
+    fn try_parse_request(data: &[u8]) -> Result<Option<(RtspRequest, usize)>, ()> {
+        // Find end of headers
+        let header_end = data.windows(4).position(|w| w == b"\r\n\r\n");
 
-        // The original code snippet had a manual parser implementation:
-        let text = String::from_utf8_lossy(data);
+        if let Some(header_end) = header_end {
+            let header_len = header_end + 4;
+            let header_bytes = &data[..header_end];
+            // Use lossy conversion to string for header parsing
+            let header_str = String::from_utf8_lossy(header_bytes);
 
-        // Parse request line
-        let mut lines = text.lines();
-        let request_line = lines.next().ok_or(())?;
-        let parts: Vec<&str> = request_line.split_whitespace().collect();
+            let mut lines = header_str.lines();
+            let request_line = lines.next().ok_or(())?;
+            let mut parts = request_line.split_whitespace();
+            let method_str = parts.next().ok_or(())?;
+            let uri = parts.next().ok_or(())?.to_string();
+            // version is likely RTSP/1.0 but we ignore it for mock
 
-        if parts.len() < 3 {
-            return Err(());
-        }
+            let method = Method::from_str(method_str)?;
 
-        let method = Method::from_str(parts[0])?;
-        let uri = parts[1].to_string();
+            let mut rtsp_headers = Headers::new();
+            let mut content_length = 0;
 
-        // Parse headers
-        let mut headers = Headers::new();
-        for line in lines {
-            if line.is_empty() {
-                break;
+            for line in lines {
+                if let Some(colon_pos) = line.find(':') {
+                    let name = line[..colon_pos].trim().to_string();
+                    let value = line[colon_pos + 1..].trim().to_string();
+
+                    if name.eq_ignore_ascii_case("Content-Length") {
+                        content_length = value.parse::<usize>().unwrap_or(0);
+                    }
+                    rtsp_headers.insert(name, value);
+                }
             }
-            if let Some(pos) = line.find(':') {
-                let name = line[..pos].trim().to_string();
-                let value = line[pos + 1..].trim().to_string();
-                headers.insert(name, value);
+
+            // Check if we have the full body
+            if data.len() < header_len + content_length {
+                return Ok(None);
             }
-        }
 
-        // We need to handle the body too. For simplicity in this mock, we might be taking just the initial packet.
-        // A proper implementation would handle Content-Length and buffering.
+            let body = data[header_len..header_len + content_length].to_vec();
 
-        // Extract body if any
-        let body_start = text.find("\r\n\r\n").map_or(text.len(), |i| i + 4);
-        let body = if body_start < data.len() {
-            data[body_start..].to_vec()
+            Ok(Some((
+                RtspRequest {
+                    method,
+                    uri,
+                    headers: rtsp_headers,
+                    body,
+                },
+                header_len + content_length,
+            )))
         } else {
-            Vec::new()
-        };
-
-        Ok(Some(RtspRequest {
-            method,
-            uri,
-            headers,
-            body,
-        }))
+            Ok(None)
+        }
     }
 
     /// Processes a request and generates a response.
@@ -296,7 +303,7 @@ impl MockServer {
                 cseq,
                 None,
                 Some(
-                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST",
+                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST, PLAY",
                 ),
             ),
             Method::Setup => {
@@ -304,22 +311,27 @@ impl MockServer {
                 state.session_id = Some(format!("{:X}", rand::random::<u64>()));
                 state.streaming = false;
 
-                let body = format!(
-                    "Transport: RTP/AVP/UDP;unicast;mode=record;server_port={}-{};control_port={};timing_port={}",
+                let transport = format!(
+                    "RTP/AVP/UDP;unicast;mode=record;server_port={};control_port={};timing_port={}",
                     config.audio_port,
-                    config.audio_port + 1,
+                    // config.audio_port + 1,
                     config.control_port,
                     config.timing_port
                 );
 
-                Self::response(
-                    StatusCode::OK,
-                    cseq,
-                    state.session_id.as_deref(),
-                    Some(&body),
-                )
+                let session_id = state.session_id.clone().unwrap();
+
+                let response = format!(
+                    "RTSP/1.0 200 OK\r\n\
+                     CSeq: {cseq}\r\n\
+                     Session: {session_id}\r\n\
+                     Transport: {transport}\r\n\
+                     \r\n",
+                );
+
+                response.into_bytes()
             }
-            Method::Record => {
+            Method::Record | Method::Play => {
                 state.write().await.streaming = true;
                 Self::response(StatusCode::OK, cseq, None, None)
             }
