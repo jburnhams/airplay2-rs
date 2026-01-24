@@ -62,6 +62,8 @@ pub struct SessionKeys {
     pub encrypt_nonce: u64,
     /// Initial nonce for decryption
     pub decrypt_nonce: u64,
+    /// Raw shared secret for audio encryption
+    pub raw_shared_secret: [u8; 32],
 }
 
 impl SessionKeys {

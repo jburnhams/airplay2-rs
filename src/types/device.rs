@@ -87,11 +87,20 @@ impl AirPlayDevice {
         self.txt_records.get("vv").and_then(|v| v.parse().ok())
     }
 
-    /// Get the primary IP address (first discovered)
+    /// Get the primary IP address (prefers IPv4 for better connectivity)
     #[must_use]
     pub fn address(&self) -> IpAddr {
+        // Prefer IPv4 addresses since IPv6 link-local addresses often have routing issues
         self.addresses
-            .first()
+            .iter()
+            .find(|addr| addr.is_ipv4())
+            .or_else(|| {
+                // If no IPv4, try non-link-local IPv6
+                self.addresses
+                    .iter()
+                    .find(|addr| matches!(addr, IpAddr::V6(v6) if v6.segments()[0] != 0xfe80))
+            })
+            .or_else(|| self.addresses.first())
             .copied()
             .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
     }

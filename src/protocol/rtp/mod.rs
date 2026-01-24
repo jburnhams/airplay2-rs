@@ -13,7 +13,7 @@ mod timing;
 #[cfg(test)]
 mod tests;
 
-pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError};
+pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpEncryptionMode};
 pub use control::{ControlPacket, RetransmitRequest};
 pub use packet::{PayloadType, RtpHeader, RtpPacket};
 pub use timing::{TimingPacket, TimingRequest, TimingResponse};

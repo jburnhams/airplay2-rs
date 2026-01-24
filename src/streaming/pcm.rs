@@ -102,6 +102,12 @@ impl PcmStreamer {
         }
     }
 
+    /// Set ChaCha20-Poly1305 encryption key
+    pub async fn set_encryption_key(&self, key: [u8; 32]) {
+        let mut codec = self.rtp_codec.lock().await;
+        codec.set_chacha_encryption(key);
+    }
+
     /// Get current state
     pub async fn state(&self) -> StreamerState {
         *self.state.read().await
@@ -140,6 +146,12 @@ impl PcmStreamer {
         let bytes_per_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
         let mut temp_buffer = vec![0u8; bytes_per_packet * 4];
 
+        tracing::debug!(
+            "Filling buffer: capacity={}, high_watermark={}",
+            self.buffer.capacity(),
+            self.buffer.capacity() * 3 / 4
+        );
+
         while !self.buffer.is_ready() {
             let n = source
                 .read(&mut temp_buffer)
@@ -148,11 +160,22 @@ impl PcmStreamer {
                     source: Some(Box::new(e)),
                 })?;
             if n == 0 {
+                tracing::debug!(
+                    "Source EOF during buffer fill, available={}",
+                    self.buffer.available()
+                );
                 break; // EOF
             }
-            self.buffer.write(&temp_buffer[..n]);
+            let written = self.buffer.write(&temp_buffer[..n]);
+            tracing::trace!(
+                "Buffer fill: read={}, written={}, available={}",
+                n,
+                written,
+                self.buffer.available()
+            );
         }
 
+        tracing::debug!("Buffer filled: available={}", self.buffer.available());
         Ok(())
     }
 
@@ -160,6 +183,12 @@ impl PcmStreamer {
     async fn streaming_loop<S: AudioSource>(&self, mut source: S) -> Result<(), AirPlayError> {
         let bytes_per_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
         let packet_duration = self.format.frames_to_duration(Self::FRAMES_PER_PACKET);
+
+        tracing::debug!(
+            "Starting streaming loop: bytes_per_packet={}, packet_duration={:?}",
+            bytes_per_packet,
+            packet_duration
+        );
 
         let mut packet_data = vec![0u8; bytes_per_packet];
         let mut cmd_rx = self.cmd_rx.lock().await;
@@ -171,6 +200,7 @@ impl PcmStreamer {
 
         // Reusable buffer for refills
         let mut refill_buffer = vec![0u8; bytes_per_packet * 4];
+        let mut packets_sent = 0u64;
 
         loop {
             // Wait for next tick
@@ -212,6 +242,11 @@ impl PcmStreamer {
 
             // Read from buffer
             let bytes_read = self.buffer.read(&mut packet_data);
+            tracing::trace!(
+                "Read {} bytes from buffer, available={}",
+                bytes_read,
+                self.buffer.available()
+            );
 
             if bytes_read == 0 {
                 // Try to fill buffer
@@ -223,6 +258,7 @@ impl PcmStreamer {
 
                 if n == 0 {
                     // EOF
+                    tracing::debug!("Source EOF after {} packets sent", packets_sent);
                     *self.state.write().await = StreamerState::Finished;
                     return Ok(());
                 }
@@ -248,6 +284,10 @@ impl PcmStreamer {
 
             // Send packet
             self.send_packet(&rtp_packet).await?;
+            packets_sent += 1;
+            if packets_sent % 100 == 0 {
+                tracing::debug!("Sent {} RTP packets", packets_sent);
+            }
 
             // Refill buffer in background
             if self.buffer.is_underrunning() {
@@ -262,6 +302,7 @@ impl PcmStreamer {
 
     /// Send an RTP packet
     async fn send_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        tracing::trace!("Sending RTP packet: {} bytes", packet.len());
         self.connection.send_rtp_audio(packet).await?;
         Ok(())
     }

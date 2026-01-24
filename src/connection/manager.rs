@@ -103,6 +103,15 @@ impl ConnectionManager {
         self.stats.read().await.clone()
     }
 
+    /// Get the session encryption key for audio (raw shared secret)
+    pub async fn encryption_key(&self) -> Option<[u8; 32]> {
+        self.session_keys
+            .lock()
+            .await
+            .as_ref()
+            .map(|k| k.raw_shared_secret)
+    }
+
     /// Connect to a device
     ///
     /// # Errors
@@ -585,11 +594,10 @@ impl ConnectionManager {
 
         // 3. Announce (ANNOUNCE / with SDP)
         tracing::debug!("Performing ANNOUNCE...");
-        // Real-looking Base64 for 256-byte RSA key (encrypted with receiver private key)
-        let rsa_key_b64 = "BMAQSHXC2zwX+XN+Mp9hSvfqosOCDrYCjYif9O6AEMbSt0WnC9iqmnNsvZ6Z3HjefTzx1/XsvUNZUBo2i/wOYZg/s4okKb39Iu4wnqeiWho9p6P6VcNfG3qDr/e12clA2Utaewe+JEBBBU4Grzu2zS2TRaNOQJK+4NhR0NuKruhYx2dbm42blVYo8XqENW2UEDfLw03t3tAORF6s4EAjx1ijusPXFCofDqKm/+DJMD9S+3qO88B2TPBXfirTkAuXU9nSA2uUB9CkgmbVPrC8UYXL2Xc1j2+Jk7IU5MfVXhPq/ojPcppMtOaoPHTCbTICY86fovAGtMLWXiAKOfDOLg";
-        let aes_iv_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
+        // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
+        // Also use PCM (L16) to avoid ALAC encoding requirement
         let sdp = format!(
-            "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\na=rsaaeskey:{rsa_key_b64}\r\na=aesiv:{aes_iv_b64}\r\n"
+            "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\n"
         );
 
         let announce_req = {

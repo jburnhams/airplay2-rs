@@ -214,11 +214,17 @@ impl PairSetup {
             let encrypt_key = hkdf.expand_fixed::<32>(b"Control-Write-Encryption-Key")?;
             let decrypt_key = hkdf.expand_fixed::<32>(b"Control-Read-Encryption-Key")?;
 
+            // For audio encryption, use first 32 bytes of SRP session key
+            let mut raw_shared_secret = [0u8; 32];
+            let copy_len = session_key.len().min(32);
+            raw_shared_secret[..copy_len].copy_from_slice(&session_key[..copy_len]);
+
             let session_keys = SessionKeys {
                 encrypt_key,
                 decrypt_key,
                 encrypt_nonce: 0,
                 decrypt_nonce: 0,
+                raw_shared_secret,
             };
 
             self.session_key = Some(session_key);
@@ -316,11 +322,17 @@ impl PairSetup {
         let encrypt_key = hkdf.expand_fixed::<32>(b"Control-Write-Encryption-Key")?;
         let decrypt_key = hkdf.expand_fixed::<32>(b"Control-Read-Encryption-Key")?;
 
+        // For audio encryption, use first 32 bytes of SRP session key
+        let mut raw_shared_secret = [0u8; 32];
+        let copy_len = session_key.len().min(32);
+        raw_shared_secret[..copy_len].copy_from_slice(&session_key[..copy_len]);
+
         let session_keys = SessionKeys {
             encrypt_key,
             decrypt_key,
             encrypt_nonce: 0,
             decrypt_nonce: 0,
+            raw_shared_secret,
         };
 
         Ok(PairingStepResult::Complete(session_keys))

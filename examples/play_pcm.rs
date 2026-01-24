@@ -63,11 +63,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Discover
     println!("Scanning for devices...");
     let devices = scan(Duration::from_secs(3)).await?;
-    let device = devices.first().ok_or("No devices found")?;
+    println!("Found devices:");
+    for d in &devices {
+        println!(" - {}", d.name);
+    }
+    let device = devices
+        .iter()
+        .find(|d| d.name.to_lowercase().contains("receiver"))
+        .or_else(|| devices.first())
+        .cloned()
+        .unwrap_or_else(|| {
+            println!("No devices found, trying manual connection to 192.168.0.101...");
+            let mut capabilities = airplay2::DeviceCapabilities::default();
+            capabilities.airplay2 = true;
+            capabilities.supports_transient_pairing = true;
+
+            airplay2::AirPlayDevice {
+                id: "Manual".to_string(),
+                name: "Manual".to_string(),
+                model: None,
+                addresses: vec!["192.168.0.101".parse().unwrap()],
+                port: 7000,
+                capabilities,
+                raop_port: None,
+                raop_capabilities: None,
+                txt_records: std::collections::HashMap::new(),
+            }
+        });
 
     println!("Connecting to {}...", device.name);
     let mut client = AirPlayClient::default_client();
-    client.connect(device).await?;
+    client.connect(&device).await?;
 
     println!("Streaming 440Hz sine wave...");
     let source = SineSource::new(440.0);

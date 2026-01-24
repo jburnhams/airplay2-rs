@@ -455,6 +455,13 @@ impl AirPlayClient {
 
         let format = source.format();
         let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), format));
+
+        // Configure encryption if available
+        if let Some(key) = self.connection.encryption_key().await {
+            tracing::debug!("Enabling audio encryption with session key");
+            streamer.set_encryption_key(key).await;
+        }
+
         self.streamer = Some(streamer.clone());
 
         streamer.stream(source).await

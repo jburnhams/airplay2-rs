@@ -207,6 +207,7 @@ impl PairVerify {
             decrypt_key,
             encrypt_nonce: 0,
             decrypt_nonce: 0,
+            raw_shared_secret: *shared_secret,
         };
 
         self.final_session_keys = Some(session_keys.clone());
