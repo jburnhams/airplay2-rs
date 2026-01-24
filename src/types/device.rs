@@ -1,3 +1,4 @@
+use super::raop::RaopCapabilities;
 use std::collections::HashMap;
 use std::net::IpAddr;
 
@@ -13,14 +14,20 @@ pub struct AirPlayDevice {
     /// Device model identifier (e.g., "AudioAccessory5,1" for `HomePod` Mini)
     pub model: Option<String>,
 
-    /// Resolved IP address
-    pub address: IpAddr,
+    /// Resolved IP addresses
+    pub addresses: Vec<IpAddr>,
 
     /// `AirPlay` service port
     pub port: u16,
 
     /// Device capabilities parsed from features flags
     pub capabilities: DeviceCapabilities,
+
+    /// RAOP (AirPlay 1) service port
+    pub raop_port: Option<u16>,
+
+    /// RAOP capabilities parsed from TXT records
+    pub raop_capabilities: Option<RaopCapabilities>,
 
     /// Raw TXT record data for protocol use
     pub txt_records: HashMap<String, String>,
@@ -78,6 +85,15 @@ impl AirPlayDevice {
     #[must_use]
     pub fn discovered_volume(&self) -> Option<f32> {
         self.txt_records.get("vv").and_then(|v| v.parse().ok())
+    }
+
+    /// Get the primary IP address (first discovered)
+    #[must_use]
+    pub fn address(&self) -> IpAddr {
+        self.addresses
+            .first()
+            .copied()
+            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)))
     }
 }
 

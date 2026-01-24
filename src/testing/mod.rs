@@ -16,9 +16,11 @@ pub fn create_test_device(id: &str, name: &str, address: IpAddr, port: u16) -> A
         id: id.to_string(),
         name: name.to_string(),
         model: Some("TestModel".to_string()),
-        address,
+        addresses: vec![address],
         port,
         capabilities: DeviceCapabilities::default(),
+        raop_port: None,
+        raop_capabilities: None,
         txt_records: HashMap::new(),
     }
 }

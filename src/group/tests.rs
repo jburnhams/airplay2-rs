@@ -8,9 +8,11 @@ fn test_device(id: &str) -> AirPlayDevice {
         id: id.to_string(),
         name: format!("Device {id}"),
         model: None,
-        address: "127.0.0.1".parse().unwrap(),
+        addresses: vec!["127.0.0.1".parse().unwrap()],
         port: 7000,
         capabilities: DeviceCapabilities::default(),
+        raop_port: None,
+        raop_capabilities: None,
         txt_records: HashMap::default(),
     }
 }

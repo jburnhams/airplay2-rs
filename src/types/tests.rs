@@ -91,9 +91,11 @@ fn test_airplay_device_methods() {
         id: "id".to_string(),
         name: "name".to_string(),
         model: None,
-        address: "127.0.0.1".parse().unwrap(),
+        addresses: vec!["127.0.0.1".parse().unwrap()],
         port: 7000,
         capabilities: caps,
+        raop_port: None,
+        raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
     };
 
@@ -114,9 +116,11 @@ fn test_device_discovered_volume() {
         id: "id".to_string(),
         name: "name".to_string(),
         model: None,
-        address: "127.0.0.1".parse().unwrap(),
+        addresses: vec!["127.0.0.1".parse().unwrap()],
         port: 7000,
         capabilities: DeviceCapabilities::default(),
+        raop_port: None,
+        raop_capabilities: None,
         txt_records: txt,
     };
 
