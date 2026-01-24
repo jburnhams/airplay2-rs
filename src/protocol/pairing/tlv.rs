@@ -242,11 +242,11 @@ impl TlvDecoder {
 /// Pairing method constants
 pub mod methods {
     /// Pair-Setup
-    pub const PAIR_SETUP: u8 = 1;
+    pub const PAIR_SETUP: u8 = 0;
     /// Pair-Setup with auth (`MFi`)
-    pub const PAIR_SETUP_AUTH: u8 = 2;
+    pub const PAIR_SETUP_AUTH: u8 = 1;
     /// Pair-Verify
-    pub const PAIR_VERIFY: u8 = 2; // Usually implies verify
+    pub const PAIR_VERIFY: u8 = 2;
     /// Add pairing
     pub const ADD_PAIRING: u8 = 3;
     /// Remove pairing

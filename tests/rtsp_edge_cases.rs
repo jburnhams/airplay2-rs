@@ -25,7 +25,7 @@ fn test_recovery_from_bad_response() {
 
     // 3. Recover with Good SETUP
     codec.reset();
-    let _ = session.setup_request("transport");
+    let _ = session.setup_stream_request("transport");
     codec
         .feed(b"RTSP/1.0 200 OK\r\nCSeq: 2\r\nSession: ID\r\n\r\n")
         .unwrap();
@@ -42,7 +42,7 @@ fn test_cseq_continuity() {
     let r1 = session.options_request();
     assert_eq!(r1.headers.cseq(), Some(1));
 
-    let r2 = session.setup_request("t");
+    let r2 = session.setup_stream_request("t");
     assert_eq!(r2.headers.cseq(), Some(2));
 
     let r3 = session.record_request();

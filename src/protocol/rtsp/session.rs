@@ -96,10 +96,10 @@ impl RtspSession {
 
     /// Create base request builder with common headers
     fn request_builder(&mut self, method: Method, path: &str) -> RtspRequestBuilder {
-        let uri = if path.starts_with('/') {
-            format!("{}{}", self.base_uri, path)
+        let uri = if path.is_empty() {
+            "/".to_string()
         } else {
-            format!("{}/{}", self.base_uri, path)
+            path.to_string()
         };
 
         let mut builder = RtspRequest::builder(method, uri)
@@ -123,10 +123,30 @@ impl RtspSession {
         self.request_builder(Method::Options, "*").build()
     }
 
-    /// Create SETUP request
+    /// Create SETUP request with plist body (Session Setup)
     #[must_use]
-    pub fn setup_request(&mut self, transport_params: &str) -> RtspRequest {
-        self.request_builder(Method::Setup, "")
+    pub fn setup_session_request(
+        &mut self,
+        plist: &crate::protocol::plist::PlistValue,
+    ) -> RtspRequest {
+        self.request_builder(Method::Setup, "/")
+            .body_plist(plist)
+            .build()
+    }
+
+    /// Create ANNOUNCE request with SDP
+    #[must_use]
+    pub fn announce_request(&mut self, sdp: &str) -> RtspRequest {
+        self.request_builder(Method::Announce, "/")
+            .content_type("application/sdp")
+            .body(sdp.as_bytes().to_vec())
+            .build()
+    }
+
+    /// Create SETUP request for audio stream
+    #[must_use]
+    pub fn setup_stream_request(&mut self, transport_params: &str) -> RtspRequest {
+        self.request_builder(Method::Setup, "/rtp/audio")
             .header(names::TRANSPORT, transport_params)
             .build()
     }

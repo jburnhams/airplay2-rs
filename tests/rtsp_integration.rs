@@ -21,7 +21,7 @@ fn test_full_session_flow() {
     assert_eq!(session.state(), SessionState::Ready);
 
     // 2. SETUP
-    let setup = session.setup_request("RTP/AVP/UDP;unicast;mode=record");
+    let setup = session.setup_stream_request("RTP/AVP/UDP;unicast;mode=record");
     assert!(!setup.encode().is_empty());
 
     // Simulate response with session ID

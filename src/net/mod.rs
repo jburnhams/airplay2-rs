@@ -2,6 +2,7 @@
 //!
 //! This module provides runtime-agnostic networking primitives.
 
+pub mod secure;
 mod traits;
 
 #[cfg(feature = "tokio-runtime")]

@@ -23,7 +23,7 @@ pub struct AirPlayDevice {
     pub capabilities: DeviceCapabilities,
 
     /// Raw TXT record data for protocol use
-    pub(crate) txt_records: HashMap<String, String>,
+    pub txt_records: HashMap<String, String>,
 }
 
 /// Device capability flags parsed from `AirPlay` features

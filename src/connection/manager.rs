@@ -5,7 +5,7 @@ use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, Disconnect
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::{
-    AuthSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
+    AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
     TransientPairing,
 };
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
@@ -32,6 +32,10 @@ pub struct ConnectionManager {
     rtsp_codec: Mutex<RtspCodec>,
     /// Session keys (after pairing)
     session_keys: Mutex<Option<SessionKeys>>,
+    /// Secure session (HAP encryption)
+    secure_session: Mutex<Option<crate::net::secure::HapSecureSession>>,
+    /// Buffer for decrypted data
+    decrypted_buffer: Mutex<Vec<u8>>,
     /// Connection statistics
     stats: RwLock<ConnectionStats>,
     /// Event sender
@@ -69,6 +73,8 @@ impl ConnectionManager {
             rtsp_session: Mutex::new(None),
             rtsp_codec: Mutex::new(RtspCodec::new()),
             session_keys: Mutex::new(None),
+            secure_session: Mutex::new(None),
+            decrypted_buffer: Mutex::new(Vec::new()),
             stats: RwLock::new(ConnectionStats::default()),
             event_tx,
             pairing_storage: None,
@@ -174,10 +180,18 @@ impl ConnectionManager {
 
         // 3.5. Try GET /info to check connectivity/auth state
         tracing::debug!("Sending GET /info...");
+        let mut manufacturer = String::new();
         match self.send_get_command("/info").await {
             Ok(body) => {
                 if let Ok(plist) = crate::protocol::plist::decode(&body) {
                     tracing::debug!("GET /info success. Parsed plist: {:#?}", plist);
+                    if let Some(m) = plist
+                        .as_dict()
+                        .and_then(|d| d.get("manufacturer"))
+                        .and_then(|v| v.as_str())
+                    {
+                        manufacturer = m.to_string();
+                    }
                 } else {
                     tracing::debug!("GET /info success (binary): {} bytes", body.len());
                 }
@@ -190,12 +204,19 @@ impl ConnectionManager {
 
         // 4.1 Perform Auth-Setup (MFi handshake)
         // Some devices (like Sonos) fail 403 on pair-setup if this is not done first.
-        match self.auth_setup().await {
-            Ok(()) => tracing::info!("Auth-Setup succeeded"),
-            Err(e) => tracing::warn!(
-                "Auth-Setup failed (might be optional for some devices): {}",
-                e
-            ),
+        // We skip it for OpenAirplay (python) as it expects FairPlay plist.
+        if manufacturer == "OpenAirplay" {
+            tracing::info!("Skipping Auth-Setup for OpenAirplay device");
+        } else {
+            match self.auth_setup().await {
+                Ok(_) => tracing::info!("Auth-Setup succeeded"),
+                Err(e) => {
+                    tracing::warn!(
+                        "Auth-Setup failed (might be optional for some devices): {}",
+                        e
+                    )
+                }
+            }
         }
 
         self.authenticate(device).await?;
@@ -293,11 +314,126 @@ impl ConnectionManager {
             }
         }
 
-        // Fall back to transient pairing
-        let session_keys = self.transient_pair().await?;
-        *self.session_keys.lock().await = Some(session_keys);
+        // Try various credentials for SRP Pairing
+        // Format: (username, pin)
+        let credentials = [
+            ("Pair-Setup", "3939"), // Standard AirPort
+            ("Pair-Setup", "0000"),
+            ("Pair-Setup", "1111"),
+            ("Pair-Setup", "1234"),
+            ("3939", "3939"),
+            ("admin", "3939"),
+            ("AirPlay", "3939"),
+            ("Pair-Setup", ""), // Empty PIN
+        ];
 
-        Ok(())
+        for (user, pin) in credentials {
+            tracing::info!("Attempting SRP Pairing: User='{}', PIN='{}'...", user, pin);
+            match self.pair_setup(user, pin).await {
+                Ok(session_keys) => {
+                    tracing::info!("SRP Pairing successful with User='{}', PIN='{}'", user, pin);
+                    *self.secure_session.lock().await =
+                        Some(crate::net::secure::HapSecureSession::new(
+                            &session_keys.encrypt_key,
+                            &session_keys.decrypt_key,
+                        ));
+                    *self.session_keys.lock().await = Some(session_keys);
+                    // TODO: Store keys if we want persistence
+                    return Ok(());
+                }
+                Err(e) => {
+                    tracing::debug!("SRP Pairing failed: {}", e);
+                    // Wait a bit to avoid backoff
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+            }
+        }
+
+        // 3. Fail if neither worked
+        Err(AirPlayError::AuthenticationFailed {
+            message: "All pairing methods failed".to_string(),
+            recoverable: false,
+        })
+    }
+
+    /// Perform Pair-Setup with PIN (SRP)
+    async fn pair_setup(&self, username: &str, pin: &str) -> Result<SessionKeys, AirPlayError> {
+        let mut pairing = PairSetup::new();
+        pairing.set_username(username);
+        pairing.set_pin(pin);
+
+        // If PIN is "3939", assume transient mode (for AirPort Express 2)
+        if pin == "3939" {
+            pairing.set_transient(true);
+        }
+
+        // M1: Start pairing
+        let m1 = pairing
+            .start()
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
+
+        tracing::debug!("Starting Pair-Setup (SRP)...");
+        let m2 = self.send_pairing_data(&m1, "/pair-setup").await?;
+
+        // M2 -> M3
+        let result = pairing
+            .process_m2(&m2)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
+
+        let PairingStepResult::SendData(m3) = result else {
+            return Err(AirPlayError::AuthenticationFailed {
+                message: "Unexpected pairing state after M2".to_string(),
+                recoverable: false,
+            });
+        };
+
+        tracing::debug!("Sending M3...");
+        let m4 = self.send_pairing_data(&m3, "/pair-setup").await?;
+
+        // M4 -> M5 (or Complete if transient)
+        let result = pairing
+            .process_m4(&m4)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
+
+        if let PairingStepResult::Complete(keys) = result {
+            tracing::info!("Pairing completed early (Transient Mode)");
+            return Ok(keys);
+        }
+
+        let PairingStepResult::SendData(m5) = result else {
+            return Err(AirPlayError::AuthenticationFailed {
+                message: "Unexpected pairing state after M4".to_string(),
+                recoverable: false,
+            });
+        };
+
+        tracing::debug!("Sending M5...");
+        let m6 = self.send_pairing_data(&m5, "/pair-setup").await?;
+
+        // M6 -> Complete
+        let result = pairing
+            .process_m6(&m6)
+            .map_err(|e| AirPlayError::AuthenticationFailed {
+                message: e.to_string(),
+                recoverable: false,
+            })?;
+
+        match result {
+            PairingStepResult::Complete(keys) => Ok(keys),
+            _ => Err(AirPlayError::AuthenticationFailed {
+                message: "Pairing did not complete".to_string(),
+                recoverable: false,
+            }),
+        }
     }
 
     /// Perform transient pairing
@@ -416,9 +552,58 @@ impl ConnectionManager {
         }
     }
 
-    /// Setup RTSP session (SETUP command)
+    /// Setup RTSP session (AirPlay 2 sequence)
     async fn setup_session(&self) -> Result<(), AirPlayError> {
-        // 1. Bind local UDP ports (0 = random port)
+        use crate::protocol::plist::DictBuilder;
+
+        // 1. GET /info (Encrypted) - Some devices refresh state here
+        tracing::debug!("Performing GET /info (Encrypted)...");
+        let _ = self.send_get_command("/info").await?;
+
+        // 2. Session Setup (SETUP / with Plist)
+        tracing::debug!("Performing Session SETUP...");
+        let group_uuid = "D67B1696-8D3A-A6CF-9ACF-03C837DC68FD";
+        let setup_plist = DictBuilder::new()
+            .insert("timingProtocol", "NTP")
+            .insert("groupUUID", group_uuid)
+            .insert("macAddress", "AC:07:75:12:4A:1F")
+            .insert("isAudioReceiver", false)
+            .build();
+
+        let setup_session_req = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            session.setup_session_request(&setup_plist)
+        };
+        self.send_rtsp_request(&setup_session_req).await?;
+
+        // 3. Announce (ANNOUNCE / with SDP)
+        tracing::debug!("Performing ANNOUNCE...");
+        // Real-looking Base64 for 256-byte RSA key (encrypted with receiver private key)
+        let rsa_key_b64 = "BMAQSHXC2zwX+XN+Mp9hSvfqosOCDrYCjYif9O6AEMbSt0WnC9iqmnNsvZ6Z3HjefTzx1/XsvUNZUBo2i/wOYZg/s4okKb39Iu4wnqeiWho9p6P6VcNfG3qDr/e12clA2Utaewe+JEBBBU4Grzu2zS2TRaNOQJK+4NhR0NuKruhYx2dbm42blVYo8XqENW2UEDfLw03t3tAORF6s4EAjx1ijusPXFCofDqKm/+DJMD9S+3qO88B2TPBXfirTkAuXU9nSA2uUB9CkgmbVPrC8UYXL2Xc1j2+Jk7IU5MfVXhPq/ojPcppMtOaoPHTCbTICY86fovAGtMLWXiAKOfDOLg";
+        let aes_iv_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
+        let sdp = format!(
+            "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\na=rsaaeskey:{rsa_key_b64}\r\na=aesiv:{aes_iv_b64}\r\n"
+        );
+
+        let announce_req = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            session.announce_request(&sdp)
+        };
+        self.send_rtsp_request(&announce_req).await?;
+
+        // 3. Bind local UDP ports
         let audio_sock = UdpSocket::bind("0.0.0.0:0").await?;
         let ctrl_sock = UdpSocket::bind("0.0.0.0:0").await?;
         let time_sock = UdpSocket::bind("0.0.0.0:0").await?;
@@ -427,13 +612,13 @@ impl ConnectionManager {
         let ctrl_port = ctrl_sock.local_addr()?.port();
         let time_port = time_sock.local_addr()?.port();
 
-        // 2. Create SETUP request with transport parameters
-        // Transport: RTP/AVP/UDP;unicast;mode=record;control_port=...;timing_port=...
+        // 4. Stream Setup (SETUP /rtp/audio with Transport)
+        tracing::debug!("Performing Stream SETUP...");
         let transport = format!(
             "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={ctrl_port};timing_port={time_port}"
         );
 
-        let request = {
+        let setup_stream_req = {
             let mut session_guard = self.rtsp_session.lock().await;
             let session = session_guard
                 .as_mut()
@@ -441,13 +626,12 @@ impl ConnectionManager {
                     message: "No RTSP session".to_string(),
                     current_state: "None".to_string(),
                 })?;
-            session.setup_request(&transport)
+            session.setup_stream_request(&transport)
         };
 
-        // 3. Send request
-        let response = self.send_rtsp_request(&request).await?;
+        let response = self.send_rtsp_request(&setup_stream_req).await?;
 
-        // 4. Update session state
+        // 5. Update session state
         {
             let mut session_guard = self.rtsp_session.lock().await;
             let session = session_guard
@@ -464,7 +648,7 @@ impl ConnectionManager {
                 })?;
         }
 
-        // 5. Parse response transport header to get server ports
+        // 6. Parse response transport header to get server ports
         let transport_header =
             response
                 .headers
@@ -477,7 +661,7 @@ impl ConnectionManager {
         let (server_audio_port, server_ctrl_port, server_time_port) =
             Self::parse_transport_ports(transport_header)?;
 
-        // 6. Connect UDP sockets to server ports
+        // 7. Connect UDP sockets to server ports
         let device_ip = {
             let current_state = self.state().await;
             let device_guard = self.device.read().await;
@@ -503,15 +687,15 @@ impl ConnectionManager {
             server_timing_port: server_time_port,
         });
 
-        // 7. Send RECORD to start buffering
+        // 8. Send RECORD to start buffering
+        tracing::debug!("Performing RECORD...");
         let record_request = {
-            let current_state = self.state().await;
             let mut session_guard = self.rtsp_session.lock().await;
             session_guard
                 .as_mut()
                 .ok_or_else(|| AirPlayError::InvalidState {
                     message: "No RTSP session".to_string(),
-                    current_state: format!("{current_state:?}"),
+                    current_state: "Setup".to_string(),
                 })?
                 .record_request()
         };
@@ -556,7 +740,8 @@ impl ConnectionManager {
              Content-Type: application/octet-stream\r\n\
              Content-Length: {}\r\n\
              User-Agent: {user_agent}\r\n\
-             Active-Remote: 4294967295\r\n",
+             Active-Remote: 4294967295\r\n\
+             X-Apple-Client-Name: airplay2-rs\r\n",
             data.len()
         );
 
@@ -574,6 +759,13 @@ impl ConnectionManager {
         if !session_id.is_empty() {
             use std::fmt::Write;
             let _ = write!(request, "X-Apple-Session-ID: {session_id}\r\n");
+        }
+
+        // Add X-Apple-HKP header for pairing requests
+        // 3 = Normal, 4 = Transient
+        // We default to 4 (Transient) as we are mostly trying 3939 flow
+        if path.starts_with("/pair-setup") || path.starts_with("/pair-verify") {
+            request.push_str("X-Apple-HKP: 4\r\n");
         }
 
         request.push_str("\r\n");
@@ -656,13 +848,7 @@ impl ConnectionManager {
     async fn send_rtsp_request(&self, request: &RtspRequest) -> Result<RtspResponse, AirPlayError> {
         let encoded = request.encode();
 
-        // Log outgoing request
-        if let Ok(s) = std::str::from_utf8(&encoded) {
-            tracing::debug!(">> Sending RTSP request:\n{}", s.trim());
-        } else {
-            tracing::debug!(">> Sending RTSP request (binary): {} bytes", encoded.len());
-        }
-
+        let mut secure_guard = self.secure_session.lock().await;
         let mut stream_guard = self.stream.lock().await;
         let stream = stream_guard
             .as_mut()
@@ -670,8 +856,22 @@ impl ConnectionManager {
                 device_name: "unknown".to_string(),
             })?;
 
-        // Send request
-        stream.write_all(&encoded).await?;
+        if let Some(ref mut secure) = *secure_guard {
+            tracing::debug!(
+                ">> Sending Encrypted RTSP request ({} bytes)",
+                encoded.len()
+            );
+            let encrypted = secure.encrypt(&encoded)?;
+            stream.write_all(&encrypted).await?;
+        } else {
+            // Log outgoing request
+            if let Ok(s) = std::str::from_utf8(&encoded) {
+                tracing::debug!(">> Sending RTSP request:\n{}", s.trim());
+            } else {
+                tracing::debug!(">> Sending RTSP request (binary): {} bytes", encoded.len());
+            }
+            stream.write_all(&encoded).await?;
+        }
         stream.flush().await?;
 
         // Update stats
@@ -680,8 +880,16 @@ impl ConnectionManager {
         // Read response
         let mut codec = self.rtsp_codec.lock().await;
         let mut buf = vec![0u8; 4096];
+        let mut encrypted_buf = Vec::new();
 
         loop {
+            if let Some(response) = codec.decode().map_err(|e| AirPlayError::RtspError {
+                message: e.to_string(),
+                status_code: None,
+            })? {
+                return Ok(response);
+            }
+
             let n = stream.read(&mut buf).await?;
             if n == 0 {
                 return Err(AirPlayError::Disconnected {
@@ -689,26 +897,52 @@ impl ConnectionManager {
                 });
             }
 
-            // Log incoming data
-            if let Ok(s) = std::str::from_utf8(&buf[..n]) {
-                tracing::debug!("<< Received RTSP data:\n{}", s.trim());
+            if let Some(ref mut secure) = *secure_guard {
+                use byteorder::{ByteOrder, LittleEndian};
+                encrypted_buf.extend_from_slice(&buf[..n]);
+
+                // Try to decrypt as many blocks as possible
+                while encrypted_buf.len() >= 2 {
+                    let block_len = LittleEndian::read_u16(&encrypted_buf[0..2]) as usize;
+                    let total_len = 2 + block_len + 16;
+                    if encrypted_buf.len() >= total_len {
+                        let block = encrypted_buf.drain(..total_len).collect::<Vec<_>>();
+                        let (decrypted, _) = secure.decrypt_block(&block)?;
+
+                        if let Ok(s) = std::str::from_utf8(&decrypted) {
+                            tracing::debug!("<< Received Decrypted RTSP data:\n{}", s.trim());
+                        } else {
+                            tracing::debug!(
+                                "<< Received Decrypted RTSP data (binary): {} bytes",
+                                decrypted.len()
+                            );
+                        }
+
+                        codec
+                            .feed(&decrypted)
+                            .map_err(|e| AirPlayError::RtspError {
+                                message: e.to_string(),
+                                status_code: None,
+                            })?;
+                    } else {
+                        break;
+                    }
+                }
             } else {
-                tracing::debug!("<< Received RTSP data (binary): {} bytes", n);
+                // Log incoming data
+                if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                    tracing::debug!("<< Received RTSP data:\n{}", s.trim());
+                } else {
+                    tracing::debug!("<< Received RTSP data (binary): {} bytes", n);
+                }
+
+                codec.feed(&buf[..n]).map_err(|e| AirPlayError::RtspError {
+                    message: e.to_string(),
+                    status_code: None,
+                })?;
             }
 
             self.stats.write().await.record_received(n);
-
-            codec.feed(&buf[..n]).map_err(|e| AirPlayError::RtspError {
-                message: e.to_string(),
-                status_code: None,
-            })?;
-
-            if let Some(response) = codec.decode().map_err(|e| AirPlayError::RtspError {
-                message: e.to_string(),
-                status_code: None,
-            })? {
-                return Ok(response);
-            }
         }
     }
 

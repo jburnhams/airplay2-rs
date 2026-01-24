@@ -27,6 +27,8 @@ pub struct PairSetup {
     session_key: Option<Vec<u8>>,
     /// Device's Ed25519 public key (for verification)
     device_ltpk: Option<Vec<u8>>,
+    /// Transient pairing mode (for `AirPort` Express 2 etc.)
+    transient: bool,
 }
 
 impl Default for PairSetup {
@@ -49,12 +51,18 @@ impl PairSetup {
             signing_keypair,
             session_key: None,
             device_ltpk: None,
+            transient: false,
         }
     }
 
     /// Set the PIN for authentication
     pub fn set_pin(&mut self, pin: &str) {
         self.pin = Some(pin.to_string());
+    }
+
+    /// Set transient mode (e.g. for `AirPort` Express 2)
+    pub fn set_transient(&mut self, transient: bool) {
+        self.transient = transient;
     }
 
     /// Start pairing - returns M1 message
@@ -71,10 +79,86 @@ impl PairSetup {
         }
 
         // Build M1: state=1, method=0 (pair-setup)
-        let m1 = TlvEncoder::new()
+        let mut encoder = TlvEncoder::new()
             .add_state(1)
-            .add_method(methods::PAIR_SETUP)
-            .build();
+            .add_method(methods::PAIR_SETUP);
+
+        if self.transient {
+            // Flags=0x10 (Transient)
+            encoder = encoder.add_byte(TlvType::Flags, 0x10);
+        }
+
+        let m1 = encoder.build();
+
+        self.state = PairingState::WaitingResponse;
+        Ok(m1)
+    }
+
+
+impl Default for PairSetup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PairSetup {
+    /// Create a new Pair-Setup session
+    #[must_use]
+    pub fn new() -> Self {
+        let signing_keypair = Ed25519KeyPair::generate();
+
+        Self {
+            state: PairingState::Init,
+            pin: None,
+            srp_client: None,
+            srp_verifier: None,
+            signing_keypair,
+            session_key: None,
+            device_ltpk: None,
+            transient: false,
+            username: "Pair-Setup".to_string(),
+        }
+    }
+
+    /// Set the PIN for authentication
+    pub fn set_pin(&mut self, pin: &str) {
+        self.pin = Some(pin.to_string());
+    }
+
+    /// Set transient mode (e.g. for `AirPort` Express 2)
+    pub fn set_transient(&mut self, transient: bool) {
+        self.transient = transient;
+    }
+
+    /// Set the username for authentication
+    pub fn set_username(&mut self, username: &str) {
+        self.username = username.to_string();
+    }
+
+    /// Start pairing - returns M1 message
+    ///
+    /// # Errors
+    ///
+    /// Returns error if state is invalid
+    pub fn start(&mut self) -> Result<Vec<u8>, PairingError> {
+        if self.state != PairingState::Init {
+            return Err(PairingError::InvalidState {
+                expected: "Init".to_string(),
+                actual: format!("{:?}", self.state),
+            });
+        }
+
+        // Build M1: state=1, method=0 (pair-setup)
+        let mut encoder = TlvEncoder::new()
+            .add_state(1)
+            .add_method(methods::PAIR_SETUP);
+
+        if self.transient {
+            // Flags=0x10 (Transient)
+            encoder = encoder.add_byte(TlvType::Flags, 0x10);
+        }
+
+        let m1 = encoder.build();
 
         self.state = PairingState::WaitingResponse;
         Ok(m1)
@@ -115,10 +199,21 @@ impl PairSetup {
         let srp_client = SrpClient::new()?;
         let client_public = srp_client.public_key().to_vec();
 
-        let verifier =
-            srp_client.process_challenge(b"Pair-Setup", pin.as_bytes(), salt, server_public)?;
+        tracing::debug!("SRP Salt: {:02X?}", salt);
+        tracing::debug!("SRP Server Public (B): {:02X?}", server_public);
+        tracing::debug!("SRP Client Public (A): {:02X?}", client_public);
+
+        let verifier = srp_client.process_challenge(
+            self.username.as_bytes(),
+            pin.as_bytes(),
+            salt,
+            server_public,
+        )?;
+
+        tracing::debug!("SRP Client Proof (M1): {:02X?}", verifier.client_proof());
 
         // Build M3: state=3, public_key=A, proof=M1
+
         let m3 = TlvEncoder::new()
             .add_state(3)
             .add(TlvType::PublicKey, &client_public)
@@ -174,6 +269,24 @@ impl PairSetup {
             .map_err(|_| PairingError::SrpVerificationFailed)?;
 
         let session_key = session_key_obj.as_bytes().to_vec();
+
+        if self.transient {
+            // For transient pairing, we stop here and derive final session keys
+            let hkdf = HkdfSha512::new(Some(b"Control-Salt"), &session_key);
+            let encrypt_key = hkdf.expand_fixed::<32>(b"Control-Write-Encryption-Key")?;
+            let decrypt_key = hkdf.expand_fixed::<32>(b"Control-Read-Encryption-Key")?;
+
+            let session_keys = SessionKeys {
+                encrypt_key,
+                decrypt_key,
+                encrypt_nonce: 0,
+                decrypt_nonce: 0,
+            };
+
+            self.session_key = Some(session_key);
+            self.state = PairingState::Complete;
+            return Ok(PairingStepResult::Complete(session_keys));
+        }
 
         // Derive encryption key for M5
         let hkdf = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);

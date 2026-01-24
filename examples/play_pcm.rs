@@ -61,13 +61,26 @@ impl AudioSource for SineSource {
     }
 }
 
+use airplay2::types::AirPlayDevice;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // Discover
     println!("Scanning for devices...");
-    let devices = scan(Duration::from_secs(3)).await?;
+    let mut devices = scan(Duration::from_secs(3)).await?;
+
+    // Manually add Python Receiver
+    devices.push(AirPlayDevice {
+        name: "MyPythonReceiver".to_string(),
+        id: "ac:07:75:12:4a:1f".to_string(), // MAC from logs
+        address: "192.168.0.101".parse()?,
+        port: 50000,
+        model: Some("Receiver".to_string()),
+        capabilities: Default::default(),
+        txt_records: std::collections::HashMap::new(),
+    });
 
     if devices.is_empty() {
         println!("No devices found.");
