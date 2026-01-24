@@ -30,6 +30,14 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Architecture
+//!
+//! The library is organized into layers:
+//!
+//! - **High-level**: `AirPlayPlayer` - Simple, intuitive API
+//! - **Mid-level**: `AirPlayClient` - Full control over all features
+//! - **Low-level**: Protocol modules - Direct protocol access
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -62,10 +70,36 @@ pub mod streaming;
 
 // Re-exports
 pub use client::AirPlayClient;
+pub use player::{AirPlayPlayer, PlayerBuilder, quick_play, quick_connect, quick_connect_to};
+pub use types::{AirPlayDevice, AirPlayConfig, TrackInfo, PlaybackState, DeviceCapabilities};
 pub use error::AirPlayError;
+pub use discovery::{scan, discover, DiscoveryEvent};
+pub use audio::AudioFormat;
+pub use control::volume::Volume;
+pub use types::RepeatMode;
+pub use state::{ClientState, ClientEvent};
 pub use group::{DeviceGroup, GroupId, GroupManager};
-pub use player::AirPlayPlayer;
-pub use types::{AirPlayConfig, AirPlayDevice, PlaybackInfo, PlaybackState, RepeatMode, TrackInfo};
 
-// Discovery functions
-pub use discovery::{discover, scan};
+/// Library version
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Prelude for common imports
+///
+/// Convenient re-exports
+pub mod prelude {
+    pub use crate::AirPlayPlayer;
+    pub use crate::AirPlayClient;
+    pub use crate::AirPlayDevice;
+    pub use crate::AirPlayConfig;
+    pub use crate::AirPlayError;
+    pub use crate::TrackInfo;
+    pub use crate::PlaybackState;
+    pub use crate::Volume;
+    pub use crate::AudioFormat;
+
+    pub use crate::quick_connect;
+    pub use crate::quick_connect_to;
+    pub use crate::quick_play;
+    pub use crate::scan;
+    pub use crate::discover;
+}
