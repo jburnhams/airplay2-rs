@@ -1,4 +1,4 @@
-//! HAP (HomeKit Accessory Protocol) secure session implementation
+//! HAP (`HomeKit` Accessory Protocol) secure session implementation
 //!
 //! Provides ChaCha20-Poly1305 encryption for RTSP control sessions
 //! after successful SRP pairing.
@@ -17,6 +17,7 @@ pub struct HapSecureSession {
 
 impl HapSecureSession {
     /// Create a new secure session from shared keys
+    #[must_use]
     pub fn new(encrypt_key: &[u8; 32], decrypt_key: &[u8; 32]) -> Self {
         Self {
             encrypt_cipher: ChaCha20Poly1305::new(Key::from_slice(encrypt_key)),
@@ -36,7 +37,10 @@ impl HapSecureSession {
         let mut output = Vec::with_capacity(data.len() + (data.len() / 1024 + 1) * 18);
 
         for chunk in data.chunks(1024) {
-            let len = chunk.len() as u16;
+            let len = u16::try_from(chunk.len()).map_err(|_| AirPlayError::RtspError {
+                message: "Chunk size exceeds u16".to_string(),
+                status_code: None,
+            })?;
             let mut len_bytes = [0u8; 2];
             LittleEndian::write_u16(&mut len_bytes, len);
 
@@ -65,7 +69,7 @@ impl HapSecureSession {
 
     /// Decrypt a single HAP block
     ///
-    /// Returns (decrypted_data, remaining_input)
+    /// Returns (`decrypted_data`, `remaining_input`)
     ///
     /// # Errors
     /// Returns an error if decryption fails or buffer is too small.

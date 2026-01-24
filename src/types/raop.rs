@@ -16,6 +16,7 @@ pub enum RaopCodec {
 
 impl RaopCodec {
     /// Parse from numeric value
+    #[must_use]
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::Pcm),
@@ -27,6 +28,7 @@ impl RaopCodec {
     }
 
     /// Get human-readable name
+    #[must_use]
     pub fn name(&self) -> &'static str {
         match self {
             Self::Pcm => "PCM",
@@ -148,18 +150,19 @@ mod tests {
 pub enum RaopEncryption {
     /// No encryption
     None = 0,
-    /// RSA (AirPort Express original)
+    /// RSA (`AirPort` Express original)
     Rsa = 1,
-    /// FairPlay (iTunes DRM)
+    /// `FairPlay` (iTunes DRM)
     FairPlay = 3,
     /// MFi-SAP (third-party devices)
     MfiSap = 4,
-    /// FairPlay SAPv2.5 (iOS/macOS mirroring)
+    /// `FairPlay` SAPv2.5 (iOS/macOS mirroring)
     FairPlaySap25 = 5,
 }
 
 impl RaopEncryption {
     /// Parse from numeric value
+    #[must_use]
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::None),
@@ -172,6 +175,7 @@ impl RaopEncryption {
     }
 
     /// Check if this encryption type is supported by the library
+    #[must_use]
     pub fn is_supported(&self) -> bool {
         matches!(self, Self::None | Self::Rsa)
     }
@@ -191,6 +195,7 @@ pub enum RaopMetadataType {
 
 impl RaopMetadataType {
     /// Parse from numeric value
+    #[must_use]
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::Text),
@@ -266,6 +271,7 @@ pub mod txt_keys {
 
 impl RaopCapabilities {
     /// Parse from TXT record map
+    #[must_use]
     pub fn from_txt_records(records: &HashMap<String, String>) -> Self {
         let mut caps = Self::default();
 
@@ -322,7 +328,7 @@ impl RaopCapabilities {
 
         // Parse transport
         if let Some(v) = records.get(txt_keys::TRANSPORT) {
-            caps.transport = v.clone();
+            caps.transport.clone_from(v);
         } else {
             caps.transport = "UDP".to_string();
         }
@@ -332,8 +338,7 @@ impl RaopCapabilities {
         caps.model = records.get(txt_keys::MODEL).cloned();
 
         if let Some(v) = records.get(txt_keys::FLAGS) {
-            caps.status_flags = u32::from_str_radix(v.trim_start_matches("0x"), 16)
-                .unwrap_or(0);
+            caps.status_flags = u32::from_str_radix(v.trim_start_matches("0x"), 16).unwrap_or(0);
         }
 
         caps
@@ -361,21 +366,25 @@ impl RaopCapabilities {
     }
 
     /// Check if device supports a specific codec
+    #[must_use]
     pub fn supports_codec(&self, codec: RaopCodec) -> bool {
         self.codecs.contains(&codec)
     }
 
     /// Check if device supports RSA encryption
+    #[must_use]
     pub fn supports_rsa(&self) -> bool {
         self.encryption_types.contains(&RaopEncryption::Rsa)
     }
 
     /// Check if device supports unencrypted streaming
+    #[must_use]
     pub fn supports_unencrypted(&self) -> bool {
         self.encryption_types.contains(&RaopEncryption::None)
     }
 
     /// Get preferred codec (ALAC > AAC > PCM)
+    #[must_use]
     pub fn preferred_codec(&self) -> Option<RaopCodec> {
         if self.codecs.contains(&RaopCodec::Alac) {
             Some(RaopCodec::Alac)
@@ -389,6 +398,7 @@ impl RaopCapabilities {
     }
 
     /// Get preferred encryption (RSA if available, else None)
+    #[must_use]
     pub fn preferred_encryption(&self) -> Option<RaopEncryption> {
         if self.supports_rsa() {
             Some(RaopEncryption::Rsa)

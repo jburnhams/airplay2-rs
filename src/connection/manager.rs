@@ -209,12 +209,12 @@ impl ConnectionManager {
             tracing::info!("Skipping Auth-Setup for OpenAirplay device");
         } else {
             match self.auth_setup().await {
-                Ok(_) => tracing::info!("Auth-Setup succeeded"),
+                Ok(()) => tracing::info!("Auth-Setup succeeded"),
                 Err(e) => {
                     tracing::warn!(
                         "Auth-Setup failed (might be optional for some devices): {}",
                         e
-                    )
+                    );
                 }
             }
         }
@@ -552,7 +552,8 @@ impl ConnectionManager {
         }
     }
 
-    /// Setup RTSP session (AirPlay 2 sequence)
+    /// Setup RTSP session (`AirPlay` 2 sequence)
+    #[allow(clippy::too_many_lines)]
     async fn setup_session(&self) -> Result<(), AirPlayError> {
         use crate::protocol::plist::DictBuilder;
 

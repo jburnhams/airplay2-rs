@@ -7,6 +7,7 @@ pub const RAOP_SERVICE_TYPE: &str = "_raop._tcp.local.";
 ///
 /// RAOP service names follow the format: `{MAC_ADDRESS}@{DEVICE_NAME}`
 /// Example: "0050C212A23F@Living Room"
+#[must_use]
 pub fn parse_raop_service_name(name: &str) -> Option<(String, String)> {
     let parts: Vec<&str> = name.splitn(2, '@').collect();
     if parts.len() == 2 {
@@ -22,6 +23,7 @@ pub fn parse_raop_service_name(name: &str) -> Option<(String, String)> {
 }
 
 /// Format MAC address with colons
+#[must_use]
 pub fn format_mac_address(mac: &str) -> String {
     mac.chars()
         .collect::<Vec<_>>()
