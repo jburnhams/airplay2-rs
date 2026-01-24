@@ -34,6 +34,9 @@ tracing = "0.1"
 mdns-sd = "0.12"
 
 # Crypto
+rsa = "0.9"
+sha1 = { version = "0.10", features = ["oid"] }
+base64 = "0.22"
 srp = "0.6"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-traits = "0.2"
