@@ -2,7 +2,6 @@
 
 use airplay2::scan;
 use std::time::Duration;
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

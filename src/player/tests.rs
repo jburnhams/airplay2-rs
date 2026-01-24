@@ -47,7 +47,7 @@ async fn test_accessors() {
     let mut player = AirPlayPlayer::new();
 
     // Check initial state
-    assert_eq!(player.volume().await, 0.75); // Default volume is 0.75 in client
+    assert!((player.volume().await - 0.75).abs() < f32::EPSILON); // Default volume is 0.75 in client
     assert!(!player.is_playing().await);
     assert_eq!(player.queue_length().await, 0);
 
