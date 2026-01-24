@@ -150,7 +150,7 @@ impl ConnectionManager {
     /// Internal connection logic
     async fn connect_internal(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
         // 1. Establish TCP connection
-        let addr = format!("{}:{}", device.address, device.port);
+        let addr = format!("{}:{}", device.address(), device.port);
         tracing::debug!("Connecting to {}", addr);
 
         let stream =
@@ -165,7 +165,7 @@ impl ConnectionManager {
         *self.stream.lock().await = Some(stream);
 
         // 2. Initialize RTSP session
-        let rtsp_session = RtspSession::new(&device.address.to_string(), device.port);
+        let rtsp_session = RtspSession::new(&device.address().to_string(), device.port);
         *self.rtsp_session.lock().await = Some(rtsp_session);
 
         // 3. Perform OPTIONS exchange
@@ -487,7 +487,7 @@ impl ConnectionManager {
                     message: "Device information is missing.".to_string(),
                     current_state: format!("{current_state:?}"),
                 })?;
-            device.address
+            device.address()
         };
 
         audio_sock.connect((device_ip, server_audio_port)).await?;
@@ -543,7 +543,7 @@ impl ConnectionManager {
         let host = {
             let device_guard = self.device.read().await;
             if let Some(device) = device_guard.as_ref() {
-                format!("{}:{}", device.address, device.port)
+                format!("{}:{}", device.address(), device.port)
             } else {
                 "127.0.0.1:7000".to_string()
             }

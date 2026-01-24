@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn print_device_info(index: usize, device: &AirPlayDevice) {
     println!("\nDevice #{}: {}", index, device.name);
     println!("  ID: {}", device.id);
-    println!("  Address: {}:{}", device.address, device.port);
+    println!("  Address: {}:{}", device.address(), device.port);
 
     if let Some(model) = &device.model {
         println!("  Model: {}", model);

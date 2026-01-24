@@ -2,10 +2,12 @@
 
 mod browser;
 pub mod parser;
+/// RAOP discovery logic
+pub mod raop;
 #[cfg(test)]
 mod tests;
 
-pub use browser::{DeviceBrowser, DiscoveryEvent};
+pub use browser::{DeviceBrowser, DeviceFilter, DiscoveryEvent, DiscoveryOptions};
 pub use parser::parse_txt_records;
 
 use crate::error::AirPlayError;
@@ -16,8 +18,7 @@ use std::time::Duration;
 /// Service type for `AirPlay` discovery
 pub const AIRPLAY_SERVICE_TYPE: &str = "_airplay._tcp.local.";
 
-/// Service type for `AirPlay` 2 RAOP (audio)
-pub const RAOP_SERVICE_TYPE: &str = "_raop._tcp.local.";
+pub use raop::RAOP_SERVICE_TYPE;
 
 /// Discover `AirPlay` devices continuously
 ///
@@ -69,6 +70,19 @@ pub async fn discover_with_config(
     browser.browse()
 }
 
+/// Discover devices with custom options
+///
+/// # Errors
+///
+/// Returns an error if the mDNS daemon cannot be initialized.
+#[allow(clippy::unused_async)]
+pub async fn discover_with_options(
+    options: DiscoveryOptions,
+) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+    let browser = DeviceBrowser::with_options(options);
+    browser.browse()
+}
+
 /// Scan for devices with timeout
 ///
 /// Performs a one-shot scan and returns all discovered devices.
@@ -87,7 +101,7 @@ pub async fn discover_with_config(
 /// let devices = scan(Duration::from_secs(5)).await?;
 ///
 /// for device in devices {
-///     println!("{}: {}", device.name, device.address);
+///     println!("{}: {}", device.name, device.address());
 /// }
 /// # Ok(())
 /// # }
@@ -118,6 +132,48 @@ pub async fn scan_with_config(
     let mut devices: HashMap<String, AirPlayDevice> = HashMap::new();
 
     // Use timeout
+    let deadline = tokio::time::Instant::now() + timeout;
+
+    tokio::pin!(stream);
+
+    loop {
+        tokio::select! {
+            () = tokio::time::sleep_until(deadline) => {
+                break;
+            }
+            event = stream.next() => {
+                match event {
+                    Some(DiscoveryEvent::Added(device) | DiscoveryEvent::Updated(device)) => {
+                        devices.insert(device.id.clone(), device);
+                    }
+                    Some(DiscoveryEvent::Removed(id)) => {
+                        devices.remove(&id);
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+
+    Ok(devices.into_values().collect())
+}
+
+/// Scan for devices with custom options
+///
+/// # Errors
+///
+/// Returns an error if the mDNS daemon cannot be initialized.
+pub async fn scan_with_options(
+    options: DiscoveryOptions,
+) -> Result<Vec<AirPlayDevice>, AirPlayError> {
+    use futures::StreamExt;
+    use std::collections::HashMap;
+
+    let timeout = options.timeout;
+    let browser = DeviceBrowser::with_options(options);
+    let stream = browser.browse()?;
+
+    let mut devices: HashMap<String, AirPlayDevice> = HashMap::new();
     let deadline = tokio::time::Instant::now() + timeout;
 
     tokio::pin!(stream);
