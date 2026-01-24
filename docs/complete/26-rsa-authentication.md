@@ -34,7 +34,7 @@ This enabled third-party implementations like Shairport and Shairport-sync.
 
 ### 26.1 RSA Module Structure
 
-- [ ] **26.1.1** Define RSA types and constants
+- [x] **26.1.1** Define RSA types and constants
 
 **File:** `src/protocol/crypto/rsa.rs`
 
@@ -202,7 +202,7 @@ impl RaopRsaPrivateKey {
 
 ### 26.2 Challenge-Response Protocol
 
-- [ ] **26.2.1** Implement Apple-Challenge generation and verification
+- [x] **26.2.1** Implement Apple-Challenge generation and verification
 
 **File:** `src/protocol/raop/auth.rs`
 
@@ -381,7 +381,7 @@ impl RaopAuthenticator {
 
 ### 26.3 AES Key Exchange
 
-- [ ] **26.3.1** Implement AES key generation and RSA wrapping
+- [x] **26.3.1** Implement AES key generation and RSA wrapping
 
 **File:** `src/protocol/raop/key_exchange.rs`
 
@@ -504,7 +504,7 @@ pub fn parse_session_keys(
 
 ### 26.4 Module Integration
 
-- [ ] **26.4.1** Update crypto module exports
+- [x] **26.4.1** Update crypto module exports
 
 **File:** `src/protocol/crypto/mod.rs` (additions)
 
@@ -515,7 +515,7 @@ mod rsa;
 pub use self::rsa::{AppleRsaPublicKey, RaopRsaPrivateKey, sizes as rsa_sizes};
 ```
 
-- [ ] **26.4.2** Create RAOP protocol module
+- [x] **26.4.2** Create RAOP protocol module
 
 **File:** `src/protocol/raop/mod.rs`
 
@@ -844,15 +844,15 @@ fn test_simulated_airplay1_auth() {
 
 ## Acceptance Criteria
 
-- [ ] RSA-OAEP encryption works for AES key wrapping
-- [ ] RSA-PKCS#1 v1.5 signatures verify correctly
-- [ ] Challenge-response protocol matches RAOP specification
-- [ ] Session keys are properly generated and encoded
-- [ ] Base64 encoding matches Apple's format (no padding)
-- [ ] Keys are zeroized on drop
-- [ ] Full authentication simulation passes
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] RSA-OAEP encryption works for AES key wrapping
+- [x] RSA-PKCS#1 v1.5 signatures verify correctly
+- [x] Challenge-response protocol matches RAOP specification
+- [x] Session keys are properly generated and encoded
+- [x] Base64 encoding matches Apple's format (no padding)
+- [x] Keys are zeroized on drop
+- [x] Full authentication simulation passes
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 

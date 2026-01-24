@@ -5,6 +5,7 @@
 pub mod crypto;
 pub mod pairing;
 pub mod plist;
+pub mod raop;
 pub mod rtp;
 pub mod rtsp;
 
