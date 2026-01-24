@@ -26,3 +26,6 @@ coverage/
 
 # Mutants
 **/mutants.out*/
+
+pair_ap/
+airplay2-receiver/

@@ -28,7 +28,7 @@ fn test_session_restart() {
     session.process_response(Method::Options, &resp).unwrap();
     assert_eq!(session.state(), SessionState::Ready);
 
-    let _ = session.setup_request("transport");
+    let _ = session.setup_stream_request("transport");
     let resp = simple_response(2, Some("SESSION-1"));
     session.process_response(Method::Setup, &resp).unwrap();
     assert_eq!(session.state(), SessionState::Setup);
@@ -49,7 +49,7 @@ fn test_session_restart() {
     assert_eq!(session.state(), SessionState::Ready);
 
     // Setup new session
-    let _ = session.setup_request("transport");
+    let _ = session.setup_stream_request("transport");
     let resp = simple_response(5, Some("SESSION-2"));
     session.process_response(Method::Setup, &resp).unwrap();
     assert_eq!(session.state(), SessionState::Setup);
