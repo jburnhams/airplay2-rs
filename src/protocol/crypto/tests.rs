@@ -356,3 +356,38 @@ fn test_x25519_public_key_from_bytes() {
 
     assert_eq!(pk.as_bytes(), kp.public_key().as_bytes());
 }
+
+#[test]
+fn test_chacha_tamper() {
+    let key = [0u8; 32];
+    let nonce = Nonce::from_bytes(&[1u8; 12]).unwrap();
+    let data = b"hello world";
+
+    let cipher = ChaCha20Poly1305Cipher::new(&key).unwrap();
+    let mut encrypted = cipher.encrypt(&nonce, data).unwrap();
+
+    // Tamper with data
+    encrypted[0] ^= 0xFF;
+
+    assert!(cipher.decrypt(&nonce, &encrypted).is_err());
+}
+
+#[test]
+fn test_aes_ctr_seek() {
+    let key = [0u8; 16];
+    let iv = [0u8; 16];
+    let data = b"hello world";
+
+    let mut cipher1 = Aes128Ctr::new(&key, &iv).unwrap();
+    let full_ciphertext = cipher1.process(data);
+
+    // Decrypt only last 5 bytes
+    let mut cipher2 = Aes128Ctr::new(&key, &iv).unwrap();
+    let offset = (data.len() - 5) as u64;
+    cipher2.seek(offset);
+
+    let mut partial = full_ciphertext[full_ciphertext.len() - 5..].to_vec();
+    cipher2.apply_keystream(&mut partial);
+
+    assert_eq!(partial, &data[data.len() - 5..]);
+}
