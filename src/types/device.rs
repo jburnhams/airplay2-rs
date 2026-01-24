@@ -23,7 +23,7 @@ pub struct AirPlayDevice {
     /// Device capabilities parsed from features flags
     pub capabilities: DeviceCapabilities,
 
-    /// RAOP (AirPlay 1) service port
+    /// RAOP (`AirPlay` 1) service port
     pub raop_port: Option<u16>,
 
     /// RAOP capabilities parsed from TXT records
@@ -93,7 +93,7 @@ impl AirPlayDevice {
         self.addresses
             .first()
             .copied()
-            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)))
+            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
     }
 }
 

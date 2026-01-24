@@ -66,7 +66,7 @@ pub async fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayErr
 pub async fn discover_with_config(
     config: AirPlayConfig,
 ) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-    let browser = DeviceBrowser::new(config);
+    let browser = DeviceBrowser::new(&config);
     browser.browse()
 }
 
@@ -126,7 +126,7 @@ pub async fn scan_with_config(
     use futures::StreamExt;
     use std::collections::HashMap;
 
-    let browser = DeviceBrowser::new(config);
+    let browser = DeviceBrowser::new(&config);
     let stream = browser.browse()?;
 
     let mut devices: HashMap<String, AirPlayDevice> = HashMap::new();

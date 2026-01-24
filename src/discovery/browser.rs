@@ -8,12 +8,12 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-/// Extended discovery options for both AirPlay 1 and 2
+/// Extended discovery options for both `AirPlay` 1 and 2
 #[derive(Debug, Clone)]
 pub struct DiscoveryOptions {
-    /// Discover AirPlay 2 devices (_airplay._tcp)
+    /// Discover `AirPlay` 2 devices (_airplay._tcp)
     pub discover_airplay2: bool,
-    /// Discover AirPlay 1/RAOP devices (_raop._tcp)
+    /// Discover `AirPlay` 1/RAOP devices (_raop._tcp)
     pub discover_raop: bool,
     /// Timeout for discovery scan (not used in continuous browse)
     pub timeout: Duration,
@@ -58,11 +58,11 @@ pub struct DeviceBrowser {
 }
 
 impl DeviceBrowser {
-    /// Create a new device browser with default config (AirPlay 2 only for backward compat?)
+    /// Create a new device browser with default config (`AirPlay` 2 only for backward compat?)
     /// or should it default to both?
     /// The original `new` took `AirPlayConfig`.
     #[must_use]
-    pub fn new(config: AirPlayConfig) -> Self {
+    pub fn new(config: &AirPlayConfig) -> Self {
         // Map AirPlayConfig to DiscoveryOptions if possible, or use defaults
         // AirPlayConfig doesn't have specific discovery flags, so we assume default (both).
         Self {
@@ -74,6 +74,7 @@ impl DeviceBrowser {
     }
 
     /// Create with specific options
+    #[must_use]
     pub fn with_options(options: DiscoveryOptions) -> Self {
         Self { options }
     }
@@ -109,12 +110,12 @@ impl DeviceBrowserStream {
         let mut streams = Vec::new();
 
         if options.discover_airplay2 {
-            let receiver = mdns
-                .browse(super::AIRPLAY_SERVICE_TYPE)
-                .map_err(|e| AirPlayError::DiscoveryFailed {
+            let receiver = mdns.browse(super::AIRPLAY_SERVICE_TYPE).map_err(|e| {
+                AirPlayError::DiscoveryFailed {
                     message: format!("Failed to browse AirPlay 2: {e}"),
                     source: None,
-                })?;
+                }
+            })?;
             // Tag events with service type
             let s = receiver
                 .into_stream()
@@ -125,12 +126,12 @@ impl DeviceBrowserStream {
         }
 
         if options.discover_raop {
-            let receiver = mdns
-                .browse(super::RAOP_SERVICE_TYPE)
-                .map_err(|e| AirPlayError::DiscoveryFailed {
+            let receiver = mdns.browse(super::RAOP_SERVICE_TYPE).map_err(|e| {
+                AirPlayError::DiscoveryFailed {
                     message: format!("Failed to browse RAOP: {e}"),
                     source: None,
-                })?;
+                }
+            })?;
             let s = receiver
                 .into_stream()
                 .map(|e| (super::RAOP_SERVICE_TYPE.to_string(), e));
@@ -212,8 +213,7 @@ impl DeviceBrowserStream {
         // Get friendly name
         let friendly_name = if service_type == super::RAOP_SERVICE_TYPE {
             raop::parse_raop_service_name(info.get_fullname())
-                .map(|(_, n)| n)
-                .unwrap_or_else(|| "Unknown RAOP Device".to_string())
+                .map_or_else(|| "Unknown RAOP Device".to_string(), |(_, n)| n)
         } else {
             txt_records
                 .get("model")
@@ -282,10 +282,13 @@ impl DeviceBrowserStream {
 
         // Filter check
         if let Some(filter) = &self.options.filter {
-             if filter.audio_only && !device.capabilities.supports_audio && device.raop_capabilities.is_none() {
-                 return None;
-             }
-             // Add more filter checks...
+            if filter.audio_only
+                && !device.capabilities.supports_audio
+                && device.raop_capabilities.is_none()
+            {
+                return None;
+            }
+            // Add more filter checks...
         }
 
         // Check if this is new or updated
@@ -315,14 +318,14 @@ impl DeviceBrowserStream {
             // Better logic: Check if other fullnames map to this ID.
             let has_other_services = self.fullname_map.values().any(|v| v == &id);
 
-            if !has_other_services {
-                self.known_devices.remove(&id);
-                Some(DiscoveryEvent::Removed(id))
-            } else {
+            if has_other_services {
                 // Maybe update?
                 // For now, ignoring partial removal (e.g. RAOP gone but AirPlay 2 stays).
                 // Ideally we should update the device to reflect lost capabilities.
                 None
+            } else {
+                self.known_devices.remove(&id);
+                Some(DiscoveryEvent::Removed(id))
             }
         } else {
             None
@@ -355,7 +358,7 @@ impl Drop for DeviceBrowserStream {
             let _ = self.mdns.stop_browse(super::AIRPLAY_SERVICE_TYPE);
         }
         if self.options.discover_raop {
-             let _ = self.mdns.stop_browse(super::RAOP_SERVICE_TYPE);
+            let _ = self.mdns.stop_browse(super::RAOP_SERVICE_TYPE);
         }
         let _ = self.mdns.shutdown();
     }
