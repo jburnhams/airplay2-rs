@@ -24,9 +24,7 @@ async fn test_builder_defaults() {
 
 #[tokio::test]
 async fn test_builder_device_name() {
-    let player = PlayerBuilder::new()
-        .device_name("Test Device")
-        .build();
+    let player = PlayerBuilder::new().device_name("Test Device").build();
 
     // We can't access target_device_name directly as it is private,
     // but we can verify it builds correctly.

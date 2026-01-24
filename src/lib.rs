@@ -69,16 +69,16 @@ pub mod protocol;
 pub mod streaming;
 
 // Re-exports
-pub use client::AirPlayClient;
-pub use player::{AirPlayPlayer, PlayerBuilder, quick_play, quick_connect, quick_connect_to};
-pub use types::{AirPlayDevice, AirPlayConfig, TrackInfo, PlaybackState, DeviceCapabilities};
-pub use error::AirPlayError;
-pub use discovery::{scan, discover, DiscoveryEvent};
 pub use audio::AudioFormat;
+pub use client::AirPlayClient;
 pub use control::volume::Volume;
-pub use types::RepeatMode;
-pub use state::{ClientState, ClientEvent};
+pub use discovery::{DiscoveryEvent, discover, scan};
+pub use error::AirPlayError;
 pub use group::{DeviceGroup, GroupId, GroupManager};
+pub use player::{AirPlayPlayer, PlayerBuilder, quick_connect, quick_connect_to, quick_play};
+pub use state::{ClientEvent, ClientState};
+pub use types::RepeatMode;
+pub use types::{AirPlayConfig, AirPlayDevice, DeviceCapabilities, PlaybackState, TrackInfo};
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -87,19 +87,19 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 /// Convenient re-exports
 pub mod prelude {
-    pub use crate::AirPlayPlayer;
     pub use crate::AirPlayClient;
-    pub use crate::AirPlayDevice;
     pub use crate::AirPlayConfig;
+    pub use crate::AirPlayDevice;
     pub use crate::AirPlayError;
-    pub use crate::TrackInfo;
-    pub use crate::PlaybackState;
-    pub use crate::Volume;
+    pub use crate::AirPlayPlayer;
     pub use crate::AudioFormat;
+    pub use crate::PlaybackState;
+    pub use crate::TrackInfo;
+    pub use crate::Volume;
 
+    pub use crate::discover;
     pub use crate::quick_connect;
     pub use crate::quick_connect_to;
     pub use crate::quick_play;
     pub use crate::scan;
-    pub use crate::discover;
 }

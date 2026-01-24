@@ -1,8 +1,8 @@
 //! High-level player API
 
 use crate::client::AirPlayClient;
-use crate::types::{AirPlayDevice, AirPlayConfig, TrackInfo, PlaybackState, RepeatMode};
 use crate::error::AirPlayError;
+use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
 
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -95,9 +95,12 @@ impl AirPlayPlayer {
                     device_id: target_name.clone(),
                 })?
         } else {
-            devices.into_iter().next().ok_or_else(|| AirPlayError::DeviceNotFound {
-                device_id: "any".to_string(),
-            })?
+            devices
+                .into_iter()
+                .next()
+                .ok_or_else(|| AirPlayError::DeviceNotFound {
+                    device_id: "any".to_string(),
+                })?
         };
 
         self.connect(&device).await?;
@@ -185,7 +188,12 @@ impl AirPlayPlayer {
         title: &str,
         artist: &str,
     ) -> Result<(), AirPlayError> {
-        self.play_tracks(vec![(url.to_string(), title.to_string(), artist.to_string())]).await
+        self.play_tracks(vec![(
+            url.to_string(),
+            title.to_string(),
+            artist.to_string(),
+        )])
+        .await
     }
 
     /// Resume playback
@@ -441,7 +449,9 @@ impl Default for PlayerBuilder {
 /// # Errors
 ///
 /// Returns error if scanning fails, no device found, or playback fails.
-pub async fn quick_play(tracks: Vec<(String, String, String)>) -> Result<AirPlayPlayer, AirPlayError> {
+pub async fn quick_play(
+    tracks: Vec<(String, String, String)>,
+) -> Result<AirPlayPlayer, AirPlayError> {
     let player = AirPlayPlayer::new();
     player.auto_connect(Duration::from_secs(5)).await?;
     player.play_tracks(tracks).await?;
