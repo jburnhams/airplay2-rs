@@ -596,9 +596,7 @@ impl ConnectionManager {
         tracing::debug!("Performing ANNOUNCE...");
         // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
         // Also use PCM (L16) to avoid ALAC encoding requirement
-        let sdp = format!(
-            "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\n"
-        );
+        let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\n".to_string();
 
         let announce_req = {
             let mut session_guard = self.rtsp_session.lock().await;
