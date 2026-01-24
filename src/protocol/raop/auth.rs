@@ -1,7 +1,7 @@
 //! RAOP challenge-response authentication
 
-use super::super::crypto::{AppleRsaPublicKey, RaopRsaPrivateKey};
 use super::super::crypto::CryptoError;
+use super::super::crypto::{AppleRsaPublicKey, RaopRsaPrivateKey};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
 
 /// Challenge size in bytes (128 bits)
@@ -29,7 +29,8 @@ pub fn encode_challenge(challenge: &[u8]) -> String {
 ///
 /// Returns `CryptoError::DecryptionFailed` if the input is not valid base64.
 pub fn decode_challenge(header: &str) -> Result<Vec<u8>, CryptoError> {
-    BASE64.decode(header.trim())
+    BASE64
+        .decode(header.trim())
         .map_err(|e| CryptoError::DecryptionFailed(format!("invalid base64: {e}")))
 }
 
@@ -96,7 +97,8 @@ pub fn verify_response(
     server_ip: &std::net::IpAddr,
     server_mac: &[u8; 6],
 ) -> Result<(), CryptoError> {
-    let signature = BASE64.decode(response_header.trim())
+    let signature = BASE64
+        .decode(response_header.trim())
         .map_err(|_| CryptoError::VerificationFailed)?;
 
     let message = build_response_message(challenge, server_ip, server_mac);

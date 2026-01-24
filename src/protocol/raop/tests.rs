@@ -89,8 +89,8 @@ fn test_session_key_generation() {
     let test_key = [0x42u8; AES_KEY_SIZE];
     let test_iv = [0x00u8; AES_IV_SIZE];
 
-    let key_b64 = BASE64.encode(&test_key);
-    let iv_b64 = BASE64.encode(&test_iv);
+    let key_b64 = BASE64.encode(test_key);
+    let iv_b64 = BASE64.encode(test_iv);
 
     let decoded_key = BASE64.decode(&key_b64).unwrap();
     let decoded_iv = BASE64.decode(&iv_b64).unwrap();
@@ -101,30 +101,30 @@ fn test_session_key_generation() {
 
 #[test]
 fn test_session_keys_with_test_keypair() {
+    // Generate AES key and IV
+    use rand::rngs::OsRng;
+    use rsa::Oaep;
+    use sha1::Sha1;
+
     // Generate test key pair
     let private = RaopRsaPrivateKey::generate().unwrap();
 
-    // Generate AES key and IV
     let mut aes_key = [0u8; AES_KEY_SIZE];
     let mut aes_iv = [0u8; AES_IV_SIZE];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut aes_key);
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut aes_iv);
 
     // Encrypt with public key
-    use rand::rngs::OsRng;
-    use rsa::Oaep;
-    use sha1::Sha1;
-
     let public = private.public_key();
     let padding = Oaep::new::<Sha1>();
     let encrypted = public.encrypt(&mut OsRng, padding, &aes_key).unwrap();
 
     // Encode as SDP attributes
     let rsaaeskey = BASE64.encode(&encrypted);
-    let aesiv = BASE64.encode(&aes_iv);
+    let aesiv_b64 = BASE64.encode(aes_iv);
 
     // Parse back
-    let (parsed_key, parsed_iv) = parse_session_keys(&rsaaeskey, &aesiv, &private).unwrap();
+    let (parsed_key, parsed_iv) = parse_session_keys(&rsaaeskey, &aesiv_b64, &private).unwrap();
 
     assert_eq!(parsed_key, aes_key);
     assert_eq!(parsed_iv, aes_iv);

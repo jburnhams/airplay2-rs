@@ -91,7 +91,8 @@ pub fn parse_session_keys(
     private_key: &super::super::crypto::RaopRsaPrivateKey,
 ) -> Result<([u8; AES_KEY_SIZE], [u8; AES_IV_SIZE]), CryptoError> {
     // Decode and decrypt AES key
-    let encrypted_key = BASE64.decode(rsaaeskey_b64.trim())
+    let encrypted_key = BASE64
+        .decode(rsaaeskey_b64.trim())
         .map_err(|e| CryptoError::DecryptionFailed(format!("invalid base64: {e}")))?;
 
     let aes_key_vec = private_key.decrypt_oaep(&encrypted_key)?;
@@ -107,7 +108,8 @@ pub fn parse_session_keys(
     aes_key.copy_from_slice(&aes_key_vec);
 
     // Decode AES IV
-    let aes_iv_vec = BASE64.decode(aesiv_b64.trim())
+    let aes_iv_vec = BASE64
+        .decode(aesiv_b64.trim())
         .map_err(|e| CryptoError::DecryptionFailed(format!("invalid base64: {e}")))?;
 
     if aes_iv_vec.len() != AES_IV_SIZE {

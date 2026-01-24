@@ -1,6 +1,5 @@
 [advisories]
 db-path = "~/.cargo/advisory-db"
-unmaintained = "workspace"
 yanked = "warn"
 
 [licenses]
