@@ -2,7 +2,7 @@ use crate::protocol::daap::PlaybackProgress;
 
 #[test]
 fn test_progress_encode() {
-    let progress = PlaybackProgress::new(0, 44100, 441000);
+    let progress = PlaybackProgress::new(0, 44_100, 441_000);
     let encoded = progress.encode();
 
     assert_eq!(encoded, "progress: 0/44100/441000\r\n");
@@ -33,9 +33,9 @@ fn test_progress_percentage() {
 #[test]
 fn test_progress_from_samples() {
     // 10 seconds at 44.1kHz
-    let progress = PlaybackProgress::from_samples(1000, 441000, 4410000);
+    let progress = PlaybackProgress::from_samples(1000, 441_000, 4_410_000);
 
     assert_eq!(progress.start, 1000);
-    assert_eq!(progress.current, 442000);
-    assert_eq!(progress.end, 4411000);
+    assert_eq!(progress.current, 442_000);
+    assert_eq!(progress.end, 4_411_000);
 }
