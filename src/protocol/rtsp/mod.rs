@@ -4,6 +4,8 @@
 #![allow(dead_code)]
 
 pub mod codec;
+#[cfg(test)]
+mod compliance_tests;
 pub mod headers;
 #[cfg(test)]
 mod headers_tests;

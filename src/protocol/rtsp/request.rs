@@ -51,7 +51,7 @@ impl RtspRequest {
         }
 
         // Content-Length if body present
-        if !self.body.is_empty() {
+        if !self.body.is_empty() && !self.headers.contains(names::CONTENT_LENGTH) {
             let len_header = format!("{}: {}\r\n", names::CONTENT_LENGTH, self.body.len());
             output.extend_from_slice(len_header.as_bytes());
         }
@@ -114,6 +114,9 @@ impl RtspRequestBuilder {
     /// Set body as raw bytes
     #[must_use]
     pub fn body(mut self, body: Vec<u8>) -> Self {
+        self.request
+            .headers
+            .insert(names::CONTENT_LENGTH, body.len().to_string());
         self.request.body = body;
         self
     }
@@ -124,8 +127,11 @@ impl RtspRequestBuilder {
     /// Panics if plist encoding fails.
     #[must_use]
     pub fn body_plist(mut self, plist: &crate::protocol::plist::PlistValue) -> Self {
-        self.request.body =
-            crate::protocol::plist::encode(plist).expect("plist encoding should not fail");
+        let body = crate::protocol::plist::encode(plist).expect("plist encoding should not fail");
+        self.request
+            .headers
+            .insert(names::CONTENT_LENGTH, body.len().to_string());
+        self.request.body = body;
         self.request.headers.insert(
             names::CONTENT_TYPE,
             "application/x-apple-binary-plist".to_string(),

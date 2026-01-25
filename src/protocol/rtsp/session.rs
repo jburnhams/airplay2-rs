@@ -108,7 +108,8 @@ impl RtspSession {
             .header(names::X_APPLE_DEVICE_ID, &self.device_id)
             .header(names::X_APPLE_SESSION_ID, &self.client_session_id)
             .header(names::ACTIVE_REMOTE, "4294967295")
-            .header(names::DACP_ID, &self.device_id);
+            .header(names::DACP_ID, &self.device_id)
+            .header(names::CLIENT_INSTANCE, &self.device_id);
 
         if let Some(ref session) = self.session_id {
             builder = builder.session(session);

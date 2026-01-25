@@ -5,6 +5,8 @@ pub mod parser;
 /// RAOP discovery logic
 pub mod raop;
 #[cfg(test)]
+mod raop_tests;
+#[cfg(test)]
 mod tests;
 
 pub use browser::{DeviceBrowser, DeviceFilter, DiscoveryEvent, DiscoveryOptions};
