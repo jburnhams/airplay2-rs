@@ -37,3 +37,6 @@ async fn test_volume_defaults() {
     // Default volume is 0.75
     assert!((client.volume().await - 0.75).abs() < f32::EPSILON);
 }
+
+mod protocol_tests;
+mod unified_tests;

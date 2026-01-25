@@ -298,7 +298,7 @@ impl PcmStreamer {
                         );
 
                         let mut out_buffer = vec![0u8; 4096];
-                        
+
                         let size = encoder.encode(&input_format, &packet_data, &mut out_buffer);
                         out_buffer[..size].to_vec()
                     } else {

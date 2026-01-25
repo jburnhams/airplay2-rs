@@ -12,8 +12,9 @@ categories = ["multimedia::audio", "network-programming"]
 readme = "README.md"
 
 [features]
-default = ["tokio-runtime"]
+default = ["tokio-runtime", "raop"]
 tokio-runtime = ["tokio", "tokio-util"]
+raop = ["rsa", "sha1"]
 
 [dependencies]
 # Async
@@ -33,8 +34,8 @@ tracing = "0.1"
 mdns-sd = "0.12"
 
 # Crypto
-rsa = "0.9"
-sha1 = { version = "0.10", features = ["oid"] }
+rsa = { version = "0.9", optional = true }
+sha1 = { version = "0.10", features = ["oid"], optional = true }
 base64 = "0.22"
 srp = "0.6"
 num-bigint = { version = "0.4", features = ["rand"] }

@@ -156,7 +156,7 @@ impl RtpCodec {
                     // NOTE: AES-CTR seek might need adjustment for variable packet sizes if sequence is frame-based
                     // For now assuming frame-based seeking works or this is only used for fixed PCM in legacy mode.
                     let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
-                    // Seek based on frame count, assuming 1:1 mapping if it was PCM. 
+                    // Seek based on frame count, assuming 1:1 mapping if it was PCM.
                     // For ALAC, this logic might need review if legacy AirPlay 1 uses ALAC.
                     // But we are focusing on AirPlay 2 (ChaCha20).
                     cipher.seek((self.sequence as u64) * expected_size as u64);
@@ -212,9 +212,9 @@ impl RtpCodec {
 
         // Update state logic moved to caller or stays here?
         // encode_audio updated state. We should too.
-        // But if ALAC has different frame count? 
+        // But if ALAC has different frame count?
         // ALAC frames per packet is still 352 for AirPlay 2 (usually).
-        
+
         // Update state for next packet
         self.sequence = self.sequence.wrapping_add(1);
         self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);
