@@ -2,6 +2,7 @@
 
 use super::auth::RaopAuthenticator;
 use super::key_exchange::RaopSessionKeys;
+use crate::protocol::daap::{Artwork, PlaybackProgress, TrackMetadata};
 use crate::protocol::rtsp::{
     Method, RtspRequest, RtspRequestBuilder, RtspResponse, headers::names, headers::raop,
 };
@@ -209,16 +210,40 @@ impl RaopRtspSession {
             .build()
     }
 
-    /// Create `SET_PARAMETER` request for progress
-    pub fn set_progress_request(&mut self, start: u32, current: u32, end: u32) -> RtspRequest {
+    /// Send track metadata
+    pub fn set_metadata_request(&mut self, metadata: &TrackMetadata, rtptime: u32) -> RtspRequest {
         let cseq = self.next_cseq();
         let builder = RtspRequest::builder(Method::SetParameter, self.uri(""));
 
-        let body = format!("progress: {start}/{current}/{end}\r\n");
+        let body = metadata.encode_dmap();
+
+        self.add_common_headers(builder, cseq)
+            .header(names::CONTENT_TYPE, "application/x-dmap-tagged")
+            .header("RTP-Info", format!("rtptime={rtptime}"))
+            .body(body)
+            .build()
+    }
+
+    /// Send artwork
+    pub fn set_artwork_request(&mut self, artwork: &Artwork, rtptime: u32) -> RtspRequest {
+        let cseq = self.next_cseq();
+        let builder = RtspRequest::builder(Method::SetParameter, self.uri(""));
+
+        self.add_common_headers(builder, cseq)
+            .header(names::CONTENT_TYPE, artwork.mime_type())
+            .header("RTP-Info", format!("rtptime={rtptime}"))
+            .body(artwork.data.clone())
+            .build()
+    }
+
+    /// Create `SET_PARAMETER` request for progress
+    pub fn set_progress_request(&mut self, progress: &PlaybackProgress) -> RtspRequest {
+        let cseq = self.next_cseq();
+        let builder = RtspRequest::builder(Method::SetParameter, self.uri(""));
 
         self.add_common_headers(builder, cseq)
             .header(names::CONTENT_TYPE, "text/parameters")
-            .body(body.into_bytes())
+            .body(progress.encode().into_bytes())
             .build()
     }
 
