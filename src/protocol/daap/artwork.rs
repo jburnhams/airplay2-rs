@@ -109,14 +109,9 @@ impl Artwork {
                 && marker != 0xCC
                 && pos + 9 < self.data.len()
             {
-                let height = u32::from(u16::from_be_bytes([
-                    self.data[pos + 5],
-                    self.data[pos + 6],
-                ]));
-                let width = u32::from(u16::from_be_bytes([
-                    self.data[pos + 7],
-                    self.data[pos + 8],
-                ]));
+                let height =
+                    u32::from(u16::from_be_bytes([self.data[pos + 5], self.data[pos + 6]]));
+                let width = u32::from(u16::from_be_bytes([self.data[pos + 7], self.data[pos + 8]]));
                 return Some((width, height));
             }
 

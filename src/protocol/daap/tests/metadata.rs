@@ -44,7 +44,9 @@ fn test_metadata_encoding() {
     // Integer 5 is 1 byte: 0x05. utf8 lossy might not be "5".
     // But let's check the tags present.
 
-    let has_title = decoded.iter().any(|(tag, val)| tag == "minm" && val == "Test");
+    let has_title = decoded
+        .iter()
+        .any(|(tag, val)| tag == "minm" && val == "Test");
     assert!(has_title, "Missing title tag");
 
     let has_track = decoded.iter().any(|(tag, _)| tag == "astn");
