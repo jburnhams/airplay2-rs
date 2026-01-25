@@ -56,7 +56,7 @@ The receiver sends HTTP GET requests to control playback:
 
 ### 30.1 DACP Service Types
 
-- [ ] **30.1.1** Define DACP constants and types
+- [x] **30.1.1** Define DACP constants and types
 
 **File:** `src/protocol/dacp/mod.rs`
 
@@ -90,7 +90,7 @@ pub mod txt_keys {
 }
 ```
 
-- [ ] **30.1.2** Define DACP commands
+- [x] **30.1.2** Define DACP commands
 
 **File:** `src/protocol/dacp/commands.rs`
 
@@ -210,7 +210,7 @@ pub enum CommandResult {
 
 ### 30.2 DACP Service Advertisement
 
-- [ ] **30.2.1** Implement DACP service registration
+- [x] **30.2.1** Implement DACP service registration
 
 **File:** `src/protocol/dacp/service.rs`
 
@@ -343,7 +343,7 @@ pub enum DacpError {
 
 ### 30.3 DACP HTTP Server
 
-- [ ] **30.3.1** Implement HTTP server for DACP commands
+- [x] **30.3.1** Implement HTTP server for DACP commands
 
 **File:** `src/protocol/dacp/server.rs`
 
@@ -749,14 +749,14 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] DACP service can be advertised via mDNS
-- [ ] All playback commands are recognized
-- [ ] Active-Remote token verification works
-- [ ] HTTP server responds with correct status codes
-- [ ] Callback handlers execute correctly
-- [ ] Service registration and unregistration works
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] DACP service can be advertised via mDNS
+- [x] All playback commands are recognized
+- [x] Active-Remote token verification works
+- [x] HTTP server responds with correct status codes
+- [x] Callback handlers execute correctly
+- [x] Service registration and unregistration works
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
