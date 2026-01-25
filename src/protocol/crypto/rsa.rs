@@ -18,6 +18,7 @@ pub mod sizes {
 ///
 /// This is the well-known public key extracted from iTunes.
 /// Modulus: 1024 bits, Exponent: 65537
+#[derive(Clone)]
 pub struct AppleRsaPublicKey {
     inner: rsa::RsaPublicKey,
 }
@@ -93,6 +94,7 @@ impl AppleRsaPublicKey {
 /// RSA private key for RAOP server emulation (testing)
 ///
 /// This represents the private key held by AirPlay receivers.
+#[derive(Clone)]
 pub struct RaopRsaPrivateKey {
     inner: rsa::RsaPrivateKey,
 }

@@ -1,3 +1,4 @@
+pub mod mock_raop_server;
 pub mod mock_server;
 #[cfg(test)]
 /// Unit tests for the mock server.
