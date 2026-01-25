@@ -2,7 +2,7 @@
 
 use super::auth::RaopAuthenticator;
 use super::key_exchange::RaopSessionKeys;
-use crate::protocol::daap::{Artwork, PlaybackProgress, TrackMetadata};
+use crate::protocol::daap::{Artwork, DmapProgress, TrackMetadata};
 use crate::protocol::rtsp::{
     Method, RtspRequest, RtspRequestBuilder, RtspResponse, headers::names, headers::raop,
 };
@@ -237,7 +237,7 @@ impl RaopRtspSession {
     }
 
     /// Create `SET_PARAMETER` request for progress
-    pub fn set_progress_request(&mut self, progress: &PlaybackProgress) -> RtspRequest {
+    pub fn set_progress_request(&mut self, progress: &DmapProgress) -> RtspRequest {
         let cseq = self.next_cseq();
         let builder = RtspRequest::builder(Method::SetParameter, self.uri(""));
 

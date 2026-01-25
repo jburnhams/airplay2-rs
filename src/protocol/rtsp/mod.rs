@@ -48,6 +48,8 @@ pub enum Method {
     Post,
     /// GET for info
     Get,
+    /// Set playback rate and anchor time
+    SetRateAnchorTime,
 }
 
 impl Method {
@@ -67,6 +69,7 @@ impl Method {
             Method::GetParameter => "GET_PARAMETER",
             Method::Post => "POST",
             Method::Get => "GET",
+            Method::SetRateAnchorTime => "SETRATEANCHORTIME",
         }
     }
 }
@@ -88,6 +91,7 @@ impl std::str::FromStr for Method {
             "GET_PARAMETER" => Ok(Method::GetParameter),
             "POST" => Ok(Method::Post),
             "GET" => Ok(Method::Get),
+            "SETRATEANCHORTIME" => Ok(Method::SetRateAnchorTime),
             _ => Err(()),
         }
     }

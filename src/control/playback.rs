@@ -2,6 +2,8 @@
 
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
+use crate::protocol::daap::{DmapProgress, TrackMetadata};
+use crate::protocol::plist::DictBuilder;
 use crate::protocol::rtsp::Method;
 use crate::types::{PlaybackState, RepeatMode};
 
@@ -48,6 +50,11 @@ impl PlaybackController {
         self.state.read().await.clone()
     }
 
+    /// Set playing state
+    pub async fn set_playing(&self, playing: bool) {
+        self.state.write().await.is_playing = playing;
+    }
+
     /// Play (resume if paused, start if stopped)
     ///
     /// # Errors
@@ -56,24 +63,26 @@ impl PlaybackController {
     pub async fn play(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
-        if state.is_playing {
-            // Already playing
-            return Ok(());
+        if !state.is_playing {
+            let body = DictBuilder::new()
+                .insert("rate", 1.0)
+                .insert("rtpTime", 0u64)
+                .build();
+            let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+            self.connection
+                .send_command(
+                    Method::SetRateAnchorTime,
+                    Some(encoded),
+                    Some("application/x-apple-binary-plist".to_string()),
+                )
+                .await?;
+            state.is_playing = true;
         }
 
-        if state.current_track.is_none() && state.queue.is_empty() {
-            return Err(AirPlayError::InvalidState {
-                message: "No content to play".to_string(),
-                current_state: "Stopped".to_string(),
-            });
-        }
-
-        // Send resume command (Method::Play)
-        self.connection
-            .send_command(Method::Play, None, None)
-            .await?;
-
-        state.is_playing = true;
         Ok(())
     }
 
@@ -81,13 +90,26 @@ impl PlaybackController {
     ///
     /// # Errors
     ///
-    /// Returns error if network fails
+    /// Returns error if playback command fails.
     pub async fn pause(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
         if state.is_playing {
+            let body = DictBuilder::new()
+                .insert("rate", 0.0)
+                .insert("rtpTime", 0u64)
+                .build();
+            let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
             self.connection
-                .send_command(Method::Pause, None, None)
+                .send_command(
+                    Method::SetRateAnchorTime,
+                    Some(encoded),
+                    Some("application/x-apple-binary-plist".to_string()),
+                )
                 .await?;
             state.is_playing = false;
         }
@@ -251,13 +273,70 @@ impl PlaybackController {
         *self.shuffle_mode.read().await
     }
 
+    /// Set track metadata
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_metadata(&self, metadata: TrackMetadata) -> Result<(), AirPlayError> {
+        self.send_metadata(metadata.clone()).await?;
+        let mut state = self.state.write().await;
+        state.current_track = metadata.title.clone().map(|t| crate::types::TrackInfo {
+            url: String::new(),
+            title: t,
+            artist: metadata.artist.clone().unwrap_or_default(),
+            album: metadata.album.clone(),
+            artwork_url: None,
+            duration_secs: metadata.duration_ms.map(|d| f64::from(d) / 1000.0),
+            track_number: metadata.track_number,
+            disc_number: metadata.disc_number,
+            genre: metadata.genre,
+            content_id: None,
+        });
+        Ok(())
+    }
+
+    /// Set playback progress
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_progress(&self, progress: DmapProgress) -> Result<(), AirPlayError> {
+        let body = progress.encode();
+        self.connection
+            .send_command(
+                Method::SetParameter,
+                Some(body.into_bytes()),
+                Some("text/parameters".to_string()),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Internal: send scrub command
-    #[allow(clippy::unused_async)]
-    async fn send_scrub(&self, _position: f64) -> Result<(), AirPlayError> {
-        // TODO: Send scrub command (e.g., SET_PARAMETER with progress)
-        Err(AirPlayError::NotImplemented {
-            feature: "scrub/seek".to_string(),
-        })
+    async fn send_scrub(&self, position: f64) -> Result<(), AirPlayError> {
+        // AirPlay 2 uses progress parameter for scrub
+        // We need a base RTP timestamp. For now we use a dummy one if not provided,
+        // but high-quality implementations should track the actual RTP base.
+        let base_rtp: u32 = 0;
+        let pos_samples = (position * 44100.0) as u32;
+        // We don't know duration here, so we use current for end as well or a large value
+        let progress = DmapProgress::new(base_rtp, base_rtp.wrapping_add(pos_samples), base_rtp.wrapping_add(pos_samples));
+        
+        self.set_progress(progress).await
+    }
+
+    /// Internal: send metadata command
+    async fn send_metadata(&self, metadata: TrackMetadata) -> Result<(), AirPlayError> {
+        let body = metadata.encode_dmap();
+        self.connection
+            .send_command(
+                Method::SetParameter,
+                Some(body),
+                Some("application/x-dmap-tagged".to_string()),
+            )
+            .await?;
+        Ok(())
     }
 
     /// Internal: send generic command (usually DACP)
@@ -271,7 +350,7 @@ impl PlaybackController {
     }
 }
 
-/// Playback progress information
+/// Playback progress information for state reporting
 #[derive(Debug, Clone)]
 pub struct PlaybackProgress {
     /// Current position

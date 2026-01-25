@@ -219,6 +219,19 @@ impl RtspSession {
         self.request_builder(Method::Pause, "").build()
     }
 
+    /// Create SETRATEANCHORTIME request
+    #[must_use]
+    pub fn set_rate_anchor_time_request(
+        &mut self,
+        content_type: &str,
+        body: Vec<u8>,
+    ) -> RtspRequest {
+        self.request_builder(Method::SetRateAnchorTime, "")
+            .content_type(content_type)
+            .body(body)
+            .build()
+    }
+
     /// Create POST request
     #[must_use]
     pub fn post_request(&mut self, path: &str, content_type: &str, body: Vec<u8>) -> RtspRequest {
@@ -280,6 +293,9 @@ impl RtspSession {
             Method::Teardown => {
                 self.state = SessionState::Terminated;
             }
+            Method::SetRateAnchorTime => {
+                // Rate and anchors are handled by body, state depends on rate
+            }
             _ => {}
         }
 
@@ -304,9 +320,15 @@ impl RtspSession {
             ) => true,
             (
                 SessionState::Paused,
-                Method::Record | Method::Play | Method::Teardown | Method::SetParameter,
+                Method::Record
+                | Method::Play
+                | Method::Teardown
+                | Method::SetParameter
+                | Method::SetRateAnchorTime,
             ) => true,
-            (_, Method::Options | Method::Teardown | Method::Get) => true, // OPTIONS, TEARDOWN, GET always allowed
+            (_, Method::Options | Method::Teardown | Method::Get | Method::SetRateAnchorTime) => {
+                true
+            }
             _ => false,
         }
     }

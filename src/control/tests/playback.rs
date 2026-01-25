@@ -21,15 +21,17 @@ async fn test_playback_controller_creation() {
 }
 
 #[tokio::test]
-async fn test_seek_not_implemented() {
+async fn test_seek_fail_disconnected() {
     let config = AirPlayConfig::default();
     let manager = Arc::new(ConnectionManager::new(config));
     let controller = crate::control::playback::PlaybackController::new(manager);
 
     let result = controller.seek(Duration::from_secs(10)).await;
+    // Should fail because not connected, but not with NotImplemented
     assert!(result.is_err());
-    // verify state didn't change (position is 0.0)
-    assert!(controller.state().await.position_secs.abs() < f64::EPSILON);
+    if let Err(crate::error::AirPlayError::NotImplemented { .. }) = result {
+        panic!("Should not be NotImplemented anymore");
+    }
 }
 
 #[test]

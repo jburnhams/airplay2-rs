@@ -56,13 +56,13 @@ impl AudioSource for StereoSource {
             let sample_l = (self.phase_l * 2.0 * PI).sin();
             #[allow(clippy::cast_possible_truncation)]
             let value_l = (sample_l * i16::MAX as f32 * 0.5) as i16;
-            let bytes_l = value_l.to_be_bytes();
+            let bytes_l = value_l.to_ne_bytes();
 
             // Right Channel (880Hz)
             let sample_r = (self.phase_r * 2.0 * PI).sin();
             #[allow(clippy::cast_possible_truncation)]
             let value_r = (sample_r * i16::MAX as f32 * 0.5) as i16;
-            let bytes_r = value_r.to_be_bytes();
+            let bytes_r = value_r.to_ne_bytes();
 
             // Interleaved: L, R
             chunk[0] = bytes_l[0];
@@ -98,15 +98,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Scanning for devices...");
     let devices = scan(Duration::from_secs(2)).await?;
 
-    let device = if let Some(d) = devices.first() {
-        println!("Found discovered device: {}", d.name);
+    let device = if let Some(d) = devices.iter().find(|d| d.name == "airplay2-rs-test") {
+        println!("Found discovered local receiver: {}", d.name);
         d.clone()
     } else {
-        println!("No devices found via mDNS. Trying fallback to local receiver...");
-        // Manual device construction for test environment where mDNS might fail
-        let ip = Ipv4Addr::new(192, 168, 0, 101); // Based on receiver output
+        println!("Local receiver not found via mDNS. Using fallback...");
+        // Manual device construction for test environment
+        let ip = Ipv4Addr::new(192, 168, 0, 101);
         AirPlayDevice {
-            id: "ac:07:75:12:4a:1f".to_string(), // From receiver logs
+            id: "ac:07:75:12:4a:1f".to_string(),
             name: "airplay2-rs-test".to_string(),
             model: Some("Receiver".to_string()),
             addresses: vec![IpAddr::V4(ip)],
@@ -119,14 +119,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let config = AirPlayConfig::default();
-    let mut client = AirPlayClient::new(config);
+    let client = AirPlayClient::new(config);
 
     println!("Connecting to {} ({:?})...", device.name, device.addresses);
     client.connect(&device).await?;
 
-    println!("Streaming Stereo Test (L=440Hz, R=880Hz)...");
-    let source = StereoSource::new(3); // 3 seconds
-    client.stream_audio(source).await?;
+    println!("Streaming Full Verification (Stereo + Volume)...");
+    let source = StereoSource::new(10); // 10 seconds
+    
+    // Start streaming in a separate task so we can control volume
+    let mut client_clone = client.clone();
+    let stream_handle = tokio::spawn(async move {
+        client_clone.stream_audio(source).await
+    });
+
+    // Test Volume Control
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    println!("Setting volume to 25%...");
+    client.set_volume(0.25).await?;
+    
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    println!("Setting volume to 100%...");
+    client.set_volume(1.0).await?;
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    println!("Muting...");
+    client.mute().await?;
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    println!("Unmuting...");
+    client.unmute().await?;
+
+    // Wait for stream to finish
+    stream_handle.await??;
 
     println!("Done.");
     Ok(())

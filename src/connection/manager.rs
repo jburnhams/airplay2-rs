@@ -1054,6 +1054,12 @@ impl ConnectionManager {
                 }
                 Method::Teardown => session.teardown_request(),
                 Method::Pause => session.pause_request(),
+                Method::SetRateAnchorTime => {
+                    let body = body.unwrap_or_default();
+                    let content_type = content_type
+                        .unwrap_or_else(|| "application/x-apple-binary-plist".to_string());
+                    session.set_rate_anchor_time_request(&content_type, body)
+                }
                 _ => {
                     return Err(AirPlayError::InvalidParameter {
                         name: "method".to_string(),

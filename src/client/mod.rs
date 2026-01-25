@@ -15,6 +15,7 @@ use crate::types::{
 use futures::Stream;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use tokio::sync::{Mutex, RwLock};
 
 #[cfg(test)]
@@ -48,6 +49,7 @@ mod tests;
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Clone)]
 pub struct AirPlayClient {
     /// Configuration
     #[allow(dead_code)]
@@ -365,6 +367,24 @@ impl AirPlayClient {
         Ok(muted)
     }
 
+    /// Set track metadata
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_metadata(&self, metadata: TrackMetadata) -> Result<(), AirPlayError> {
+        self.playback.set_metadata(metadata).await
+    }
+
+    /// Set playback progress
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_progress(&self, progress: DmapProgress) -> Result<(), AirPlayError> {
+        self.playback.set_progress(progress).await
+    }
+
     // === Queue ===
 
     /// Add a track to the queue
@@ -486,6 +506,8 @@ impl AirPlayClient {
 
         self.streamer = Some(streamer.clone());
 
+        self.state.update(|s| s.playback.is_playing = true).await;
+        self.playback.set_playing(true).await;
         streamer.stream(source).await
     }
 

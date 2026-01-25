@@ -6,8 +6,8 @@
 - [x] **PCM** (Pulse Code Modulation) — uncompressed linear audio
   - *Status*: Implemented and verified with 440Hz tone. `examples/play_pcm.rs` and `examples/connect_to_receiver.rs` support L16/44100/2.
   - *Note*: Ensure Big Endian format (verified fix).
-- [ ] **ALAC** (Apple Lossless Audio Codec) — lossless compression
-  - *Status*: Pending. Required for standard AirPlay 2 high-quality streaming.
+- [x] **ALAC** (Apple Lossless Audio Codec) — lossless compression
+  - *Status*: Implemented and verified against Python receiver. Correct negotiation via SDP (rtpmap:96 AppleLossless) and fmtp.
 - [ ] **AAC** (Advanced Audio Codec) — lossy compression
   - *Status*: Pending.
 - [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
@@ -20,8 +20,8 @@
 - [ ] Sample rate conversion/resampling if needed
   - *Status*: Pending (using `rubato` in `Cargo.toml` but not fully integrated).
 - [ ] Bit depth conversion if needed
-- [ ] Stereo channel configuration (mono support optional)
-  - *Status*: Implemented but **not verified** (only verified signal presence, not independent channel content).
+- [x] Stereo channel configuration (mono support optional)
+  - *Status*: Implemented and **verified** with independent L/R frequencies (440Hz/880Hz).
 
 ## Service Discovery (Bonjour/mDNS)
 
@@ -183,8 +183,8 @@
 ### Playback Engine
 - [x] Decode audio codec (PCM passthrough)
 - [ ] Resampling if sample rate mismatch
-- [ ] Volume control (if supported by device)
-  - *Status*: Basic volume control implemented but **not verified**.
+- [x] Volume control (if supported by device)
+  - *Status*: Basic volume control implemented and **verified** against receiver (RTSP SET_PARAMETER).
 
 ## Metadata and Control
 
