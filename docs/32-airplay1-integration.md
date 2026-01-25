@@ -563,7 +563,6 @@ pub enum RaopError {
 default = ["tokio-runtime", "raop"]
 tokio-runtime = ["tokio"]
 async-std-runtime = ["async-std"]
-persistent-pairing = ["sled"]
 raop = ["rsa", "sha1"]  # AirPlay 1 support
 
 [dependencies]
