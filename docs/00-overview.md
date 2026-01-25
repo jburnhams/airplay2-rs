@@ -469,7 +469,6 @@ Optional features for additional dependencies:
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio"]
 async-std-runtime = ["async-std"]
-persistent-pairing = ["sled"]  # Or similar for key storage
 ```
 
 ## Testing Strategy
