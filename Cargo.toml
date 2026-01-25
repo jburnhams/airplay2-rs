@@ -58,6 +58,7 @@ bytes = "1.9"
 
 # Audio processing
 rubato = "0.14"           # Audio resampling
+alac-encoder = "0.3"      # ALAC encoding
 
 # Persistent storage (optional)
 sled = { version = "0.34", optional = true }

@@ -131,6 +131,11 @@ impl RtpCodec {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
         }
 
+        self.encode_arbitrary_payload(pcm_data)
+    }
+
+    /// Encode arbitrary audio payload (e.g. ALAC) to RTP packet
+    pub fn encode_arbitrary_payload(&mut self, data: &[u8]) -> Result<Vec<u8>, RtpCodecError> {
         // Create packet header
         let header =
             RtpHeader::new_audio(self.sequence, self.timestamp, self.ssrc, self.buffered_mode);
@@ -139,15 +144,21 @@ impl RtpCodec {
         let result = match self.encryption_mode {
             RtpEncryptionMode::None => {
                 // No encryption - just header + payload
-                let packet = RtpPacket::new(header, pcm_data.to_vec());
+                let packet = RtpPacket::new(header, data.to_vec());
                 packet.encode()
             }
             RtpEncryptionMode::Aes128Ctr => {
                 // Legacy AES-128-CTR encryption
-                let mut payload = pcm_data.to_vec();
+                let mut payload = data.to_vec();
                 if let (Some(key), Some(iv)) = (&self.aes_key, &self.aes_iv) {
                     let mut cipher = Aes128Ctr::new(key, iv)
                         .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
+                    // NOTE: AES-CTR seek might need adjustment for variable packet sizes if sequence is frame-based
+                    // For now assuming frame-based seeking works or this is only used for fixed PCM in legacy mode.
+                    let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
+                    // Seek based on frame count, assuming 1:1 mapping if it was PCM. 
+                    // For ALAC, this logic might need review if legacy AirPlay 1 uses ALAC.
+                    // But we are focusing on AirPlay 2 (ChaCha20).
                     cipher.seek((self.sequence as u64) * expected_size as u64);
                     cipher.apply_keystream(&mut payload);
                 }
@@ -180,7 +191,7 @@ impl RtpCodec {
 
                 // Encrypt payload with AAD
                 let encrypted = cipher
-                    .encrypt_with_aad(&nonce, aad, pcm_data)
+                    .encrypt_with_aad(&nonce, aad, data)
                     .map_err(|e| RtpCodecError::EncryptionFailed(e.to_string()))?;
 
                 // encrypted contains: [ciphertext][tag (16 bytes)]
@@ -199,6 +210,11 @@ impl RtpCodec {
             }
         };
 
+        // Update state logic moved to caller or stays here?
+        // encode_audio updated state. We should too.
+        // But if ALAC has different frame count? 
+        // ALAC frames per packet is still 352 for AirPlay 2 (usually).
+        
         // Update state for next packet
         self.sequence = self.sequence.wrapping_add(1);
         self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);

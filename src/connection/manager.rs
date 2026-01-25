@@ -631,8 +631,10 @@ impl ConnectionManager {
         // 3. Announce (ANNOUNCE / with SDP)
         tracing::debug!("Performing ANNOUNCE...");
         // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
-        // Also use PCM (L16) to avoid ALAC encoding requirement
-        let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\n".to_string();
+        // ALAC negotiation (96 AppleLossless)
+        // Note: Python receiver is strict and expects exactly 'AppleLossless' (no /44100/2)
+        // to correctly enter the ALAC parsing path.
+        let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string();
 
         let announce_req = {
             let mut session_guard = self.rtsp_session.lock().await;

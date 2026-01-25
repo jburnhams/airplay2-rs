@@ -474,6 +474,9 @@ impl AirPlayClient {
 
         let format = source.format();
         let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), format));
+        
+        // Enable ALAC encoding (matching negotiated SDP)
+        streamer.use_alac().await;
 
         // Configure encryption if available
         if let Some(key) = self.connection.encryption_key().await {

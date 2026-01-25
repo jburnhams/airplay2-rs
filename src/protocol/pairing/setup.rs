@@ -334,6 +334,7 @@ impl PairSetup {
         self.state = PairingState::Complete;
 
         // Derive final session keys
+        let hkdf = HkdfSha512::new(Some(b"Control-Salt"), session_key);
         let encrypt_key = hkdf.expand_fixed::<32>(b"Control-Write-Encryption-Key")?;
         let decrypt_key = hkdf.expand_fixed::<32>(b"Control-Read-Encryption-Key")?;
 

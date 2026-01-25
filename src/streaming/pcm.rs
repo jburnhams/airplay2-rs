@@ -43,6 +43,8 @@ pub enum StreamerState {
     Error,
 }
 
+use crate::audio::AudioCodec;
+
 /// PCM audio streamer
 pub struct PcmStreamer {
     /// Connection manager
@@ -59,6 +61,10 @@ pub struct PcmStreamer {
     cmd_tx: mpsc::Sender<StreamerCommand>,
     /// Command receiver
     cmd_rx: Mutex<mpsc::Receiver<StreamerCommand>>,
+    /// ALAC encoder
+    encoder: Mutex<Option<alac_encoder::AlacEncoder>>,
+    /// Codec type
+    codec_type: RwLock<AudioCodec>,
 }
 
 /// Commands for the streamer
@@ -99,6 +105,8 @@ impl PcmStreamer {
             state: RwLock::new(StreamerState::Idle),
             cmd_tx,
             cmd_rx: Mutex::new(cmd_rx),
+            encoder: Mutex::new(None),
+            codec_type: RwLock::new(AudioCodec::Pcm),
         }
     }
 
@@ -272,11 +280,36 @@ impl PcmStreamer {
                 packet_data[bytes_read..].fill(0);
             }
 
-            // Encode to RTP
+            // Encode payload
+            let encoded_payload = {
+                let codec_type = *self.codec_type.read().await;
+                if codec_type == AudioCodec::Alac {
+                    let mut encoder_guard = self.encoder.lock().await;
+                    if let Some(encoder) = encoder_guard.as_mut() {
+                        // alac-encoder 0.3.0 expects byte slice of PCM data
+                        // and a FormatDescription for that input
+                        let input_format = alac_encoder::FormatDescription::pcm::<i16>(
+                            self.format.sample_rate.as_u32() as f64,
+                            self.format.channels.channels() as u32,
+                        );
+
+                        let mut out_buffer = vec![0u8; 4096];
+                        
+                        let size = encoder.encode(&input_format, &packet_data, &mut out_buffer);
+                        out_buffer[..size].to_vec()
+                    } else {
+                        packet_data.clone()
+                    }
+                } else {
+                    packet_data.clone()
+                }
+            };
+
+            // Encrypt and wrap in RTP
             let rtp_packet = {
                 let mut codec = self.rtp_codec.lock().await;
                 codec
-                    .encode_audio(&packet_data)
+                    .encode_arbitrary_payload(&encoded_payload)
                     .map_err(|e| AirPlayError::RtpError {
                         message: e.to_string(),
                     })?
@@ -365,5 +398,22 @@ impl PcmStreamer {
                 message: "Streamer not running".to_string(),
                 current_state: "unknown".to_string(),
             })
+    }
+
+    /// Set codec to ALAC
+    pub async fn use_alac(&self) {
+        let format = alac_encoder::FormatDescription::alac(
+            self.format.sample_rate.as_u32() as f64,
+            Self::FRAMES_PER_PACKET as u32,
+            self.format.channels.channels() as u32,
+        );
+        *self.encoder.lock().await = Some(alac_encoder::AlacEncoder::new(&format));
+        *self.codec_type.write().await = AudioCodec::Alac;
+    }
+
+    /// Set codec to PCM (default)
+    pub async fn use_pcm(&self) {
+        *self.encoder.lock().await = None;
+        *self.codec_type.write().await = AudioCodec::Pcm;
     }
 }
