@@ -18,8 +18,14 @@ use std::time::Duration;
 use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use tokio::sync::{Mutex, RwLock};
 
+pub mod protocol;
+pub mod session;
+
 #[cfg(test)]
 mod tests;
+
+pub use protocol::{PreferredProtocol, SelectedProtocol, check_raop_encryption, select_protocol};
+pub use session::{AirPlay2SessionImpl, AirPlaySession, RaopSessionImpl};
 
 /// `AirPlay` client for streaming audio to devices
 ///
@@ -494,7 +500,7 @@ impl AirPlayClient {
 
         let format = source.format();
         let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), format));
-        
+
         // Enable ALAC encoding (matching negotiated SDP)
         streamer.use_alac().await;
 
@@ -528,5 +534,218 @@ impl AirPlayClient {
     #[must_use]
     pub fn subscribe_state(&self) -> tokio::sync::watch::Receiver<ClientState> {
         self.state.subscribe()
+    }
+}
+
+/// Unified `AirPlay` client configuration
+#[derive(Debug, Clone)]
+pub struct ClientConfig {
+    /// Preferred protocol
+    pub preferred_protocol: PreferredProtocol,
+    /// Connection timeout
+    pub connection_timeout: std::time::Duration,
+    /// Enable DACP remote control (RAOP)
+    pub enable_dacp: bool,
+    /// Enable metadata transmission
+    pub enable_metadata: bool,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            preferred_protocol: PreferredProtocol::PreferAirPlay2,
+            connection_timeout: std::time::Duration::from_secs(10),
+            enable_dacp: true,
+            enable_metadata: true,
+        }
+    }
+}
+
+/// Unified `AirPlay` client
+pub struct UnifiedAirPlayClient {
+    /// Configuration
+    config: ClientConfig,
+    /// Active session
+    session: Option<Box<dyn AirPlaySession>>,
+    /// Connected device info
+    device: Option<AirPlayDevice>,
+    /// Selected protocol
+    protocol: Option<SelectedProtocol>,
+}
+
+impl UnifiedAirPlayClient {
+    /// Create new client with default configuration
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_config(ClientConfig::default())
+    }
+
+    /// Create client with custom configuration
+    #[must_use]
+    pub fn with_config(config: ClientConfig) -> Self {
+        Self {
+            config,
+            session: None,
+            device: None,
+            protocol: None,
+        }
+    }
+
+    /// Connect to a discovered device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if connection fails or no protocol can be selected.
+    pub async fn connect(&mut self, device: AirPlayDevice) -> Result<(), AirPlayError> {
+        // Select protocol
+        let protocol = select_protocol(&device, self.config.preferred_protocol).map_err(|e| {
+            AirPlayError::ConnectionFailed {
+                device_name: device.name.clone(),
+                message: e.to_string(),
+                source: None,
+            }
+        })?;
+
+        // Create appropriate session
+        let mut session: Box<dyn AirPlaySession> = match protocol {
+            SelectedProtocol::AirPlay2 => Box::new(AirPlay2SessionImpl::new(
+                device.clone(),
+                AirPlayConfig::default(),
+            )),
+            SelectedProtocol::Raop => {
+                let addr = device.address();
+                let port = device.raop_port.unwrap_or(5000);
+                Box::new(RaopSessionImpl::new(&addr.to_string(), port))
+            }
+        };
+
+        // Connect
+        session.connect().await?;
+
+        self.session = Some(session);
+        self.device = Some(device);
+        self.protocol = Some(protocol);
+
+        Ok(())
+    }
+
+    /// Disconnect from current device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if disconnection fails.
+    pub async fn disconnect(&mut self) -> Result<(), AirPlayError> {
+        if let Some(ref mut session) = self.session {
+            session.disconnect().await?;
+        }
+        self.session = None;
+        self.device = None;
+        self.protocol = None;
+        Ok(())
+    }
+
+    /// Check if connected
+    #[must_use]
+    pub fn is_connected(&self) -> bool {
+        self.session.as_ref().is_some_and(|s| s.is_connected())
+    }
+
+    /// Get selected protocol
+    #[must_use]
+    pub fn protocol(&self) -> Option<SelectedProtocol> {
+        self.protocol
+    }
+
+    /// Get session reference
+    #[must_use]
+    pub fn session(&self) -> Option<&dyn AirPlaySession> {
+        self.session.as_deref()
+    }
+
+    /// Get mutable session reference
+    #[must_use]
+    pub fn session_mut(&mut self) -> Option<&mut (dyn AirPlaySession + 'static)> {
+        self.session.as_deref_mut()
+    }
+
+    /// Start playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails or not connected.
+    pub async fn play(&mut self) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.play().await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Pause playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails or not connected.
+    pub async fn pause(&mut self) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.pause().await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Stop playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails or not connected.
+    pub async fn stop(&mut self) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.stop().await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Set volume
+    ///
+    /// # Errors
+    ///
+    /// Returns error if volume command fails or not connected.
+    pub async fn set_volume(&mut self, volume: f32) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.set_volume(volume).await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Stream audio data
+    ///
+    /// # Errors
+    ///
+    /// Returns error if streaming fails or not connected.
+    pub async fn stream_audio(&mut self, data: &[u8]) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.stream_audio(data).await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+}
+
+impl Default for UnifiedAirPlayClient {
+    fn default() -> Self {
+        Self::new()
     }
 }

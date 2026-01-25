@@ -75,6 +75,12 @@ impl AirPlayDevice {
         self.capabilities.airplay2
     }
 
+    /// Check if this device supports RAOP (`AirPlay` 1)
+    #[must_use]
+    pub fn supports_raop(&self) -> bool {
+        self.raop_port.is_some()
+    }
+
     /// Check if this device can be part of a multi-room group
     #[must_use]
     pub fn supports_grouping(&self) -> bool {

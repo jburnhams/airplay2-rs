@@ -12,8 +12,9 @@ mod chacha;
 mod ed25519;
 mod error;
 mod hkdf;
+#[cfg(feature = "raop")]
 mod rsa;
-#[cfg(test)]
+#[cfg(all(test, feature = "raop"))]
 mod rsa_tests;
 mod srp;
 #[cfg(test)]
@@ -25,6 +26,7 @@ pub use self::chacha::{ChaCha20Poly1305Cipher, Nonce};
 pub use self::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature};
 pub use self::error::CryptoError;
 pub use self::hkdf::{AirPlayKeys, HkdfSha512, derive_key};
+#[cfg(feature = "raop")]
 pub use self::rsa::{AppleRsaPublicKey, RaopRsaPrivateKey, sizes as rsa_sizes};
 pub use self::srp::{SrpClient, SrpVerifier};
 pub use self::x25519::{X25519KeyPair, X25519PublicKey, X25519SharedSecret};

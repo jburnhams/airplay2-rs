@@ -1,9 +1,45 @@
 use std::io;
 use thiserror::Error;
 
+/// RAOP-specific errors
+#[derive(Debug, Error)]
+pub enum RaopError {
+    /// RSA authentication failed
+    #[error("RSA authentication failed")]
+    AuthenticationFailed,
+
+    /// Unsupported encryption type
+    #[error("unsupported encryption type: {0}")]
+    UnsupportedEncryption(String),
+
+    /// SDP parsing error
+    #[error("SDP parsing error: {0}")]
+    SdpParseError(String),
+
+    /// Key exchange failed
+    #[error("key exchange failed: {0}")]
+    KeyExchangeFailed(String),
+
+    /// Audio encryption error
+    #[error("audio encryption error: {0}")]
+    EncryptionError(String),
+
+    /// Timing synchronization failed
+    #[error("timing sync failed")]
+    TimingSyncFailed,
+
+    /// Retransmit buffer overflow
+    #[error("retransmit buffer overflow")]
+    RetransmitBufferOverflow,
+}
+
 /// Errors that can occur during `AirPlay` operations
 #[derive(Debug, Error)]
 pub enum AirPlayError {
+    /// RAOP error
+    #[error("RAOP error: {0}")]
+    Raop(#[from] RaopError),
+
     // ===== Discovery Errors =====
     /// Device was not found during discovery
     #[error("device not found: {device_id}")]

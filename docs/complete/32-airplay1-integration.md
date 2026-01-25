@@ -48,7 +48,7 @@ This section describes how to integrate AirPlay 1 (RAOP) support with the existi
 
 ### 32.1 Protocol Detection
 
-- [ ] **32.1.1** Implement automatic protocol detection
+- [x] **32.1.1** Implement automatic protocol detection
 
 **File:** `src/client/protocol.rs`
 
@@ -154,7 +154,7 @@ pub enum ProtocolError {
 
 ### 32.2 Session Abstraction
 
-- [ ] **32.2.1** Define common session trait
+- [x] **32.2.1** Define common session trait
 
 **File:** `src/client/session.rs`
 
@@ -331,7 +331,7 @@ impl AirPlaySession for RaopSessionImpl {
 
 ### 32.3 Unified Client
 
-- [ ] **32.3.1** Extend AirPlayClient for dual protocol support
+- [x] **32.3.1** Extend AirPlayClient for dual protocol support
 
 **File:** `src/client/mod.rs` (extensions)
 
@@ -513,7 +513,7 @@ impl Default for UnifiedAirPlayClient {
 
 ### 32.4 Error Handling
 
-- [ ] **32.4.1** Extend error types for RAOP
+- [x] **32.4.1** Extend error types for RAOP
 
 **File:** `src/error.rs` (additions)
 
@@ -554,7 +554,7 @@ pub enum RaopError {
 
 ### 32.5 Feature Flags
 
-- [ ] **32.5.1** Add optional RAOP feature flag
+- [x] **32.5.1** Add optional RAOP feature flag
 
 **File:** `Cargo.toml` (additions)
 
@@ -678,15 +678,15 @@ let mut client = UnifiedAirPlayClient::with_config(config);
 
 ## Acceptance Criteria
 
-- [ ] Protocol detection works correctly
-- [ ] Session abstraction handles both protocols
-- [ ] Unified client provides consistent API
-- [ ] Error types cover both protocols
-- [ ] Feature flags control compilation
-- [ ] Examples demonstrate usage patterns
-- [ ] Migration path is clear
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] Protocol detection works correctly
+- [x] Session abstraction handles both protocols
+- [x] Unified client provides consistent API
+- [x] Error types cover both protocols
+- [x] Feature flags control compilation
+- [x] Examples demonstrate usage patterns
+- [x] Migration path is clear
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
