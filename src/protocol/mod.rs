@@ -3,6 +3,7 @@
 #![allow(missing_docs)]
 
 pub mod crypto;
+pub mod daap;
 pub mod dacp;
 pub mod pairing;
 pub mod plist;

@@ -51,7 +51,7 @@ Metadata is sent via RTSP `SET_PARAMETER` requests with specific content types:
 
 ### 31.1 DMAP Encoding
 
-- [ ] **31.1.1** Implement DMAP types and encoder
+- [x] **31.1.1** Implement DMAP types and encoder
 
 **File:** `src/protocol/daap/mod.rs`
 
@@ -265,7 +265,7 @@ pub enum DmapDecodeError {
 
 ### 31.2 Track Metadata
 
-- [ ] **31.2.1** Implement track metadata encoding
+- [x] **31.2.1** Implement track metadata encoding
 
 **File:** `src/protocol/daap/metadata.rs`
 
@@ -437,7 +437,7 @@ impl Default for MetadataBuilder {
 
 ### 31.3 Artwork
 
-- [ ] **31.3.1** Implement artwork transmission
+- [x] **31.3.1** Implement artwork transmission
 
 **File:** `src/protocol/daap/artwork.rs`
 
@@ -597,7 +597,7 @@ impl Artwork {
 
 ### 31.4 Progress Reporting
 
-- [ ] **31.4.1** Implement progress updates
+- [x] **31.4.1** Implement progress updates
 
 **File:** `src/protocol/daap/progress.rs`
 
@@ -689,7 +689,7 @@ impl PlaybackProgress {
 
 ### 31.5 Metadata RTSP Integration
 
-- [ ] **31.5.1** Add metadata methods to RAOP session
+- [x] **31.5.1** Add metadata methods to RAOP session
 
 **File:** `src/protocol/raop/session.rs` (additions)
 
@@ -841,14 +841,14 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] DMAP encoding produces valid output
-- [ ] Track metadata includes all relevant fields
-- [ ] Artwork format detection works correctly
-- [ ] Progress encoding/parsing is correct
-- [ ] RTSP integration uses correct content types
-- [ ] RTP-Info header includes timestamp
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] DMAP encoding produces valid output
+- [x] Track metadata includes all relevant fields
+- [x] Artwork format detection works correctly
+- [x] Progress encoding/parsing is correct
+- [x] RTSP integration uses correct content types
+- [x] RTP-Info header includes timestamp
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
