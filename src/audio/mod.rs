@@ -8,6 +8,7 @@ pub mod clock;
 pub mod convert;
 pub mod format;
 pub mod jitter;
+pub mod raop_encoder;
 
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,12 @@
 //! RAOP (`AirPlay` 1) protocol implementation
 
 mod auth;
+pub mod encryption;
 mod key_exchange;
 pub mod session;
 
+#[cfg(test)]
+mod encryption_tests;
 #[cfg(test)]
 mod session_tests;
 #[cfg(test)]

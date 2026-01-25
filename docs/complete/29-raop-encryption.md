@@ -54,7 +54,7 @@ RAOP uses AES-128 encryption in Counter (CTR) mode for audio payload protection.
 
 ### 29.1 AES-CTR Encryption Module
 
-- [ ] **29.1.1** Implement RAOP-specific AES-CTR wrapper
+- [x] **29.1.1** Implement RAOP-specific AES-CTR wrapper
 
 **File:** `src/protocol/raop/encryption.rs`
 
@@ -217,7 +217,7 @@ impl Drop for RaopDecryptor {
 
 ### 29.2 Key Generation and Exchange
 
-- [ ] **29.2.1** Implement secure key generation
+- [x] **29.2.1** Implement secure key generation
 
 **File:** `src/protocol/raop/encryption.rs` (continued)
 
@@ -342,7 +342,7 @@ pub fn parse_wrapped_keys(
 
 ### 29.3 ALAC Encryption Integration
 
-- [ ] **29.3.1** Integrate encryption with audio encoding
+- [x] **29.3.1** Integrate encryption with audio encoding
 
 **File:** `src/audio/raop_encoder.rs`
 
@@ -441,7 +441,7 @@ pub enum AudioEncodeError {
 
 ### 29.4 Unencrypted Mode
 
-- [ ] **29.4.1** Support devices that accept unencrypted audio
+- [x] **29.4.1** Support devices that accept unencrypted audio
 
 **File:** `src/protocol/raop/encryption.rs` (continued)
 
@@ -719,16 +719,16 @@ fn test_unencrypted_mode() {
 
 ## Acceptance Criteria
 
-- [ ] AES-128-CTR encryption works correctly
-- [ ] Different packets produce different ciphertext
-- [ ] Decrypt correctly reverses encryption
-- [ ] Key generation produces random keys
-- [ ] RSA key wrapping integrates with key exchange
-- [ ] Unencrypted mode passes data through unchanged
-- [ ] Keys are zeroized on drop
-- [ ] Sequential packet encryption works correctly
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] AES-128-CTR encryption works correctly
+- [x] Different packets produce different ciphertext
+- [x] Decrypt correctly reverses encryption
+- [x] Key generation produces random keys
+- [x] RSA key wrapping integrates with key exchange
+- [x] Unencrypted mode passes data through unchanged
+- [x] Keys are zeroized on drop
+- [x] Sequential packet encryption works correctly
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
