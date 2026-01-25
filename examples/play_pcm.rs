@@ -74,9 +74,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .cloned()
         .unwrap_or_else(|| {
             println!("No devices found, trying manual connection to 192.168.0.101...");
-            let mut capabilities = airplay2::DeviceCapabilities::default();
-            capabilities.airplay2 = true;
-            capabilities.supports_transient_pairing = true;
+            let capabilities = airplay2::DeviceCapabilities {
+                airplay2: true,
+                supports_transient_pairing: true,
+                ..Default::default()
+            };
 
             airplay2::AirPlayDevice {
                 id: "Manual".to_string(),

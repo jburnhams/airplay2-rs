@@ -1,6 +1,4 @@
-use super::{
-    MediaDescription, SdpConnection, SdpOrigin, SessionDescription,
-};
+use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
 use std::collections::HashMap;
 
 /// Builder for SDP session descriptions
@@ -30,12 +28,7 @@ impl SdpBuilder {
 
     /// Set origin
     #[must_use]
-    pub fn origin(
-        mut self,
-        username: &str,
-        session_id: &str,
-        addr: &str,
-    ) -> Self {
+    pub fn origin(mut self, username: &str, session_id: &str, addr: &str) -> Self {
         self.sdp.origin = Some(SdpOrigin {
             username: username.to_string(),
             session_id: session_id.to_string(),
@@ -75,22 +68,15 @@ impl SdpBuilder {
     /// Add session-level attribute
     #[must_use]
     pub fn attribute(mut self, name: &str, value: Option<&str>) -> Self {
-        self.sdp.attributes.insert(
-            name.to_string(),
-            value.map(String::from),
-        );
+        self.sdp
+            .attributes
+            .insert(name.to_string(), value.map(String::from));
         self
     }
 
     /// Start a media section
     #[must_use]
-    pub fn media(
-        mut self,
-        media_type: &str,
-        port: u16,
-        protocol: &str,
-        formats: &[&str],
-    ) -> Self {
+    pub fn media(mut self, media_type: &str, port: u16, protocol: &str, formats: &[&str]) -> Self {
         // Save previous media if any
         if let Some(media) = self.current_media.take() {
             self.sdp.media.push(media);
@@ -111,10 +97,9 @@ impl SdpBuilder {
     #[must_use]
     pub fn media_attribute(mut self, name: &str, value: Option<&str>) -> Self {
         if let Some(ref mut media) = self.current_media {
-            media.attributes.insert(
-                name.to_string(),
-                value.map(String::from),
-            );
+            media
+                .attributes
+                .insert(name.to_string(), value.map(String::from));
         }
         self
     }
@@ -148,11 +133,12 @@ pub fn encode_sdp(sdp: &SessionDescription) -> String {
 
     // Origin
     if let Some(ref o) = sdp.origin {
-        write!(output,
+        write!(
+            output,
             "o={} {} {} {} {} {}\r\n",
-            o.username, o.session_id, o.session_version,
-            o.net_type, o.addr_type, o.unicast_address
-        ).unwrap();
+            o.username, o.session_id, o.session_version, o.net_type, o.addr_type, o.unicast_address
+        )
+        .unwrap();
     }
 
     // Session name
@@ -179,13 +165,15 @@ pub fn encode_sdp(sdp: &SessionDescription) -> String {
 
     // Media sections
     for media in &sdp.media {
-        write!(output,
+        write!(
+            output,
             "m={} {} {} {}\r\n",
             media.media_type,
             media.port,
             media.protocol,
             media.formats.join(" ")
-        ).unwrap();
+        )
+        .unwrap();
 
         for (name, value) in &media.attributes {
             if let Some(v) = value {

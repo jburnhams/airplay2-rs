@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_parse_basic_sdp() {
-    let sdp_text = r#"v=0
+    let sdp_text = r"v=0
 o=iTunes 1234567890 1 IN IP4 192.168.1.100
 s=iTunes
 c=IN IP4 192.168.1.50
@@ -10,7 +10,7 @@ t=0 0
 m=audio 0 RTP/AVP 96
 a=rtpmap:96 AppleLossless
 a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
-"#;
+";
 
     let sdp = SdpParser::parse(sdp_text).unwrap();
 
@@ -25,7 +25,7 @@ a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
 
 #[test]
 fn test_parse_raop_announce() {
-    let sdp_text = r#"v=0
+    let sdp_text = r"v=0
 o=iTunes 3413821438 1 IN IP4 fe80::217:f2ff:fe0f:e0f6
 s=iTunes
 c=IN IP4 fe80::5a55:caff:fe1a:e288
@@ -36,7 +36,7 @@ a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
 a=rsaaeskey:ABCDEF123456
 a=aesiv:0011223344556677
 a=min-latency:11025
-"#;
+";
 
     let sdp = SdpParser::parse(sdp_text).unwrap();
 
