@@ -2,7 +2,10 @@
 
 mod auth;
 mod key_exchange;
+pub mod session;
 
+#[cfg(test)]
+mod session_tests;
 #[cfg(test)]
 mod tests;
 
@@ -12,3 +15,4 @@ pub use auth::{
 };
 
 pub use key_exchange::{AES_IV_SIZE, AES_KEY_SIZE, RaopSessionKeys, parse_session_keys};
+pub use session::{RaopRtspSession, RaopSessionState};
