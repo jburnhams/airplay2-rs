@@ -2,9 +2,8 @@
 
 use super::auth::RaopAuthenticator;
 use super::key_exchange::RaopSessionKeys;
-use crate::protocol::rtsp::{
-    Method, RtspRequest, RtspRequestBuilder, RtspResponse, headers::names, headers::raop,
-};
+use crate::protocol::rtsp::headers::{names, raop};
+use crate::protocol::rtsp::{Method, RtspRequest, RtspRequestBuilder, RtspResponse};
 
 /// RAOP session states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,7 +176,8 @@ impl RaopRtspSession {
         let builder = RtspRequest::builder(Method::Setup, self.uri(""));
 
         let transport = format!(
-            "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={control_port};timing_port={timing_port}"
+            "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={control_port};\
+             timing_port={timing_port}"
         );
 
         self.add_common_headers(builder, cseq)

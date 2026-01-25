@@ -13,6 +13,5 @@ pub use auth::{
     AuthState, CHALLENGE_SIZE, RaopAuthenticator, build_response_message, decode_challenge,
     encode_challenge, generate_challenge, generate_response, verify_response,
 };
-
 pub use key_exchange::{AES_IV_SIZE, AES_KEY_SIZE, RaopSessionKeys, parse_session_keys};
 pub use session::{RaopRtspSession, RaopSessionState};

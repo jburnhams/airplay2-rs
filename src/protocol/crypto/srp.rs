@@ -1,9 +1,10 @@
-use super::CryptoError;
 use num_bigint::{BigUint, RandomBits};
 use num_traits::One;
 use rand::Rng;
 use sha2::{Digest, Sha512};
 use zeroize::Zeroize;
+
+use super::CryptoError;
 
 /// Apple SRP-6a implementation matching HomeKit/AirPlay 2 requirements
 pub struct SrpClient {
@@ -16,8 +17,8 @@ pub struct SrpClient {
 
 impl Drop for SrpClient {
     fn drop(&mut self) {
-        // BigUint doesn't implement Zeroize easily, but we can clear the internal Vec if we had access.
-        // For now, we just let it be dropped.
+        // BigUint doesn't implement Zeroize easily, but we can clear the internal Vec if we had
+        // access. For now, we just let it be dropped.
     }
 }
 

@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use airplay2::protocol::plist;
-    use airplay2::protocol::plist::PlistValue;
     use std::fs;
     use std::path::Path;
+
+    use airplay2::protocol::plist;
+    use airplay2::protocol::plist::PlistValue;
 
     fn load_fixture(name: &str) -> Vec<u8> {
         let path = Path::new("tests/fixtures").join(name);

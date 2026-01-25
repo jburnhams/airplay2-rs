@@ -3,10 +3,8 @@
 //! This is used when first connecting to a device that requires authentication.
 //! The user must enter a PIN displayed on the device.
 
-use super::{
-    PairingError, PairingState, PairingStepResult, SessionKeys,
-    tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods},
-};
+use super::tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods};
+use super::{PairingError, PairingState, PairingStepResult, SessionKeys};
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpClient, SrpVerifier,
 };
@@ -328,7 +326,8 @@ impl PairSetup {
         let device_ltpk = device_tlv.get_required(TlvType::PublicKey)?.to_vec();
 
         // TODO: Verify device signature
-        // The spec in docs/07 says "TODO: Verify device signature" so I will leave it as TODO or just comment.
+        // The spec in docs/07 says "TODO: Verify device signature" so I will leave it as TODO or
+        // just comment.
 
         self.device_ltpk = Some(device_ltpk);
         self.state = PairingState::Complete;

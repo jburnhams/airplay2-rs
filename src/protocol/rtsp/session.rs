@@ -1,4 +1,5 @@
-use super::{Method, RtspRequest, RtspRequestBuilder, RtspResponse, headers::names};
+use super::headers::names;
+use super::{Method, RtspRequest, RtspRequestBuilder, RtspResponse};
 
 /// RTSP session states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -306,7 +307,7 @@ impl RtspSession {
                 SessionState::Paused,
                 Method::Record | Method::Play | Method::Teardown | Method::SetParameter,
             ) => true,
-            (_, Method::Options | Method::Teardown | Method::Get) => true, // OPTIONS, TEARDOWN, GET always allowed
+            (_, Method::Options | Method::Teardown | Method::Get) => true, /* OPTIONS, TEARDOWN, GET always allowed */
             _ => false,
         }
     }

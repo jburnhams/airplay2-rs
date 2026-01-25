@@ -1,7 +1,8 @@
 //! Example: Discover AirPlay devices on the network
 
-use airplay2::{AirPlayDevice, scan};
 use std::time::Duration;
+
+use airplay2::{AirPlayDevice, scan};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

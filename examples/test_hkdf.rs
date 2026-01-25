@@ -14,5 +14,5 @@ fn main() {
     for b in okm {
         print!("{:02x}", b);
     }
-    println!("");
+    println!();
 }

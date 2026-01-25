@@ -41,8 +41,9 @@ impl RaopCodec {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
+
+    use super::*;
 
     #[test]
     fn test_parse_capabilities_basic() {

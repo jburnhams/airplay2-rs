@@ -50,9 +50,10 @@ fn test_callback_source() {
 
 #[tokio::test]
 async fn test_pcm_streamer_creation() {
+    use std::sync::Arc;
+
     use crate::connection::ConnectionManager;
     use crate::types::AirPlayConfig;
-    use std::sync::Arc;
 
     let config = AirPlayConfig::default();
     let connection = Arc::new(ConnectionManager::new(config));
@@ -62,11 +63,13 @@ async fn test_pcm_streamer_creation() {
     assert_eq!(streamer.state().await, StreamerState::Idle);
 }
 
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use tokio::time::Duration;
+
 use crate::error::AirPlayError;
 use crate::streaming::RtpSender;
-use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
-use tokio::time::Duration;
 
 #[derive(Default)]
 struct MockRtpSender {
@@ -102,7 +105,8 @@ async fn test_streaming_loop() {
     // Allow some time for streaming
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // Check state (might be Streaming or finished if fast, but with interval it should be streaming)
+    // Check state (might be Streaming or finished if fast, but with interval it should be
+    // streaming)
     assert_eq!(streamer_arc.state().await, StreamerState::Streaming);
 
     // Pause
@@ -128,10 +132,11 @@ async fn test_streaming_loop() {
 
 #[tokio::test]
 async fn test_url_streamer_creation() {
+    use std::sync::Arc;
+
     use crate::connection::ConnectionManager;
     use crate::streaming::url::UrlStreamer;
     use crate::types::AirPlayConfig;
-    use std::sync::Arc;
 
     let config = AirPlayConfig::default();
     let connection = Arc::new(ConnectionManager::new(config));

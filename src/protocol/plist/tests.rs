@@ -1,5 +1,6 @@
-use super::*;
 use std::collections::HashMap;
+
+use super::*;
 
 // --- Tests from mod.rs ---
 
@@ -471,7 +472,8 @@ fn test_fixture_types() {
 fn test_decode_deeply_nested_recursion_limit() {
     // We don't have a recursion limit implemented yet (except stack limit).
     // Let's create a nested dict 500 levels deep.
-    // If it overflows stack, we should probably implement a limit, but for now just test robust encoding/decoding.
+    // If it overflows stack, we should probably implement a limit, but for now just test robust
+    // encoding/decoding.
 
     let mut val = PlistValue::Integer(0);
     for _ in 0..500 {

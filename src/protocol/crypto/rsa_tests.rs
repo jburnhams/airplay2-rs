@@ -1,5 +1,6 @@
-use super::*;
 use ::rsa::traits::PublicKeyParts;
+
+use super::*;
 
 #[test]
 fn test_rsa_key_generation() {

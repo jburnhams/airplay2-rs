@@ -29,9 +29,9 @@ fn test_connection_stats() {
 mod parsing_tests {
     #[test]
     fn test_transport_parsing() {
-        // This logic is internal to setup_session but we can test the parsing logic if we extract it.
-        // For now, since we cannot easily test private async methods without refactoring,
-        // we will verify the logic via inspection or integration tests.
+        // This logic is internal to setup_session but we can test the parsing logic if we extract
+        // it. For now, since we cannot easily test private async methods without
+        // refactoring, we will verify the logic via inspection or integration tests.
         // However, I can create a small test that mimics the parsing logic here to ensure it works.
 
         let transport_header =

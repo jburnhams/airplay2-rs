@@ -1,5 +1,6 @@
-use super::*;
 use rand::RngCore;
+
+use super::*;
 
 // --- aes.rs tests ---
 

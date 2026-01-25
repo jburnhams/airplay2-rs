@@ -3,9 +3,10 @@ pub mod mock_server;
 /// Unit tests for the mock server.
 pub mod tests;
 
-use crate::types::{AirPlayDevice, DeviceCapabilities};
 use std::collections::HashMap;
 use std::net::IpAddr;
+
+use crate::types::{AirPlayDevice, DeviceCapabilities};
 
 /// Helper to create an `AirPlayDevice` for testing.
 ///

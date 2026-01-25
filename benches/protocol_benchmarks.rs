@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
-use std::collections::HashMap;
 
 fn plist_benchmark(c: &mut Criterion) {
     // 1. Prepare data

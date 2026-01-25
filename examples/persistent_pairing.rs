@@ -5,12 +5,13 @@
 //! 2. Disconnecting
 //! 3. Reconnecting (should use Pair-Verify with stored keys)
 
+use std::f32::consts::PI;
+use std::time::Duration;
+
 use airplay2::audio::AudioFormat;
 use airplay2::protocol::pairing::storage::FileStorage;
 use airplay2::streaming::AudioSource;
 use airplay2::{AirPlayClient, AirPlayConfig, scan};
-use std::f32::consts::PI;
-use std::time::Duration;
 
 /// Simple sine wave generator for testing
 struct SineWaveSource {

@@ -3,10 +3,8 @@
 //! Used after initial Pair-Setup to quickly establish a session
 //! without requiring PIN entry again.
 
-use super::{
-    PairingError, PairingKeys, PairingState, PairingStepResult, SessionKeys,
-    tlv::{TlvDecoder, TlvEncoder, TlvType, errors},
-};
+use super::tlv::{TlvDecoder, TlvEncoder, TlvType, errors};
+use super::{PairingError, PairingKeys, PairingState, PairingStepResult, SessionKeys};
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, HkdfSha512, Nonce,
     X25519KeyPair, X25519PublicKey,

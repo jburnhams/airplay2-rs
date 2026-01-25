@@ -1,7 +1,10 @@
+use std::net::IpAddr;
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
+
 use super::*;
 use crate::protocol::crypto::RaopRsaPrivateKey;
-use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
-use std::net::IpAddr;
 
 #[test]
 fn test_challenge_generation() {

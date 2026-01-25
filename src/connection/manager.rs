@@ -1,6 +1,9 @@
 //! Connection manager for `AirPlay` devices
 #![allow(dead_code)]
 
+use tokio::net::UdpSocket;
+use tokio::sync::{Mutex, RwLock, broadcast};
+
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
@@ -10,9 +13,6 @@ use crate::protocol::pairing::{
 };
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice};
-
-use tokio::net::UdpSocket;
-use tokio::sync::{Mutex, RwLock, broadcast};
 
 /// Connection manager handles device connections
 pub struct ConnectionManager {
@@ -388,9 +388,9 @@ impl ConnectionManager {
         // If PIN is "3939", assume transient mode (for AirPort Express 2)
         // Note: For persistent pairing test, we disable this override.
         // In a real app, this logic needs to be smarter (maybe try both?)
-        /*if pin == "3939" {
-            pairing.set_transient(true);
-        }*/
+        // if pin == "3939" {
+        // pairing.set_transient(true);
+        // }
 
         // M1: Start pairing
         let m1 = pairing
@@ -632,7 +632,9 @@ impl ConnectionManager {
         tracing::debug!("Performing ANNOUNCE...");
         // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
         // Also use PCM (L16) to avoid ALAC encoding requirement
-        let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\n".to_string();
+        let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
+                   0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\n"
+            .to_string();
 
         let announce_req = {
             let mut session_guard = self.rtsp_session.lock().await;
@@ -658,7 +660,8 @@ impl ConnectionManager {
         // 4. Stream Setup (SETUP /rtp/audio with Transport)
         tracing::debug!("Performing Stream SETUP...");
         let transport = format!(
-            "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={ctrl_port};timing_port={time_port}"
+            "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={ctrl_port};\
+             timing_port={time_port}"
         );
 
         let setup_stream_req = {
@@ -778,20 +781,16 @@ impl ConnectionManager {
 
         // Construct request with all headers
         let mut request = format!(
-            "POST {path} HTTP/1.1\r\n\
-             Host: {host}\r\n\
-             Content-Type: application/octet-stream\r\n\
-             Content-Length: {}\r\n\
-             User-Agent: {user_agent}\r\n\
-             Active-Remote: 4294967295\r\n\
-             X-Apple-Client-Name: airplay2-rs\r\n",
+            "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: \
+             application/octet-stream\r\nContent-Length: {}\r\nUser-Agent: \
+             {user_agent}\r\nActive-Remote: 4294967295\r\nX-Apple-Client-Name: airplay2-rs\r\n",
             data.len()
         );
 
         // HACK: Re-enable these if we can access them cleanly.
-        // For now, they are stripped because I don't want to re-add the logic to fetch them from private session fields
-        // without adding accessors again (which I did, but I want to keep this clean).
-        // Wait, I DID add accessors to RtspSession.
+        // For now, they are stripped because I don't want to re-add the logic to fetch them from
+        // private session fields without adding accessors again (which I did, but I want to
+        // keep this clean). Wait, I DID add accessors to RtspSession.
 
         if !device_id.is_empty() {
             use std::fmt::Write;

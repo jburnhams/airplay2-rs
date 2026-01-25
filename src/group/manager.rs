@@ -1,12 +1,13 @@
 //! Multi-room group management
 
+use std::collections::HashMap;
+
+use rand::Rng;
+use tokio::sync::RwLock;
+
 use crate::control::volume::Volume;
 use crate::error::AirPlayError;
 use crate::types::AirPlayDevice;
-
-use rand::Rng;
-use std::collections::HashMap;
-use tokio::sync::RwLock;
 
 /// Unique identifier for a group
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

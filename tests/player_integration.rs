@@ -1,9 +1,8 @@
-use airplay2::PlayerBuilder;
-use airplay2::testing::{
-    create_test_device,
-    mock_server::{MockServer, MockServerConfig},
-};
 use std::time::Duration;
+
+use airplay2::PlayerBuilder;
+use airplay2::testing::create_test_device;
+use airplay2::testing::mock_server::{MockServer, MockServerConfig};
 
 // Note: This test is currently ignored because the mock server doesn't fully implement
 // the SRP pairing protocol. The client always attempts authentication, but the mock server

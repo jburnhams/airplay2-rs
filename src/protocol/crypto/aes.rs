@@ -1,6 +1,7 @@
-use super::{CryptoError, lengths};
 use aes::Aes128;
 use ctr::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
+
+use super::{CryptoError, lengths};
 
 type Aes128CtrImpl = ctr::Ctr64BE<Aes128>;
 
