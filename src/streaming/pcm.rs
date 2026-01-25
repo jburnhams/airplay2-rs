@@ -1,15 +1,16 @@
 //! PCM audio streaming to `AirPlay` devices
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use tokio::sync::{Mutex, RwLock, mpsc};
+
 use super::source::AudioSource;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::rtp::RtpCodec;
-
-use async_trait::async_trait;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// RTP packet sender trait
 #[async_trait]

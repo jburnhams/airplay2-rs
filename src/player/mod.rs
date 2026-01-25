@@ -1,11 +1,12 @@
 //! High-level player API
 
+use std::time::Duration;
+
+use tokio::sync::RwLock;
+
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
-
-use std::time::Duration;
-use tokio::sync::RwLock;
 
 #[cfg(test)]
 mod tests;
@@ -15,8 +16,9 @@ mod tests;
 /// # Example
 ///
 /// ```rust,no_run
-/// use airplay2::AirPlayPlayer;
 /// use std::time::Duration;
+///
+/// use airplay2::AirPlayPlayer;
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
 /// // Create player and connect to first available device
@@ -24,10 +26,20 @@ mod tests;
 /// player.auto_connect(Duration::from_secs(5)).await?;
 ///
 /// // Play some tracks
-/// player.play_tracks(vec![
-///     ("http://example.com/1.mp3".to_string(), "Song 1".to_string(), "Artist A".to_string()),
-///     ("http://example.com/2.mp3".to_string(), "Song 2".to_string(), "Artist B".to_string()),
-/// ]).await?;
+/// player
+///     .play_tracks(vec![
+///         (
+///             "http://example.com/1.mp3".to_string(),
+///             "Song 1".to_string(),
+///             "Artist A".to_string(),
+///         ),
+///         (
+///             "http://example.com/2.mp3".to_string(),
+///             "Song 2".to_string(),
+///             "Artist B".to_string(),
+///         ),
+///     ])
+///     .await?;
 ///
 /// // Control playback
 /// player.pause().await?;

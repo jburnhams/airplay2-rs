@@ -4,18 +4,19 @@
 //! to test the client functionality without requiring real hardware. It supports
 //! basic RTSP negotiation, audio data reception (stub), and control commands.
 
-use crate::net::{AsyncReadExt, AsyncWriteExt};
-use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
-use crate::protocol::rtp::RtpPacket;
-use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
-
 use std::fmt::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{RwLock, mpsc};
+
+use crate::net::{AsyncReadExt, AsyncWriteExt};
+use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
+use crate::protocol::rtp::RtpPacket;
+use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
 
 /// Configuration for the Mock `AirPlay` Server.
 #[derive(Debug, Clone)]
@@ -303,7 +304,8 @@ impl MockServer {
                 cseq,
                 None,
                 Some(
-                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST, PLAY",
+                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, \
+                     GET_PARAMETER, POST, PLAY",
                 ),
             ),
             Method::Setup => {
@@ -322,11 +324,8 @@ impl MockServer {
                 let session_id = state.session_id.clone().unwrap();
 
                 let response = format!(
-                    "RTSP/1.0 200 OK\r\n\
-                     CSeq: {cseq}\r\n\
-                     Session: {session_id}\r\n\
-                     Transport: {transport}\r\n\
-                     \r\n",
+                    "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: {session_id}\r\nTransport: \
+                     {transport}\r\n\r\n",
                 );
 
                 response.into_bytes()

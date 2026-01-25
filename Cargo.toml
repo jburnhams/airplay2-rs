@@ -73,6 +73,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 criterion = { version = "0.5", features = ["async_tokio"] }
 # Pinned to 3.10.1 to align getrandom dependency (0.2)
 tempfile = "=3.10.1"
+hex = "0.4.3"
 
 [[bench]]
 name = "protocol_benchmarks"

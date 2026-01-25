@@ -247,8 +247,9 @@ mod jitter_tests {
 }
 
 mod clock_tests {
-    use crate::audio::clock::*;
     use std::time::Duration;
+
+    use crate::audio::clock::*;
 
     #[test]
     fn test_clock_advance() {

@@ -1,14 +1,17 @@
-use ed25519_dalek::{Keypair, Signer};
+use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
 
 fn main() {
     let mut csprng = OsRng;
-    let keypair = Keypair::generate(&mut csprng);
+    let signing_key = SigningKey::generate(&mut csprng);
 
     let message = b"Hello World";
-    let signature = keypair.sign(message);
+    let signature = signing_key.sign(message);
 
-    println!("Public Key: {}", hex::encode(keypair.public.as_bytes()));
+    println!(
+        "Public Key: {}",
+        hex::encode(signing_key.verifying_key().as_bytes())
+    );
     println!("Message: {}", hex::encode(message));
     println!("Signature: {}", hex::encode(signature.to_bytes()));
 }

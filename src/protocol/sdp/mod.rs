@@ -8,10 +8,10 @@ mod parser;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashMap;
+
 pub use builder::{SdpBuilder, create_raop_announce_sdp};
 pub use parser::{SdpParseError, SdpParser};
-
-use std::collections::HashMap;
 
 /// SDP session description
 #[derive(Debug, Clone, Default)]

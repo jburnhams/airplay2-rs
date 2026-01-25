@@ -1,4 +1,5 @@
 use std::io;
+
 use thiserror::Error;
 
 /// Errors that can occur during `AirPlay` operations

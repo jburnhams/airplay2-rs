@@ -1,6 +1,7 @@
+use thiserror::Error;
+
 use super::packet::{RtpDecodeError, RtpHeader, RtpPacket};
 use crate::protocol::crypto::{Aes128Ctr, ChaCha20Poly1305Cipher, Nonce};
-use thiserror::Error;
 
 /// RTP codec errors
 #[derive(Debug, Error)]

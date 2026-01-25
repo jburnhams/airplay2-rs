@@ -1,5 +1,11 @@
 //! Main `AirPlay` client implementation
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use futures::Stream;
+use tokio::sync::{Mutex, RwLock};
+
 use crate::connection::{ConnectionManager, ConnectionState};
 use crate::control::playback::{PlaybackController, ShuffleMode};
 use crate::control::queue::PlaybackQueue;
@@ -12,11 +18,6 @@ use crate::types::{
     AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
 };
 
-use futures::Stream;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, RwLock};
-
 #[cfg(test)]
 mod tests;
 
@@ -25,8 +26,9 @@ mod tests;
 /// # Example
 ///
 /// ```rust,no_run
-/// use airplay2::{AirPlayClient, AirPlayConfig};
 /// use std::time::Duration;
+///
+/// use airplay2::{AirPlayClient, AirPlayConfig};
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
 /// // Create client with default config

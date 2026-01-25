@@ -15,11 +15,8 @@ fn test_rtsp_plist_integration() {
 
     // 3. Simulate RTSP Response containing this plist
     let header = format!(
-        "RTSP/1.0 200 OK\r\n\
-         CSeq: 10\r\n\
-         Content-Type: application/x-apple-binary-plist\r\n\
-         Content-Length: {}\r\n\
-         \r\n",
+        "RTSP/1.0 200 OK\r\nCSeq: 10\r\nContent-Type: \
+         application/x-apple-binary-plist\r\nContent-Length: {}\r\n\r\n",
         plist_bytes.len()
     );
 
@@ -61,9 +58,7 @@ fn test_rtsp_plist_fragmented_integration() {
     let plist_bytes = plist::encode(&track_info).unwrap();
 
     let header = format!(
-        "RTSP/1.0 200 OK\r\n\
-         Content-Length: {}\r\n\
-         \r\n",
+        "RTSP/1.0 200 OK\r\nContent-Length: {}\r\n\r\n",
         plist_bytes.len()
     );
 

@@ -1,6 +1,8 @@
-use super::PlistValue;
 use std::collections::{HashMap, HashSet};
+
 use thiserror::Error;
+
+use super::PlistValue;
 
 /// Errors that can occur during plist decoding
 #[derive(Debug, Error)]
