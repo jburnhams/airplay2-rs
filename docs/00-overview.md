@@ -469,7 +469,6 @@ Optional features for additional dependencies:
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio"]
 async-std-runtime = ["async-std"]
-persistent-pairing = ["sled"]  # Or similar for key storage
 ```
 
 ## Testing Strategy
@@ -535,3 +534,115 @@ persistent-pairing = ["sled"]  # Or similar for key storage
 - [OpenAirPlay Specification](https://openairplay.github.io/airplay-spec/audio/index.html)
 - [Unofficial AirPlay Protocol Specification](https://nto.github.io/AirPlay.html)
 - [RAOP Protocol Analysis](https://git.zx2c4.com/Airtunes2/about/)
+
+---
+
+## AirPlay 1 Receiver Support
+
+The library includes comprehensive documentation for implementing an AirPlay 1 **receiver**, enabling the library to accept incoming audio streams from AirPlay senders (iTunes, iOS, macOS).
+
+### AirPlay 1 Receiver Section Dependencies
+
+```
+                         ┌──────────────────┐
+                         │ 34: Receiver     │
+                         │ Overview         │
+                         └────────┬─────────┘
+                                  │
+           ┌──────────────────────┼──────────────────────┐
+           │                      │                      │
+  ┌────────▼────────┐   ┌─────────▼────────┐   ┌────────▼────────┐
+  │ 35: Service     │   │ 36: RTSP Server  │   │ 42: Audio       │
+  │ Advertisement   │   │ (Sans-IO)        │   │ Output          │
+  └────────┬────────┘   └─────────┬────────┘   └────────┬────────┘
+           │                      │                     │
+           │            ┌─────────▼────────┐            │
+           │            │ 37: Session      │            │
+           │            │ Management       │            │
+           │            └─────────┬────────┘            │
+           │                      │                     │
+           │            ┌─────────▼────────┐            │
+           │            │ 38: SDP Parsing  │            │
+           │            │ & Stream Setup   │            │
+           │            └─────────┬────────┘            │
+           │                      │                     │
+           │            ┌─────────▼────────┐            │
+           │            │ 39: RTP Receiver │            │
+           │            │ Core             │            │
+           │            └─────────┬────────┘            │
+           │                      │                     │
+           │   ┌──────────────────┼──────────────────┐  │
+           │   │                  │                  │  │
+  ┌────────▼───▼────┐   ┌─────────▼────────┐  ┌─────▼──▼────────┐
+  │ 40: Timing      │   │ 41: Jitter       │  │                 │
+  │ Synchronization │   │ Buffer           │  │                 │
+  └────────┬────────┘   └─────────┬────────┘  │                 │
+           │                      │           │                 │
+           └──────────────────────┼───────────┘                 │
+                                  │                             │
+                         ┌────────▼────────┐                    │
+                         │ 43: Volume &    │                    │
+                         │ Metadata        │                    │
+                         └────────┬────────┘                    │
+                                  │                             │
+                         ┌────────▼────────┐                    │
+                         │ 44: Receiver    │◀───────────────────┘
+                         │ Integration     │
+                         └────────┬────────┘
+                                  │
+                         ┌────────▼────────┐
+                         │ 45: Receiver    │
+                         │ Testing         │
+                         └─────────────────┘
+```
+
+### AirPlay 1 Receiver Documentation Sections
+
+| Section | Title | Description |
+|---------|-------|-------------|
+| 34 | Receiver Overview | Architecture, feature flags, code reuse strategy |
+| 35 | RAOP Service Advertisement | mDNS publishing, TXT records for receiver discovery |
+| 36 | RTSP Server (Sans-IO) | Server-side RTSP parsing and response generation |
+| 37 | Session Management | Single-session enforcement, state machine, timeouts |
+| 38 | SDP Parsing & Stream Setup | ANNOUNCE handling, codec/encryption parameter extraction |
+| 39 | RTP Receiver Core | UDP audio reception, decryption, packet handling |
+| 40 | Timing Synchronization | NTP-like timing, clock offset computation |
+| 41 | Jitter Buffer & Packet Loss | Reordering, buffering, concealment strategies |
+| 42 | Audio Output Abstraction | Platform backends (CoreAudio, CPAL, ALSA) |
+| 43 | Volume & Metadata Handling | SET_PARAMETER parsing, DMAP metadata, artwork |
+| 44 | Receiver Integration | AirPlayReceiver API, event system, wiring |
+| 45 | Receiver Testing | Mock sender, protocol tests, network simulation |
+
+### Receiver Feature Flags
+
+The receiver uses feature flags to keep client-only builds lightweight:
+
+```toml
+[features]
+default = ["tokio-runtime", "client"]
+client = []                              # Client (sender) only
+receiver = ["audio-decode"]              # Receiver functionality
+audio-decode = ["dep:alac", "dep:symphonia"]
+audio-coreaudio = ["dep:coreaudio-rs"]   # macOS (priority)
+audio-cpal = ["dep:cpal"]                # Cross-platform fallback
+audio-alsa = ["dep:alsa"]                # Linux native
+receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
+```
+
+### Receiver Components Reused from Client
+
+| Component | Location | Usage in Receiver |
+|-----------|----------|-------------------|
+| `RtspCodec` | `protocol/rtsp/` | Parse requests, encode responses |
+| `RtpPacket` | `protocol/rtp/` | Receive instead of send |
+| `RaopEncryption` | `protocol/raop/` | Decrypt incoming audio |
+| `AudioRingBuffer` | `audio/buffer.rs` | Buffer decoded audio for output |
+| `DmapParser` | `protocol/dacp/` | Parse incoming metadata |
+
+### Stream RF: Receiver Implementation
+
+1. Section 34 (Overview) → 35, 36, 42 (parallel)
+2. Section 36 → 37 → 38 → 39
+3. Section 39 → 40, 41 (parallel)
+4. Section 41, 40, 42, 43 → 44
+5. Section 44 → 45

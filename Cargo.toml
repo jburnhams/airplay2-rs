@@ -14,7 +14,6 @@ readme = "README.md"
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio", "tokio-util"]
-persistent-pairing = ["sled"]
 
 [dependencies]
 # Async
@@ -61,7 +60,6 @@ rubato = "0.14"           # Audio resampling
 alac-encoder = "0.3"      # ALAC encoding
 
 # Persistent storage (optional)
-sled = { version = "0.34", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 

@@ -42,7 +42,6 @@ readme = "README.md"
 [features]
 default = ["tokio-runtime"]
 tokio-runtime = ["tokio", "tokio-util"]
-persistent-pairing = ["sled"]
 
 [dependencies]
 # Async
@@ -79,9 +78,6 @@ bytes = "1.9"
 
 # Audio processing
 rubato = "0.14"           # Audio resampling
-
-# Persistent storage (optional)
-sled = { version = "0.34", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.43", features = ["full", "test-util"] }
