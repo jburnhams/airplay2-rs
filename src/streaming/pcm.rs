@@ -1,5 +1,8 @@
 //! PCM audio streaming to `AirPlay` devices
 
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::cast_possible_truncation)]
+
 use super::source::AudioSource;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
@@ -180,6 +183,7 @@ impl PcmStreamer {
     }
 
     /// Main streaming loop
+    #[allow(clippy::too_many_lines)]
     async fn streaming_loop<S: AudioSource>(&self, mut source: S) -> Result<(), AirPlayError> {
         let bytes_per_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
         let packet_duration = self.format.frames_to_duration(Self::FRAMES_PER_PACKET);
