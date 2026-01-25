@@ -16,6 +16,28 @@ pub mod names {
     pub const X_APPLE_PROTOCOL_VERSION: &str = "X-Apple-ProtocolVersion";
 }
 
+/// RAOP-specific header names
+pub mod raop {
+    /// Apple challenge for authentication
+    pub const APPLE_CHALLENGE: &str = "Apple-Challenge";
+    /// Apple response to challenge
+    pub const APPLE_RESPONSE: &str = "Apple-Response";
+    /// Audio latency in samples
+    pub const AUDIO_LATENCY: &str = "Audio-Latency";
+    /// Audio jack status
+    pub const AUDIO_JACK_STATUS: &str = "Audio-Jack-Status";
+    /// Client instance ID
+    pub const CLIENT_INSTANCE: &str = "Client-Instance";
+    /// DACP ID for remote control
+    pub const DACP_ID: &str = "DACP-ID";
+    /// Active remote token
+    pub const ACTIVE_REMOTE: &str = "Active-Remote";
+    /// Server info header
+    pub const SERVER: &str = "Server";
+    /// Range header for RECORD
+    pub const RANGE: &str = "Range";
+}
+
 /// RTSP header collection
 #[derive(Debug, Clone, Default)]
 pub struct Headers {
