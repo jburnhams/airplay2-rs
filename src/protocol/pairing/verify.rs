@@ -115,7 +115,12 @@ impl PairVerify {
 
         // Decrypt device's signature
         let cipher = ChaCha20Poly1305Cipher::new(&session_key)?;
-        let nonce = Nonce::from_bytes(&[0u8; 12])?;
+
+        // Use "PV-Msg02" as nonce (padded to 12 bytes with prefix zeros)
+        let mut nonce_bytes = [0u8; 12];
+        nonce_bytes[4..].copy_from_slice(b"PV-Msg02");
+        let nonce = Nonce::from_bytes(&nonce_bytes)?;
+
         let decrypted = cipher.decrypt(&nonce, encrypted_data)?;
 
         let device_tlv = TlvDecoder::decode(&decrypted)?;
@@ -144,10 +149,11 @@ impl PairVerify {
             .add(TlvType::Signature, &our_signature.to_bytes())
             .build();
 
-        // Note: Spec used Nonce::from_bytes([0,0...1]) ?
-        // Spec says: `let nonce = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])?;`
-        let nonce_bytes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        // Use "PV-Msg03" as nonce (padded to 12 bytes with prefix zeros)
+        let mut nonce_bytes = [0u8; 12];
+        nonce_bytes[4..].copy_from_slice(b"PV-Msg03");
         let nonce = Nonce::from_bytes(&nonce_bytes)?;
+
         let encrypted = cipher.encrypt(&nonce, &inner_tlv)?;
 
         // Build M3

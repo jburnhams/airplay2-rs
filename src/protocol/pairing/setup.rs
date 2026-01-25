@@ -233,15 +233,19 @@ impl PairSetup {
         }
 
         // Derive encryption key for M5
-        let hkdf = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
-        let encrypt_key = hkdf.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")?;
+        let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
+        let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")?;
 
         // Sign: HKDF(...) || identifier || public_key
-        let mut sign_data = hkdf.expand(b"Pair-Setup-Controller-Sign-Salt", 32)?;
+        let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Controller-Sign-Salt"), &session_key);
+        let mut sign_data = hkdf_sign.expand(b"Pair-Setup-Controller-Sign-Info", 32)?;
         sign_data.extend_from_slice(b"airplay2-rs");
         sign_data.extend_from_slice(self.signing_keypair.public_key().as_bytes());
 
+        tracing::debug!("Signing Data (hex): {:02X?}", sign_data);
+
         let signature = self.signing_keypair.sign(&sign_data);
+        tracing::debug!("Signature (hex): {:02X?}", signature.to_bytes());
 
         let signed_tlv = TlvEncoder::new()
             .add(TlvType::Identifier, b"airplay2-rs")
@@ -254,7 +258,13 @@ impl PairSetup {
 
         // Encrypt the signed TLV
         let cipher = ChaCha20Poly1305Cipher::new(&encrypt_key)?;
-        let nonce = Nonce::from_bytes(&[0u8; 12])?;
+
+        // Use "PS-Msg05" as nonce (padded to 12 bytes with prefix zeros)
+        // PyCryptodome (used by receiver) prepends 4 bytes counter (0) to 8 byte nonce
+        let mut nonce_bytes = [0u8; 12];
+        nonce_bytes[4..].copy_from_slice(b"PS-Msg05");
+        let nonce = Nonce::from_bytes(&nonce_bytes)?;
+
         let encrypted = cipher.encrypt(&nonce, &signed_tlv)?;
 
         // Build M5
@@ -305,7 +315,12 @@ impl PairSetup {
         let decrypt_key = hkdf.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")?;
 
         let cipher = ChaCha20Poly1305Cipher::new(&decrypt_key)?;
-        let nonce = Nonce::from_bytes(&[0u8; 12])?;
+
+        // Use "PS-Msg06" as nonce (padded to 12 bytes with prefix zeros)
+        let mut nonce_bytes = [0u8; 12];
+        nonce_bytes[4..].copy_from_slice(b"PS-Msg06");
+        let nonce = Nonce::from_bytes(&nonce_bytes)?;
+
         let decrypted = cipher.decrypt(&nonce, encrypted)?;
 
         // Parse device info TLV

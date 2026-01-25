@@ -95,6 +95,25 @@ impl AirPlayClient {
         }
     }
 
+    /// Set pairing storage for persistent pairing
+    #[must_use]
+    pub fn with_pairing_storage(
+        mut self,
+        storage: Box<dyn crate::protocol::pairing::PairingStorage>,
+    ) -> Self {
+        // Create new connection manager with storage
+        let connection = crate::connection::ConnectionManager::new(self.config.clone())
+            .with_pairing_storage(storage);
+        let connection = Arc::new(connection);
+
+        // Re-create components that depend on connection
+        self.playback = Arc::new(PlaybackController::new(connection.clone()));
+        self.volume = Arc::new(VolumeController::new(connection.clone()));
+        self.connection = connection;
+
+        self
+    }
+
     /// Create with default configuration
     #[must_use]
     pub fn default_client() -> Self {

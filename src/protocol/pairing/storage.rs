@@ -1,9 +1,10 @@
 //! Storage for pairing keys
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Stored pairing keys for a device
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairingKeys {
     /// Our identifier (e.g., "airplay2-rs")
     pub identifier: Vec<u8>,
@@ -86,14 +87,12 @@ impl PairingStorage for MemoryStorage {
 }
 
 /// File-based pairing storage
-#[cfg(feature = "persistent-pairing")]
 pub struct FileStorage {
     #[allow(dead_code)]
     path: std::path::PathBuf,
     cache: HashMap<String, PairingKeys>,
 }
 
-#[cfg(feature = "persistent-pairing")]
 impl FileStorage {
     /// Create file storage at the given path
     ///
@@ -114,22 +113,27 @@ impl FileStorage {
         Ok(Self { path, cache })
     }
 
-    #[allow(clippy::unnecessary_wraps)]
-    fn load_all(_path: &std::path::Path) -> Result<HashMap<String, PairingKeys>, StorageError> {
-        // Implementation would read from file/database
-        // For now, return empty map
-        Ok(HashMap::new())
+    fn load_all(path: &std::path::Path) -> Result<HashMap<String, PairingKeys>, StorageError> {
+        if !path.exists() {
+            return Ok(HashMap::new());
+        }
+
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let cache = serde_json::from_reader(reader)
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
+        Ok(cache)
     }
 
-    #[allow(clippy::unused_self)]
-    #[allow(clippy::unnecessary_wraps)]
     fn save_all(&self) -> Result<(), StorageError> {
-        // Implementation would write to file/database
+        let file = std::fs::File::create(&self.path)?;
+        let writer = std::io::BufWriter::new(file);
+        serde_json::to_writer_pretty(writer, &self.cache)
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
         Ok(())
     }
 }
 
-#[cfg(feature = "persistent-pairing")]
 impl PairingStorage for FileStorage {
     fn load(&self, device_id: &str) -> Option<PairingKeys> {
         self.cache.get(device_id).cloned()
