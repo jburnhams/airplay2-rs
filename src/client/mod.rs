@@ -12,10 +12,10 @@ use crate::types::{
     AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
 };
 
+use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use futures::Stream;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use tokio::sync::{Mutex, RwLock};
 
 pub mod protocol;

@@ -68,10 +68,11 @@ impl PlaybackController {
                 .insert("rate", 1.0)
                 .insert("rtpTime", 0u64)
                 .build();
-            let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-                message: format!("Failed to encode plist: {e}"),
-                status_code: None,
-            })?;
+            let encoded =
+                crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to encode plist: {e}"),
+                    status_code: None,
+                })?;
 
             self.connection
                 .send_command(
@@ -99,10 +100,11 @@ impl PlaybackController {
                 .insert("rate", 0.0)
                 .insert("rtpTime", 0u64)
                 .build();
-            let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-                message: format!("Failed to encode plist: {e}"),
-                status_code: None,
-            })?;
+            let encoded =
+                crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to encode plist: {e}"),
+                    status_code: None,
+                })?;
 
             self.connection
                 .send_command(
@@ -321,8 +323,12 @@ impl PlaybackController {
         let base_rtp: u32 = 0;
         let pos_samples = (position * 44100.0) as u32;
         // We don't know duration here, so we use current for end as well or a large value
-        let progress = DmapProgress::new(base_rtp, base_rtp.wrapping_add(pos_samples), base_rtp.wrapping_add(pos_samples));
-        
+        let progress = DmapProgress::new(
+            base_rtp,
+            base_rtp.wrapping_add(pos_samples),
+            base_rtp.wrapping_add(pos_samples),
+        );
+
         self.set_progress(progress).await
     }
 

@@ -34,9 +34,6 @@ impl RaopTimingRequest {
         buf.extend_from_slice(&sequence.to_be_bytes());
         buf.extend_from_slice(&0u32.to_be_bytes()); // Timestamp (unused)
 
-        // Padding (4 bytes)
-        buf.extend_from_slice(&[0u8; 4]);
-
         // Reference time
         buf.extend_from_slice(&self.reference_time.encode());
 

@@ -126,18 +126,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Streaming Full Verification (Stereo + Volume)...");
     let source = StereoSource::new(10); // 10 seconds
-    
+
     // Start streaming in a separate task so we can control volume
     let mut client_clone = client.clone();
-    let stream_handle = tokio::spawn(async move {
-        client_clone.stream_audio(source).await
-    });
+    let stream_handle = tokio::spawn(async move { client_clone.stream_audio(source).await });
 
     // Test Volume Control
     tokio::time::sleep(Duration::from_secs(2)).await;
     println!("Setting volume to 25%...");
     client.set_volume(0.25).await?;
-    
+
     tokio::time::sleep(Duration::from_secs(2)).await;
     println!("Setting volume to 100%...");
     client.set_volume(1.0).await?;
