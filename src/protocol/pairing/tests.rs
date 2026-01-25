@@ -242,7 +242,10 @@ fn test_pair_verify_flow() {
         .build();
 
     let cipher = ChaCha20Poly1305Cipher::new(&session_key).unwrap();
-    let nonce = Nonce::from_bytes(&[0u8; 12]).unwrap();
+    // Use "PV-Msg02" as nonce
+    let mut nonce_bytes = [0u8; 12];
+    nonce_bytes[4..].copy_from_slice(b"PV-Msg02");
+    let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
     let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
 
     let m2 = TlvEncoder::new()
@@ -259,9 +262,10 @@ fn test_pair_verify_flow() {
             let m3_encrypted = tlv_m3.get_required(TlvType::EncryptedData).unwrap();
 
             // Decrypt M3
-            // Spec says client uses nonce [0..01] for M3?
-            // "let nonce = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])?;"
-            let nonce_m3 = Nonce::from_bytes(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap();
+            // Use "PV-Msg03" as nonce
+            let mut nonce_bytes = [0u8; 12];
+            nonce_bytes[4..].copy_from_slice(b"PV-Msg03");
+            let nonce_m3 = Nonce::from_bytes(&nonce_bytes).unwrap();
             let decrypted_m3 = cipher
                 .decrypt(&nonce_m3, m3_encrypted)
                 .expect("Device failed to decrypt M3");
