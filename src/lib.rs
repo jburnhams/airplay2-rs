@@ -52,6 +52,9 @@ pub mod state;
 /// Core types
 pub mod types;
 
+/// Receiver implementation
+pub mod receiver;
+
 /// Testing utilities
 pub mod testing;
 
