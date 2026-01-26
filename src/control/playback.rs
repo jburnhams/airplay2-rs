@@ -321,6 +321,7 @@ impl PlaybackController {
         // We need a base RTP timestamp. For now we use a dummy one if not provided,
         // but high-quality implementations should track the actual RTP base.
         let base_rtp: u32 = 0;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let pos_samples = (position * 44100.0) as u32;
         // We don't know duration here, so we use current for end as well or a large value
         let progress = DmapProgress::new(

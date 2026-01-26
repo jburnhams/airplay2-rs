@@ -14,9 +14,13 @@ pub mod raop_timing;
 mod timing;
 
 #[cfg(test)]
+mod codec_tests;
+#[cfg(test)]
+mod packet_tests;
+#[cfg(test)]
 mod raop_tests;
 #[cfg(test)]
-mod tests;
+mod timing_tests;
 
 pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpEncryptionMode};
 pub use control::{ControlPacket, RetransmitRequest};
