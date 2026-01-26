@@ -7,7 +7,7 @@ fn create_device(airplay2: bool, raop: bool) -> AirPlayDevice {
         id: "test".to_string(),
         name: "Test Device".to_string(),
         model: None,
-        addresses: vec![IpAddr::V4(Ipv4Addr::LOCALHOST)],
+        addresses: vec![IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))],
         port: 7000,
         capabilities: DeviceCapabilities::default(),
         raop_port: None,

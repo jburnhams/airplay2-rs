@@ -3,7 +3,7 @@
 use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 
 /// Errors from service advertisement
 #[derive(Debug, thiserror::Error)]
@@ -117,7 +117,7 @@ fn get_mac_windows() -> Result<[u8; 6], AdvertiserError> {
     ))
 }
 
-#[cfg_attr(test, allow(dead_code))]
+#[allow(dead_code)]
 pub(crate) fn parse_mac_string(mac: &str) -> Result<[u8; 6], AdvertiserError> {
     let parts: Vec<&str> = mac.split(':').collect();
     if parts.len() != 6 {
@@ -567,7 +567,6 @@ impl AsyncRaopAdvertiser {
 
         // Spawn blocking task for mdns-sd
         let mut config_clone = config.clone();
-        // Ensure consistency by enforcing the resolved MAC
         config_clone.mac_override = Some(mac);
 
         tokio::task::spawn_blocking(move || {

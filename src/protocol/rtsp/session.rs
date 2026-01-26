@@ -253,7 +253,6 @@ impl RtspSession {
     ///
     /// # Errors
     /// Returns an error string if the response status code is not success.
-    #[allow(clippy::match_same_arms)]
     pub fn process_response(
         &mut self,
         method: Method,
@@ -305,7 +304,7 @@ impl RtspSession {
 
     /// Check if a method is valid in current state
     #[must_use]
-    #[allow(clippy::match_same_arms, clippy::match_like_matches_macro)]
+    #[allow(clippy::match_same_arms)]
     pub fn can_send(&self, method: Method) -> bool {
         match (self.state, method) {
             (SessionState::Init, Method::Options | Method::Post) => true,

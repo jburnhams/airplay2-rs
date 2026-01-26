@@ -34,10 +34,7 @@ fn test_stable_mac_generation() {
     assert_eq!(mac1, mac2);
 
     // Should have locally-administered bit set
-    assert!(
-        mac1[0] & 0x02 != 0,
-        "Locally-administered bit should be set"
-    );
+    assert!(mac1[0] & 0x02 != 0, "Locally-administered bit should be set");
 }
 
 #[test]
