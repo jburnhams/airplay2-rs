@@ -293,9 +293,6 @@ impl RtspSession {
             Method::Teardown => {
                 self.state = SessionState::Terminated;
             }
-            Method::SetRateAnchorTime => {
-                // Rate and anchors are handled by body, state depends on rate
-            }
             _ => {}
         }
 
@@ -306,30 +303,31 @@ impl RtspSession {
     #[must_use]
     #[allow(clippy::match_same_arms)]
     pub fn can_send(&self, method: Method) -> bool {
-        match (self.state, method) {
-            (SessionState::Init, Method::Options | Method::Post) => true,
-            (SessionState::Ready, Method::Setup | Method::Post) => true,
-            (SessionState::Setup, Method::Record | Method::Play) => true,
-            (
-                SessionState::Playing,
-                Method::Pause
-                | Method::Flush
-                | Method::SetParameter
-                | Method::GetParameter
-                | Method::Teardown,
-            ) => true,
-            (
-                SessionState::Paused,
-                Method::Record
-                | Method::Play
-                | Method::Teardown
-                | Method::SetParameter
-                | Method::SetRateAnchorTime,
-            ) => true,
-            (_, Method::Options | Method::Teardown | Method::Get | Method::SetRateAnchorTime) => {
-                true
-            }
-            _ => false,
-        }
+        matches!(
+            (self.state, method),
+            (SessionState::Init, Method::Options | Method::Post)
+                | (SessionState::Ready, Method::Setup | Method::Post)
+                | (SessionState::Setup, Method::Record | Method::Play)
+                | (
+                    SessionState::Playing,
+                    Method::Pause
+                        | Method::Flush
+                        | Method::SetParameter
+                        | Method::GetParameter
+                        | Method::Teardown,
+                )
+                | (
+                    SessionState::Paused,
+                    Method::Record
+                        | Method::Play
+                        | Method::Teardown
+                        | Method::SetParameter
+                        | Method::SetRateAnchorTime,
+                )
+                | (
+                    _,
+                    Method::Options | Method::Teardown | Method::Get | Method::SetRateAnchorTime
+                )
+        )
     }
 }

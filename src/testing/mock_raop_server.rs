@@ -3,13 +3,13 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_errors_doc)]
 
+use crate::net::{AsyncReadExt, AsyncWriteExt};
 #[cfg(feature = "raop")]
 use crate::protocol::crypto::RaopRsaPrivateKey;
 use crate::protocol::rtsp::{Headers, Method, RtspRequest};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use crate::net::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::broadcast;
 
@@ -66,7 +66,7 @@ impl Default for MockRaopConfig {
             timing_port: 0,
             name: "Mock RAOP".to_string(),
             mac_address: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55],
-            codecs: vec![0, 1, 2], // PCM, ALAC, AAC
+            codecs: vec![0, 1, 2],        // PCM, ALAC, AAC
             encryption_types: vec![0, 1], // None, RSA
             require_challenge: true,
         }
@@ -111,7 +111,9 @@ impl MockRaopServer {
     /// Get mDNS service name
     #[must_use]
     pub fn service_name(&self) -> String {
-        let mac = self.config.mac_address
+        let mac = self
+            .config
+            .mac_address
             .iter()
             .fold(String::new(), |mut acc, b| {
                 use std::fmt::Write;
@@ -127,17 +129,23 @@ impl MockRaopServer {
         let mut records = HashMap::new();
         records.insert("txtvers".to_string(), "1".to_string());
         records.insert("ch".to_string(), "2".to_string());
-        records.insert("cn".to_string(),
-            self.config.codecs.iter()
+        records.insert(
+            "cn".to_string(),
+            self.config
+                .codecs
+                .iter()
                 .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>()
-                .join(",")
+                .join(","),
         );
-        records.insert("et".to_string(),
-            self.config.encryption_types.iter()
+        records.insert(
+            "et".to_string(),
+            self.config
+                .encryption_types
+                .iter()
                 .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>()
-                .join(",")
+                .join(","),
         );
         records.insert("sr".to_string(), "44100".to_string());
         records.insert("ss".to_string(), "16".to_string());
@@ -192,7 +200,7 @@ impl MockRaopServer {
         // RTSP Listener
         let mut shutdown_rx_rtsp = shutdown_tx.subscribe();
         tokio::spawn(async move {
-             loop {
+            loop {
                 tokio::select! {
                     result = listener.accept() => {
                         match result {
@@ -256,7 +264,7 @@ impl MockRaopServer {
         // Timing Listener (Dummy consume)
         let mut shutdown_rx_timing = shutdown_tx.subscribe();
         tokio::spawn(async move {
-             let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 4096];
             loop {
                 tokio::select! {
                     res = timing_socket.recv_from(&mut buf) => {
@@ -360,7 +368,15 @@ impl MockRaopServer {
                 return Ok(None);
             }
             let body = data[header_len..header_len + content_length].to_vec();
-            Ok(Some((RtspRequest { method, uri, headers, body }, header_len + content_length)))
+            Ok(Some((
+                RtspRequest {
+                    method,
+                    uri,
+                    headers,
+                    body,
+                },
+                header_len + content_length,
+            )))
         } else {
             Ok(None)
         }
@@ -369,12 +385,17 @@ impl MockRaopServer {
     fn encode_response(response: &crate::protocol::rtsp::RtspResponse) -> Vec<u8> {
         use std::io::Write;
         let mut bytes = Vec::new();
-        write!(&mut bytes, "{} {} {}\r\n", response.version, response.status.0, response.reason).unwrap();
+        write!(
+            &mut bytes,
+            "{} {} {}\r\n",
+            response.version, response.status.0, response.reason
+        )
+        .unwrap();
         for (k, v) in response.headers.iter() {
             write!(&mut bytes, "{k}: {v}\r\n").unwrap();
         }
         if !response.body.is_empty() {
-             write!(&mut bytes, "Content-Length: {}\r\n", response.body.len()).unwrap();
+            write!(&mut bytes, "Content-Length: {}\r\n", response.body.len()).unwrap();
         }
         write!(&mut bytes, "\r\n").unwrap();
         bytes.extend_from_slice(&response.body);
@@ -394,7 +415,7 @@ impl MockRaopServer {
             Method::Record => Self::handle_record_static(request, state),
             Method::SetParameter => Self::handle_set_parameter_static(request, state),
             _ => {
-                use crate::protocol::rtsp::{RtspResponse, StatusCode, Headers};
+                use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
                 let mut headers = Headers::new();
                 if let Some(cseq) = request.headers.cseq() {
                     headers.insert("CSeq", cseq.to_string());
@@ -420,7 +441,7 @@ impl MockRaopServer {
         request: &RtspRequest,
         config: &MockRaopConfig,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{RtspResponse, StatusCode, Headers};
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
         let mut headers = Headers::new();
         headers.insert("CSeq", request.headers.cseq().unwrap_or(0).to_string());
@@ -455,7 +476,7 @@ impl MockRaopServer {
         state: &Arc<Mutex<MockRaopState>>,
         rsa_key: &RaopRsaPrivateKey,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{RtspResponse, StatusCode, Headers};
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
         use crate::protocol::sdp::SdpParser;
 
         // Parse SDP
@@ -463,11 +484,9 @@ impl MockRaopServer {
         if let Ok(sdp) = SdpParser::parse(&sdp_text) {
             // Extract and decrypt AES key
             if let (Some(rsaaeskey), Some(aesiv)) = (sdp.rsaaeskey(), sdp.aesiv()) {
-                if let Ok((key, iv)) = crate::protocol::raop::parse_session_keys(
-                    rsaaeskey,
-                    aesiv,
-                    rsa_key,
-                ) {
+                if let Ok((key, iv)) =
+                    crate::protocol::raop::parse_session_keys(rsaaeskey, aesiv, rsa_key)
+                {
                     let mut state = state.lock().unwrap();
                     state.aes_key = Some(key);
                     state.aes_iv = Some(iv);
@@ -498,7 +517,7 @@ impl MockRaopServer {
         state: &Arc<Mutex<MockRaopState>>,
         config: &MockRaopConfig,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{RtspResponse, StatusCode, Headers};
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
         use rand::Rng;
 
         let session_id = format!("{:016X}", rand::thread_rng().r#gen::<u64>());
@@ -511,12 +530,13 @@ impl MockRaopServer {
         let mut headers = Headers::new();
         headers.insert("CSeq", request.headers.cseq().unwrap_or(0).to_string());
         headers.insert("Session", &session_id);
-        headers.insert("Transport", format!(
-            "RTP/AVP/UDP;unicast;mode=record;server_port={};control_port={};timing_port={}",
-            config.audio_port,
-            config.control_port,
-            config.timing_port,
-        ));
+        headers.insert(
+            "Transport",
+            format!(
+                "RTP/AVP/UDP;unicast;mode=record;server_port={};control_port={};timing_port={}",
+                config.audio_port, config.control_port, config.timing_port,
+            ),
+        );
         headers.insert("Audio-Latency", "11025");
 
         RtspResponse {
@@ -538,7 +558,7 @@ impl MockRaopServer {
         request: &RtspRequest,
         state: &Arc<Mutex<MockRaopState>>,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{RtspResponse, StatusCode, Headers};
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
         {
             let mut state = state.lock().unwrap();
@@ -560,7 +580,10 @@ impl MockRaopServer {
 
     /// Handle RTSP `SET_PARAMETER` request
     #[must_use]
-    pub fn handle_set_parameter(&self, request: &RtspRequest) -> crate::protocol::rtsp::RtspResponse {
+    pub fn handle_set_parameter(
+        &self,
+        request: &RtspRequest,
+    ) -> crate::protocol::rtsp::RtspResponse {
         Self::handle_set_parameter_static(request, &self.state)
     }
 
@@ -568,7 +591,7 @@ impl MockRaopServer {
         request: &RtspRequest,
         state: &Arc<Mutex<MockRaopState>>,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{RtspResponse, StatusCode, Headers};
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
         let content_type = request.headers.content_type().unwrap_or("");
 
