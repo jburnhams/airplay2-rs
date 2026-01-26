@@ -316,6 +316,7 @@ impl PlaybackController {
     }
 
     /// Internal: send scrub command
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     async fn send_scrub(&self, position: f64) -> Result<(), AirPlayError> {
         // AirPlay 2 uses progress parameter for scrub
         // We need a base RTP timestamp. For now we use a dummy one if not provided,

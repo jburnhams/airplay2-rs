@@ -1,5 +1,9 @@
 //! mDNS device discovery for `AirPlay` devices
 
+/// RAOP service advertisement
+pub mod advertiser;
+#[cfg(test)]
+mod advertiser_tests;
 mod browser;
 pub mod parser;
 /// RAOP discovery logic

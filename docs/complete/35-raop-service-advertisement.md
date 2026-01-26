@@ -26,7 +26,7 @@ The RAOP service uses the `_raop._tcp.local.` service type with a specific namin
 
 ### 35.1 Service Name Generation
 
-- [ ] **35.1.1** Implement MAC address retrieval for service name
+- [x] **35.1.1** Implement MAC address retrieval for service name
 
 **File:** `src/discovery/advertiser.rs`
 
@@ -163,7 +163,7 @@ pub fn format_mac_for_service(mac: &[u8; 6]) -> String {
 
 ### 35.2 TXT Record Builder
 
-- [ ] **35.2.1** Implement TXT record construction with all required fields
+- [x] **35.2.1** Implement TXT record construction with all required fields
 
 **File:** `src/discovery/advertiser.rs` (continued)
 
@@ -344,7 +344,7 @@ impl Default for TxtRecordBuilder {
 
 ### 35.3 Service Advertiser
 
-- [ ] **35.3.1** Implement the main service advertiser using mdns-sd
+- [x] **35.3.1** Implement the main service advertiser using mdns-sd
 
 **File:** `src/discovery/advertiser.rs` (continued)
 
@@ -526,7 +526,7 @@ impl Drop for RaopAdvertiser {
 
 ### 35.4 Async Wrapper
 
-- [ ] **35.4.1** Implement async-friendly advertiser wrapper
+- [x] **35.4.1** Implement async-friendly advertiser wrapper
 
 **File:** `src/discovery/advertiser.rs` (continued)
 
@@ -651,7 +651,7 @@ impl AsyncRaopAdvertiser {
 
 ### 35.5 Unit Tests
 
-- [ ] **35.5.1** Implement comprehensive unit tests
+- [x] **35.5.1** Implement comprehensive unit tests
 
 **File:** `src/discovery/advertiser.rs` (test module)
 
@@ -796,7 +796,7 @@ mod tests {
 
 ### 35.6 Integration Tests
 
-- [ ] **35.6.1** Test service visibility on network
+- [x] **35.6.1** Test service visibility on network
 
 **File:** `tests/discovery/advertiser_tests.rs`
 
@@ -946,16 +946,16 @@ async fn test_shutdown_removes_service() {
 
 ## Acceptance Criteria
 
-- [ ] MAC address retrieval works on Linux, macOS, Windows
-- [ ] Stable pseudo-MAC generation for platforms without accessible MAC
-- [ ] TXT record contains all required RAOP fields
-- [ ] Service advertised as `MAC@FriendlyName`
-- [ ] Service discoverable by standard mDNS browsers (dns-sd, avahi-browse)
-- [ ] Status updates (busy/available) reflected in TXT record
-- [ ] Graceful shutdown removes service from network
-- [ ] Multiple receivers can advertise on same machine (different ports)
-- [ ] All unit tests pass
-- [ ] Integration tests pass (advertise and discover)
+- [x] MAC address retrieval works on Linux, macOS, Windows
+- [x] Stable pseudo-MAC generation for platforms without accessible MAC
+- [x] TXT record contains all required RAOP fields
+- [x] Service advertised as `MAC@FriendlyName`
+- [x] Service discoverable by standard mDNS browsers (dns-sd, avahi-browse)
+- [x] Status updates (busy/available) reflected in TXT record
+- [x] Graceful shutdown removes service from network
+- [x] Multiple receivers can advertise on same machine (different ports)
+- [x] All unit tests pass
+- [x] Integration tests pass (advertise and discover)
 
 ---
 
