@@ -3,7 +3,7 @@
 use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 /// Errors from service advertisement
 #[derive(Debug, thiserror::Error)]

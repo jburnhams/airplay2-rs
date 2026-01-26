@@ -6,10 +6,14 @@ pub struct StatusCode(pub u16);
 
 impl StatusCode {
     pub const OK: StatusCode = StatusCode(200);
+    pub const BAD_REQUEST: StatusCode = StatusCode(400);
     pub const UNAUTHORIZED: StatusCode = StatusCode(401);
+    pub const FORBIDDEN: StatusCode = StatusCode(403);
     pub const NOT_FOUND: StatusCode = StatusCode(404);
     pub const METHOD_NOT_ALLOWED: StatusCode = StatusCode(405);
     pub const NOT_ACCEPTABLE: StatusCode = StatusCode(406);
+    pub const SESSION_NOT_FOUND: StatusCode = StatusCode(454);
+    pub const METHOD_NOT_VALID: StatusCode = StatusCode(455);
     pub const INTERNAL_ERROR: StatusCode = StatusCode(500);
     pub const NOT_IMPLEMENTED: StatusCode = StatusCode(501);
     pub const SERVICE_UNAVAILABLE: StatusCode = StatusCode(503);

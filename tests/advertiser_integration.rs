@@ -4,8 +4,9 @@
 //! by the existing browser functionality.
 
 use airplay2::discovery::{
+    DiscoveryOptions,
     advertiser::{AdvertiserConfig, AsyncRaopAdvertiser, ReceiverStatusFlags},
-    scan_with_options, DiscoveryOptions,
+    scan_with_options,
 };
 use std::time::Duration;
 
