@@ -123,6 +123,11 @@ impl PortAllocator {
 
     /// Allocate next available port trio
     fn allocate_trio(&mut self) -> (u16, u16, u16) {
+        // Ensure we have enough room for 3 sequential ports
+        if self.next + 3 > self.range {
+            self.next = 0;
+        }
+
         let offset = self.next;
         self.next = (self.next + 3) % self.range;
 
@@ -334,6 +339,38 @@ impl SessionManager {
         false
     }
 
+    /// Check and enforce session timeouts
+    async fn enforce_timeouts(&self) {
+        let mut active = self.active_session.write().await;
+
+        // Check conditions
+        let reason = if let Some(ref session) = *active {
+            if session.is_timed_out(self.config.idle_timeout) {
+                Some("Idle timeout")
+            } else if self.config.max_duration > Duration::ZERO
+                && session.age() > self.config.max_duration
+            {
+                Some("Maximum duration exceeded")
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // If timed out, end session
+        if let Some(r) = reason {
+            if let Some(session) = active.take() {
+                tracing::info!("Session timed out: {}", r);
+                self.cleanup_sockets().await;
+                let _ = self.event_tx.send(SessionEvent::SessionEnded {
+                    session_id: session.id().to_string(),
+                    reason: r.to_string(),
+                });
+            }
+        }
+    }
+
     /// Touch session to reset idle timeout
     pub async fn touch_session(&self) {
         let mut active = self.active_session.write().await;
@@ -365,7 +402,6 @@ impl SessionManager {
     pub fn start_timeout_monitor(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
         let weak_manager = Arc::downgrade(self);
         let check_interval = self.config.idle_timeout / 4;
-        let max_duration = self.config.max_duration;
 
         tokio::spawn(async move {
             let mut ticker = interval(check_interval);
@@ -374,24 +410,7 @@ impl SessionManager {
                 ticker.tick().await;
 
                 if let Some(manager) = weak_manager.upgrade() {
-                    let should_timeout = manager.check_timeout().await;
-
-                    if should_timeout {
-                        tracing::info!("Session timed out due to inactivity");
-                        manager.end_session("Idle timeout").await;
-                    }
-
-                    // Also check max duration if configured
-                    if max_duration > Duration::ZERO {
-                        let active = manager.active_session.read().await;
-                        if let Some(ref session) = *active {
-                            if session.age() > max_duration {
-                                drop(active); // Release read lock before write
-                                tracing::info!("Session exceeded maximum duration");
-                                manager.end_session("Maximum duration exceeded").await;
-                            }
-                        }
-                    }
+                    manager.enforce_timeouts().await;
                 } else {
                     break;
                 }
