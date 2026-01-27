@@ -2,7 +2,7 @@ use super::session::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn test_addr() -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345)
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345)
 }
 
 #[test]
@@ -10,8 +10,8 @@ fn test_session_initial_state() {
     let session = ReceiverSession::new(test_addr());
     assert_eq!(session.state(), SessionState::Connected);
     assert_eq!(session.client_addr(), test_addr());
-    assert_eq!(session.volume(), 0.0);
-    assert!(session.id().len() > 0);
+    assert!((session.volume() - 0.0).abs() < f32::EPSILON);
+    assert!(!session.id().is_empty());
 }
 
 #[test]
@@ -63,14 +63,14 @@ fn test_volume_control() {
     let mut session = ReceiverSession::new(test_addr());
 
     session.set_volume(-10.0);
-    assert_eq!(session.volume(), -10.0);
+    assert!((session.volume() - -10.0).abs() < f32::EPSILON);
 
     // Test clamping
     session.set_volume(-200.0);
-    assert_eq!(session.volume(), -144.0);
+    assert!((session.volume() - -144.0).abs() < f32::EPSILON);
 
     session.set_volume(10.0);
-    assert_eq!(session.volume(), 0.0);
+    assert!((session.volume() - 0.0).abs() < f32::EPSILON);
 }
 
 #[test]

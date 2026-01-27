@@ -4,7 +4,7 @@ use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn test_addr() -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345)
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345)
 }
 
 fn create_request(method: Method) -> RtspRequest {

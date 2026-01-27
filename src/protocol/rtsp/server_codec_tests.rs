@@ -155,8 +155,7 @@ fn test_body_too_large() {
     let content_length = 16 * 1024 * 1024 + 1;
     let request = format!(
         "SET_PARAMETER rtsp://example.com RTSP/1.0\r\n\
-         Content-Length: {}\r\n\r\n",
-        content_length
+         Content-Length: {content_length}\r\n\r\n"
     );
     codec.feed(request.as_bytes());
 
