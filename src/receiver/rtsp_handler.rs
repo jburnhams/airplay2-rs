@@ -47,7 +47,7 @@ pub fn handle_request(request: &RtspRequest, session: &ReceiverSession) -> Handl
         Method::Setup => handle_setup(request, cseq, session),
         Method::Record => handle_record(request, cseq, session),
         Method::Pause => handle_pause(cseq, session),
-        Method::Flush => handle_flush(request, cseq),
+        Method::Flush => handle_flush(request, cseq, session),
         Method::Teardown => handle_teardown(cseq, session),
         Method::GetParameter => handle_get_parameter(request, cseq, session),
         Method::SetParameter => handle_set_parameter(request, cseq, session),
@@ -180,7 +180,11 @@ fn handle_record(request: &RtspRequest, cseq: u32, session: &ReceiverSession) ->
 }
 
 /// Handle PAUSE request
-fn handle_pause(cseq: u32, _session: &ReceiverSession) -> HandleResult {
+fn handle_pause(cseq: u32, session: &ReceiverSession) -> HandleResult {
+    if session.state() != SessionState::Streaming {
+        return error_result(StatusCode::METHOD_NOT_VALID, cseq);
+    }
+
     let response = ResponseBuilder::ok().cseq(cseq).build();
 
     HandleResult {
@@ -193,7 +197,14 @@ fn handle_pause(cseq: u32, _session: &ReceiverSession) -> HandleResult {
 }
 
 /// Handle FLUSH request (clear buffer)
-fn handle_flush(request: &RtspRequest, cseq: u32) -> HandleResult {
+fn handle_flush(request: &RtspRequest, cseq: u32, session: &ReceiverSession) -> HandleResult {
+    if !matches!(
+        session.state(),
+        SessionState::Streaming | SessionState::Paused
+    ) {
+        return error_result(StatusCode::METHOD_NOT_VALID, cseq);
+    }
+
     // Parse RTP-Info for flush point
     // Format: rtptime=<timestamp>
     let _rtp_info = request.headers.get("RTP-Info");
