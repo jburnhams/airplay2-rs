@@ -130,3 +130,46 @@ fn test_service_name_special_characters() {
 
     assert_eq!(advertiser.service_name(), "AABBCCDDEEFF@John's Speaker");
 }
+
+#[test]
+fn test_advertiser_config_default() {
+    let config = AdvertiserConfig::default();
+    assert_eq!(config.name, "AirPlay Receiver");
+    assert_eq!(config.port, 5000);
+    assert!(config.mac_override.is_none());
+}
+
+#[test]
+fn test_raop_capabilities_default() {
+    let caps = RaopCapabilities::default();
+    assert_eq!(caps.channels, 2);
+    assert_eq!(caps.sample_rate, 44100);
+    assert_eq!(caps.sample_size, 16);
+    assert_eq!(caps.codecs, vec![0, 1, 2]);
+    assert_eq!(caps.encryption_types, vec![0, 1]);
+    assert_eq!(caps.metadata_types, vec![0, 1, 2]);
+    assert!(!caps.password_required);
+    assert_eq!(caps.protocol_version, 1);
+}
+
+#[test]
+fn test_txt_record_builder_empty() {
+    let mut txt = TxtRecordBuilder::new();
+    assert!(txt.build().is_empty());
+    assert!(txt.build_map().is_empty());
+
+    txt.add("key", "value");
+    assert_eq!(txt.build(), vec!["key=value"]);
+}
+
+#[test]
+fn test_receiver_status_flags_all() {
+    let flags = ReceiverStatusFlags {
+        problem: true,
+        pin_required: true,
+        busy: true,
+        supports_legacy_pairing: true,
+    };
+    // 0x01 | 0x02 | 0x04 | 0x08 = 0x0F = 15
+    assert_eq!(flags.to_flags(), 15);
+}

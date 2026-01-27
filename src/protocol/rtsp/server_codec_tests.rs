@@ -129,3 +129,112 @@ fn test_error_response() {
     let response_str = String::from_utf8(response).unwrap();
     assert!(response_str.starts_with("RTSP/1.0 404 Not Found\r\n"));
 }
+
+#[test]
+fn test_header_overflow() {
+    let mut codec = RtspServerCodec::new();
+    // Fill buffer with junk until it exceeds limit
+    // MAX_HEADER_SIZE is 64KB
+    let junk = "X".repeat(65536 + 1);
+    codec.feed(junk.as_bytes());
+
+    let result = codec.decode();
+    assert!(result.is_err());
+    match result {
+        Err(super::server_codec::ParseError::InvalidHeader(msg)) => {
+            assert_eq!(msg, "Headers too large");
+        }
+        _ => panic!("Expected InvalidHeader error"),
+    }
+}
+
+#[test]
+fn test_body_too_large() {
+    let mut codec = RtspServerCodec::new();
+    // MAX_BODY_SIZE is 16MB
+    let content_length = 16 * 1024 * 1024 + 1;
+    let request = format!(
+        "SET_PARAMETER rtsp://example.com RTSP/1.0\r\n\
+         Content-Length: {}\r\n\r\n",
+        content_length
+    );
+    codec.feed(request.as_bytes());
+
+    let result = codec.decode();
+    assert!(result.is_err());
+    match result {
+        Err(super::server_codec::ParseError::BodyTooLarge { size, max }) => {
+            assert_eq!(size, content_length);
+            assert_eq!(max, 16 * 1024 * 1024);
+        }
+        _ => panic!("Expected BodyTooLarge error"),
+    }
+}
+
+#[test]
+fn test_invalid_content_length() {
+    let mut codec = RtspServerCodec::new();
+    let request = "SET_PARAMETER rtsp://example.com RTSP/1.0\r\n\
+                   Content-Length: not_a_number\r\n\r\n";
+    codec.feed(request.as_bytes());
+
+    let result = codec.decode();
+    assert!(result.is_err());
+    match result {
+        Err(super::server_codec::ParseError::InvalidContentLength(_)) => {}
+        _ => panic!("Expected InvalidContentLength error"),
+    }
+}
+
+#[test]
+fn test_malformed_headers() {
+    let mut codec = RtspServerCodec::new();
+    // Missing colon
+    let request = "OPTIONS * RTSP/1.0\r\nInvalidHeader\r\n\r\n";
+    codec.feed(request.as_bytes());
+
+    let result = codec.decode();
+    assert!(result.is_err());
+    match result {
+        Err(super::server_codec::ParseError::InvalidHeader(line)) => {
+            assert_eq!(line, "InvalidHeader");
+        }
+        _ => panic!("Expected InvalidHeader error"),
+    }
+}
+
+#[test]
+fn test_response_builder_binary_body() {
+    let body = vec![0x00, 0x01, 0x02, 0x03];
+    let response = ResponseBuilder::ok()
+        .binary_body(body.clone(), "application/octet-stream")
+        .encode();
+
+    let response_str = String::from_utf8_lossy(&response);
+    assert!(response_str.contains("Content-Type: application/octet-stream\r\n"));
+    assert!(response_str.contains("Content-Length: 4\r\n"));
+    assert!(response.ends_with(&body));
+}
+
+#[test]
+fn test_response_builder_audio_latency() {
+    let response = ResponseBuilder::ok().audio_latency(44100).encode();
+
+    let response_str = String::from_utf8(response).unwrap();
+    assert!(response_str.contains("Audio-Latency: 44100\r\n"));
+}
+
+#[test]
+fn test_codec_clear() {
+    let mut codec = RtspServerCodec::new();
+    codec.feed(b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n");
+    let _ = codec.decode();
+
+    assert!(codec.buffer_len() == 0);
+
+    codec.feed(b"PARTIAL");
+    assert!(codec.buffer_len() > 0);
+
+    codec.clear();
+    assert_eq!(codec.buffer_len(), 0);
+}
