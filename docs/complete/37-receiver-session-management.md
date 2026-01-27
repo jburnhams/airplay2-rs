@@ -32,7 +32,7 @@ The receiver enforces **single-session semantics**: only one sender can stream a
 
 ### 37.1 Session State Machine
 
-- [ ] **37.1.1** Define session states and transitions
+- [x] **37.1.1** Define session states and transitions
 
 **File:** `src/receiver/session.rs`
 
@@ -339,7 +339,7 @@ fn generate_session_id() -> String {
 
 ### 37.2 Session Manager
 
-- [ ] **37.2.1** Implement session manager for handling multiple connections
+- [x] **37.2.1** Implement session manager for handling multiple connections
 
 **File:** `src/receiver/session_manager.rs`
 
@@ -663,7 +663,7 @@ impl SessionManager {
 
 ### 37.3 Timeout Monitor
 
-- [ ] **37.3.1** Implement background timeout monitoring
+- [x] **37.3.1** Implement background timeout monitoring
 
 **File:** `src/receiver/session_manager.rs` (continued)
 
@@ -714,7 +714,7 @@ impl SessionManager {
 
 ### 37.4 Unit Tests
 
-- [ ] **37.4.1** Session state machine tests
+- [x] **37.4.1** Session state machine tests
 
 ```rust
 #[cfg(test)]
@@ -872,7 +872,7 @@ mod tests {
 
 ### 37.5 Integration Tests
 
-- [ ] **37.5.1** Full session lifecycle test
+- [x] **37.5.1** Full session lifecycle test
 
 **File:** `tests/receiver/session_tests.rs`
 
@@ -989,16 +989,16 @@ async fn test_session_timeout() {
 
 ## Acceptance Criteria
 
-- [ ] Session state machine validates all transitions
-- [ ] Invalid transitions return appropriate errors
-- [ ] Single-session enforcement works with all policies
-- [ ] UDP socket allocation succeeds and returns valid ports
-- [ ] Session events broadcast correctly
-- [ ] Timeout monitoring detects idle sessions
-- [ ] Session preemption works correctly
-- [ ] Volume changes tracked per-session
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] Session state machine validates all transitions
+- [x] Invalid transitions return appropriate errors
+- [x] Single-session enforcement works with all policies
+- [x] UDP socket allocation succeeds and returns valid ports
+- [x] Session events broadcast correctly
+- [x] Timeout monitoring detects idle sessions
+- [x] Session preemption works correctly
+- [x] Volume changes tracked per-session
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
