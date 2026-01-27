@@ -129,6 +129,21 @@ fn test_record_invalid_state() {
 #[test]
 fn test_pause() {
     let session = ReceiverSession::new(test_addr());
+    // Connected state is invalid for PAUSE
+    let request = create_request(Method::Pause);
+    let result = handle_request(&request, &session);
+
+    assert_eq!(result.response.status, StatusCode::METHOD_NOT_VALID);
+}
+
+#[test]
+fn test_pause_valid() {
+    let mut session = ReceiverSession::new(test_addr());
+    // Move to Streaming state
+    session.set_state(SessionState::Announced).unwrap();
+    session.set_state(SessionState::Setup).unwrap();
+    session.set_state(SessionState::Streaming).unwrap();
+
     let request = create_request(Method::Pause);
     let result = handle_request(&request, &session);
 
@@ -139,6 +154,37 @@ fn test_pause() {
 #[test]
 fn test_flush() {
     let session = ReceiverSession::new(test_addr());
+    // Connected state is invalid for FLUSH
+    let request = create_request(Method::Flush);
+    let result = handle_request(&request, &session);
+
+    assert_eq!(result.response.status, StatusCode::METHOD_NOT_VALID);
+}
+
+#[test]
+fn test_flush_valid_streaming() {
+    let mut session = ReceiverSession::new(test_addr());
+    // Move to Streaming state
+    session.set_state(SessionState::Announced).unwrap();
+    session.set_state(SessionState::Setup).unwrap();
+    session.set_state(SessionState::Streaming).unwrap();
+
+    let request = create_request(Method::Flush);
+    let result = handle_request(&request, &session);
+
+    assert_eq!(result.response.status, StatusCode::OK);
+    assert!(result.new_state.is_none());
+}
+
+#[test]
+fn test_flush_valid_paused() {
+    let mut session = ReceiverSession::new(test_addr());
+    // Move to Paused state
+    session.set_state(SessionState::Announced).unwrap();
+    session.set_state(SessionState::Setup).unwrap();
+    session.set_state(SessionState::Streaming).unwrap();
+    session.set_state(SessionState::Paused).unwrap();
+
     let request = create_request(Method::Flush);
     let result = handle_request(&request, &session);
 

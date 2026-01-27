@@ -230,7 +230,7 @@ fn test_codec_clear() {
     codec.feed(b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n");
     let _ = codec.decode();
 
-    assert_eq!(codec.buffer_len(), 0);
+    assert!(codec.buffer_len() == 0);
 
     codec.feed(b"PARTIAL");
     assert!(codec.buffer_len() > 0);
