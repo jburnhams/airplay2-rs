@@ -4,6 +4,7 @@
 
 pub mod rtsp_handler;
 pub mod session;
+pub mod session_manager;
 
 #[cfg(test)]
 mod rtsp_handler_tests;
