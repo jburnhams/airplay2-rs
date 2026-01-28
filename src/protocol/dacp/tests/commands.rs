@@ -40,7 +40,7 @@ fn test_command_path_roundtrip() {
     for cmd in commands {
         let path = cmd.path();
         let parsed = DacpCommand::from_path(path);
-        assert_eq!(parsed, Some(cmd), "Failed to roundtrip {:?}", cmd);
+        assert_eq!(parsed, Some(cmd), "Failed to roundtrip {cmd:?}");
     }
 }
 
@@ -91,8 +91,7 @@ fn test_descriptions() {
     for cmd in commands {
         assert!(
             !cmd.description().is_empty(),
-            "Description for {:?} is empty",
-            cmd
+            "Description for {cmd:?} is empty"
         );
     }
 }
