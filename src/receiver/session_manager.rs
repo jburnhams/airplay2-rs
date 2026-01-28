@@ -264,9 +264,9 @@ impl SessionManager {
 
     /// Get reference to allocated sockets
     #[must_use]
-    pub fn get_sockets(&self) -> Option<Arc<Mutex<Option<AllocatedSockets>>>> {
+    pub fn get_sockets(&self) -> Arc<Mutex<Option<AllocatedSockets>>> {
         // Return clone of Arc for shared access
-        Some(self.sockets.clone())
+        self.sockets.clone()
     }
 
     /// Update session state
