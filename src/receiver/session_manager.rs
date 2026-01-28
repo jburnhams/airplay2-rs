@@ -401,7 +401,7 @@ impl SessionManager {
     #[must_use]
     pub fn start_timeout_monitor(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
         let manager_weak = Arc::downgrade(self);
-        let check_interval = self.config.idle_timeout / 4;
+        let check_interval = (self.config.idle_timeout / 4).max(Duration::from_millis(1));
 
         tokio::spawn(async move {
             let mut ticker = interval(check_interval);
