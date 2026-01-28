@@ -110,12 +110,12 @@ impl AllocatedSockets {
     ///
     /// Returns (`audio_port`, `control_port`, `timing_port`)
     #[must_use]
-    pub fn ports(&self) -> (u16, u16, u16) {
-        (
-            self.audio.local_addr().map_or(0, |a| a.port()),
-            self.control.local_addr().map_or(0, |a| a.port()),
-            self.timing.local_addr().map_or(0, |a| a.port()),
-        )
+    pub fn ports(&self) -> std::io::Result<(u16, u16, u16)> {
+        Ok((
+            self.audio.local_addr()?.port(),
+            self.control.local_addr()?.port(),
+            self.timing.local_addr()?.port(),
+        ))
     }
 }
 
