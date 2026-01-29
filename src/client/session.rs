@@ -53,7 +53,6 @@ pub trait AirPlaySession: Send + Sync {
 
 /// RAOP session implementation
 pub struct RaopSessionImpl {
-    #[allow(dead_code)]
     rtsp_session: crate::protocol::raop::RaopRtspSession,
     streamer: Option<crate::streaming::raop_streamer::RaopStreamer>,
     connected: bool,
@@ -128,7 +127,16 @@ impl AirPlaySession for RaopSessionImpl {
 
     async fn set_volume(&mut self, volume: f32) -> Result<(), AirPlayError> {
         // Convert to dB: 0.0 = -144dB (mute), 1.0 = 0dB
-        // TODO: Implement actual volume set
+        let vol_struct = crate::control::volume::Volume::new(volume);
+        let db = vol_struct.to_db();
+
+        // Create request
+        let request = self.rtsp_session.set_volume_request(db);
+        let _data = request.encode();
+
+        // TODO: Send request via RTSP transport
+        // For now, we just update local state as transport is not yet implemented
+
         self.volume = volume;
         Ok(())
     }
