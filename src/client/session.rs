@@ -113,7 +113,21 @@ impl AirPlaySession for RaopSessionImpl {
 
     async fn pause(&mut self) -> Result<(), AirPlayError> {
         // Send FLUSH
-        // TODO: Implement actual pause
+        let (seq, rtptime) = if let Some(ref streamer) = self.streamer {
+            (streamer.sequence(), streamer.timestamp())
+        } else {
+            (0, 0)
+        };
+
+        let request = self.rtsp_session.flush_request(seq, rtptime);
+
+        // TODO: Send request when transport is implemented
+        tracing::debug!("Generated FLUSH request: {:?}", request);
+
+        if let Some(ref mut streamer) = self.streamer {
+            streamer.flush();
+        }
+
         self.state.is_playing = false;
         Ok(())
     }
