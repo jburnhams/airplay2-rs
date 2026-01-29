@@ -262,11 +262,12 @@ impl PcmStreamer {
 
             if bytes_read == 0 {
                 // Try to fill buffer
-                let mut temp = vec![0u8; bytes_per_packet * 2];
-                let n = source.read(&mut temp).map_err(|e| AirPlayError::IoError {
-                    message: "Read failed".to_string(),
-                    source: Some(Box::new(e)),
-                })?;
+                let n = source
+                    .read(&mut refill_buffer)
+                    .map_err(|e| AirPlayError::IoError {
+                        message: "Read failed".to_string(),
+                        source: Some(Box::new(e)),
+                    })?;
 
                 if n == 0 {
                     // EOF
@@ -275,7 +276,7 @@ impl PcmStreamer {
                     return Ok(());
                 }
 
-                self.buffer.write(&temp[..n]);
+                self.buffer.write(&refill_buffer[..n]);
                 continue;
             }
 
