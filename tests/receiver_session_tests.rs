@@ -32,7 +32,10 @@ async fn test_complete_session_lifecycle() {
                 retry_count += 1;
                 continue;
             }
-            panic!("Failed to start session after {} retries: {:?}", max_retries, e);
+            panic!(
+                "Failed to start session after {} retries: {:?}",
+                max_retries, e
+            );
         }
 
         // Verify start event
@@ -99,7 +102,10 @@ async fn test_complete_session_lifecycle() {
                     retry_count += 1;
                     continue;
                 }
-                panic!("Failed to allocate sockets after {} retries: {:?}", max_retries, e);
+                panic!(
+                    "Failed to allocate sockets after {} retries: {:?}",
+                    max_retries, e
+                );
             }
         }
     }
@@ -125,23 +131,29 @@ async fn test_session_preemption() {
 
         // Start first session
         if let Err(e) = manager.start_session(addr1).await {
-             if retry_count < max_retries {
+            if retry_count < max_retries {
                 eprintln!("Preemption test start failed: {:?}, retrying...", e);
                 retry_count += 1;
                 continue;
             }
-            panic!("Preemption test failed to start after {} retries: {:?}", max_retries, e);
+            panic!(
+                "Preemption test failed to start after {} retries: {:?}",
+                max_retries, e
+            );
         }
         let _ = events.recv().await; // SessionStarted
 
         // Preempt with second session
         if let Err(e) = manager.start_session(addr2).await {
-             if retry_count < max_retries {
+            if retry_count < max_retries {
                 eprintln!("Preemption test 2nd start failed: {:?}, retrying...", e);
                 retry_count += 1;
                 continue;
             }
-            panic!("Preemption test 2nd failed to start after {} retries: {:?}", max_retries, e);
+            panic!(
+                "Preemption test 2nd failed to start after {} retries: {:?}",
+                max_retries, e
+            );
         }
 
         // Should get SessionEnded for first, then SessionStarted for second
@@ -177,12 +189,15 @@ async fn test_session_timeout() {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 1000);
 
         if let Err(e) = manager.start_session(addr).await {
-             if retry_count < max_retries {
+            if retry_count < max_retries {
                 eprintln!("Timeout test start failed: {:?}, retrying...", e);
                 retry_count += 1;
                 continue;
             }
-            panic!("Timeout test failed to start after {} retries: {:?}", max_retries, e);
+            panic!(
+                "Timeout test failed to start after {} retries: {:?}",
+                max_retries, e
+            );
         }
 
         let _ = events.recv().await; // SessionStarted
