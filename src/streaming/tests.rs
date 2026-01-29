@@ -185,9 +185,9 @@ fn test_playback_info_defaults() {
 
 #[tokio::test]
 async fn benchmark_pcm_streaming_performance() {
-    use crate::streaming::source::SliceSource;
-    use crate::streaming::PcmStreamer;
     use crate::audio::AudioFormat;
+    use crate::streaming::PcmStreamer;
+    use crate::streaming::source::SliceSource;
     use std::sync::Arc;
 
     // Pause time to run fast
@@ -209,5 +209,5 @@ async fn benchmark_pcm_streaming_performance() {
     streamer.stream(source).await.unwrap();
     let duration = start.elapsed();
 
-    println!("Processed {} packets in {:?}", num_packets, duration);
+    println!("Processed {num_packets} packets in {duration:?}");
 }
