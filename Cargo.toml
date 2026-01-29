@@ -19,7 +19,7 @@ raop = ["rsa", "sha1"]
 [dependencies]
 # Async
 # Pinned to 1.38.2 to align socket2 dependency (0.5) with mdns-sd
-tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
+tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros", "fs", "io-util"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
 async-trait = "0.1"
 futures = "0.3"

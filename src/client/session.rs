@@ -4,6 +4,11 @@ use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
 use async_trait::async_trait;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpStream, UdpSocket};
+
+use crate::protocol::rtsp::{RtspCodec, RtspRequest, RtspResponse};
+use crate::streaming::raop_streamer::{RaopStreamer, RaopStreamConfig};
 
 /// Common session operations for both `AirPlay` 1 and 2
 #[async_trait]
@@ -53,12 +58,17 @@ pub trait AirPlaySession: Send + Sync {
 
 /// RAOP session implementation
 pub struct RaopSessionImpl {
-    #[allow(dead_code)]
     rtsp_session: crate::protocol::raop::RaopRtspSession,
-    streamer: Option<crate::streaming::raop_streamer::RaopStreamer>,
+    streamer: Option<RaopStreamer>,
     connected: bool,
     volume: f32,
     state: PlaybackState,
+    stream: Option<TcpStream>,
+    codec: RtspCodec,
+    server_addr: String,
+    server_port: u16,
+    control_socket: Option<UdpSocket>,
+    timing_socket: Option<UdpSocket>,
 }
 
 impl RaopSessionImpl {
@@ -71,6 +81,59 @@ impl RaopSessionImpl {
             connected: false,
             volume: 1.0,
             state: PlaybackState::default(),
+            stream: None,
+            codec: RtspCodec::new(),
+            server_addr: server_addr.to_string(),
+            server_port,
+            control_socket: None,
+            timing_socket: None,
+        }
+    }
+
+    /// Send RTSP request and return response
+    async fn send_request(&mut self, request: RtspRequest) -> Result<RtspResponse, AirPlayError> {
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| AirPlayError::Disconnected {
+                device_name: self.server_addr.clone(),
+            })?;
+
+        let encoded = request.encode();
+        stream
+            .write_all(&encoded)
+            .await
+            .map_err(AirPlayError::NetworkError)?;
+
+        let mut buffer = [0u8; 4096];
+
+        loop {
+            // Check if we already have a complete response buffered
+            if let Some(response) =
+                self.codec
+                    .decode()
+                    .map_err(|e| AirPlayError::CodecError {
+                        message: e.to_string(),
+                    })?
+            {
+                return Ok(response);
+            }
+
+            let n = stream
+                .read(&mut buffer)
+                .await
+                .map_err(AirPlayError::NetworkError)?;
+            if n == 0 {
+                return Err(AirPlayError::Disconnected {
+                    device_name: self.server_addr.clone(),
+                });
+            }
+
+            self.codec
+                .feed(&buffer[..n])
+                .map_err(|e| AirPlayError::CodecError {
+                    message: e.to_string(),
+                })?;
         }
     }
 }
@@ -78,25 +141,110 @@ impl RaopSessionImpl {
 #[async_trait]
 impl AirPlaySession for RaopSessionImpl {
     async fn connect(&mut self) -> Result<(), AirPlayError> {
-        // 1. Send OPTIONS with Apple-Challenge
-        // 2. Send ANNOUNCE with SDP
-        // 3. Send SETUP to configure transport
-        // 4. Initialize audio streamer
+        // Connect to TCP
+        let addr = format!("{}:{}", self.server_addr, self.server_port);
+        let stream = TcpStream::connect(&addr).await.map_err(|e| {
+            AirPlayError::ConnectionFailed {
+                device_name: self.server_addr.clone(),
+                message: e.to_string(),
+                source: Some(Box::new(e)),
+            }
+        })?;
+        self.stream = Some(stream);
 
-        // This is a placeholder for the actual connection logic which would be complex
-        // and involve multiple RTSP round trips.
-        // For now, we simulate connection.
+        // 1. OPTIONS
+        let req = self.rtsp_session.options_request();
+        let resp = self.send_request(req).await?;
+        self.rtsp_session
+            .process_response(crate::protocol::rtsp::Method::Options, &resp)
+            .map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(resp.status.as_u16()),
+            })?;
 
-        // TODO: Implement actual connection logic using self.rtsp_session
+        // 2. ANNOUNCE
+        let sdp = self
+            .rtsp_session
+            .prepare_announce()
+            .map_err(|e| AirPlayError::InternalError { message: e })?;
+        let req = self.rtsp_session.announce_request(&sdp);
+        let resp = self.send_request(req).await?;
+        self.rtsp_session
+            .process_response(crate::protocol::rtsp::Method::Announce, &resp)
+            .map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(resp.status.as_u16()),
+            })?;
+
+        // 3. SETUP
+        // Bind UDP ports
+        let control_socket = UdpSocket::bind("0.0.0.0:0").await?;
+        let timing_socket = UdpSocket::bind("0.0.0.0:0").await?;
+
+        let control_port = control_socket.local_addr()?.port();
+        let timing_port = timing_socket.local_addr()?.port();
+
+        self.control_socket = Some(control_socket);
+        self.timing_socket = Some(timing_socket);
+
+        let req = self
+            .rtsp_session
+            .setup_request(control_port, timing_port);
+        let resp = self.send_request(req).await?;
+        self.rtsp_session
+            .process_response(crate::protocol::rtsp::Method::Setup, &resp)
+            .map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(resp.status.as_u16()),
+            })?;
+
+        // 4. Initialize streamer
+        let keys = self
+            .rtsp_session
+            .session_keys()
+            .ok_or_else(|| AirPlayError::InternalError {
+                message: "Session keys not initialized".to_string(),
+            })?
+            .clone();
+
+        let _transport = self
+            .rtsp_session
+            .transport()
+            .ok_or_else(|| AirPlayError::InternalError {
+                message: "Transport not initialized".to_string(),
+            })?;
+
+        let config = RaopStreamConfig::default();
+        self.streamer = Some(RaopStreamer::new(keys, config));
+
+        // 5. RECORD
+        let req = self.rtsp_session.record_request(0, 0); // start at 0
+        let resp = self.send_request(req).await?;
+        self.rtsp_session
+            .process_response(crate::protocol::rtsp::Method::Record, &resp)
+            .map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(resp.status.as_u16()),
+            })?;
+
         self.connected = true;
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), AirPlayError> {
-        // Send TEARDOWN
-        // TODO: Implement actual teardown
-        self.connected = false;
-        self.state = PlaybackState::default();
+        if self.connected {
+            let req = self.rtsp_session.teardown_request();
+            // Best effort
+            let _ = self.send_request(req).await;
+
+            // Close stream and sockets
+            self.stream = None;
+            self.codec.reset();
+            self.control_socket = None;
+            self.timing_socket = None;
+            self.connected = false;
+            self.state = PlaybackState::default();
+        }
         Ok(())
     }
 

@@ -1,6 +1,18 @@
 use crate::client::{ClientConfig, PreferredProtocol, SelectedProtocol, UnifiedAirPlayClient};
+use crate::testing::mock_raop_server::{MockRaopConfig, MockRaopServer};
 use crate::types::{AirPlayDevice, DeviceCapabilities};
 use std::net::{IpAddr, Ipv4Addr};
+
+async fn setup_mock_server() -> MockRaopServer {
+    let config = MockRaopConfig {
+        rtsp_port: 0,
+        audio_port: 0,
+        ..Default::default()
+    };
+    let mut server = MockRaopServer::new(config);
+    server.start().await.expect("failed to start mock server");
+    server
+}
 
 fn create_device(airplay2: bool, raop: bool) -> AirPlayDevice {
     let mut device = AirPlayDevice {
@@ -34,7 +46,10 @@ async fn test_unified_client_defaults() {
 
 #[tokio::test]
 async fn test_unified_client_connect_raop() {
-    let device = create_device(false, true);
+    let server = setup_mock_server().await;
+    let mut device = create_device(false, true);
+    device.raop_port = Some(server.config.rtsp_port);
+
     let mut client = UnifiedAirPlayClient::new();
 
     client.connect(device).await.unwrap();
@@ -78,7 +93,10 @@ async fn test_unified_client_connect_airplay2() {
 
 #[tokio::test]
 async fn test_unified_client_force_protocol() {
-    let device = create_device(true, true);
+    let server = setup_mock_server().await;
+    let mut device = create_device(true, true);
+    device.raop_port = Some(server.config.rtsp_port);
+
     let config = ClientConfig {
         preferred_protocol: PreferredProtocol::ForceRaop,
         ..Default::default()
