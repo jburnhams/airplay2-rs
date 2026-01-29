@@ -1,5 +1,6 @@
 //! Storage for pairing keys
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -17,26 +18,27 @@ pub struct PairingKeys {
 }
 
 /// Abstract storage interface for pairing keys
+#[async_trait]
 pub trait PairingStorage: Send + Sync {
     /// Load keys for a device
-    fn load(&self, device_id: &str) -> Option<PairingKeys>;
+    async fn load(&self, device_id: &str) -> Option<PairingKeys>;
 
     /// Save keys for a device
     ///
     /// # Errors
     ///
     /// Returns error if storage fails
-    fn save(&mut self, device_id: &str, keys: &PairingKeys) -> Result<(), StorageError>;
+    async fn save(&mut self, device_id: &str, keys: &PairingKeys) -> Result<(), StorageError>;
 
     /// Remove keys for a device
     ///
     /// # Errors
     ///
     /// Returns error if removal fails
-    fn remove(&mut self, device_id: &str) -> Result<(), StorageError>;
+    async fn remove(&mut self, device_id: &str) -> Result<(), StorageError>;
 
     /// List all stored device IDs
-    fn list_devices(&self) -> Vec<String>;
+    async fn list_devices(&self) -> Vec<String>;
 }
 
 /// Storage errors
@@ -66,22 +68,23 @@ impl MemoryStorage {
     }
 }
 
+#[async_trait]
 impl PairingStorage for MemoryStorage {
-    fn load(&self, device_id: &str) -> Option<PairingKeys> {
+    async fn load(&self, device_id: &str) -> Option<PairingKeys> {
         self.keys.get(device_id).cloned()
     }
 
-    fn save(&mut self, device_id: &str, keys: &PairingKeys) -> Result<(), StorageError> {
+    async fn save(&mut self, device_id: &str, keys: &PairingKeys) -> Result<(), StorageError> {
         self.keys.insert(device_id.to_string(), keys.clone());
         Ok(())
     }
 
-    fn remove(&mut self, device_id: &str) -> Result<(), StorageError> {
+    async fn remove(&mut self, device_id: &str) -> Result<(), StorageError> {
         self.keys.remove(device_id);
         Ok(())
     }
 
-    fn list_devices(&self) -> Vec<String> {
+    async fn list_devices(&self) -> Vec<String> {
         self.keys.keys().cloned().collect()
     }
 }
@@ -98,58 +101,72 @@ impl FileStorage {
     ///
     /// # Errors
     ///
-    /// Returns error if directory cannot be created
-    pub fn new(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+    /// Returns error if directory cannot be created or file loaded
+    pub async fn new(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
 
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            tokio::fs::create_dir_all(parent).await?;
         }
 
         // Load existing keys
-        let cache = Self::load_all(&path)?;
+        let cache = Self::load_all(&path).await?;
 
         Ok(Self { path, cache })
     }
 
-    fn load_all(path: &std::path::Path) -> Result<HashMap<String, PairingKeys>, StorageError> {
-        if !path.exists() {
+    async fn load_all(
+        path: &std::path::Path,
+    ) -> Result<HashMap<String, PairingKeys>, StorageError> {
+        if !tokio::fs::try_exists(path).await? {
             return Ok(HashMap::new());
         }
 
-        let file = std::fs::File::open(path)?;
-        let reader = std::io::BufReader::new(file);
-        let cache = serde_json::from_reader(reader)
+        let bytes = tokio::fs::read(path).await?;
+        if bytes.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let cache = tokio::task::spawn_blocking(move || serde_json::from_slice(&bytes))
+            .await
+            .map_err(|e| StorageError::Serialization(format!("Deserialization task failed: {e}")))?
             .map_err(|e| StorageError::Serialization(e.to_string()))?;
+
         Ok(cache)
     }
 
-    fn save_all(&self) -> Result<(), StorageError> {
-        let file = std::fs::File::create(&self.path)?;
-        let writer = std::io::BufWriter::new(file);
-        serde_json::to_writer_pretty(writer, &self.cache)
+    async fn save_all(&self) -> Result<(), StorageError> {
+        let path = self.path.clone();
+        let cache = self.cache.clone();
+
+        let bytes = tokio::task::spawn_blocking(move || serde_json::to_vec_pretty(&cache))
+            .await
+            .map_err(|e| StorageError::Serialization(format!("Serialization task failed: {e}")))?
             .map_err(|e| StorageError::Serialization(e.to_string()))?;
+
+        tokio::fs::write(path, bytes).await?;
         Ok(())
     }
 }
 
+#[async_trait]
 impl PairingStorage for FileStorage {
-    fn load(&self, device_id: &str) -> Option<PairingKeys> {
+    async fn load(&self, device_id: &str) -> Option<PairingKeys> {
         self.cache.get(device_id).cloned()
     }
 
-    fn save(&mut self, device_id: &str, keys: &PairingKeys) -> Result<(), StorageError> {
+    async fn save(&mut self, device_id: &str, keys: &PairingKeys) -> Result<(), StorageError> {
         self.cache.insert(device_id.to_string(), keys.clone());
-        self.save_all()
+        self.save_all().await
     }
 
-    fn remove(&mut self, device_id: &str) -> Result<(), StorageError> {
+    async fn remove(&mut self, device_id: &str) -> Result<(), StorageError> {
         self.cache.remove(device_id);
-        self.save_all()
+        self.save_all().await
     }
 
-    fn list_devices(&self) -> Vec<String> {
+    async fn list_devices(&self) -> Vec<String> {
         self.cache.keys().cloned().collect()
     }
 }
