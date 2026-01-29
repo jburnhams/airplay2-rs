@@ -56,6 +56,13 @@ fn test_parse_alac_parameters_no_payload_type() {
 }
 
 #[test]
+fn test_parse_alac_parameters_invalid_values() {
+    let fmtp = "96 352 0 16 40 10 14 2 255 0 0 invalid";
+    let result = AlacParameters::parse(fmtp);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_parse_encryption_params() {
     let sdp = SdpParser::parse(SAMPLE_SDP).unwrap();
     let audio = sdp.audio_media().unwrap();

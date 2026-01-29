@@ -55,51 +55,29 @@ impl AlacParameters {
             }
         };
 
+        fn parse_part<T: std::str::FromStr>(parts: &[&str], index: usize, name: &str) -> Result<T, SdpParseError> {
+            let val_str = parts.get(index).ok_or_else(|| {
+                SdpParseError::InvalidAttribute(format!("Missing field '{name}' at index {index}"))
+            })?;
+            val_str.parse().map_err(|_| {
+                SdpParseError::InvalidAttribute(format!(
+                    "Invalid value for '{name}': {val_str}"
+                ))
+            })
+        }
+
         Ok(AlacParameters {
-            frames_per_packet: parts
-                .get(offset)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(352),
-            compatible_version: parts
-                .get(offset + 1)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0),
-            bit_depth: parts
-                .get(offset + 2)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(16),
-            pb: parts
-                .get(offset + 3)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(40),
-            mb: parts
-                .get(offset + 4)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(10),
-            kb: parts
-                .get(offset + 5)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(14),
-            channels: parts
-                .get(offset + 6)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(2),
-            max_run: parts
-                .get(offset + 7)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(255),
-            max_frame_bytes: parts
-                .get(offset + 8)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0),
-            avg_bit_rate: parts
-                .get(offset + 9)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0),
-            sample_rate: parts
-                .get(offset + 10)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(44100),
+            frames_per_packet: parse_part(&parts, offset, "frames_per_packet")?,
+            compatible_version: parse_part(&parts, offset + 1, "compatible_version")?,
+            bit_depth: parse_part(&parts, offset + 2, "bit_depth")?,
+            pb: parse_part(&parts, offset + 3, "pb")?,
+            mb: parse_part(&parts, offset + 4, "mb")?,
+            kb: parse_part(&parts, offset + 5, "kb")?,
+            channels: parse_part(&parts, offset + 6, "channels")?,
+            max_run: parse_part(&parts, offset + 7, "max_run")?,
+            max_frame_bytes: parse_part(&parts, offset + 8, "max_frame_bytes")?,
+            avg_bit_rate: parse_part(&parts, offset + 9, "avg_bit_rate")?,
+            sample_rate: parse_part(&parts, offset + 10, "sample_rate")?,
         })
     }
 }
@@ -272,13 +250,16 @@ fn decrypt_aes_key(encrypted: &[u8], rsa_private_key: &[u8]) -> Result<[u8; 16],
         use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 
         // Parse RSA private key
-        let private_key = RsaPrivateKey::from_pkcs8_der(rsa_private_key)
-            .map_err(|e| SdpParseError::InvalidAttribute(format!("Invalid RSA key: {e}")))?;
+        let private_key = RsaPrivateKey::from_pkcs8_der(rsa_private_key).map_err(|e| {
+            SdpParseError::InvalidAttribute(format!("Invalid RSA key: {e}"))
+        })?;
 
         // Decrypt using PKCS#1 v1.5
         let decrypted = private_key
             .decrypt(Pkcs1v15Encrypt, encrypted)
-            .map_err(|e| SdpParseError::InvalidAttribute(format!("RSA decrypt failed: {e}")))?;
+            .map_err(|e| {
+                SdpParseError::InvalidAttribute(format!("RSA decrypt failed: {e}"))
+            })?;
 
         if decrypted.len() != 16 {
             return Err(SdpParseError::InvalidAttribute(format!(
