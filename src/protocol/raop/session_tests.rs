@@ -110,8 +110,8 @@ fn test_full_state_machine() {
     assert_eq!(session.state(), RaopSessionState::OptionsExchange);
 
     // 2. ANNOUNCE
-    let _ = session.prepare_announce(); // Need to call this to init keys if needed, but for tests maybe not strictly required if we don't check keys
-    session.announce_request("sdp_content");
+    let sdp = session.prepare_announce().unwrap();
+    session.announce_request(&sdp);
     let headers = Headers::new();
     session
         .process_response(Method::Announce, &ok_response(headers))
