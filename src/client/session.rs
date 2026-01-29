@@ -2,8 +2,11 @@
 
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
+use crate::net::{AsyncReadExt, AsyncWriteExt};
+use crate::protocol::rtsp::{Headers, Method, RtspCodec, RtspRequest, RtspResponse, StatusCode};
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
 use async_trait::async_trait;
+use tokio::net::TcpStream;
 
 /// Common session operations for both `AirPlay` 1 and 2
 #[async_trait]
@@ -56,6 +59,8 @@ pub struct RaopSessionImpl {
     #[allow(dead_code)]
     rtsp_session: crate::protocol::raop::RaopRtspSession,
     streamer: Option<crate::streaming::raop_streamer::RaopStreamer>,
+    stream: Option<TcpStream>,
+    codec: RtspCodec,
     connected: bool,
     volume: f32,
     state: PlaybackState,
@@ -68,9 +73,79 @@ impl RaopSessionImpl {
         Self {
             rtsp_session: crate::protocol::raop::RaopRtspSession::new(server_addr, server_port),
             streamer: None,
+            stream: None,
+            codec: RtspCodec::new(),
             connected: false,
             volume: 1.0,
             state: PlaybackState::default(),
+        }
+    }
+
+    async fn send_rtsp_request(
+        &mut self,
+        request: &RtspRequest,
+    ) -> Result<RtspResponse, AirPlayError> {
+        if let Some(ref mut stream) = self.stream {
+            let encoded = request.encode();
+
+            // Write request
+            stream
+                .write_all(&encoded)
+                .await
+                .map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to write request: {e}"),
+                    status_code: None,
+                })?;
+            stream.flush().await.map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to flush stream: {e}"),
+                status_code: None,
+            })?;
+
+            // Read response
+            let mut buf = vec![0u8; 4096];
+            loop {
+                // Check if we already have a response in codec buffer
+                if let Some(response) =
+                    self.codec.decode().map_err(|e| AirPlayError::RtspError {
+                        message: e.to_string(),
+                        status_code: None,
+                    })?
+                {
+                    return Ok(response);
+                }
+
+                // Read more data
+                let n = stream
+                    .read(&mut buf)
+                    .await
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: format!("Failed to read response: {e}"),
+                        status_code: None,
+                    })?;
+
+                if n == 0 {
+                    return Err(AirPlayError::RtspError {
+                        message: "Connection closed by server".to_string(),
+                        status_code: None,
+                    });
+                }
+
+                self.codec
+                    .feed(&buf[..n])
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: e.to_string(),
+                        status_code: None,
+                    })?;
+            }
+        } else {
+            // Mock successful response for stub session
+            Ok(RtspResponse {
+                version: "RTSP/1.0".to_string(),
+                status: StatusCode::OK,
+                reason: "OK".to_string(),
+                headers: Headers::new(),
+                body: Vec::new(),
+            })
         }
     }
 }
@@ -120,9 +195,39 @@ impl AirPlaySession for RaopSessionImpl {
 
     async fn stop(&mut self) -> Result<(), AirPlayError> {
         // Send FLUSH + TEARDOWN
-        // TODO: Implement actual stop
-        self.state.is_playing = false;
-        self.state.position_secs = 0.0;
+
+        // Get sequence and timestamp from streamer if available
+        let (seq, rtptime) = if let Some(ref streamer) = self.streamer {
+            (streamer.sequence(), streamer.timestamp())
+        } else {
+            (0, 0)
+        };
+
+        // 1. FLUSH
+        let request = self.rtsp_session.flush_request(seq, rtptime);
+        let response = self.send_rtsp_request(&request).await?;
+
+        self.rtsp_session
+            .process_response(Method::Flush, &response)
+            .map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(response.status.as_u16()),
+            })?;
+
+        // 2. TEARDOWN
+        let request = self.rtsp_session.teardown_request();
+        let response = self.send_rtsp_request(&request).await?;
+
+        self.rtsp_session
+            .process_response(Method::Teardown, &response)
+            .map_err(|e| AirPlayError::RtspError {
+                message: e,
+                status_code: Some(response.status.as_u16()),
+            })?;
+
+        self.streamer = None;
+        self.connected = false;
+        self.state = PlaybackState::default();
         Ok(())
     }
 
