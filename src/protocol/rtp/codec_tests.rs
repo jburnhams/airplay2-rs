@@ -6,11 +6,12 @@ fn test_codec_sequence_increment() {
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
     let audio = vec![0u8; frame_size];
+    let mut packet = Vec::new();
 
-    let _ = codec.encode_audio(&audio).unwrap();
+    codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.sequence(), 1);
 
-    let _ = codec.encode_audio(&audio).unwrap();
+    codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.sequence(), 2);
 }
 
@@ -20,11 +21,12 @@ fn test_codec_timestamp_increment() {
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
     let audio = vec![0u8; frame_size];
+    let mut packet = Vec::new();
 
-    let _ = codec.encode_audio(&audio).unwrap();
+    codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.timestamp(), 352);
 
-    let _ = codec.encode_audio(&audio).unwrap();
+    codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.timestamp(), 704);
 }
 
@@ -32,8 +34,9 @@ fn test_codec_timestamp_increment() {
 fn test_codec_invalid_audio_size() {
     let mut codec = RtpCodec::new(0);
     let audio = vec![0u8; 100]; // Wrong size
+    let mut packet = Vec::new();
 
-    let result = codec.encode_audio(&audio);
+    let result = codec.encode_audio(&audio, &mut packet);
     assert!(matches!(result, Err(RtpCodecError::InvalidAudioSize(100))));
 }
 
@@ -59,8 +62,9 @@ fn test_codec_with_encryption() {
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
     let audio = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
 
-    let packet = codec.encode_audio(&audio).unwrap();
+    codec.encode_audio(&audio, &mut packet).unwrap();
 
     // Encrypted payload should differ from original
     let decoded = RtpPacket::decode(&packet).unwrap();
@@ -80,8 +84,9 @@ fn test_codec_encrypt_decrypt_roundtrip() {
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
     let original = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
 
-    let packet = encoder.encode_audio(&original).unwrap();
+    encoder.encode_audio(&original, &mut packet).unwrap();
 
     // Create decoder with same keys
     let mut decoder = RtpCodec::new(0);

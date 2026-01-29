@@ -125,27 +125,35 @@ impl RtpCodec {
     ///
     /// Audio should be 16-bit signed little-endian stereo PCM.
     /// Expects exactly FRAMES_PER_PACKET * 4 bytes (352 frames * 4 bytes/frame).
-    pub fn encode_audio(&mut self, pcm_data: &[u8]) -> Result<Vec<u8>, RtpCodecError> {
+    pub fn encode_audio(
+        &mut self,
+        pcm_data: &[u8],
+        output: &mut Vec<u8>,
+    ) -> Result<(), RtpCodecError> {
         let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
         if pcm_data.len() != expected_size {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
         }
 
-        self.encode_arbitrary_payload(pcm_data)
+        self.encode_arbitrary_payload(pcm_data, output)
     }
 
     /// Encode arbitrary audio payload (e.g. ALAC) to RTP packet
-    pub fn encode_arbitrary_payload(&mut self, data: &[u8]) -> Result<Vec<u8>, RtpCodecError> {
+    pub fn encode_arbitrary_payload(
+        &mut self,
+        data: &[u8],
+        output: &mut Vec<u8>,
+    ) -> Result<(), RtpCodecError> {
         // Create packet header
         let header =
             RtpHeader::new_audio(self.sequence, self.timestamp, self.ssrc, self.buffered_mode);
         let header_bytes = header.encode();
 
-        let result = match self.encryption_mode {
+        match self.encryption_mode {
             RtpEncryptionMode::None => {
                 // No encryption - just header + payload
                 let packet = RtpPacket::new(header, data.to_vec());
-                packet.encode()
+                output.extend_from_slice(&packet.encode());
             }
             RtpEncryptionMode::Aes128Ctr => {
                 // Legacy AES-128-CTR encryption
@@ -163,7 +171,7 @@ impl RtpCodec {
                     cipher.apply_keystream(&mut payload);
                 }
                 let packet = RtpPacket::new(header, payload);
-                packet.encode()
+                output.extend_from_slice(&packet.encode());
             }
             RtpEncryptionMode::ChaCha20Poly1305 => {
                 // ChaCha20-Poly1305 encryption (AirPlay 2)
@@ -199,14 +207,13 @@ impl RtpCodec {
                 let (ciphertext, tag) = encrypted.split_at(encrypted.len() - Self::TAG_SIZE);
 
                 // Build final packet: [header][ciphertext][tag][nonce (8 bytes)]
-                let mut result = Vec::with_capacity(
+                output.reserve(
                     RtpHeader::SIZE + ciphertext.len() + Self::TAG_SIZE + Self::NONCE_SIZE,
                 );
-                result.extend_from_slice(&header_bytes);
-                result.extend_from_slice(ciphertext);
-                result.extend_from_slice(tag);
-                result.extend_from_slice(&nonce_bytes);
-                result
+                output.extend_from_slice(&header_bytes);
+                output.extend_from_slice(ciphertext);
+                output.extend_from_slice(tag);
+                output.extend_from_slice(&nonce_bytes);
             }
         };
 
@@ -219,7 +226,7 @@ impl RtpCodec {
         self.sequence = self.sequence.wrapping_add(1);
         self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);
 
-        Ok(result)
+        Ok(())
     }
 
     /// Encode multiple frames of audio
@@ -230,13 +237,16 @@ impl RtpCodec {
         let mut packets = Vec::new();
 
         for chunk in pcm_data.chunks(frame_size) {
+            let mut packet = Vec::new();
             if chunk.len() == frame_size {
-                packets.push(self.encode_audio(chunk)?);
+                self.encode_audio(chunk, &mut packet)?;
+                packets.push(packet);
             } else if !chunk.is_empty() {
                 // Pad last chunk with silence
                 let mut padded = chunk.to_vec();
                 padded.resize(frame_size, 0);
-                packets.push(self.encode_audio(&padded)?);
+                self.encode_audio(&padded, &mut packet)?;
+                packets.push(packet);
             }
         }
 

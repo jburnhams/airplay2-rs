@@ -1,5 +1,6 @@
 use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
+use airplay2::protocol::rtp::RtpCodec;
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
 
@@ -74,10 +75,26 @@ fn rtsp_encoding_benchmark(c: &mut Criterion) {
     });
 }
 
+fn rtp_encoding_benchmark(c: &mut Criterion) {
+    let mut codec = RtpCodec::new(1234);
+    let key = [0u8; 32];
+    codec.set_chacha_encryption(key);
+    let payload = vec![0u8; 352 * 4];
+    let mut output = Vec::with_capacity(2048);
+
+    c.bench_function("rtp_encode_chacha", |b| {
+        b.iter(|| {
+            output.clear();
+            let _ = codec.encode_arbitrary_payload(black_box(&payload), &mut output);
+        })
+    });
+}
+
 criterion_group!(
     benches,
     plist_benchmark,
     crypto_benchmark,
-    rtsp_encoding_benchmark
+    rtsp_encoding_benchmark,
+    rtp_encoding_benchmark
 );
 criterion_main!(benches);

@@ -666,7 +666,11 @@ impl RtpCodec {
     ///
     /// Audio should be 16-bit signed little-endian stereo PCM.
     /// Expects exactly FRAMES_PER_PACKET * 4 bytes (352 frames * 4 bytes/frame).
-    pub fn encode_audio(&mut self, pcm_data: &[u8]) -> Result<Vec<u8>, RtpCodecError> {
+    pub fn encode_audio(
+        &mut self,
+        pcm_data: &[u8],
+        output: &mut Vec<u8>,
+    ) -> Result<(), RtpCodecError> {
         let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
         if pcm_data.len() != expected_size {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
@@ -699,7 +703,8 @@ impl RtpCodec {
 
         // Build final packet
         let packet = RtpPacket::new(header, payload);
-        Ok(packet.encode())
+        output.extend_from_slice(&packet.encode());
+        Ok(())
     }
 
     /// Encode multiple frames of audio
@@ -713,13 +718,16 @@ impl RtpCodec {
         let mut packets = Vec::new();
 
         for chunk in pcm_data.chunks(frame_size) {
+            let mut packet = Vec::new();
             if chunk.len() == frame_size {
-                packets.push(self.encode_audio(chunk)?);
+                self.encode_audio(chunk, &mut packet)?;
+                packets.push(packet);
             } else if !chunk.is_empty() {
                 // Pad last chunk with silence
                 let mut padded = chunk.to_vec();
                 padded.resize(frame_size, 0);
-                packets.push(self.encode_audio(&padded)?);
+                self.encode_audio(&padded, &mut packet)?;
+                packets.push(packet);
             }
         }
 
@@ -926,11 +934,12 @@ mod tests {
 
         let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
         let audio = vec![0u8; frame_size];
+        let mut packet = Vec::new();
 
-        let _ = codec.encode_audio(&audio).unwrap();
+        codec.encode_audio(&audio, &mut packet).unwrap();
         assert_eq!(codec.sequence(), 1);
 
-        let _ = codec.encode_audio(&audio).unwrap();
+        codec.encode_audio(&audio, &mut packet).unwrap();
         assert_eq!(codec.sequence(), 2);
     }
 
@@ -940,11 +949,12 @@ mod tests {
 
         let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
         let audio = vec![0u8; frame_size];
+        let mut packet = Vec::new();
 
-        let _ = codec.encode_audio(&audio).unwrap();
+        codec.encode_audio(&audio, &mut packet).unwrap();
         assert_eq!(codec.timestamp(), 352);
 
-        let _ = codec.encode_audio(&audio).unwrap();
+        codec.encode_audio(&audio, &mut packet).unwrap();
         assert_eq!(codec.timestamp(), 704);
     }
 
@@ -952,8 +962,9 @@ mod tests {
     fn test_codec_invalid_audio_size() {
         let mut codec = RtpCodec::new(0);
         let audio = vec![0u8; 100]; // Wrong size
+        let mut packet = Vec::new();
 
-        let result = codec.encode_audio(&audio);
+        let result = codec.encode_audio(&audio, &mut packet);
         assert!(matches!(result, Err(RtpCodecError::InvalidAudioSize(100))));
     }
 
@@ -979,8 +990,9 @@ mod tests {
 
         let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
         let audio = vec![0xAA; frame_size];
+        let mut packet = Vec::new();
 
-        let packet = codec.encode_audio(&audio).unwrap();
+        codec.encode_audio(&audio, &mut packet).unwrap();
 
         // Encrypted payload should differ from original
         let decoded = RtpPacket::decode(&packet).unwrap();
@@ -1000,8 +1012,9 @@ mod tests {
 
         let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
         let original = vec![0xAA; frame_size];
+        let mut packet = Vec::new();
 
-        let packet = encoder.encode_audio(&original).unwrap();
+        encoder.encode_audio(&original, &mut packet).unwrap();
 
         // Create decoder with same keys
         let mut decoder = RtpCodec::new(0);

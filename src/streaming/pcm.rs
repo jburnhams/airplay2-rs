@@ -214,6 +214,9 @@ impl PcmStreamer {
         let mut refill_buffer = vec![0u8; bytes_per_packet * 4];
         let mut packets_sent = 0u64;
 
+        // Reusable buffer for RTP packet to avoid allocations
+        let mut rtp_packet_buffer = Vec::with_capacity(bytes_per_packet + 64);
+
         loop {
             // Wait for next tick
             interval.tick().await;
@@ -310,17 +313,18 @@ impl PcmStreamer {
             };
 
             // Encrypt and wrap in RTP
-            let rtp_packet = {
+            rtp_packet_buffer.clear();
+            {
                 let mut codec = self.rtp_codec.lock().await;
                 codec
-                    .encode_arbitrary_payload(&encoded_payload)
+                    .encode_arbitrary_payload(&encoded_payload, &mut rtp_packet_buffer)
                     .map_err(|e| AirPlayError::RtpError {
                         message: e.to_string(),
-                    })?
-            };
+                    })?;
+            }
 
             // Send packet
-            self.send_packet(&rtp_packet).await?;
+            self.send_packet(&rtp_packet_buffer).await?;
             packets_sent += 1;
             if packets_sent % 100 == 0 {
                 tracing::debug!("Sent {} RTP packets", packets_sent);
