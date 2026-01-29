@@ -40,6 +40,19 @@ impl AlacParameters {
     /// # Errors
     /// Returns `SdpParseError` if the fmtp string is invalid.
     pub fn parse(fmtp: &str) -> Result<Self, SdpParseError> {
+        fn parse_part<T: std::str::FromStr>(
+            parts: &[&str],
+            index: usize,
+            name: &str,
+        ) -> Result<T, SdpParseError> {
+            let val_str = parts.get(index).ok_or_else(|| {
+                SdpParseError::InvalidAttribute(format!("Missing field '{name}' at index {index}"))
+            })?;
+            val_str.parse().map_err(|_| {
+                SdpParseError::InvalidAttribute(format!("Invalid value for '{name}': {val_str}"))
+            })
+        }
+
         let parts: Vec<&str> = fmtp.split_whitespace().collect();
 
         // Determine offset based on whether payload type is present
@@ -54,17 +67,6 @@ impl AlacParameters {
                 )));
             }
         };
-
-        fn parse_part<T: std::str::FromStr>(parts: &[&str], index: usize, name: &str) -> Result<T, SdpParseError> {
-            let val_str = parts.get(index).ok_or_else(|| {
-                SdpParseError::InvalidAttribute(format!("Missing field '{name}' at index {index}"))
-            })?;
-            val_str.parse().map_err(|_| {
-                SdpParseError::InvalidAttribute(format!(
-                    "Invalid value for '{name}': {val_str}"
-                ))
-            })
-        }
 
         Ok(AlacParameters {
             frames_per_packet: parse_part(&parts, offset, "frames_per_packet")?,
