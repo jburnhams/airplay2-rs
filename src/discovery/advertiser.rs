@@ -559,10 +559,13 @@ impl AsyncRaopAdvertiser {
     pub async fn start(config: AdvertiserConfig) -> Result<Self, AdvertiserError> {
         let (command_tx, mut command_rx) = mpsc::channel(16);
 
-        let mac_override = config.mac_override;
-        let mac = tokio::task::spawn_blocking(move || mac_override.map_or_else(get_device_mac, Ok))
-            .await
-            .map_err(|e| AdvertiserError::MacRetrievalFailed(e.to_string()))??;
+        let mac = if let Some(mac) = config.mac_override {
+            Ok(mac)
+        } else {
+            tokio::task::spawn_blocking(get_device_mac)
+                .await
+                .map_err(|e| AdvertiserError::MacRetrievalFailed(e.to_string()))?
+        }?;
 
         let service_name = format!("{}@{}", format_mac_for_service(&mac), config.name);
         let status = Arc::new(RwLock::new(ReceiverStatusFlags::default()));
