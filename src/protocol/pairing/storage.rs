@@ -101,37 +101,54 @@ impl FileStorage {
     ///
     /// # Errors
     ///
-    /// Returns error if directory cannot be created
-    pub fn new(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+    /// Returns error if directory cannot be created or file loaded
+    pub async fn new(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
 
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            tokio::fs::create_dir_all(parent).await?;
         }
 
         // Load existing keys
-        let cache = Self::load_all(&path)?;
+        let cache = Self::load_all(&path).await?;
 
         Ok(Self { path, cache })
     }
 
-    fn load_all(path: &std::path::Path) -> Result<HashMap<String, PairingKeys>, StorageError> {
-        if !path.exists() {
+    async fn load_all(
+        path: &std::path::Path,
+    ) -> Result<HashMap<String, PairingKeys>, StorageError> {
+        if !tokio::fs::try_exists(path).await? {
             return Ok(HashMap::new());
         }
 
-        let file = std::fs::File::open(path)?;
-        let reader = std::io::BufReader::new(file);
-        let cache = serde_json::from_reader(reader)
-            .map_err(|e| StorageError::Serialization(e.to_string()))?;
+        let bytes = tokio::fs::read(path).await?;
+        if bytes.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let cache = tokio::task::spawn_blocking(move || {
+            serde_json::from_slice(&bytes)
+        })
+        .await
+        .map_err(|e| StorageError::Serialization(format!("Deserialization task failed: {e}")))?
+        .map_err(|e| StorageError::Serialization(e.to_string()))?;
+
         Ok(cache)
     }
 
     async fn save_all(&self) -> Result<(), StorageError> {
         let path = self.path.clone();
-        let bytes = serde_json::to_vec_pretty(&self.cache)
-            .map_err(|e| StorageError::Serialization(e.to_string()))?;
+        let cache = self.cache.clone();
+
+        let bytes = tokio::task::spawn_blocking(move || {
+            serde_json::to_vec_pretty(&cache)
+        })
+        .await
+        .map_err(|e| StorageError::Serialization(format!("Serialization task failed: {e}")))?
+        .map_err(|e| StorageError::Serialization(e.to_string()))?;
+
         tokio::fs::write(path, bytes).await?;
         Ok(())
     }
