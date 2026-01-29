@@ -89,3 +89,22 @@ async fn test_unified_client_force_protocol() {
     client.connect(device).await.unwrap();
     assert_eq!(client.protocol(), Some(SelectedProtocol::Raop));
 }
+
+#[tokio::test]
+async fn test_unified_client_raop_stop() {
+    let device = create_device(false, true);
+    let config = ClientConfig {
+        preferred_protocol: PreferredProtocol::ForceRaop,
+        ..Default::default()
+    };
+
+    let mut client = UnifiedAirPlayClient::with_config(config);
+    client.connect(device).await.unwrap();
+    assert!(client.is_connected());
+
+    // Stop playback
+    client.stop().await.unwrap();
+
+    // RAOP stop also disconnects in our implementation
+    assert!(!client.is_connected());
+}
