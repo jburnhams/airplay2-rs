@@ -31,7 +31,7 @@ The receiver must parse this SDP to configure the audio pipeline correctly.
 
 ### 38.1 SDP Parser
 
-- [ ] **38.1.1** Implement SDP line parser
+- [x] **38.1.1** Implement SDP line parser
 
 **File:** `src/protocol/sdp/parser.rs`
 
@@ -258,7 +258,7 @@ impl SdpSession {
 
 ### 38.2 RAOP-Specific Parameter Extraction
 
-- [ ] **38.2.1** Extract ALAC/AAC format parameters
+- [x] **38.2.1** Extract ALAC/AAC format parameters
 
 **File:** `src/protocol/sdp/raop.rs`
 
@@ -501,7 +501,7 @@ fn decrypt_aes_key(
 
 ### 38.3 Integration with Session
 
-- [ ] **38.3.1** Wire SDP parsing into ANNOUNCE handler
+- [x] **38.3.1** Wire SDP parsing into ANNOUNCE handler
 
 **File:** `src/receiver/announce_handler.rs`
 
@@ -564,7 +564,7 @@ pub fn apply_to_session(
 
 ### 38.4 Unit Tests
 
-- [ ] **38.4.1** SDP parsing tests
+- [x] **38.4.1** SDP parsing tests
 
 ```rust
 #[cfg(test)]
@@ -706,16 +706,16 @@ a=rtpmap:96 L16/44100/2
 
 ## Acceptance Criteria
 
-- [ ] Parse SDP v0 sessions correctly
-- [ ] Extract audio media section
-- [ ] Parse rtpmap for codec detection (ALAC, AAC, PCM)
-- [ ] Parse fmtp for ALAC parameters
-- [ ] Decode base64 rsaaeskey and aesiv
-- [ ] Decrypt AES key with RSA private key (when provided)
-- [ ] Handle missing encryption (unencrypted streams)
-- [ ] Extract min-latency attribute
-- [ ] Map to StreamParameters correctly
-- [ ] All unit tests pass
+- [x] Parse SDP v0 sessions correctly
+- [x] Extract audio media section
+- [x] Parse rtpmap for codec detection (ALAC, AAC, PCM)
+- [x] Parse fmtp for ALAC parameters
+- [x] Decode base64 rsaaeskey and aesiv
+- [x] Decrypt AES key with RSA private key (when provided)
+- [x] Handle missing encryption (unencrypted streams)
+- [x] Extract min-latency attribute
+- [x] Map to StreamParameters correctly
+- [x] All unit tests pass
 
 ---
 

@@ -19,7 +19,7 @@ fn test_complete_session_negotiation() {
     // Step 1: OPTIONS
     codec.feed(b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n");
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     let response_str = String::from_utf8(encode_response(&result.response)).unwrap();
     assert!(response_str.contains("200 OK"));
@@ -50,7 +50,7 @@ fn test_complete_session_negotiation() {
     codec.feed(announce.as_bytes());
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert!(
         String::from_utf8(encode_response(&result.response))
@@ -70,7 +70,7 @@ fn test_complete_session_negotiation() {
     );
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     let response_str = String::from_utf8(encode_response(&result.response)).unwrap();
     assert!(response_str.contains("200 OK"));
@@ -91,7 +91,7 @@ fn test_complete_session_negotiation() {
     );
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     let response_str = String::from_utf8(encode_response(&result.response)).unwrap();
     assert!(response_str.contains("200 OK"));
@@ -108,7 +108,7 @@ fn test_complete_session_negotiation() {
     );
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert!(
         String::from_utf8(encode_response(&result.response))
@@ -136,7 +136,7 @@ fn test_volume_control() {
     let request = codec.decode().unwrap().unwrap();
 
     assert_eq!(request.method, Method::SetParameter);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert!(
         String::from_utf8(encode_response(&result.response))
@@ -159,7 +159,7 @@ fn test_keepalive() {
     );
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert!(
         String::from_utf8(encode_response(&result.response))
@@ -189,7 +189,7 @@ fn test_flush() {
     );
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert!(
         String::from_utf8(encode_response(&result.response))
@@ -213,7 +213,7 @@ fn test_invalid_state_transition() {
     );
 
     let request = codec.decode().unwrap().unwrap();
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     // Should get 455 Method Not Valid in This State
     assert!(
