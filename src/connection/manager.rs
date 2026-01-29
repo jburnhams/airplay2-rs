@@ -309,7 +309,7 @@ impl ConnectionManager {
     async fn authenticate(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
         // Check if we have stored keys
         if let Some(ref storage) = *self.pairing_storage.lock().await {
-            if let Some(keys) = storage.load(&device.id) {
+            if let Some(keys) = storage.load(&device.id).await {
                 // Try Pair-Verify with stored keys
                 match self.pair_verify(device, &keys).await {
                     Ok(session_keys) => {
@@ -353,7 +353,7 @@ impl ConnectionManager {
                         (self.pairing_storage.lock().await.as_mut(), pairing_keys)
                     {
                         tracing::info!("Saving pairing keys for device {}", device.id);
-                        if let Err(e) = storage.save(&device.id, &keys) {
+                        if let Err(e) = storage.save(&device.id, &keys).await {
                             tracing::warn!("Failed to save pairing keys: {}", e);
                         }
                     }
