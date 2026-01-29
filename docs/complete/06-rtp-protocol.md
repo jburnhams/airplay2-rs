@@ -1,5 +1,7 @@
 # Section 06: RTP/RAOP Protocol (Sans-IO)
 
+**VERIFIED**: mod.rs structure, RtpEncryptionMode, ChaCha20-Poly1305 encryption, RtpCodecError variants checked against source.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)
@@ -36,15 +38,29 @@ This section implements sans-IO RTP packet encoding/decoding for audio streaming
 ```rust
 //! RTP/RAOP protocol implementation for AirPlay audio streaming
 
-mod packet;
-mod timing;
-mod control;
 mod codec;
+#[cfg(test)]
+mod codec_tests;
+mod control;
+mod packet;
+/// Packet buffer for reordering and retransmission
+pub mod packet_buffer;
+#[cfg(test)]
+mod packet_tests;
+/// RAOP-specific RTP handling
+pub mod raop;
+/// RAOP timing synchronization
+pub mod raop_timing;
+#[cfg(test)]
+mod raop_tests;
+mod timing;
+#[cfg(test)]
+mod timing_tests;
 
-pub use packet::{RtpPacket, RtpHeader, PayloadType};
-pub use timing::{TimingPacket, TimingRequest, TimingResponse};
+pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpEncryptionMode};
 pub use control::{ControlPacket, RetransmitRequest};
-pub use codec::{RtpCodec, RtpCodecError};
+pub use packet::{PayloadType, RtpDecodeError, RtpHeader, RtpPacket};
+pub use timing::{NtpTimestamp, TimingPacket, TimingRequest, TimingResponse};
 
 /// RTP protocol constants for AirPlay
 pub mod constants {
@@ -585,7 +601,7 @@ impl ControlPacket {
 
 ```rust
 use super::packet::{RtpPacket, RtpHeader, RtpDecodeError};
-use crate::protocol::crypto::Aes128Ctr;
+use crate::protocol::crypto::{Aes128Ctr, ChaCha20Poly1305Cipher, Nonce};
 use thiserror::Error;
 
 /// RTP codec errors
@@ -599,6 +615,23 @@ pub enum RtpCodecError {
 
     #[error("invalid audio data size: {0} bytes")]
     InvalidAudioSize(usize),
+
+    #[error("encryption failed: {0}")]
+    EncryptionFailed(String),
+
+    #[error("decryption failed: {0}")]
+    DecryptionFailed(String),
+}
+
+/// Encryption mode for RTP packets
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RtpEncryptionMode {
+    /// No encryption
+    None,
+    /// AES-128-CTR (legacy AirPlay 1)
+    Aes128Ctr,
+    /// ChaCha20-Poly1305 (AirPlay 2)
+    ChaCha20Poly1305,
 }
 
 /// RTP codec for encoding/decoding audio packets
@@ -615,13 +648,25 @@ pub struct RtpCodec {
     aes_key: Option<[u8; 16]>,
     /// AES IV for encryption
     aes_iv: Option<[u8; 16]>,
+    /// ChaCha20-Poly1305 key (32 bytes)
+    chacha_key: Option<[u8; 32]>,
+    /// Encryption mode
+    encryption_mode: RtpEncryptionMode,
     /// Use buffered audio mode
     buffered_mode: bool,
+    /// Nonce counter for ChaCha20-Poly1305
+    nonce_counter: u64,
 }
 
 impl RtpCodec {
     /// Samples per packet
     pub const FRAMES_PER_PACKET: u32 = 352;
+
+    /// Poly1305 tag size
+    pub const TAG_SIZE: usize = 16;
+
+    /// Nonce size for ChaCha20-Poly1305 (8 bytes sent in packet, 12 bytes total with padding)
+    pub const NONCE_SIZE: usize = 8;
 
     /// Create a new codec
     pub fn new(ssrc: u32) -> Self {
@@ -631,14 +676,29 @@ impl RtpCodec {
             timestamp: 0,
             aes_key: None,
             aes_iv: None,
+            chacha_key: None,
+            encryption_mode: RtpEncryptionMode::None,
             buffered_mode: false,
+            nonce_counter: 0,
         }
     }
 
-    /// Set encryption keys
+    /// Set AES-128-CTR encryption keys (legacy)
     pub fn set_encryption(&mut self, key: [u8; 16], iv: [u8; 16]) {
         self.aes_key = Some(key);
         self.aes_iv = Some(iv);
+        self.encryption_mode = RtpEncryptionMode::Aes128Ctr;
+    }
+
+    /// Set ChaCha20-Poly1305 encryption key (AirPlay 2)
+    pub fn set_chacha_encryption(&mut self, key: [u8; 32]) {
+        self.chacha_key = Some(key);
+        self.encryption_mode = RtpEncryptionMode::ChaCha20Poly1305;
+    }
+
+    /// Get the encryption mode
+    pub fn encryption_mode(&self) -> RtpEncryptionMode {
+        self.encryption_mode
     }
 
     /// Enable buffered audio mode
@@ -650,6 +710,7 @@ impl RtpCodec {
     pub fn reset(&mut self) {
         self.sequence = 0;
         self.timestamp = 0;
+        self.nonce_counter = 0;
     }
 
     /// Get current sequence number
@@ -676,34 +737,85 @@ impl RtpCodec {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
         }
 
-        // Create packet
+        self.encode_arbitrary_payload(pcm_data, output)
+    }
+
+    /// Encode arbitrary audio payload (e.g. ALAC) to RTP packet
+    pub fn encode_arbitrary_payload(
+        &mut self,
+        data: &[u8],
+        output: &mut Vec<u8>,
+    ) -> Result<(), RtpCodecError> {
+        // Create packet header
         let header = RtpHeader::new_audio(
             self.sequence,
             self.timestamp,
             self.ssrc,
             self.buffered_mode,
         );
+        let header_bytes = header.encode();
 
-        let mut payload = pcm_data.to_vec();
+        match self.encryption_mode {
+            RtpEncryptionMode::None => {
+                // No encryption - just header + payload
+                let packet = RtpPacket::new(header, data.to_vec());
+                output.extend_from_slice(&packet.encode());
+            }
+            RtpEncryptionMode::Aes128Ctr => {
+                // Legacy AES-128-CTR encryption
+                let mut payload = data.to_vec();
+                if let (Some(key), Some(iv)) = (&self.aes_key, &self.aes_iv) {
+                    let mut cipher = Aes128Ctr::new(key, iv)
+                        .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
+                    let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
+                    cipher.seek((self.sequence as u64) * expected_size as u64);
+                    cipher.apply_keystream(&mut payload);
+                }
+                let packet = RtpPacket::new(header, payload);
+                output.extend_from_slice(&packet.encode());
+            }
+            RtpEncryptionMode::ChaCha20Poly1305 => {
+                // ChaCha20-Poly1305 encryption (AirPlay 2)
+                // Format: [Header (12)] [Encrypted Payload] [Tag (16)] [Nonce (8)]
+                let key = self.chacha_key.as_ref()
+                    .ok_or(RtpCodecError::EncryptionNotInitialized)?;
 
-        // Encrypt if keys are set
-        if let (Some(key), Some(iv)) = (&self.aes_key, &self.aes_iv) {
-            let mut cipher = Aes128Ctr::new(key, iv)
-                .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
+                let cipher = ChaCha20Poly1305Cipher::new(key)
+                    .map_err(|e| RtpCodecError::EncryptionFailed(e.to_string()))?;
 
-            // Seek to correct position based on packet index
-            // AirPlay uses sequence number for CTR position
-            cipher.seek((self.sequence as u64) * expected_size as u64);
-            cipher.apply_keystream(&mut payload);
+                // Generate 8-byte nonce (will be padded to 12 bytes internally)
+                let nonce_bytes = self.nonce_counter.to_le_bytes();
+                self.nonce_counter = self.nonce_counter.wrapping_add(1);
+
+                // Create 12-byte nonce with 4-byte padding at start
+                let mut full_nonce = [0u8; 12];
+                full_nonce[4..12].copy_from_slice(&nonce_bytes);
+                let nonce = Nonce::from_bytes(&full_nonce)
+                    .map_err(|e| RtpCodecError::EncryptionFailed(e.to_string()))?;
+
+                // AAD is timestamp (4 bytes) + SSRC (4 bytes) = bytes 4-12 of header
+                let aad = &header_bytes[4..12];
+
+                // Encrypt payload with AAD
+                let encrypted = cipher.encrypt_with_aad(&nonce, aad, data)
+                    .map_err(|e| RtpCodecError::EncryptionFailed(e.to_string()))?;
+
+                // encrypted contains: [ciphertext][tag (16 bytes)]
+                let (ciphertext, tag) = encrypted.split_at(encrypted.len() - Self::TAG_SIZE);
+
+                // Build final packet: [header][ciphertext][tag][nonce (8 bytes)]
+                output.reserve(RtpHeader::SIZE + ciphertext.len() + Self::TAG_SIZE + Self::NONCE_SIZE);
+                output.extend_from_slice(&header_bytes);
+                output.extend_from_slice(ciphertext);
+                output.extend_from_slice(tag);
+                output.extend_from_slice(&nonce_bytes);
+            }
         }
 
         // Update state for next packet
         self.sequence = self.sequence.wrapping_add(1);
         self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);
 
-        // Build final packet
-        let packet = RtpPacket::new(header, payload);
-        output.extend_from_slice(&packet.encode());
         Ok(())
     }
 
@@ -767,9 +879,15 @@ impl AudioPacketBuilder {
         }
     }
 
-    /// Set encryption
+    /// Set AES-128-CTR encryption (legacy)
     pub fn with_encryption(mut self, key: [u8; 16], iv: [u8; 16]) -> Self {
         self.codec.set_encryption(key, iv);
+        self
+    }
+
+    /// Set ChaCha20-Poly1305 encryption (AirPlay 2)
+    pub fn with_chacha_encryption(mut self, key: [u8; 32]) -> Self {
+        self.codec.set_chacha_encryption(key);
         self
     }
 

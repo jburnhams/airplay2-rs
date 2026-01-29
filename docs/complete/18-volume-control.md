@@ -1,5 +1,7 @@
 # Section 18: Volume Control
 
+**VERIFIED**: Volume struct, VolumeController, send_volume/get_device_volume implementations checked against source.
+
 ## Dependencies
 - **Section 05**: RTSP Protocol (must be complete)
 - **Section 10**: Connection Management (must be complete)
@@ -25,7 +27,7 @@ This section implements volume control for AirPlay devices including:
 
 ### 18.1 Volume Controller
 
-- [ ] **18.1.1** Implement volume control
+- [x] **18.1.1** Implement volume control
 
 **File:** `src/control/volume.rs`
 
@@ -242,17 +244,50 @@ impl VolumeController {
         let db = volume.to_db();
 
         // Format: "volume: -30.000000\r\n"
-        let body = format!("volume: {:.6}\r\n", db);
+        let body = format!("volume: {db:.6}\r\n");
 
-        // TODO: Send SET_PARAMETER with volume
-        // self.connection.send_set_parameter("text/parameters", body.as_bytes()).await?;
+        self.connection
+            .send_command(
+                Method::SetParameter,
+                Some(body.into_bytes()),
+                Some("text/parameters".to_string()),
+            )
+            .await?;
 
         Ok(())
     }
 
     /// Get volume from device
     async fn get_device_volume(&self) -> Result<Volume, AirPlayError> {
-        // TODO: Send GET_PARAMETER and parse response
+        let body = "volume\r\n";
+        let response = self
+            .connection
+            .send_command(
+                Method::GetParameter,
+                Some(body.as_bytes().to_vec()),
+                Some("text/parameters".to_string()),
+            )
+            .await?;
+
+        // Parse response body "volume: -10.5\r\n"
+        let response_str = String::from_utf8(response).map_err(|_| AirPlayError::RtspError {
+            message: "Invalid UTF-8 in volume response".to_string(),
+            status_code: None,
+        })?;
+
+        for line in response_str.lines() {
+            if let Some(val_str) = line.strip_prefix("volume:") {
+                let val = val_str
+                    .trim()
+                    .parse::<f32>()
+                    .map_err(|_| AirPlayError::RtspError {
+                        message: "Invalid volume value".to_string(),
+                        status_code: None,
+                    })?;
+                return Ok(Volume::from_db(val));
+            }
+        }
+
         Ok(Volume::DEFAULT)
     }
 }
@@ -395,12 +430,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Volume set/get works correctly
-- [ ] Mute/unmute works correctly
-- [ ] dB conversion is accurate
-- [ ] Volume sync from device works
-- [ ] Multi-device volume works
-- [ ] All unit tests pass
+- [x] Volume set/get works correctly
+- [x] Mute/unmute works correctly
+- [x] dB conversion is accurate
+- [x] Volume sync from device works
+- [x] Multi-device volume works
+- [x] All unit tests pass
 
 ---
 
