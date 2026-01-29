@@ -39,5 +39,5 @@ async fn test_volume_defaults() {
 }
 
 mod protocol_tests;
-mod unified_tests;
 mod raop_session_tests;
+mod unified_tests;
