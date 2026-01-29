@@ -182,3 +182,32 @@ fn test_playback_info_defaults() {
     assert!(info.playing);
     assert_eq!(info.duration, 100.0);
 }
+
+#[tokio::test]
+async fn benchmark_pcm_streaming_performance() {
+    use crate::streaming::source::SliceSource;
+    use crate::streaming::PcmStreamer;
+    use crate::audio::AudioFormat;
+    use std::sync::Arc;
+
+    // Pause time to run fast
+    tokio::time::pause();
+
+    let sender = Arc::new(MockRtpSender::default());
+    let format = AudioFormat::CD_QUALITY;
+    let streamer = PcmStreamer::new(sender, format);
+
+    // Create a large source
+    // 352 frames * 4 bytes = 1408 bytes per packet
+    // Let's process 10,000 packets => ~14MB
+    let packet_size = 352 * 4;
+    let num_packets = 10_000;
+    let data = vec![0u8; packet_size * num_packets];
+    let source = SliceSource::new(data, format);
+
+    let start = std::time::Instant::now();
+    streamer.stream(source).await.unwrap();
+    let duration = start.elapsed();
+
+    println!("Processed {} packets in {:?}", num_packets, duration);
+}
