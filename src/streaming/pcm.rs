@@ -10,6 +10,7 @@ use crate::error::AirPlayError;
 use crate::protocol::rtp::RtpCodec;
 
 use async_trait::async_trait;
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock, mpsc};
@@ -286,7 +287,7 @@ impl PcmStreamer {
             }
 
             // Encode payload
-            let encoded_payload = {
+            let encoded_payload: Cow<'_, [u8]> = {
                 let codec_type = *self.codec_type.read().await;
                 if codec_type == AudioCodec::Alac {
                     let mut encoder_guard = self.encoder.lock().await;
@@ -301,12 +302,13 @@ impl PcmStreamer {
                         let mut out_buffer = vec![0u8; 4096];
 
                         let size = encoder.encode(&input_format, &packet_data, &mut out_buffer);
-                        out_buffer[..size].to_vec()
+                        out_buffer.truncate(size);
+                        Cow::Owned(out_buffer)
                     } else {
-                        packet_data.clone()
+                        Cow::Borrowed(&packet_data)
                     }
                 } else {
-                    packet_data.clone()
+                    Cow::Borrowed(&packet_data)
                 }
             };
 
