@@ -128,12 +128,10 @@ impl FileStorage {
             return Ok(HashMap::new());
         }
 
-        let cache = tokio::task::spawn_blocking(move || {
-            serde_json::from_slice(&bytes)
-        })
-        .await
-        .map_err(|e| StorageError::Serialization(format!("Deserialization task failed: {e}")))?
-        .map_err(|e| StorageError::Serialization(e.to_string()))?;
+        let cache = tokio::task::spawn_blocking(move || serde_json::from_slice(&bytes))
+            .await
+            .map_err(|e| StorageError::Serialization(format!("Deserialization task failed: {e}")))?
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
 
         Ok(cache)
     }
@@ -142,12 +140,10 @@ impl FileStorage {
         let path = self.path.clone();
         let cache = self.cache.clone();
 
-        let bytes = tokio::task::spawn_blocking(move || {
-            serde_json::to_vec_pretty(&cache)
-        })
-        .await
-        .map_err(|e| StorageError::Serialization(format!("Serialization task failed: {e}")))?
-        .map_err(|e| StorageError::Serialization(e.to_string()))?;
+        let bytes = tokio::task::spawn_blocking(move || serde_json::to_vec_pretty(&cache))
+            .await
+            .map_err(|e| StorageError::Serialization(format!("Serialization task failed: {e}")))?
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
 
         tokio::fs::write(path, bytes).await?;
         Ok(())
