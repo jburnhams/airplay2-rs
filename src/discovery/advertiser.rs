@@ -556,10 +556,16 @@ impl AsyncRaopAdvertiser {
     ///
     /// Returns error if advertiser creation fails (e.g. mDNS init or MAC retrieval).
     #[allow(clippy::needless_pass_by_value)]
-    pub fn start(config: AdvertiserConfig) -> Result<Self, AdvertiserError> {
+    pub async fn start(config: AdvertiserConfig) -> Result<Self, AdvertiserError> {
         let (command_tx, mut command_rx) = mpsc::channel(16);
 
-        let mac = config.mac_override.map_or_else(get_device_mac, Ok)?;
+        let mac = if let Some(mac) = config.mac_override {
+            Ok(mac)
+        } else {
+            tokio::task::spawn_blocking(get_device_mac)
+                .await
+                .map_err(|e| AdvertiserError::MacRetrievalFailed(e.to_string()))?
+        }?;
 
         let service_name = format!("{}@{}", format_mac_for_service(&mac), config.name);
         let status = Arc::new(RwLock::new(ReceiverStatusFlags::default()));
