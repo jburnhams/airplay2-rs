@@ -2,10 +2,10 @@
 
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
+use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::{Headers, Method, RtspCodec, RtspRequest, RtspResponse, StatusCode};
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
 use async_trait::async_trait;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 /// Common session operations for both `AirPlay` 1 and 2
@@ -89,44 +89,31 @@ impl RaopSessionImpl {
             let encoded = request.encode();
 
             // Write request
-            stream
-                .write_all(&encoded)
-                .await
-                .map_err(|e| AirPlayError::RtspError {
-                    message: format!("Failed to write request: {e}"),
-                    status_code: None,
-                })?;
-            stream
-                .flush()
-                .await
-                .map_err(|e| AirPlayError::RtspError {
-                    message: format!("Failed to flush stream: {e}"),
-                    status_code: None,
-                })?;
+            stream.write_all(&encoded).await.map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to write request: {e}"),
+                status_code: None,
+            })?;
+            stream.flush().await.map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to flush stream: {e}"),
+                status_code: None,
+            })?;
 
             // Read response
             let mut buf = vec![0u8; 4096];
             loop {
                 // Check if we already have a response in codec buffer
-                if let Some(response) =
-                    self.codec
-                        .decode()
-                        .map_err(|e| AirPlayError::RtspError {
-                            message: e.to_string(),
-                            status_code: None,
-                        })?
-                {
+                if let Some(response) = self.codec.decode().map_err(|e| AirPlayError::RtspError {
+                    message: e.to_string(),
+                    status_code: None,
+                })? {
                     return Ok(response);
                 }
 
                 // Read more data
-                let n = stream
-                    .read(&mut buf)
-                    .await
-                    .map_err(|e| AirPlayError::RtspError {
-                        message: format!("Failed to read response: {e}"),
-                        status_code: None,
-                    })?;
+                let n = stream.read(&mut buf).await.map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to read response: {e}"),
+                    status_code: None,
+                })?;
 
                 if n == 0 {
                     return Err(AirPlayError::RtspError {
