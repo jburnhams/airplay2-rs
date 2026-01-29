@@ -11,6 +11,7 @@ fn test_codec_sequence_increment() {
     codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.sequence(), 1);
 
+    packet.clear();
     codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.sequence(), 2);
 }
@@ -26,6 +27,7 @@ fn test_codec_timestamp_increment() {
     codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.timestamp(), 352);
 
+    packet.clear();
     codec.encode_audio(&audio, &mut packet).unwrap();
     assert_eq!(codec.timestamp(), 704);
 }
