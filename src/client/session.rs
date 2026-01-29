@@ -2,8 +2,11 @@
 
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
+use crate::protocol::rtsp::{Method, codec::RtspCodec};
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
 use async_trait::async_trait;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 /// Common session operations for both `AirPlay` 1 and 2
 #[async_trait]
@@ -59,6 +62,8 @@ pub struct RaopSessionImpl {
     connected: bool,
     volume: f32,
     state: PlaybackState,
+    server_addr: String,
+    server_port: u16,
 }
 
 impl RaopSessionImpl {
@@ -71,6 +76,8 @@ impl RaopSessionImpl {
             connected: false,
             volume: 1.0,
             state: PlaybackState::default(),
+            server_addr: server_addr.to_string(),
+            server_port,
         }
     }
 }
@@ -93,8 +100,61 @@ impl AirPlaySession for RaopSessionImpl {
     }
 
     async fn disconnect(&mut self) -> Result<(), AirPlayError> {
+        if !self.connected {
+            return Ok(());
+        }
+
         // Send TEARDOWN
-        // TODO: Implement actual teardown
+        let request = self.rtsp_session.teardown_request();
+        let encoded = request.encode();
+
+        let addr = format!("{}:{}", self.server_addr, self.server_port);
+        let mut stream = TcpStream::connect(addr)
+            .await
+            .map_err(AirPlayError::NetworkError)?;
+
+        stream
+            .write_all(&encoded)
+            .await
+            .map_err(AirPlayError::NetworkError)?;
+
+        // Read response
+        let mut codec = RtspCodec::new();
+        let mut buffer = [0u8; 4096];
+
+        loop {
+            let n = stream
+                .read(&mut buffer)
+                .await
+                .map_err(AirPlayError::NetworkError)?;
+
+            if n == 0 {
+                // Connection closed before response
+                return Err(AirPlayError::NetworkError(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "connection closed",
+                )));
+            }
+
+            codec
+                .feed(&buffer[..n])
+                .map_err(|e| AirPlayError::CodecError {
+                    message: e.to_string(),
+                })?;
+
+            if let Some(response) = codec.decode().map_err(|e| AirPlayError::CodecError {
+                message: e.to_string(),
+            })? {
+                self.rtsp_session
+                    .process_response(Method::Teardown, &response)
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: e,
+                        status_code: Some(response.status.as_u16()),
+                    })?;
+                break;
+            }
+        }
+
         self.connected = false;
         self.state = PlaybackState::default();
         Ok(())
