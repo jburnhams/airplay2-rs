@@ -237,3 +237,43 @@ fn test_codec_clear() {
     codec.clear();
     assert_eq!(codec.buffer_len(), 0);
 }
+
+#[test]
+fn test_mixed_case_headers() {
+    let mut codec = RtspServerCodec::new();
+    codec.feed(b"OPTIONS * RTSP/1.0\r\ncSEQ: 1\r\n\r\n");
+    let request = codec.decode().unwrap().unwrap();
+    assert_eq!(request.headers.cseq(), Some(1));
+}
+
+#[test]
+fn test_feed_splitting() {
+    let mut codec = RtspServerCodec::new();
+    let data = b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n";
+
+    // Split into 1-byte chunks
+    for b in data {
+        codec.feed(&[*b]);
+    }
+
+    let request = codec.decode().unwrap().unwrap();
+    assert_eq!(request.method, Method::Options);
+}
+
+#[test]
+fn test_unsupported_chunked_encoding() {
+    let mut codec = RtspServerCodec::new();
+    // Assuming implementation doesn't support chunked, it might treat it as 0 length body if Content-Length is missing
+    let request = "SET_PARAMETER * RTSP/1.0\r\n\
+                   Transfer-Encoding: chunked\r\n\r\n\
+                   5\r\nhello\r\n0\r\n\r\n";
+    codec.feed(request.as_bytes());
+
+    let decoded = codec.decode().unwrap().unwrap();
+    // Should have parsed headers but body empty because no content-length
+    assert!(decoded.body.is_empty());
+
+    // The remaining bytes are still in buffer and will cause error on next decode
+    let result = codec.decode();
+    assert!(result.is_err());
+}
