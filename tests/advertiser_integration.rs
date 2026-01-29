@@ -30,7 +30,7 @@ async fn test_advertise_and_discover() {
         ..Default::default()
     };
 
-    let advertiser = AsyncRaopAdvertiser::start(config).unwrap();
+    let advertiser = AsyncRaopAdvertiser::start(config).await.unwrap();
 
     // Wait for advertisement to propagate
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -69,7 +69,7 @@ async fn test_status_update_reflected_in_txt() {
         ..Default::default()
     };
 
-    let advertiser = AsyncRaopAdvertiser::start(config).unwrap();
+    let advertiser = AsyncRaopAdvertiser::start(config).await.unwrap();
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Update status to busy
@@ -126,7 +126,7 @@ async fn test_multiple_advertisers() {
 
     let mut advertisers = Vec::new();
     for config in configs {
-        advertisers.push(AsyncRaopAdvertiser::start(config).unwrap());
+        advertisers.push(AsyncRaopAdvertiser::start(config).await.unwrap());
     }
 
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -159,7 +159,7 @@ async fn test_shutdown_removes_service() {
         ..Default::default()
     };
 
-    let advertiser = AsyncRaopAdvertiser::start(config).unwrap();
+    let advertiser = AsyncRaopAdvertiser::start(config).await.unwrap();
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Verify visible
