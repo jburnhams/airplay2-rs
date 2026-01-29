@@ -16,13 +16,22 @@ fn create_request(method: Method) -> RtspRequest {
     }
 }
 
+const SIMPLE_SDP: &str = r#"v=0
+o=- 0 0 IN IP4 127.0.0.1
+s=AirTunes
+t=0 0
+m=audio 0 RTP/AVP 96
+a=rtpmap:96 AppleLossless
+a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
+"#;
+
 #[test]
 fn test_options() {
     let session = ReceiverSession::new(test_addr());
     let mut request = create_request(Method::Options);
     request.headers.insert("CSeq".to_string(), "1".to_string());
 
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert!(result.response.headers.contains("Public"));
@@ -38,11 +47,13 @@ fn test_announce_valid_state() {
     request
         .headers
         .insert("Content-Type".to_string(), "application/sdp".to_string());
+    request.body = SIMPLE_SDP.as_bytes().to_vec();
 
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert_eq!(result.new_state, Some(SessionState::Announced));
+    assert!(result.stream_params.is_some());
 }
 
 #[test]
@@ -53,8 +64,9 @@ fn test_announce_invalid_state() {
     session.set_state(SessionState::Setup).unwrap();
     session.set_state(SessionState::Streaming).unwrap();
 
-    let request = create_request(Method::Announce);
-    let result = handle_request(&request, &session);
+    let mut request = create_request(Method::Announce);
+    request.body = SIMPLE_SDP.as_bytes().to_vec();
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::METHOD_NOT_VALID);
 }
@@ -71,7 +83,7 @@ fn test_setup_valid() {
         "RTP/AVP/UDP;unicast;mode=record;control_port=6001;timing_port=6002".to_string(),
     );
 
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert!(result.response.headers.contains("Transport"));
@@ -91,7 +103,7 @@ fn test_setup_invalid_transport() {
         .headers
         .insert("Transport".to_string(), "InvalidTransport".to_string());
 
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::BAD_REQUEST);
 }
@@ -108,7 +120,7 @@ fn test_record_valid() {
         .headers
         .insert("RTP-Info".to_string(), "seq=1;rtptime=12345".to_string());
 
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert!(result.response.headers.contains("Audio-Latency"));
@@ -121,7 +133,7 @@ fn test_record_invalid_state() {
     let session = ReceiverSession::new(test_addr());
     // Connected state is invalid for RECORD
     let request = create_request(Method::Record);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::METHOD_NOT_VALID);
 }
@@ -131,7 +143,7 @@ fn test_pause() {
     let session = ReceiverSession::new(test_addr());
     // Connected state is invalid for PAUSE
     let request = create_request(Method::Pause);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::METHOD_NOT_VALID);
 }
@@ -145,7 +157,7 @@ fn test_pause_valid() {
     session.set_state(SessionState::Streaming).unwrap();
 
     let request = create_request(Method::Pause);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert_eq!(result.new_state, Some(SessionState::Paused));
@@ -156,7 +168,7 @@ fn test_flush() {
     let session = ReceiverSession::new(test_addr());
     // Connected state is invalid for FLUSH
     let request = create_request(Method::Flush);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::METHOD_NOT_VALID);
 }
@@ -170,7 +182,7 @@ fn test_flush_valid_streaming() {
     session.set_state(SessionState::Streaming).unwrap();
 
     let request = create_request(Method::Flush);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert!(result.new_state.is_none());
@@ -186,7 +198,7 @@ fn test_flush_valid_paused() {
     session.set_state(SessionState::Paused).unwrap();
 
     let request = create_request(Method::Flush);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert!(result.new_state.is_none());
@@ -196,7 +208,7 @@ fn test_flush_valid_paused() {
 fn test_teardown() {
     let session = ReceiverSession::new(test_addr());
     let request = create_request(Method::Teardown);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert_eq!(result.new_state, Some(SessionState::Teardown));
@@ -207,7 +219,7 @@ fn test_teardown() {
 fn test_get_parameter_empty() {
     let session = ReceiverSession::new(test_addr());
     let request = create_request(Method::GetParameter);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     assert!(result.response.body.is_empty());
@@ -221,7 +233,7 @@ fn test_get_parameter_volume() {
     let mut request = create_request(Method::GetParameter);
     request.body = b"volume".to_vec();
 
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
     let body = String::from_utf8(result.response.body).unwrap();
@@ -235,7 +247,7 @@ fn test_unknown_method() {
     // Actually `handle_request` matches Method enum.
     // We can use a method that is not implemented, e.g. PLAY
     let request = create_request(Method::Play);
-    let result = handle_request(&request, &session);
+    let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::METHOD_NOT_ALLOWED);
 }

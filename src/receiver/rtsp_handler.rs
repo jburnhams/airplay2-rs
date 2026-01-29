@@ -8,7 +8,8 @@ use crate::protocol::rtsp::{
     Method, RtspRequest, RtspResponse, StatusCode, server_codec::ResponseBuilder,
     transport::TransportHeader,
 };
-use crate::receiver::session::{ReceiverSession, SessionState};
+use crate::receiver::announce_handler;
+use crate::receiver::session::{ReceiverSession, SessionState, StreamParameters};
 
 /// Result of handling an RTSP request
 #[derive(Debug)]
@@ -19,6 +20,8 @@ pub struct HandleResult {
     pub new_state: Option<SessionState>,
     /// Allocated ports (for SETUP)
     pub allocated_ports: Option<AllocatedPorts>,
+    /// Stream parameters parsed from ANNOUNCE
+    pub stream_params: Option<StreamParameters>,
     /// Should start streaming (for RECORD)
     pub start_streaming: bool,
     /// Should stop streaming (for TEARDOWN)
@@ -38,12 +41,16 @@ pub struct AllocatedPorts {
 
 /// Handle an incoming RTSP request
 #[must_use]
-pub fn handle_request(request: &RtspRequest, session: &ReceiverSession) -> HandleResult {
+pub fn handle_request(
+    request: &RtspRequest,
+    session: &ReceiverSession,
+    rsa_private_key: Option<&[u8]>,
+) -> HandleResult {
     let cseq = request.headers.cseq().unwrap_or(0);
 
     match request.method {
         Method::Options => handle_options(cseq),
-        Method::Announce => handle_announce(request, cseq, session),
+        Method::Announce => handle_announce(request, cseq, session, rsa_private_key),
         Method::Setup => handle_setup(request, cseq, session),
         Method::Record => handle_record(request, cseq, session),
         Method::Pause => handle_pause(cseq, session),
@@ -81,29 +88,40 @@ fn handle_options(cseq: u32) -> HandleResult {
         response,
         new_state: None,
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
 }
 
 /// Handle ANNOUNCE request (SDP body with stream parameters)
-fn handle_announce(_request: &RtspRequest, cseq: u32, session: &ReceiverSession) -> HandleResult {
+fn handle_announce(
+    request: &RtspRequest,
+    cseq: u32,
+    session: &ReceiverSession,
+    rsa_private_key: Option<&[u8]>,
+) -> HandleResult {
     // Verify state
     if session.state() != SessionState::Connected {
         return error_result(StatusCode::METHOD_NOT_VALID, cseq);
     }
 
-    // SDP parsing is handled by Section 38
-    // Here we just acknowledge receipt
-
-    let response = ResponseBuilder::ok().cseq(cseq).build();
-
-    HandleResult {
-        response,
-        new_state: Some(SessionState::Announced),
-        allocated_ports: None,
-        start_streaming: false,
-        stop_streaming: false,
+    match announce_handler::process_announce(request, rsa_private_key) {
+        Ok(params) => {
+            let response = ResponseBuilder::ok().cseq(cseq).build();
+            HandleResult {
+                response,
+                new_state: Some(SessionState::Announced),
+                allocated_ports: None,
+                stream_params: Some(params),
+                start_streaming: false,
+                stop_streaming: false,
+            }
+        }
+        Err(_) => {
+            // TODO: Log error?
+            error_result(StatusCode::BAD_REQUEST, cseq)
+        }
     }
 }
 
@@ -146,6 +164,7 @@ fn handle_setup(request: &RtspRequest, cseq: u32, _session: &ReceiverSession) ->
         response,
         new_state: Some(SessionState::Setup),
         allocated_ports: Some(ports),
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
@@ -174,6 +193,7 @@ fn handle_record(request: &RtspRequest, cseq: u32, session: &ReceiverSession) ->
         response,
         new_state: Some(SessionState::Streaming),
         allocated_ports: None,
+        stream_params: None,
         start_streaming: true,
         stop_streaming: false,
     }
@@ -191,6 +211,7 @@ fn handle_pause(cseq: u32, session: &ReceiverSession) -> HandleResult {
         response,
         new_state: Some(SessionState::Paused),
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false, // Keep session alive, just pause output
     }
@@ -215,6 +236,7 @@ fn handle_flush(request: &RtspRequest, cseq: u32, session: &ReceiverSession) -> 
         response,
         new_state: None,
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
@@ -228,6 +250,7 @@ fn handle_teardown(cseq: u32, _session: &ReceiverSession) -> HandleResult {
         response,
         new_state: Some(SessionState::Teardown),
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: true,
     }
@@ -263,6 +286,7 @@ fn handle_get_parameter(
         response,
         new_state: None,
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
@@ -286,6 +310,7 @@ fn handle_set_parameter(
         response,
         new_state: None,
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
@@ -304,6 +329,7 @@ fn handle_post(_request: &RtspRequest, cseq: u32, _session: &ReceiverSession) ->
         response,
         new_state: None,
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
@@ -322,6 +348,7 @@ fn error_result(status: StatusCode, cseq: u32) -> HandleResult {
         response,
         new_state: None,
         allocated_ports: None,
+        stream_params: None,
         start_streaming: false,
         stop_streaming: false,
     }
