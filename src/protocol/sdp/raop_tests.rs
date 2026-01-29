@@ -2,7 +2,7 @@ use super::parser::SdpParser;
 use super::raop::*;
 use crate::receiver::session::AudioCodec;
 
-const SAMPLE_SDP: &str = r#"v=0
+const SAMPLE_SDP: &str = r"v=0
 o=iTunes 3413821438 0 IN IP4 192.168.1.100
 s=iTunes
 c=IN IP4 192.168.1.1
@@ -13,16 +13,16 @@ a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
 a=rsaaeskey:VGhpcyBpcyBhIHRlc3Qga2V5IHRoYXQgaXMgdXNlZCBmb3IgdGVzdGluZw==
 a=aesiv:MDEyMzQ1Njc4OWFiY2RlZg==
 a=min-latency:11025
-"#;
+";
 
-const SIMPLE_SDP: &str = r#"v=0
+const SIMPLE_SDP: &str = r"v=0
 o=- 0 0 IN IP4 127.0.0.1
 s=AirTunes
 t=0 0
 m=audio 0 RTP/AVP 96
 a=rtpmap:96 AppleLossless
 a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
-"#;
+";
 
 #[test]
 fn test_detect_codec_alac() {
@@ -93,13 +93,13 @@ fn test_extract_stream_params_unencrypted() {
 
 #[test]
 fn test_pcm_codec() {
-    let sdp_str = r#"v=0
+    let sdp_str = r"v=0
 o=- 0 0 IN IP4 127.0.0.1
 s=Test
 t=0 0
 m=audio 0 RTP/AVP 96
 a=rtpmap:96 L16/44100/2
-"#;
+";
     let sdp = SdpParser::parse(sdp_str).unwrap();
     let audio = sdp.audio_media().unwrap();
 

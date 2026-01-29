@@ -118,8 +118,8 @@ fn handle_announce(
                 stop_streaming: false,
             }
         }
-        Err(e) => {
-            tracing::error!("Failed to process ANNOUNCE request: {e}");
+        Err(_) => {
+            // TODO: Log error?
             error_result(StatusCode::BAD_REQUEST, cseq)
         }
     }

@@ -272,16 +272,13 @@ fn decrypt_aes_key(encrypted: &[u8], rsa_private_key: &[u8]) -> Result<[u8; 16],
         use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 
         // Parse RSA private key
-        let private_key = RsaPrivateKey::from_pkcs8_der(rsa_private_key).map_err(|e| {
-            SdpParseError::InvalidAttribute(format!("Invalid RSA key: {e}"))
-        })?;
+        let private_key = RsaPrivateKey::from_pkcs8_der(rsa_private_key)
+            .map_err(|e| SdpParseError::InvalidAttribute(format!("Invalid RSA key: {e}")))?;
 
         // Decrypt using PKCS#1 v1.5
         let decrypted = private_key
             .decrypt(Pkcs1v15Encrypt, encrypted)
-            .map_err(|e| {
-                SdpParseError::InvalidAttribute(format!("RSA decrypt failed: {e}"))
-            })?;
+            .map_err(|e| SdpParseError::InvalidAttribute(format!("RSA decrypt failed: {e}")))?;
 
         if decrypted.len() != 16 {
             return Err(SdpParseError::InvalidAttribute(format!(

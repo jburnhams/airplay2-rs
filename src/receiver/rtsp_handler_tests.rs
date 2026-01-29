@@ -16,14 +16,14 @@ fn create_request(method: Method) -> RtspRequest {
     }
 }
 
-const SIMPLE_SDP: &str = r#"v=0
+const SIMPLE_SDP: &str = r"v=0
 o=- 0 0 IN IP4 127.0.0.1
 s=AirTunes
 t=0 0
 m=audio 0 RTP/AVP 96
 a=rtpmap:96 AppleLossless
 a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
-"#;
+";
 
 #[test]
 fn test_options() {
