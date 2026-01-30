@@ -11,6 +11,7 @@ use crate::protocol::pairing::{
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice};
 
+use std::fmt::Write;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 
@@ -790,19 +791,12 @@ impl ConnectionManager {
             data.len()
         );
 
-        // HACK: Re-enable these if we can access them cleanly.
-        // For now, they are stripped because I don't want to re-add the logic to fetch them from private session fields
-        // without adding accessors again (which I did, but I want to keep this clean).
-        // Wait, I DID add accessors to RtspSession.
-
         if !device_id.is_empty() {
-            use std::fmt::Write;
             let _ = write!(request, "DACP-ID: {device_id}\r\n");
             let _ = write!(request, "X-Apple-Device-ID: {device_id}\r\n");
         }
 
         if !session_id.is_empty() {
-            use std::fmt::Write;
             let _ = write!(request, "X-Apple-Session-ID: {session_id}\r\n");
         }
 
