@@ -159,7 +159,15 @@ fn test_loss_detector_reorder() {
     let mut detector = PacketLossDetector::new();
 
     detector.process(100);
+    // expected is 101
+
     // Receive old packet, should be ignored/empty
     let missing = detector.process(99);
+    assert!(missing.is_empty());
+
+    // Receive next expected packet (101)
+    // If bug exists, expected_seq was reset to 100 by the reordered packet,
+    // so it would report 100 as missing here.
+    let missing = detector.process(101);
     assert!(missing.is_empty());
 }
