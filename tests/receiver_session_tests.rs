@@ -144,3 +144,45 @@ async fn test_session_timeout() {
     assert!(matches!(event, SessionEvent::SessionEnded { reason, .. }
         if reason.contains("timeout")));
 }
+
+#[tokio::test]
+async fn test_session_preemption_reject() {
+    let config = SessionManagerConfig {
+        preemption_policy: PreemptionPolicy::Reject,
+        udp_base_port: random_base_port(),
+        ..Default::default()
+    };
+    let manager = SessionManager::new(config);
+
+    let addr1 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 1000);
+    let addr2 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2)), 1001);
+
+    // Start first session
+    manager.start_session(addr1).await.unwrap();
+
+    // Try to start second session - should be rejected
+    let result = manager.start_session(addr2).await;
+    assert!(matches!(
+        result,
+        Err(airplay2::receiver::session::SessionError::Busy)
+    ));
+}
+
+#[tokio::test]
+async fn test_invalid_state_transition() {
+    let config = SessionManagerConfig {
+        udp_base_port: random_base_port(),
+        ..Default::default()
+    };
+    let manager = SessionManager::new(config);
+
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 1000);
+    manager.start_session(addr).await.unwrap();
+
+    // Connected -> Streaming is invalid (must go through Announced/Setup)
+    let result = manager.update_state(SessionState::Streaming).await;
+    assert!(matches!(
+        result,
+        Err(airplay2::receiver::session::SessionError::InvalidTransition { .. })
+    ));
+}
