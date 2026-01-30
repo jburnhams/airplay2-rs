@@ -1,5 +1,8 @@
 # Section 04: Cryptographic Primitives
 
+> **VERIFIED**: Checked against `src/protocol/crypto/mod.rs` and submodules on 2025-01-30.
+> Implementation complete with additional RSA support for RAOP (feature-gated).
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)
@@ -34,28 +37,36 @@ AirPlay 2 uses multiple cryptographic algorithms for authentication and encrypti
 
 ### 4.1 Module Structure
 
-- [ ] **4.1.1** Create crypto module with submodules
+- [x] **4.1.1** Create crypto module with submodules
 
 **File:** `src/protocol/crypto/mod.rs`
 
 ```rust
 //! Cryptographic primitives for AirPlay authentication and encryption
 
-mod srp;
-mod ed25519;
-mod x25519;
-mod hkdf;
-mod chacha;
 mod aes;
+mod chacha;
+mod ed25519;
 mod error;
+mod hkdf;
+#[cfg(feature = "raop")]
+mod rsa;
+#[cfg(all(test, feature = "raop"))]
+mod rsa_tests;
+mod srp;
+#[cfg(test)]
+mod tests;
+mod x25519;
 
-pub use self::srp::{SrpClient, SrpVerifier};
-pub use self::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature};
-pub use self::x25519::{X25519KeyPair, X25519PublicKey, X25519SharedSecret};
-pub use self::hkdf::{derive_key, HkdfSha512};
-pub use self::chacha::{ChaCha20Poly1305Cipher, Nonce};
 pub use self::aes::{Aes128Ctr, Aes128Gcm};
+pub use self::chacha::{ChaCha20Poly1305Cipher, Nonce};
+pub use self::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature};
 pub use self::error::CryptoError;
+pub use self::hkdf::{AirPlayKeys, HkdfSha512, derive_key};
+#[cfg(feature = "raop")]
+pub use self::rsa::{AppleRsaPublicKey, RaopRsaPrivateKey, sizes as rsa_sizes};
+pub use self::srp::{SrpClient, SrpVerifier};
+pub use self::x25519::{X25519KeyPair, X25519PublicKey, X25519SharedSecret};
 
 /// Length of various cryptographic values
 pub mod lengths {
@@ -84,7 +95,7 @@ pub mod lengths {
 
 ### 4.2 Error Types
 
-- [ ] **4.2.1** Define crypto error types
+- [x] **4.2.1** Define crypto error types
 
 **File:** `src/protocol/crypto/error.rs`
 
@@ -127,7 +138,7 @@ pub enum CryptoError {
 
 ### 4.3 SRP-6a Implementation
 
-- [ ] **4.3.1** Implement SRP client for pairing
+- [x] **4.3.1** Implement SRP client for pairing
 
 **File:** `src/protocol/crypto/srp.rs`
 
@@ -242,7 +253,7 @@ impl Drop for SessionKey {
 
 ### 4.4 Ed25519 Signatures
 
-- [ ] **4.4.1** Implement Ed25519 key pair and operations
+- [x] **4.4.1** Implement Ed25519 key pair and operations
 
 **File:** `src/protocol/crypto/ed25519.rs`
 
@@ -364,7 +375,7 @@ impl Ed25519Signature {
 
 ### 4.5 X25519 Key Exchange
 
-- [ ] **4.5.1** Implement X25519 ECDH
+- [x] **4.5.1** Implement X25519 ECDH
 
 **File:** `src/protocol/crypto/x25519.rs`
 
@@ -474,7 +485,7 @@ impl Drop for X25519SharedSecret {
 
 ### 4.6 HKDF Key Derivation
 
-- [ ] **4.6.1** Implement HKDF-SHA512
+- [x] **4.6.1** Implement HKDF-SHA512
 
 **File:** `src/protocol/crypto/hkdf.rs`
 
@@ -563,7 +574,7 @@ impl AirPlayKeys {
 
 ### 4.7 ChaCha20-Poly1305 AEAD
 
-- [ ] **4.7.1** Implement ChaCha20-Poly1305 encryption
+- [x] **4.7.1** Implement ChaCha20-Poly1305 encryption
 
 **File:** `src/protocol/crypto/chacha.rs`
 
@@ -693,7 +704,7 @@ impl ChaCha20Poly1305Cipher {
 
 ### 4.8 AES Ciphers
 
-- [ ] **4.8.1** Implement AES-128-CTR for audio encryption
+- [x] **4.8.1** Implement AES-128-CTR for audio encryption
 
 **File:** `src/protocol/crypto/aes.rs`
 
@@ -1153,16 +1164,16 @@ fn test_chacha20_poly1305_rfc8439_vector() {
 
 ## Acceptance Criteria
 
-- [ ] All crypto types compile and tests pass
-- [ ] Ed25519 sign/verify works correctly
-- [ ] X25519 key exchange produces matching shared secrets
-- [ ] HKDF derives correct keys from test vectors
-- [ ] ChaCha20-Poly1305 encrypts/decrypts correctly
-- [ ] AES-CTR encrypts/decrypts correctly
-- [ ] AES-GCM encrypts/decrypts with authentication
-- [ ] All secrets are zeroized on drop
-- [ ] Error types are descriptive
-- [ ] RFC test vectors pass
+- [x] All crypto types compile and tests pass
+- [x] Ed25519 sign/verify works correctly
+- [x] X25519 key exchange produces matching shared secrets
+- [x] HKDF derives correct keys from test vectors
+- [x] ChaCha20-Poly1305 encrypts/decrypts correctly
+- [x] AES-CTR encrypts/decrypts correctly
+- [x] AES-GCM encrypts/decrypts with authentication
+- [x] All secrets are zeroized on drop
+- [x] Error types are descriptive
+- [x] RFC test vectors pass
 
 ---
 

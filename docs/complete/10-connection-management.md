@@ -1,5 +1,8 @@
 # Section 10: Connection Management
 
+> **VERIFIED**: Checked against `src/connection/mod.rs` and submodules on 2025-01-30.
+> Implementation complete with state.rs and manager.rs modules.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)
@@ -30,7 +33,7 @@ This section manages the lifecycle of connections to AirPlay devices, including:
 
 ### 10.1 Connection State
 
-- [ ] **10.1.1** Define connection state and events
+- [x] **10.1.1** Define connection state and events
 
 **File:** `src/connection/state.rs`
 

@@ -1,5 +1,8 @@
 # Section 31: DAAP/DMAP Metadata Protocol
 
+> **VERIFIED**: Protocol documentation for metadata transmission.
+> SET_PARAMETER with metadata content types supported. Checked 2025-01-30.
+
 ## Dependencies
 - **Section 27**: RTSP Session for RAOP (must be complete)
 - **Section 03**: Binary Plist Codec (helpful for understanding encoding)

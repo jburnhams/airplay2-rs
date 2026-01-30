@@ -1,5 +1,9 @@
 # Section 23: Examples
 
+> **VERIFIED**: Checked against `examples/` directory on 2025-01-30.
+> Working examples include: discover.rs, play_pcm.rs, play_url.rs, connect_to_receiver.rs,
+> multi_room.rs, interactive.rs, persistent_pairing.rs, verify_metadata.rs, verify_stereo.rs.
+
 ## Dependencies
 - **Section 22**: High-Level API (must be complete)
 

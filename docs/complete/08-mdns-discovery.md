@@ -1,5 +1,9 @@
 # Section 08: mDNS Discovery
 
+> **VERIFIED**: Checked against `src/discovery/mod.rs` and submodules on 2025-01-30.
+> Implementation includes additional features: advertiser, RAOP discovery, DeviceFilter,
+> DiscoveryOptions, and Updated event type.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)
@@ -29,22 +33,31 @@ AirPlay devices advertise themselves via mDNS (multicast DNS) / DNS-SD (Service 
 ```rust
 //! mDNS device discovery for AirPlay devices
 
+/// RAOP service advertisement
+pub mod advertiser;
+#[cfg(test)]
+mod advertiser_tests;
 mod browser;
-mod parser;
+pub mod parser;
+/// RAOP discovery logic
+pub mod raop;
+#[cfg(test)]
+mod raop_tests;
+#[cfg(test)]
+mod tests;
 
-pub use browser::{DeviceBrowser, DiscoveryEvent};
+pub use browser::{DeviceBrowser, DeviceFilter, DiscoveryEvent, DiscoveryOptions};
 pub use parser::parse_txt_records;
 
-use crate::types::{AirPlayDevice, AirPlayConfig};
 use crate::error::AirPlayError;
+use crate::types::{AirPlayConfig, AirPlayDevice};
 use futures::Stream;
 use std::time::Duration;
 
 /// Service type for AirPlay discovery
 pub const AIRPLAY_SERVICE_TYPE: &str = "_airplay._tcp.local.";
 
-/// Service type for AirPlay 2 RAOP (audio)
-pub const RAOP_SERVICE_TYPE: &str = "_raop._tcp.local.";
+pub use raop::RAOP_SERVICE_TYPE;
 
 /// Discover AirPlay devices continuously
 ///

@@ -1,5 +1,7 @@
 # Section 17: State and Events
 
+**VERIFIED**: StateContainer, ClientState, EventBus, event types checked against source. PlaybackState uses struct default.
+
 ## Dependencies
 - **Section 02**: Core Types (must be complete)
 - **Section 10**: Connection Management (must be complete)
@@ -24,7 +26,7 @@ This section implements a centralized state management system and event bus for:
 
 ### 17.1 State Container
 
-- [ ] **17.1.1** Implement state management
+- [x] **17.1.1** Implement state management
 
 **File:** `src/state/container.rs`
 
@@ -73,7 +75,7 @@ impl Default for ClientState {
     fn default() -> Self {
         Self {
             device: None,
-            playback: PlaybackState::Stopped,
+            playback: PlaybackState::default(),
             current_track: None,
             volume: 1.0,
             muted: false,
@@ -211,7 +213,7 @@ mod tests {
 
 ### 17.2 Event Bus
 
-- [ ] **17.2.1** Implement event bus
+- [x] **17.2.1** Implement event bus
 
 **File:** `src/state/events.rs`
 
@@ -413,7 +415,7 @@ mod tests {
 
 ### 17.3 Module Entry Point
 
-- [ ] **17.3.1** Create state module
+- [x] **17.3.1** Create state module
 
 **File:** `src/state/mod.rs`
 
@@ -422,20 +424,23 @@ mod tests {
 
 mod container;
 mod events;
+#[cfg(test)]
+mod tests;
 
-pub use container::{ClientState, StateContainer, RepeatMode};
-pub use events::{ClientEvent, EventBus, EventFilter, ErrorCode};
+pub use crate::types::RepeatMode;
+pub use container::{ClientState, StateContainer};
+pub use events::{ClientEvent, ErrorCode, EventBus, EventFilter};
 ```
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] State container tracks all client state
-- [ ] State changes notify subscribers
-- [ ] Event bus distributes events
-- [ ] Event filtering works
-- [ ] All unit tests pass
+- [x] State container tracks all client state
+- [x] State changes notify subscribers
+- [x] Event bus distributes events
+- [x] Event filtering works
+- [x] All unit tests pass
 
 ---
 

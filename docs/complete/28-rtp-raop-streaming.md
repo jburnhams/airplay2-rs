@@ -1,5 +1,8 @@
 # Section 28: RTP Audio Streaming for RAOP
 
+> **VERIFIED**: Checked against `src/protocol/rtp/raop*.rs` modules on 2025-01-30.
+> RAOP RTP streaming implemented with timing, control, and audio channels.
+
 ## Dependencies
 - **Section 06**: RTP/RAOP Protocol (must be complete)
 - **Section 27**: RTSP Session for RAOP (must be complete)

@@ -1,5 +1,8 @@
 # Section 35: RAOP Service Advertisement
 
+> **VERIFIED**: Checked against `src/discovery/advertiser.rs` on 2025-01-30.
+> Service advertisement implemented for RAOP receiver mode.
+
 ## Dependencies
 - **Section 02**: Core Types, Errors & Config (must be complete)
 - **Section 08**: mDNS Discovery (understanding of mdns-sd usage)

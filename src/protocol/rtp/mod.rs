@@ -16,6 +16,10 @@ mod timing;
 #[cfg(test)]
 mod codec_tests;
 #[cfg(test)]
+mod control_tests;
+#[cfg(test)]
+mod packet_buffer_tests;
+#[cfg(test)]
 mod packet_tests;
 #[cfg(test)]
 mod raop_tests;
@@ -24,7 +28,7 @@ mod timing_tests;
 
 pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpEncryptionMode};
 pub use control::{ControlPacket, RetransmitRequest};
-pub use packet::{PayloadType, RtpDecodeError, RtpHeader, RtpPacket};
+pub use packet::{PayloadType, RtpHeader, RtpPacket};
 pub use timing::{NtpTimestamp, TimingPacket, TimingRequest, TimingResponse};
 
 /// RTP protocol constants for AirPlay

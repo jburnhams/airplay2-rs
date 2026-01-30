@@ -1,5 +1,7 @@
 # Section 02: Core Types, Errors & Configuration
 
+**VERIFIED**: AirPlayDevice (addresses, raop fields, methods), QueueItemId/QueueItem, RAOP types exports, RaopError enum checked against source.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 
@@ -26,6 +28,7 @@ This section defines the foundational types used throughout the library: device 
 **File:** `src/types/device.rs`
 
 ```rust
+use super::raop::RaopCapabilities;
 use std::net::IpAddr;
 use std::collections::HashMap;
 
@@ -41,8 +44,8 @@ pub struct AirPlayDevice {
     /// Device model identifier (e.g., "AudioAccessory5,1" for HomePod Mini)
     pub model: Option<String>,
 
-    /// Resolved IP address
-    pub address: IpAddr,
+    /// Resolved IP addresses
+    pub addresses: Vec<IpAddr>,
 
     /// AirPlay service port
     pub port: u16,
@@ -50,8 +53,14 @@ pub struct AirPlayDevice {
     /// Device capabilities parsed from features flags
     pub capabilities: DeviceCapabilities,
 
+    /// RAOP (AirPlay 1) service port
+    pub raop_port: Option<u16>,
+
+    /// RAOP capabilities parsed from TXT records
+    pub raop_capabilities: Option<RaopCapabilities>,
+
     /// Raw TXT record data for protocol use
-    pub(crate) txt_records: HashMap<String, String>,
+    pub txt_records: HashMap<String, String>,
 }
 
 /// Device capability flags parsed from AirPlay features
@@ -94,6 +103,11 @@ impl AirPlayDevice {
         self.capabilities.airplay2
     }
 
+    /// Check if this device supports RAOP (AirPlay 1)
+    pub fn supports_raop(&self) -> bool {
+        self.raop_port.is_some()
+    }
+
     /// Check if this device can be part of a multi-room group
     pub fn supports_grouping(&self) -> bool {
         self.capabilities.supports_grouping
@@ -104,6 +118,16 @@ impl AirPlayDevice {
         self.txt_records
             .get("vv")
             .and_then(|v| v.parse().ok())
+    }
+
+    /// Get the primary IP address (prefers IPv4 for better connectivity)
+    pub fn address(&self) -> IpAddr {
+        self.addresses
+            .iter()
+            .find(|addr| addr.is_ipv4())
+            .or_else(|| self.addresses.first())
+            .copied()
+            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED))
     }
 }
 ```
@@ -210,19 +234,53 @@ impl TrackInfo {
 }
 ```
 
-- [x] **2.2.2** Implement `QueueItem` for internal queue tracking
+- [x] **2.2.2** Implement `QueueItemId` and `QueueItem` for internal queue tracking
 
 **File:** `src/types/track.rs`
 
 ```rust
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Unique identifier for a queue item
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QueueItemId(pub u64);
+
+impl QueueItemId {
+    /// Generate a new unique ID
+    pub fn new() -> Self {
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Default for QueueItemId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// A track in the playback queue with unique identifier
 #[derive(Debug, Clone)]
 pub struct QueueItem {
     /// Unique identifier for this queue position
-    pub item_id: i32,
+    pub id: QueueItemId,
 
     /// Track information
     pub track: TrackInfo,
+
+    /// Original position (before shuffle)
+    pub original_position: usize,
+}
+
+impl QueueItem {
+    /// Create a new queue item
+    pub fn new(track: TrackInfo, position: usize) -> Self {
+        Self {
+            id: QueueItemId::new(),
+            track,
+            original_position: position,
+        }
+    }
 }
 ```
 
@@ -330,13 +388,15 @@ impl From<&PlaybackState> for PlaybackInfo {
     fn from(state: &PlaybackState) -> Self {
         Self {
             current_track: state.current_track.clone(),
-            index: state.queue_index.map(|i| i as u32).unwrap_or(0),
+            index: state.queue_index
+                .and_then(|i| u32::try_from(i).ok())
+                .unwrap_or(0),
             position_ms: (state.position_secs * 1000.0) as u32,
             is_playing: state.is_playing,
             items: state
                 .queue
                 .iter()
-                .map(|item| (item.track.clone(), item.item_id))
+                .map(|item| (item.track.clone(), item.id.0 as i32))
                 .collect(),
         }
     }
@@ -466,9 +526,45 @@ impl AirPlayConfigBuilder {
 use std::io;
 use thiserror::Error;
 
+/// RAOP-specific errors
+#[derive(Debug, Error)]
+pub enum RaopError {
+    /// RSA authentication failed
+    #[error("RSA authentication failed")]
+    AuthenticationFailed,
+
+    /// Unsupported encryption type
+    #[error("unsupported encryption type: {0}")]
+    UnsupportedEncryption(String),
+
+    /// SDP parsing error
+    #[error("SDP parsing error: {0}")]
+    SdpParseError(String),
+
+    /// Key exchange failed
+    #[error("key exchange failed: {0}")]
+    KeyExchangeFailed(String),
+
+    /// Audio encryption error
+    #[error("audio encryption error: {0}")]
+    EncryptionError(String),
+
+    /// Timing synchronization failed
+    #[error("timing sync failed")]
+    TimingSyncFailed,
+
+    /// Retransmit buffer overflow
+    #[error("retransmit buffer overflow")]
+    RetransmitBufferOverflow,
+}
+
 /// Errors that can occur during AirPlay operations
 #[derive(Debug, Error)]
 pub enum AirPlayError {
+    /// RAOP error
+    #[error("RAOP error: {0}")]
+    Raop(#[from] RaopError),
+
     // ===== Discovery Errors =====
 
     /// Device was not found during discovery
@@ -628,6 +724,21 @@ pub enum AirPlayError {
     NotImplemented {
         feature: String,
     },
+
+    /// Invalid parameter provided
+    #[error("invalid parameter: {name} - {message}")]
+    InvalidParameter {
+        name: String,
+        message: String,
+    },
+
+    /// General I/O error
+    #[error("I/O error: {message}")]
+    IoError {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 impl AirPlayError {
@@ -668,15 +779,18 @@ pub type Result<T> = std::result::Result<T, AirPlayError>;
 ```rust
 //! Core types for the airplay2 library
 
-mod device;
-mod track;
-mod state;
 mod config;
+mod device;
+/// RAOP (AirPlay 1) types
+pub mod raop;
+mod state;
+mod track;
 
-pub use device::{AirPlayDevice, DeviceCapabilities};
-pub use track::{TrackInfo, QueueItem};
-pub use state::{PlaybackState, PlaybackInfo, RepeatMode, ConnectionState};
 pub use config::{AirPlayConfig, AirPlayConfigBuilder};
+pub use device::{AirPlayDevice, DeviceCapabilities};
+pub use raop::{RaopCapabilities, RaopCodec, RaopEncryption, RaopMetadataType};
+pub use state::{ConnectionState, PlaybackInfo, PlaybackState, RepeatMode};
+pub use track::{QueueItem, QueueItemId, TrackInfo};
 ```
 
 ---

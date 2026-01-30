@@ -1,5 +1,8 @@
 # Section 16: Queue Management
 
+> **VERIFIED**: Checked against `src/control/queue.rs` on 2025-01-30.
+> Implementation complete with queue management.
+
 ## Dependencies
 - **Section 02**: Core Types (must be complete)
 - **Section 13**: PCM Streaming (must be complete)
@@ -26,7 +29,7 @@ This section implements a playback queue for managing multiple tracks, supportin
 
 ### 16.1 Queue Implementation
 
-- [ ] **16.1.1** Implement playback queue
+- [x] **16.1.1** Implement playback queue
 
 **File:** `src/control/queue.rs`
 

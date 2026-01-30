@@ -1,5 +1,8 @@
 # Section 25: RAOP Service Discovery
 
+> **VERIFIED**: Checked against `src/discovery/raop.rs` on 2025-01-30.
+> RAOP discovery integrated with mDNS browser.
+
 ## Dependencies
 - **Section 08**: mDNS Discovery (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)

@@ -1,5 +1,8 @@
 # Section 38: SDP Parsing & Stream Setup
 
+> **VERIFIED**: Checked against `src/protocol/sdp/mod.rs` and submodules on 2025-01-30.
+> SDP parsing complete with parser.rs, builder.rs, raop.rs modules.
+
 ## Dependencies
 - **Section 36**: RTSP Server (Sans-IO) (ANNOUNCE handling)
 - **Section 37**: Session Management (StreamParameters storage)

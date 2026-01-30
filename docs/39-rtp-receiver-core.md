@@ -35,7 +35,7 @@ The receiver must:
 
 ### 39.1 RTP Packet Reception
 
-- [x] **39.1.1** Implement RTP packet receiver
+- [ ] **39.1.1** Implement RTP packet receiver
 
 **File:** `src/receiver/rtp_receiver.rs`
 
@@ -231,7 +231,7 @@ impl RtpHeader {
 
 ### 39.2 Audio Decryptor
 
-- [x] **39.2.1** Implement AES-128-CBC decryption for audio
+- [ ] **39.2.1** Implement AES-128-CBC decryption for audio
 
 **File:** `src/receiver/rtp_receiver.rs` (continued)
 
@@ -308,7 +308,7 @@ impl AudioDecryptor {
 
 ### 39.3 Control Port Handler
 
-- [x] **39.3.1** Implement control port receiver for sync packets
+- [ ] **39.3.1** Implement control port receiver for sync packets
 
 **File:** `src/receiver/control_receiver.rs`
 
@@ -454,7 +454,7 @@ impl ControlReceiver {
 
 ### 39.4 Packet Loss Detection
 
-- [x] **39.4.1** Implement sequence number tracking and gap detection
+- [ ] **39.4.1** Implement sequence number tracking and gap detection
 
 **File:** `src/receiver/sequence_tracker.rs`
 
@@ -659,7 +659,7 @@ mod tests {
 
 ### 39.5 Combined Receiver Manager
 
-- [x] **39.5.1** Implement unified receiver management
+- [ ] **39.5.1** Implement unified receiver management
 
 **File:** `src/receiver/receiver_manager.rs`
 
@@ -932,16 +932,16 @@ fn build_test_rtp_packet(seq: u16, timestamp: u32, payload: &[u8]) -> Vec<u8> {
 
 ## Acceptance Criteria
 
-- [x] Parse RTP headers correctly (version, PT, seq, timestamp, SSRC)
-- [x] Decrypt AES-128-CBC payloads correctly
-- [x] Handle unencrypted streams
-- [x] Receive packets on audio UDP port
-- [x] Receive sync packets on control port
-- [x] Detect packet loss via sequence gaps
-- [x] Calculate accurate loss statistics
-- [x] Handle 16-bit sequence wraparound
-- [x] All unit tests pass
-- [x] Integration tests pass
+- [ ] Parse RTP headers correctly (version, PT, seq, timestamp, SSRC)
+- [ ] Decrypt AES-128-CBC payloads correctly
+- [ ] Handle unencrypted streams
+- [ ] Receive packets on audio UDP port
+- [ ] Receive sync packets on control port
+- [ ] Detect packet loss via sequence gaps
+- [ ] Calculate accurate loss statistics
+- [ ] Handle 16-bit sequence wraparound
+- [ ] All unit tests pass
+- [ ] Integration tests pass
 
 ---
 
