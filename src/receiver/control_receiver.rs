@@ -123,8 +123,8 @@ impl ControlReceiver {
     fn parse_retransmit(data: &[u8]) -> Option<ControlEvent> {
         // Retransmit request format:
         // Bytes 0-1: Header
-        // Bytes 2-3: Sequence of missing packet
-        // Bytes 4-5: Count
+        // Bytes 4-5: Sequence of missing packet
+        // Bytes 6-7: Count
 
         if data.len() < 8 {
             return None;
