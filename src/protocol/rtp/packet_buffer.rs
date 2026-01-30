@@ -125,6 +125,12 @@ impl PacketLossDetector {
         // Calculate how many packets were skipped
         let diff = sequence.wrapping_sub(self.expected_seq);
 
+        // Check for reordered (old) packet
+        // If diff is greater than half the range (32768), it means sequence is behind expected_seq
+        if diff >= 0x8000 {
+            return Vec::new();
+        }
+
         if diff > 0 && diff < 100 {
             // Packets were lost
             for i in 0..diff {
