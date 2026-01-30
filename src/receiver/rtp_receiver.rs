@@ -5,17 +5,14 @@
 
 use crate::protocol::rtp::{RtpDecodeError, RtpHeader};
 use crate::receiver::session::StreamParameters;
-use aes::Aes128;
 use aes::cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray};
+use aes::Aes128;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 /// Maximum UDP packet size
 const MAX_PACKET_SIZE: usize = 2048;
-
-/// RTP audio packet payload type (0x60 = 96)
-const PAYLOAD_TYPE_AUDIO: u8 = 0x60;
 
 /// Received and decrypted audio packet
 #[derive(Debug, Clone)]
@@ -105,7 +102,9 @@ impl AudioDecryptor {
             let mut block = GenericArray::clone_from_slice(chunk);
 
             // Save ciphertext for next XOR
-            let ciphertext: [u8; 16] = chunk.try_into().unwrap();
+            let ciphertext: [u8; 16] = chunk
+                .try_into()
+                .map_err(|_| RtpReceiveError::DecryptionFailed("Invalid chunk size".to_string()))?;
 
             // Decrypt block
             cipher.decrypt_block(&mut block);
@@ -196,9 +195,12 @@ impl RtpAudioReceiver {
         let header = RtpHeader::decode(data)?;
 
         // Check payload type
-        let pt_byte = header.payload_type as u8;
-        if !matches!(header.payload_type, crate::protocol::rtp::PayloadType::AudioRealtime | crate::protocol::rtp::PayloadType::AudioBuffered) {
-             return Err(RtpReceiveError::WrongPayloadType(header.payload_type as u8));
+        if !matches!(
+            header.payload_type,
+            crate::protocol::rtp::PayloadType::AudioRealtime
+                | crate::protocol::rtp::PayloadType::AudioBuffered
+        ) {
+            return Err(RtpReceiveError::WrongPayloadType(header.payload_type as u8));
         }
 
         // Extract payload (after header size)
