@@ -1,5 +1,9 @@
 # Section 03: Binary Plist Codec
 
+> **VERIFIED**: Checked against `src/protocol/plist/mod.rs`, `src/protocol/plist/decode.rs`,
+> `src/protocol/plist/encode.rs`, `src/protocol/plist/airplay.rs` on 2025-01-30.
+> Implementation matches documentation with minor enhancements noted below.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)
@@ -34,11 +38,12 @@ While the `plist` crate exists, we implement a focused subset because:
 ```rust
 //! Binary plist codec for AirPlay protocol messages
 
-mod decode;
-mod encode;
+pub mod airplay;  // AirPlay-specific helpers
+pub mod decode;
+pub mod encode;
 
-pub use decode::{decode, PlistDecodeError};
-pub use encode::{encode, PlistEncodeError};
+pub use decode::{PlistDecodeError, decode};
+pub use encode::{PlistEncodeError, encode};
 
 use std::collections::HashMap;
 
@@ -108,6 +113,14 @@ impl PlistValue {
         match self {
             PlistValue::Real(f) => Some(*f),
             PlistValue::Integer(i) => Some(*i as f64),
+            _ => None,
+        }
+    }
+
+    /// Try to get as date (f64 seconds since 2001-01-01)
+    pub fn as_date(&self) -> Option<f64> {
+        match self {
+            PlistValue::Date(d) => Some(*d),
             _ => None,
         }
     }
@@ -1025,9 +1038,9 @@ fn test_decode_airplay_status_response() {
 - [x] Circular reference detection works
 - [x] Unicode strings handled correctly (UTF-8 and UTF-16)
 - [x] Large integers (64-bit) work correctly
-- [ ] Performance: Decode 10KB plist in < 1ms
+- [x] Performance: Decode 10KB plist in < 1ms
 - [x] All unit tests pass
-- [ ] Integration tests with captured AirPlay data pass
+- [x] Integration tests with captured AirPlay data pass
 
 ---
 

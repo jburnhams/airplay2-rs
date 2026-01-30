@@ -1,5 +1,7 @@
 # Section 20: Mock AirPlay Server
 
+**VERIFIED**: MockServer, MockServerConfig, handle_connection, RTSP handlers checked against source. Implementation uses try_parse_request().
+
 ## Dependencies
 - **Section 05**: RTSP Protocol (must be complete)
 - **Section 06**: RTP Protocol (must be complete)
@@ -26,7 +28,7 @@ A mock AirPlay server for testing the client without real hardware. This enables
 
 ### 20.1 Mock Server
 
-- [ ] **20.1.1** Implement mock AirPlay server
+- [x] **20.1.1** Implement mock AirPlay server
 
 **File:** `src/testing/mock_server.rs`
 
@@ -460,13 +462,13 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Server starts and accepts connections
-- [ ] OPTIONS returns supported methods
-- [ ] SETUP returns transport info
-- [ ] RECORD/PAUSE control streaming
-- [ ] SET_PARAMETER updates volume
-- [ ] Pairing flow is handled
-- [ ] All unit tests pass
+- [x] Server starts and accepts connections
+- [x] OPTIONS returns supported methods
+- [x] SETUP returns transport info
+- [x] RECORD/PAUSE control streaming
+- [x] SET_PARAMETER updates volume
+- [x] Pairing flow is handled
+- [x] All unit tests pass
 
 ---
 

@@ -1,5 +1,8 @@
 # Section 19: Multi-room Grouping
 
+> **NOTE**: Multi-room grouping is documented but `src/multiroom/` module does not exist.
+> This feature is planned but not yet implemented. Checked 2025-01-30.
+
 ## Dependencies
 - **Section 08**: mDNS Discovery (must be complete)
 - **Section 10**: Connection Management (must be complete)

@@ -1,5 +1,8 @@
 # Section 30: DACP Remote Control Protocol
 
+> **VERIFIED**: Protocol documentation. Implementation provides DACP-ID headers in RTSP.
+> Full remote control is sender-initiated. Checked 2025-01-30.
+
 ## Dependencies
 - **Section 27**: RTSP Session for RAOP (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)

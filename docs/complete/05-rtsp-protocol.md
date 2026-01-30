@@ -1,5 +1,9 @@
 # Section 05: RTSP Protocol (Sans-IO)
 
+> **VERIFIED**: Checked against `src/protocol/rtsp/mod.rs` and submodules on 2025-01-30.
+> Implementation includes additional methods (Get, SetRateAnchorTime) and modules
+> (server_codec, transport) beyond original spec.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)
@@ -36,17 +40,35 @@ The AirPlay variant of RTSP extends standard RTSP with:
 ```rust
 //! Sans-IO RTSP protocol implementation for AirPlay
 
-mod request;
-mod response;
-mod codec;
-mod session;
-mod headers;
+pub mod codec;
+#[cfg(test)]
+mod codec_tests;
+#[cfg(test)]
+mod compliance_tests;
+pub mod headers;
+#[cfg(test)]
+mod headers_tests;
+pub mod request;
+#[cfg(test)]
+mod request_tests;
+pub mod response;
+#[cfg(test)]
+mod response_tests;
+pub mod server_codec;  // Server-side codec for receiver mode
+#[cfg(test)]
+mod server_codec_tests;
+pub mod session;
+#[cfg(test)]
+mod session_tests;
+pub mod transport;  // Transport parameter parsing
+#[cfg(test)]
+mod transport_tests;
 
+pub use codec::{RtspCodec, RtspCodecError};
+pub use headers::Headers;
 pub use request::{RtspRequest, RtspRequestBuilder};
 pub use response::{RtspResponse, StatusCode};
-pub use codec::{RtspCodec, RtspCodecError};
 pub use session::{RtspSession, SessionState};
-pub use headers::Headers;
 
 /// RTSP methods used in AirPlay
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,11 +95,16 @@ pub enum Method {
     GetParameter,
     /// POST for pairing/auth
     Post,
+    /// GET for info
+    Get,
+    /// Set playback rate and anchor time
+    SetRateAnchorTime,
 }
 
 impl Method {
     /// Convert to RTSP method string
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
         match self {
             Method::Options => "OPTIONS",
             Method::Announce => "ANNOUNCE",
@@ -90,24 +117,31 @@ impl Method {
             Method::SetParameter => "SET_PARAMETER",
             Method::GetParameter => "GET_PARAMETER",
             Method::Post => "POST",
+            Method::Get => "GET",
+            Method::SetRateAnchorTime => "SETRATEANCHORTIME",
         }
     }
+}
 
-    /// Parse from string
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for Method {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
-            "OPTIONS" => Some(Method::Options),
-            "ANNOUNCE" => Some(Method::Announce),
-            "SETUP" => Some(Method::Setup),
-            "RECORD" => Some(Method::Record),
-            "PLAY" => Some(Method::Play),
-            "PAUSE" => Some(Method::Pause),
-            "FLUSH" => Some(Method::Flush),
-            "TEARDOWN" => Some(Method::Teardown),
-            "SET_PARAMETER" => Some(Method::SetParameter),
-            "GET_PARAMETER" => Some(Method::GetParameter),
-            "POST" => Some(Method::Post),
-            _ => None,
+            "OPTIONS" => Ok(Method::Options),
+            "ANNOUNCE" => Ok(Method::Announce),
+            "SETUP" => Ok(Method::Setup),
+            "RECORD" => Ok(Method::Record),
+            "PLAY" => Ok(Method::Play),
+            "PAUSE" => Ok(Method::Pause),
+            "FLUSH" => Ok(Method::Flush),
+            "TEARDOWN" => Ok(Method::Teardown),
+            "SET_PARAMETER" => Ok(Method::SetParameter),
+            "GET_PARAMETER" => Ok(Method::GetParameter),
+            "POST" => Ok(Method::Post),
+            "GET" => Ok(Method::Get),
+            "SETRATEANCHORTIME" => Ok(Method::SetRateAnchorTime),
+            _ => Err(()),
         }
     }
 }
@@ -991,9 +1025,11 @@ mod tests {
 
     #[test]
     fn test_method_from_str() {
-        assert_eq!(Method::from_str("OPTIONS"), Some(Method::Options));
-        assert_eq!(Method::from_str("options"), Some(Method::Options));
-        assert_eq!(Method::from_str("INVALID"), None);
+        use std::str::FromStr;
+        assert_eq!(Method::from_str("OPTIONS"), Ok(Method::Options));
+        assert_eq!(Method::from_str("options"), Ok(Method::Options));
+        assert_eq!(Method::from_str("GET"), Ok(Method::Get));
+        assert!(Method::from_str("INVALID").is_err());
     }
 }
 ```

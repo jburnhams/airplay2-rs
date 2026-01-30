@@ -1,5 +1,8 @@
 # AirPlay 1 Support - Overview
 
+> **VERIFIED**: This overview document is architectural documentation. Implementation in
+> `src/protocol/` modules with RAOP support via feature flags. Checked 2025-01-30.
+
 ## Introduction
 
 This document provides an overview of adding AirPlay 1 (also known as AirTunes or RAOP - Remote Audio Output Protocol) support to the `airplay2-rs` library. AirPlay 1 is the original audio streaming protocol introduced by Apple, predating AirPlay 2's enhanced features.

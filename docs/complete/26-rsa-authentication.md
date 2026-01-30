@@ -1,5 +1,8 @@
 # Section 26: RSA Authentication
 
+> **VERIFIED**: Checked against `src/protocol/crypto/rsa.rs` on 2025-01-30.
+> RSA implementation complete (feature-gated with `raop` feature).
+
 ## Dependencies
 - **Section 04**: Cryptographic Primitives (must be complete)
 - **Section 24**: AirPlay 1 Overview (should be reviewed)

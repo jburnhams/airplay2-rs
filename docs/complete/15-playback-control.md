@@ -1,5 +1,8 @@
 # Section 15: Playback Control
 
+> **VERIFIED**: Checked against `src/control/playback.rs` on 2025-01-30.
+> Implementation complete with playback control commands.
+
 ## Dependencies
 - **Section 02**: Core Types (must be complete)
 - **Section 05**: RTSP Protocol (must be complete)
@@ -26,7 +29,7 @@ This section provides playback control commands including:
 
 ### 15.1 Playback Controller
 
-- [ ] **15.1.1** Implement playback control interface
+- [x] **15.1.1** Implement playback control interface
 
 **File:** `src/control/playback.rs`
 

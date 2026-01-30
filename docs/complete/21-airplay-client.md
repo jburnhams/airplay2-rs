@@ -1,5 +1,9 @@
 # Section 21: AirPlayClient Implementation
 
+> **NOTE**: Unified AirPlayClient is documented but `src/client.rs` does not exist.
+> Individual components (discovery, connection, streaming, control) are implemented.
+> High-level unified client is planned but not yet implemented. Checked 2025-01-30.
+
 ## Dependencies
 - **Section 08**: mDNS Discovery (must be complete)
 - **Section 10**: Connection Management (must be complete)

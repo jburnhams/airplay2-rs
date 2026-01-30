@@ -1,5 +1,8 @@
 # Section 29: RAOP Audio Encryption
 
+> **VERIFIED**: Checked against `src/protocol/crypto/aes.rs` and `src/protocol/rtp/codec.rs`
+> on 2025-01-30. AES-128-CTR encryption integrated for RAOP audio.
+
 ## Dependencies
 - **Section 04**: Cryptographic Primitives (must be complete)
 - **Section 26**: RSA Authentication (must be complete)

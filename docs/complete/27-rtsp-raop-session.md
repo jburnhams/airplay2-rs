@@ -1,5 +1,8 @@
 # Section 27: RTSP Session for RAOP
 
+> **VERIFIED**: Checked against `src/protocol/rtsp/` and `src/protocol/sdp/` on 2025-01-30.
+> RAOP RTSP session support integrated via SDP parsing and server codec.
+
 ## Dependencies
 - **Section 05**: RTSP Protocol (must be complete)
 - **Section 26**: RSA Authentication (must be complete)

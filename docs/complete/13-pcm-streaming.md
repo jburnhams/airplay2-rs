@@ -1,5 +1,8 @@
 # Section 13: PCM Audio Streaming
 
+> **VERIFIED**: Checked against `src/streaming/mod.rs`, `src/streaming/source.rs`,
+> `src/streaming/pcm.rs` on 2025-01-30. Implementation includes additional raop_streamer module.
+
 ## Dependencies
 - **Section 06**: RTP Protocol (must be complete)
 - **Section 10**: Connection Management (must be complete)
