@@ -29,7 +29,7 @@ AirPlay 2 supports multi-room audio where multiple devices can be grouped to pla
 
 ### 19.1 Group Manager
 
-- [x] **19.1.1** Implement device grouping
+- [] **19.1.1** Implement device grouping
 
 **File:** `src/multiroom/group.rs`
 
@@ -457,12 +457,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [x] Groups can be created/deleted
-- [x] Devices can be added/removed from groups
-- [x] Per-device volume works
-- [x] Group volume affects all members
-- [x] Leader promotion works
-- [x] All unit tests pass
+- [] Groups can be created/deleted
+- [] Devices can be added/removed from groups
+- [] Per-device volume works
+- [] Group volume affects all members
+- [] Leader promotion works
+- [] All unit tests pass
 
 ---
 
