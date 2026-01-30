@@ -34,7 +34,7 @@ This is the main client implementation that ties together all components into a 
 
 ### 21.1 AirPlayClient
 
-- [x] **21.1.1** Implement the main client
+- [] **21.1.1** Implement the main client
 
 **File:** `src/client.rs`
 
