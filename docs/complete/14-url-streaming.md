@@ -1,5 +1,8 @@
 # Section 14: URL-Based Streaming
 
+> **VERIFIED**: Checked against `src/streaming/url.rs` on 2025-01-30.
+> Implementation complete with URL streaming support.
+
 ## Dependencies
 - **Section 05**: RTSP Protocol (must be complete)
 - **Section 10**: Connection Management (must be complete)

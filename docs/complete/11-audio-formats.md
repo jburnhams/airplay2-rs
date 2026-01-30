@@ -1,5 +1,8 @@
 # Section 11: Audio Format and Codec Support
 
+> **VERIFIED**: Checked against `src/audio/format.rs`, `src/audio/convert.rs` on 2025-01-30.
+> Implementation complete with additional raop_encoder module for RAOP encoding.
+
 ## Dependencies
 - **Section 01**: Project Setup & CI/CD (must be complete)
 - **Section 02**: Core Types, Errors & Configuration (must be complete)

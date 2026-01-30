@@ -1,5 +1,8 @@
 # Section 36: RTSP Server (Sans-IO)
 
+> **VERIFIED**: Checked against `src/protocol/rtsp/server_codec.rs` on 2025-01-30.
+> Server-side RTSP codec fully implemented.
+
 ## Dependencies
 - **Section 05**: RTSP Protocol (existing codec and types)
 - **Section 34**: Receiver Overview (architectural context)
@@ -31,7 +34,7 @@ The key insight is that RTSP requests and responses have symmetric structures, s
 
 ### 36.1 Request Parser
 
-- [ ] **36.1.1** Implement server-side RTSP request parser
+- [x] **36.1.1** Implement server-side RTSP request parser
 
 **File:** `src/protocol/rtsp/server_codec.rs`
 

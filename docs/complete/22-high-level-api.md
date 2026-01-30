@@ -1,5 +1,9 @@
 # Section 22: High-Level API (AirPlayPlayer)
 
+> **NOTE**: AirPlayPlayer is documented but `src/player.rs` does not exist.
+> This simplified API depends on AirPlayClient which is also not implemented.
+> Planned but not yet implemented. Checked 2025-01-30.
+
 ## Dependencies
 - **Section 21**: AirPlayClient (must be complete)
 

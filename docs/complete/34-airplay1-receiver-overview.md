@@ -1,5 +1,8 @@
 # Section 34: AirPlay 1 Receiver Overview
 
+> **VERIFIED**: Checked against `src/receiver/mod.rs` and submodules on 2025-01-30.
+> Receiver implementation includes rtsp_handler, session_manager, announce_handler modules.
+
 ## Dependencies
 - **Section 02**: Core Types, Errors & Config (must be complete)
 - **Section 24**: AirPlay 1 Overview (recommended reading)

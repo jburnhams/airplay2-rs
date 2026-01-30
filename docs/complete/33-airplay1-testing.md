@@ -1,5 +1,8 @@
 # Section 33: AirPlay 1 Testing Strategy
 
+> **VERIFIED**: Test strategy documentation. Unit tests exist in *_tests.rs modules.
+> Integration tests via examples/. Checked 2025-01-30.
+
 ## Dependencies
 - All previous AirPlay 1 sections (24-32)
 - **Section 20**: Mock AirPlay Server (for reference)
