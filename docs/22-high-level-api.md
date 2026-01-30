@@ -24,7 +24,7 @@ A simplified high-level API wrapper for common use cases. While `AirPlayClient` 
 
 ### 22.1 AirPlayPlayer
 
-- [x] **22.1.1** Implement high-level player
+- [] **22.1.1** Implement high-level player
 
 **File:** `src/player.rs`
 
