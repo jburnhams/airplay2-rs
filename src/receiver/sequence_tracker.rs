@@ -51,7 +51,7 @@ impl SequenceTracker {
         self.packets_received += 1;
 
         let gap = if let Some(expected) = self.expected_seq {
-            let gap_size = self.sequence_gap(expected, seq);
+            let gap_size = Self::sequence_gap(expected, seq);
 
             if gap_size > 0 && gap_size < 1000 {
                 // Gap detected (but not wrap-around)
@@ -85,7 +85,7 @@ impl SequenceTracker {
 
     /// Calculate gap between expected and actual sequence numbers
     /// Handles 16-bit wraparound correctly
-    fn sequence_gap(&self, expected: u16, actual: u16) -> u16 {
+    fn sequence_gap(expected: u16, actual: u16) -> u16 {
         actual.wrapping_sub(expected)
     }
 
@@ -95,14 +95,16 @@ impl SequenceTracker {
         if let Some(expected) = self.expected_seq {
             let diff = seq.wrapping_sub(expected);
             // Accept if within reasonable window (ahead or slightly behind)
-            diff < 1000 || diff > 65000
+            // diff < 1000 || diff > 65000
+            !(1000..=65000).contains(&diff)
         } else {
-            true  // First packet
+            true // First packet
         }
     }
 
     /// Get packet loss ratio (0.0 to 1.0)
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn loss_ratio(&self) -> f64 {
         if self.packets_received == 0 {
             return 0.0;

@@ -1,8 +1,8 @@
 use super::control_receiver::*;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use std::time::Duration;
 
 #[tokio::test]
 async fn test_sync_packet_reception() {
@@ -13,21 +13,22 @@ async fn test_sync_packet_reception() {
     let (tx, mut rx) = mpsc::channel(1);
     let receiver = ControlReceiver::new(Arc::new(receiver_socket), tx);
 
-    let handle = tokio::spawn(async move {
-        receiver.run().await
-    });
+    let handle = tokio::spawn(async move { receiver.run().await });
 
     let data = [
-        0x90, 0xD4,  // Header with sync type
-        0x00, 0x01,  // Sequence
-        0x00, 0x00, 0x01, 0x00,  // RTP timestamp = 256
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,  // NTP timestamp = 1
-        0x00, 0x00, 0x00, 0xFF,  // RTP at NTP = 255
+        0x90, 0xD4, // Header with sync type
+        0x00, 0x01, // Sequence
+        0x00, 0x00, 0x01, 0x00, // RTP timestamp = 256
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // NTP timestamp = 1
+        0x00, 0x00, 0x00, 0xFF, // RTP at NTP = 255
     ];
 
     sender_socket.send_to(&data, receiver_addr).await.unwrap();
 
-    let event = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await.unwrap().unwrap();
+    let event = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
 
     if let ControlEvent::Sync(sync) = event {
         assert!(sync.extension);
@@ -50,20 +51,21 @@ async fn test_retransmit_packet_reception() {
     let (tx, mut rx) = mpsc::channel(1);
     let receiver = ControlReceiver::new(Arc::new(receiver_socket), tx);
 
-    let handle = tokio::spawn(async move {
-        receiver.run().await
-    });
+    let handle = tokio::spawn(async move { receiver.run().await });
 
     let data = [
-        0x80, 0xD5,  // Header with retransmit type
-        0x00, 0x00,  // ignored
-        0x00, 0x0A,  // First seq = 10
-        0x00, 0x05,  // Count = 5
+        0x80, 0xD5, // Header with retransmit type
+        0x00, 0x00, // ignored
+        0x00, 0x0A, // First seq = 10
+        0x00, 0x05, // Count = 5
     ];
 
     sender_socket.send_to(&data, receiver_addr).await.unwrap();
 
-    let event = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await.unwrap().unwrap();
+    let event = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
 
     if let ControlEvent::RetransmitRequest(req) = event {
         assert_eq!(req.first_seq, 10);

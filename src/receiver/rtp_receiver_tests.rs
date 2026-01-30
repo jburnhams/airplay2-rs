@@ -2,9 +2,9 @@ use super::rtp_receiver::*;
 use crate::protocol::rtp::RtpHeader;
 use crate::receiver::session::StreamParameters;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use std::time::Duration;
 
 #[test]
 fn test_audio_decryptor() {
@@ -36,9 +36,7 @@ async fn test_packet_reception() {
     let receiver = RtpAudioReceiver::new(Arc::new(receiver_socket), params, tx);
 
     // Start receiver in background
-    let handle = tokio::spawn(async move {
-        receiver.run().await
-    });
+    let handle = tokio::spawn(async move { receiver.run().await });
 
     // Create a dummy RTP packet
     let header = RtpHeader::new_audio(123, 456, 789, false);
@@ -52,7 +50,10 @@ async fn test_packet_reception() {
     sender_socket.send_to(&data, receiver_addr).await.unwrap();
 
     // Receive and verify
-    let packet = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await.unwrap().unwrap();
+    let packet = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
 
     assert_eq!(packet.sequence, 123);
     assert_eq!(packet.timestamp, 456);

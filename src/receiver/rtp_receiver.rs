@@ -3,13 +3,13 @@
 //! Handles incoming RTP packets on the audio UDP port,
 //! decrypts them, and forwards to the jitter buffer.
 
-use crate::protocol::rtp::{RtpHeader, RtpDecodeError};
+use crate::protocol::rtp::{RtpDecodeError, RtpHeader};
 use crate::receiver::session::StreamParameters;
+use aes::Aes128;
+use aes::cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use aes::Aes128;
-use aes::cipher::{BlockDecrypt, KeyInit, generic_array::GenericArray};
 
 /// Maximum UDP packet size
 const MAX_PACKET_SIZE: usize = 2048;
@@ -73,6 +73,12 @@ impl AudioDecryptor {
     ///
     /// RAOP uses AES-128-CBC with the IV from SDP.
     /// Each packet uses the same IV (not chained between packets).
+    ///
+    /// # Errors
+    /// Returns `RtpReceiveError` if decryption fails (though currently AES-128-CBC via `aes` crate doesn't typically fail if input is valid size).
+    ///
+    /// # Panics
+    /// Panics if the chunk size in the loop is not 16 bytes, which shouldn't happen due to `chunks(block_size)`.
     pub fn decrypt(&self, encrypted: &[u8]) -> Result<Vec<u8>, RtpReceiveError> {
         if encrypted.is_empty() {
             return Ok(Vec::new());
@@ -139,7 +145,8 @@ impl RtpAudioReceiver {
         stream_params: StreamParameters,
         packet_tx: mpsc::Sender<AudioPacket>,
     ) -> Self {
-        let decryptor = if let (Some(key), Some(iv)) = (stream_params.aes_key, stream_params.aes_iv) {
+        let decryptor = if let (Some(key), Some(iv)) = (stream_params.aes_key, stream_params.aes_iv)
+        {
             Some(AudioDecryptor::new(key, iv))
         } else {
             None
@@ -154,6 +161,9 @@ impl RtpAudioReceiver {
     }
 
     /// Run the receive loop
+    ///
+    /// # Errors
+    /// Returns `RtpReceiveError` if socket access fails.
     pub async fn run(self) -> Result<(), RtpReceiveError> {
         let mut buf = [0u8; MAX_PACKET_SIZE];
 
@@ -188,7 +198,7 @@ impl RtpAudioReceiver {
         // Check payload type
         let pt_byte = header.payload_type as u8;
         if pt_byte != PAYLOAD_TYPE_AUDIO {
-             return Err(RtpReceiveError::WrongPayloadType(pt_byte));
+            return Err(RtpReceiveError::WrongPayloadType(pt_byte));
         }
 
         // Extract payload (after header size)
@@ -211,7 +221,9 @@ impl RtpAudioReceiver {
         };
 
         // Send to jitter buffer
-        self.packet_tx.send(packet).await
+        self.packet_tx
+            .send(packet)
+            .await
             .map_err(|_| RtpReceiveError::ChannelClosed)?;
 
         Ok(())

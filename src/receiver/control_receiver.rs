@@ -55,6 +55,9 @@ impl ControlReceiver {
     }
 
     /// Run the receive loop
+    ///
+    /// # Errors
+    /// Returns `std::io::Error` if socket access fails.
     pub async fn run(self) -> Result<(), std::io::Error> {
         let mut buf = [0u8; 256];
 
@@ -65,7 +68,7 @@ impl ControlReceiver {
                 continue;
             }
 
-            if let Some(event) = self.parse_packet(&buf[..len]) {
+            if let Some(event) = Self::parse_packet(&buf[..len]) {
                 if self.event_tx.send(event).await.is_err() {
                     break;
                 }
@@ -75,7 +78,7 @@ impl ControlReceiver {
         Ok(())
     }
 
-    fn parse_packet(&self, data: &[u8]) -> Option<ControlEvent> {
+    fn parse_packet(data: &[u8]) -> Option<ControlEvent> {
         if data.len() < 8 {
             return None;
         }
@@ -83,13 +86,13 @@ impl ControlReceiver {
         let packet_type = data[1] & 0x7F;
 
         match packet_type {
-            PACKET_TYPE_SYNC => self.parse_sync(data),
-            PACKET_TYPE_RETRANSMIT_REQUEST => self.parse_retransmit(data),
+            PACKET_TYPE_SYNC => Self::parse_sync(data),
+            PACKET_TYPE_RETRANSMIT_REQUEST => Self::parse_retransmit(data),
             _ => None,
         }
     }
 
-    fn parse_sync(&self, data: &[u8]) -> Option<ControlEvent> {
+    fn parse_sync(data: &[u8]) -> Option<ControlEvent> {
         // Sync packet format:
         // Byte 0: 0x80 | extension bit
         // Byte 1: 0x54 (marker + type)
@@ -105,8 +108,7 @@ impl ControlReceiver {
         let extension = (data[0] & 0x10) != 0;
         let rtp_timestamp = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
         let ntp_timestamp = u64::from_be_bytes([
-            data[8], data[9], data[10], data[11],
-            data[12], data[13], data[14], data[15],
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
         ]);
         let rtp_timestamp_at_ntp = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
 
@@ -118,7 +120,7 @@ impl ControlReceiver {
         }))
     }
 
-    fn parse_retransmit(&self, data: &[u8]) -> Option<ControlEvent> {
+    fn parse_retransmit(data: &[u8]) -> Option<ControlEvent> {
         // Retransmit request format:
         // Bytes 0-1: Header
         // Bytes 2-3: Sequence of missing packet
