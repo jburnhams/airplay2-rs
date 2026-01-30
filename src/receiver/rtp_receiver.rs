@@ -197,8 +197,8 @@ impl RtpAudioReceiver {
 
         // Check payload type
         let pt_byte = header.payload_type as u8;
-        if pt_byte != PAYLOAD_TYPE_AUDIO {
-            return Err(RtpReceiveError::WrongPayloadType(pt_byte));
+        if !matches!(header.payload_type, crate::protocol::rtp::PayloadType::AudioRealtime | crate::protocol::rtp::PayloadType::AudioBuffered) {
+             return Err(RtpReceiveError::WrongPayloadType(header.payload_type as u8));
         }
 
         // Extract payload (after header size)
