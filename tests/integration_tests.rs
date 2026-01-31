@@ -66,20 +66,42 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        // Wait for receiver to start (look for "serving on" message)
+        // Capture stdout for monitoring
+        let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
+        let stderr = process.stderr.take().ok_or("Failed to capture stderr")?;
+
+        // Wait for receiver to start by reading output
         let start = std::time::Instant::now();
         let timeout = Duration::from_secs(10);
+
+        use std::io::{BufRead, BufReader};
+        let mut reader = BufReader::new(stdout);
+        let mut stderr_reader = BufReader::new(stderr);
+        let mut output_lines = Vec::new();
+        let mut stderr_lines = Vec::new();
+        #[allow(unused_assignments)]
+        let mut found_serving = false;
 
         loop {
             if start.elapsed() > timeout {
                 let _ = process.kill();
-                return Err("Python receiver failed to start within timeout".into());
+                let stderr_output: String = stderr_lines.join("\n");
+                return Err(format!(
+                    "Python receiver failed to start within timeout.\nStderr: {}",
+                    stderr_output
+                )
+                .into());
             }
 
             // Check if process is still running
             match process.try_wait() {
                 Ok(Some(status)) => {
-                    return Err(format!("Python receiver exited early: {}", status).into());
+                    let stderr_output: String = stderr_lines.join("\n");
+                    return Err(format!(
+                        "Python receiver exited early: {}\nStderr: {}",
+                        status, stderr_output
+                    )
+                    .into());
                 }
                 Ok(None) => {
                     // Still running, good
@@ -89,14 +111,37 @@ impl PythonReceiver {
                 }
             }
 
-            sleep(Duration::from_millis(500)).await;
+            // Try to read a line from stdout (non-blocking via try_wait check)
+            let mut line = String::new();
+            if let Ok(n) = reader.read_line(&mut line) {
+                if n > 0 {
+                    tracing::debug!("Receiver stdout: {}", line.trim());
+                    output_lines.push(line.clone());
 
-            // In a real implementation, we'd read stdout to check for "serving on" message
-            // For now, just wait a reasonable time
-            if start.elapsed() > Duration::from_secs(3) {
-                tracing::info!("Assuming receiver is ready after 3 seconds");
-                break;
+                    // Check for "serving on" message
+                    if line.contains("serving on") {
+                        tracing::info!("✓ Python receiver started: {}", line.trim());
+                        found_serving = true;
+                        break;
+                    }
+                }
             }
+
+            // Also check stderr for errors
+            let mut err_line = String::new();
+            if let Ok(n) = stderr_reader.read_line(&mut err_line) {
+                if n > 0 {
+                    tracing::warn!("Receiver stderr: {}", err_line.trim());
+                    stderr_lines.push(err_line);
+                }
+            }
+
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        if !found_serving {
+            let _ = process.kill();
+            return Err("Failed to find 'serving on' message from receiver".into());
         }
 
         Ok(Self {
@@ -221,8 +266,8 @@ impl ReceiverOutput {
         Ok(())
     }
 
-    /// Verify sine wave quality (basic check)
-    fn verify_sine_wave_quality(&self, _frequency: f32) -> Result<(), Box<dyn std::error::Error>> {
+    /// Verify sine wave quality with frequency analysis
+    fn verify_sine_wave_quality(&self, expected_frequency: f32) -> Result<(), Box<dyn std::error::Error>> {
         let audio = self
             .audio_data
             .as_ref()
@@ -233,40 +278,172 @@ impl ReceiverOutput {
             return Err(format!("Audio too short: {} bytes", audio.len()).into());
         }
 
-        // Parse as 16-bit stereo samples
+        // Parse as 16-bit stereo samples (44100 Hz, 2 channels, 16-bit)
+        let mut samples = Vec::new();
         let mut min_sample = i16::MAX;
         let mut max_sample = i16::MIN;
-        let mut non_zero = 0;
+        let mut zero_crossings = 0;
+        let mut prev_sample = 0i16;
 
         for chunk in audio.chunks_exact(4) {
             if chunk.len() == 4 {
                 let left = i16::from_le_bytes([chunk[0], chunk[1]]);
+                samples.push(left as f32);
                 min_sample = min_sample.min(left);
                 max_sample = max_sample.max(left);
-                if left != 0 {
-                    non_zero += 1;
+
+                // Count zero crossings
+                if (prev_sample < 0 && left >= 0) || (prev_sample >= 0 && left < 0) {
+                    zero_crossings += 1;
                 }
+                prev_sample = left;
             }
         }
 
+        let num_samples = samples.len();
+        let sample_rate = 44100.0;
+        let duration = num_samples as f32 / sample_rate;
+
         tracing::info!(
-            "Audio stats - min: {}, max: {}, non_zero: {}",
+            "Audio stats - samples: {}, duration: {:.2}s, min: {}, max: {}, range: {}",
+            num_samples,
+            duration,
             min_sample,
             max_sample,
-            non_zero
+            max_sample - min_sample
         );
 
-        // Verify we have actual audio data (not silence or garbage)
-        if max_sample - min_sample < 10000 {
-            return Err("Audio amplitude too low (might be silence)".into());
+        // 1. Verify amplitude range
+        let amplitude_range = max_sample - min_sample;
+        if amplitude_range < 20000 {
+            return Err(format!(
+                "Audio amplitude too low: {} (expected >20000 for full-scale sine wave)",
+                amplitude_range
+            ).into());
         }
 
-        if non_zero < audio.len() / 8 {
-            return Err("Too many zero samples".into());
+        // 2. Verify dynamic range (should use most of 16-bit range)
+        if max_sample.abs() < 25000 || min_sample.abs() < 25000 {
+            tracing::warn!(
+                "Audio not using full dynamic range: max={}, min={}",
+                max_sample,
+                min_sample
+            );
         }
 
+        // 3. Estimate frequency from zero crossings
+        // Zero crossings per second = frequency * 2 (one crossing per half cycle)
+        let estimated_frequency = (zero_crossings as f32 / duration) / 2.0;
+        let frequency_error = (estimated_frequency - expected_frequency).abs();
+        let frequency_tolerance = expected_frequency * 0.05; // 5% tolerance
+
+        tracing::info!(
+            "Frequency analysis - expected: {}Hz, estimated: {:.1}Hz, error: {:.1}Hz, tolerance: {:.1}Hz",
+            expected_frequency,
+            estimated_frequency,
+            frequency_error,
+            frequency_tolerance
+        );
+
+        if frequency_error > frequency_tolerance {
+            return Err(format!(
+                "Frequency mismatch: expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz tolerance)",
+                expected_frequency,
+                estimated_frequency,
+                frequency_error,
+                frequency_tolerance
+            ).into());
+        }
+
+        // 4. Check for continuity (shouldn't have long runs of zeros)
+        let mut max_zero_run = 0;
+        let mut current_zero_run = 0;
+
+        for &sample in &samples {
+            if sample.abs() < 100.0 {  // Near-zero threshold
+                current_zero_run += 1;
+                max_zero_run = max_zero_run.max(current_zero_run);
+            } else {
+                current_zero_run = 0;
+            }
+        }
+
+        if max_zero_run > (sample_rate as usize / 10) {
+            return Err(format!(
+                "Found suspicious silence: {} consecutive near-zero samples",
+                max_zero_run
+            ).into());
+        }
+
+        // 5. Simple FFT-based frequency verification (optional, more accurate)
+        // For now, zero-crossing is sufficient and doesn't require additional deps
+
+        tracing::info!("✓ Audio quality verified: {}Hz sine wave with good amplitude and continuity", expected_frequency);
         Ok(())
     }
+
+    /// Detailed audio analysis (for debugging)
+    #[allow(dead_code)]
+    fn analyze_audio_detailed(&self) -> Result<AudioAnalysis, Box<dyn std::error::Error>> {
+        let audio = self
+            .audio_data
+            .as_ref()
+            .ok_or("No audio data for analysis")?;
+
+        let mut samples = Vec::new();
+        for chunk in audio.chunks_exact(4) {
+            if chunk.len() == 4 {
+                let left = i16::from_le_bytes([chunk[0], chunk[1]]);
+                samples.push(left as f32);
+            }
+        }
+
+        let num_samples = samples.len();
+        let sample_rate = 44100.0;
+
+        // Calculate RMS (loudness)
+        let rms = (samples.iter().map(|&s| s * s).sum::<f32>() / num_samples as f32).sqrt();
+
+        // Calculate peak amplitude
+        let peak = samples.iter().map(|&s| s.abs()).fold(0.0f32, f32::max);
+
+        // Calculate crest factor (peak/rms ratio)
+        let crest_factor = if rms > 0.0 { peak / rms } else { 0.0 };
+
+        // Count zero crossings for frequency estimation
+        let mut zero_crossings = 0;
+        for i in 1..samples.len() {
+            if (samples[i-1] < 0.0 && samples[i] >= 0.0) || (samples[i-1] >= 0.0 && samples[i] < 0.0) {
+                zero_crossings += 1;
+            }
+        }
+
+        let duration = num_samples as f32 / sample_rate;
+        let estimated_frequency = (zero_crossings as f32 / duration) / 2.0;
+
+        Ok(AudioAnalysis {
+            num_samples,
+            duration,
+            sample_rate,
+            rms,
+            peak,
+            crest_factor,
+            estimated_frequency,
+            zero_crossings,
+        })
+    }
+}
+
+#[allow(dead_code)]
+struct AudioAnalysis {
+    num_samples: usize,
+    duration: f32,
+    sample_rate: f32,
+    rms: f32,
+    peak: f32,
+    crest_factor: f32,
+    estimated_frequency: f32,
+    zero_crossings: usize,
 }
 
 /// Sine wave audio source for testing
