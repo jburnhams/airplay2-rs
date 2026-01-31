@@ -3,6 +3,7 @@ import multiprocessing
 import enum
 import threading
 import time
+import os
 
 import av
 try:
@@ -19,6 +20,10 @@ from functools import reduce
 
 from ..utils import get_file_logger, get_screen_logger, get_free_socket
 from .audio_file_sink import get_audio_backend
+
+# Configuration flags
+SAVE_RAW_RTP = os.environ.get("AIRPLAY_SAVE_RTP", "0") == "1"
+SKIP_DECODE = os.environ.get("AIRPLAY_SKIP_DECODE", "0") == "1"
 
 
 class RTP:
@@ -504,7 +509,14 @@ class Audio:
         if self.codec is not None:
             self.codecContext = av.codec.CodecContext.create(self.codec)
             self.codecContext.sample_rate = self.sample_rate
-            self.codecContext.channels = self.channel_count
+            # In newer PyAV (16.x+), channels is read-only - use layout instead
+            if self.channel_count == 1:
+                self.codecContext.layout = av.AudioLayout('mono')
+            elif self.channel_count == 2:
+                self.codecContext.layout = av.AudioLayout('stereo')
+            else:
+                # For other channel counts, try to set layout by channel count
+                self.codecContext.layout = av.AudioLayout(self.channel_count)
             self.codecContext.format = av.AudioFormat('s' + str(self.sample_size) + 'p')
         if ed is not None:
             self.codecContext.extradata = ed
@@ -716,7 +728,9 @@ class AudioRealtime(Audio):
             time.sleep((self.spf / self.sample_rate) * 5)
 
     def play(self, rtspconn, serverconn):
-        # self.init_audio_sink()  # Comment out to skip codec init - just save raw RTP
+        # Initialize audio sink unless we're only capturing RTP packets
+        if not SKIP_DECODE:
+            self.init_audio_sink()
         RTP_SEQ_SIZE = 2**16
         RTP_ROLLOVER = RTP_SEQ_SIZE - 1  # 65535
         lastRecvdSeqNo = 0
@@ -742,9 +756,10 @@ class AudioRealtime(Audio):
 
                 data, address = self.socket.recvfrom(2048)
                 if data:
-                    # Save raw RTP packet for verification
-                    with open("rtp_packets.bin", "ab") as f:
-                        f.write(data)
+                    # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
+                    if SAVE_RAW_RTP:
+                        with open("rtp_packets.bin", "ab") as f:
+                            f.write(data)
                     pkt = RTP_REALTIME(data)
                     lastRecvdSeqNo = pkt.sequence_no
                     self.log(pkt)
@@ -763,39 +778,42 @@ class AudioRealtime(Audio):
                                 starting = False
 
                         if rtp:
-                            if p_write_a:
-                                delay = self.msec_to_playout(rtp.timestamp) - p_write_a
-                                """
-                                if p_write > one_pkt:
-                                    print(f'excessive audio write times:{p_write:3.3} msec')
-                                print(f'd{self.msec_to_playout(rtp.timestamp):4}; pw:{p_write:3.3} ; combo;{delay:3.3}', end='\r', flush=False)
-                                """
-                                ''' # comment this out to enable relative sync
-                                if delay < ((2 * -one_pkt)):
-                                    """ What to do here depends on the receiver performance. 'continue' too often can sound crunchy.
-                                    dont skip frames and the playout lags behind. This is an unbuffered approach. WiFi also affects. """
-                                    continue
-                                '''  # comment this out to enable relative sync
-                                if delay - 2 > 3:
-                                    time.sleep((delay - 2) * 1e-3)
+                            if not SKIP_DECODE:
+                                if p_write_a:
+                                    delay = self.msec_to_playout(rtp.timestamp) - p_write_a
+                                    """
+                                    if p_write > one_pkt:
+                                        print(f'excessive audio write times:{p_write:3.3} msec')
+                                    print(f'd{self.msec_to_playout(rtp.timestamp):4}; pw:{p_write:3.3} ; combo;{delay:3.3}', end='\r', flush=False)
+                                    """
+                                    ''' # comment this out to enable relative sync
+                                    if delay < ((2 * -one_pkt)):
+                                        """ What to do here depends on the receiver performance. 'continue' too often can sound crunchy.
+                                        dont skip frames and the playout lags behind. This is an unbuffered approach. WiFi also affects. """
+                                        continue
+                                    '''  # comment this out to enable relative sync
+                                    if delay - 2 > 3:
+                                        time.sleep((delay - 2) * 1e-3)
 
-                                if rtp.sequence_no % 20 == 0:
-                                    print(f'playout offset: {delay:+3.2} msec (relative to self)     ', end='\r', flush=False)
+                                    if rtp.sequence_no % 20 == 0:
+                                        print(f'playout offset: {delay:+3.2} msec (relative to self)     ', end='\r', flush=False)
 
-                            # audio = self.process(rtp)  # Comment out to skip decoding
+                                audio = self.process(rtp)
 
-                            # if(audio):
-                            #     pre_write = time.monotonic_ns()
-                            #     self.sink.write(audio)
-                            #     lastPlayedSeqNo = rtp.sequence_no
-                            #     post_write = time.monotonic_ns()
-                            #     p_write = (post_write - pre_write) * 1e-6
-                            #     p_write_avg.append(p_write)
-                            #     p_write_a = sum(p_write_avg) / len(p_write_avg)
+                                if(audio):
+                                    pre_write = time.monotonic_ns()
+                                    self.sink.write(audio)
+                                    lastPlayedSeqNo = rtp.sequence_no
+                                    post_write = time.monotonic_ns()
+                                    p_write = (post_write - pre_write) * 1e-6
+                                    p_write_avg.append(p_write)
+                                    p_write_a = sum(p_write_avg) / len(p_write_avg)
 
-                            #     playing = True
-                            lastPlayedSeqNo = rtp.sequence_no  # Keep tracking sequence number
-                            playing = True
+                                    playing = True
+                            else:
+                                # Skip decoding mode - just track packets
+                                lastPlayedSeqNo = rtp.sequence_no
+                                playing = True
                         else:
                             playing = False
 
@@ -807,7 +825,8 @@ class AudioRealtime(Audio):
             pass
         finally:
             self.socket.close()
-            # self.fini_audio_sink()  # Comment out - no sink initialized
+            if not SKIP_DECODE:
+                self.fini_audio_sink()
 
 
 class AudioBuffered(Audio):

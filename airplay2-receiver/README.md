@@ -149,3 +149,81 @@ Tested on Python 3.7.5 / macOS 10.15.2 with iPhone X 13.3 and Raspberry Pi 4
 
 https://emanuelecozzi.net/docs/airplay2
 
+---
+
+## Environment Variables for Testing
+
+The receiver supports several environment variables for different testing and development modes:
+
+### Audio Output Modes
+
+**`AIRPLAY_FILE_SINK=1`** - Write audio to file instead of audio hardware
+- Useful for testing without speakers or in headless environments
+- Creates files: `received_audio_{rate}_{channels}ch.raw` and `.wav`
+- Automatically falls back to file mode if PyAudio is not available
+- Example: `AIRPLAY_FILE_SINK=1 python ap2-receiver.py --netiface en0`
+
+### Debugging Options
+
+**`AIRPLAY_SAVE_RTP=1`** - Save raw encrypted RTP packets to file
+- Saves all received RTP packets to `rtp_packets.bin`
+- Useful for verifying packet transmission and debugging network issues
+- Can be combined with normal audio playback or file output
+- Example: `AIRPLAY_SAVE_RTP=1 python ap2-receiver.py --netiface en0`
+
+**`AIRPLAY_SKIP_DECODE=1`** - Skip audio decoding entirely
+- Only captures RTP packets without processing audio
+- Useful for testing packet transmission without codec dependencies
+- Should be combined with `AIRPLAY_SAVE_RTP=1` to be useful
+- Example: `AIRPLAY_SKIP_DECODE=1 AIRPLAY_SAVE_RTP=1 python ap2-receiver.py --netiface en0`
+
+### Combined Examples
+
+**Full debugging mode** (capture RTP packets + decode to file):
+```bash
+AIRPLAY_FILE_SINK=1 AIRPLAY_SAVE_RTP=1 python ap2-receiver.py --netiface en0
+```
+
+**RTP capture only** (no decoding, useful for network debugging):
+```bash
+AIRPLAY_SAVE_RTP=1 AIRPLAY_SKIP_DECODE=1 python ap2-receiver.py --netiface en0
+```
+
+**File output mode** (decode to file instead of speakers):
+```bash
+AIRPLAY_FILE_SINK=1 python ap2-receiver.py --netiface en0
+```
+
+### Output Files
+
+When using `AIRPLAY_FILE_SINK=1`:
+- `received_audio_{rate}_{channels}ch.raw` - Raw PCM audio data
+- `received_audio_{rate}_{channels}ch.wav` - WAV file (created on shutdown)
+
+When using `AIRPLAY_SAVE_RTP=1`:
+- `rtp_packets.bin` - Raw encrypted RTP packets as received from network
+
+### PyAV Compatibility
+
+This receiver has been updated to work with PyAV 16.x which changed the audio codec context API:
+- **Older versions**: `ctx.channels = 2` (direct assignment)
+- **PyAV 16+**: `ctx.layout = av.AudioLayout('stereo')` (use layout object)
+
+The code automatically uses the correct API for the installed PyAV version.
+
+### Testing with airplay2-rs
+
+This receiver is useful for testing the Rust AirPlay 2 client library:
+
+```bash
+# Terminal 1 - Start receiver in file mode
+cd airplay2-receiver
+AIRPLAY_FILE_SINK=1 python ap2-receiver.py --netiface en0
+
+# Terminal 2 - Run Rust client
+cd ..
+cargo run --example play_pcm
+```
+
+The Rust client will discover the receiver via mDNS and stream audio to it.
+
