@@ -28,4 +28,8 @@ coverage/
 **/mutants.out*/
 
 pair_ap/
-airplay2-receiver/
+
+*.raw
+*.bin
+
+__pycache__

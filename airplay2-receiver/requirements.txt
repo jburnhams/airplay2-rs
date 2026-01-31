@@ -1,0 +1,11 @@
+netifaces
+zeroconf==0.38.3
+biplist
+pycryptodome
+hexdump
+srptools
+hkdf
+# pynacl
+cryptography
+requests
+av>=10.0.0
