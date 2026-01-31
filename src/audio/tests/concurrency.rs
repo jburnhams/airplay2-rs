@@ -47,7 +47,7 @@ fn test_concurrent_producer_consumer() {
                 }
                 total_read_bytes += read;
             } else {
-                thread::yield_now();
+                thread::sleep(Duration::from_micros(10));
             }
         }
     });
