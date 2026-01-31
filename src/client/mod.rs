@@ -196,6 +196,24 @@ impl AirPlayClient {
         self.connection.state().await == ConnectionState::Connected
     }
 
+    /// Helper to ensure client is connected
+    ///
+    /// # Errors
+    ///
+    /// Returns `AirPlayError::Disconnected` if not connected
+    async fn ensure_connected(&self) -> Result<(), AirPlayError> {
+        if !self.is_connected().await {
+            let device_name = self
+                .connection
+                .device()
+                .await
+                .map(|d| d.name)
+                .unwrap_or_else(|| "none".to_string());
+            return Err(AirPlayError::Disconnected { device_name });
+        }
+        Ok(())
+    }
+
     /// Get connected device
     pub async fn connected_device(&self) -> Option<AirPlayDevice> {
         self.state.get().await.device
@@ -209,11 +227,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn play(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.play().await?;
         self.state.update(|s| s.playback.is_playing = true).await;
         Ok(())
@@ -225,11 +239,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn pause(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.pause().await?;
         self.state.update(|s| s.playback.is_playing = false).await;
         Ok(())
@@ -241,11 +251,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn toggle_playback(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.toggle().await
     }
 
@@ -255,11 +261,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn stop(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.stop().await?;
         self.state
             .update(|s| {
@@ -276,11 +278,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn next(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.next().await?;
 
         // Update queue
@@ -299,11 +297,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn previous(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.previous().await?;
 
         let track = {
@@ -321,11 +315,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn seek(&self, position: Duration) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.seek(position).await
     }
 
@@ -347,11 +337,7 @@ impl AirPlayClient {
     ///
     /// Returns error if volume command fails.
     pub async fn set_volume(&self, level: f32) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.volume.set(Volume::new(level)).await?;
         self.state.set_volume(level).await;
         self.events
@@ -365,11 +351,7 @@ impl AirPlayClient {
     ///
     /// Returns error if volume command fails.
     pub async fn volume_up(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         let new_vol = self.volume.step_up().await?;
         self.state.set_volume(new_vol.as_f32()).await;
         Ok(())
@@ -381,11 +363,7 @@ impl AirPlayClient {
     ///
     /// Returns error if volume command fails.
     pub async fn volume_down(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         let new_vol = self.volume.step_down().await?;
         self.state.set_volume(new_vol.as_f32()).await;
         Ok(())
@@ -397,11 +375,7 @@ impl AirPlayClient {
     ///
     /// Returns error if volume command fails.
     pub async fn mute(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.volume.mute().await?;
         self.state.set_muted(true).await;
         Ok(())
@@ -413,11 +387,7 @@ impl AirPlayClient {
     ///
     /// Returns error if volume command fails.
     pub async fn unmute(&self) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.volume.unmute().await?;
         self.state.set_muted(false).await;
         Ok(())
@@ -429,11 +399,7 @@ impl AirPlayClient {
     ///
     /// Returns error if volume command fails.
     pub async fn toggle_mute(&self) -> Result<bool, AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         let muted = self.volume.toggle_mute().await?;
         self.state.set_muted(muted).await;
         Ok(muted)
@@ -502,11 +468,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn set_shuffle(&self, enabled: bool) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         if enabled {
             self.queue.write().await.shuffle();
             self.playback.set_shuffle(ShuffleMode::On).await?;
@@ -523,11 +485,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback command fails.
     pub async fn set_repeat(&self, mode: RepeatMode) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
         self.playback.set_repeat(mode).await
     }
 
@@ -539,11 +497,7 @@ impl AirPlayClient {
     ///
     /// Returns error if playback fails or device is disconnected.
     pub async fn play_url(&self, url: &str) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
 
         let mut url_streamer_lock = self.url_streamer.lock().await;
 
@@ -568,11 +522,7 @@ impl AirPlayClient {
         &mut self,
         source: S,
     ) -> Result<(), AirPlayError> {
-        if !self.is_connected().await {
-            return Err(AirPlayError::Disconnected {
-                device_name: "none".to_string(),
-            });
-        }
+        self.ensure_connected().await?;
 
         let format = source.format();
         let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), format));
