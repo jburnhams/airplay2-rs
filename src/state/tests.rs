@@ -18,13 +18,13 @@ async fn test_state_subscription() {
     let mut rx = container.subscribe();
 
     // Initial state
-    assert!((rx.borrow().volume - 1.0).abs() < f32::EPSILON);
+    assert!((rx.borrow().volume - 0.75).abs() < f32::EPSILON);
 
-    container.set_volume(0.75).await;
+    container.set_volume(0.5).await;
 
     // Receiver should have the updated state
     rx.changed().await.unwrap();
-    assert!((rx.borrow().volume - 0.75).abs() < f32::EPSILON);
+    assert!((rx.borrow().volume - 0.5).abs() < f32::EPSILON);
 }
 
 #[tokio::test]
