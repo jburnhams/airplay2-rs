@@ -1,5 +1,6 @@
 //! Main `AirPlay` client implementation
 
+use crate::audio::AudioCodec;
 use crate::connection::{ConnectionManager, ConnectionState};
 use crate::control::playback::{PlaybackController, ShuffleMode};
 use crate::control::queue::PlaybackQueue;
@@ -501,8 +502,10 @@ impl AirPlayClient {
         let format = source.format();
         let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), format));
 
-        // Enable ALAC encoding (matching negotiated SDP)
-        streamer.use_alac().await;
+        // Enable ALAC encoding if configured
+        if self.config.audio_codec == AudioCodec::Alac {
+            streamer.use_alac().await;
+        }
 
         // Configure encryption if available
         if let Some(key) = self.connection.encryption_key().await {

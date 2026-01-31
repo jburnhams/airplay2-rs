@@ -158,9 +158,9 @@ impl SrpClient {
             hasher.update(&hn_xor_hg);
             hasher.update(&h_user);
             hasher.update(salt);
-            hasher.update(&self.public_key);
-            // Pad B for M1? Python's srp.py doesn't pad here.
-            // But let's see. If I don't pad, it matches to_bytes(B, False).
+            // Use minimal-bytes representation of A (not padded) to match Python's to_bytes()
+            hasher.update(a_pub.to_bytes_be());
+            // Use minimal-bytes representation of B (not padded)
             hasher.update(b_pub.to_bytes_be());
             hasher.update(&k_session);
             hasher.finalize().to_vec()

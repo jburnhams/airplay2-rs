@@ -1,4 +1,5 @@
 use std::time::Duration;
+use crate::audio::AudioCodec;
 
 /// Configuration for `AirPlay` client behavior
 #[derive(Debug, Clone)]
@@ -26,6 +27,9 @@ pub struct AirPlayConfig {
 
     /// Path to store persistent pairing keys (None = transient only)
     pub pairing_storage_path: Option<std::path::PathBuf>,
+
+    /// Audio codec to use for streaming (default: PCM - uncompressed)
+    pub audio_codec: AudioCodec,
 }
 
 impl Default for AirPlayConfig {
@@ -39,6 +43,7 @@ impl Default for AirPlayConfig {
             reconnect_delay: Duration::from_secs(1),
             audio_buffer_frames: 44100,
             pairing_storage_path: None,
+            audio_codec: AudioCodec::Pcm, // Default to uncompressed PCM
         }
     }
 }
@@ -90,6 +95,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn pairing_storage(mut self, path: impl Into<std::path::PathBuf>) -> Self {
         self.config.pairing_storage_path = Some(path.into());
+        self
+    }
+
+    /// Set audio codec for streaming (PCM or ALAC)
+    #[must_use]
+    pub fn audio_codec(mut self, codec: AudioCodec) -> Self {
+        self.config.audio_codec = codec;
         self
     }
 

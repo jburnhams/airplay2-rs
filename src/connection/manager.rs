@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
+use crate::audio::AudioCodec;
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::{
@@ -632,10 +633,24 @@ impl ConnectionManager {
         // 3. Announce (ANNOUNCE / with SDP)
         tracing::debug!("Performing ANNOUNCE...");
         // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
-        // ALAC negotiation (96 AppleLossless)
-        // Note: Python receiver is strict and expects exactly 'AppleLossless' (no /44100/2)
-        // to correctly enter the ALAC parsing path.
-        let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string();
+        // Build SDP based on configured codec
+        let sdp = match self.config.audio_codec {
+            AudioCodec::Alac => {
+                // ALAC negotiation (96 AppleLossless)
+                // Note: Python receiver expects exactly 'AppleLossless' (no /44100/2)
+                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
+            },
+            AudioCodec::Pcm => {
+                // PCM/L16 negotiation (uncompressed audio)
+                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
+            },
+            _ => {
+                return Err(AirPlayError::InvalidParameter {
+                    name: "audio_codec".to_string(),
+                    message: format!("Unsupported codec: {:?}", self.config.audio_codec),
+                });
+            }
+        };
 
         let announce_req = {
             let mut session_guard = self.rtsp_session.lock().await;
