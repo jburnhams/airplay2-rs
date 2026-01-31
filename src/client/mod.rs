@@ -561,15 +561,19 @@ impl Default for ClientConfig {
     }
 }
 
-/// Unified `AirPlay` client
+/// Unified `AirPlay` client that supports both `AirPlay` 2 and `RAOP` protocols.
+///
+/// This client automatically selects the best available protocol for a device
+/// (preferring `AirPlay` 2 by default) and provides a common interface for
+/// connection, playback control, and streaming.
 pub struct UnifiedAirPlayClient {
-    /// Configuration
+    /// Client configuration determining protocol selection and behavior
     config: ClientConfig,
-    /// Active session
+    /// Currently active session (either `AirPlay` 2 or `RAOP`)
     session: Option<Box<dyn AirPlaySession>>,
-    /// Connected device info
+    /// Information about the currently connected device
     device: Option<AirPlayDevice>,
-    /// Selected protocol
+    /// The protocol currently being used
     protocol: Option<SelectedProtocol>,
 }
 
