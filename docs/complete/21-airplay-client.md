@@ -34,7 +34,7 @@ This is the main client implementation that ties together all components into a 
 
 ### 21.1 AirPlayClient
 
-- [] **21.1.1** Implement the main client
+- [x] **21.1.1** Implement the main client
 
 **File:** `src/client.rs`
 
@@ -434,14 +434,14 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Client can be created with config
-- [ ] Discovery methods work
-- [ ] Connection lifecycle is managed
-- [ ] Playback controls work
-- [ ] Volume controls work
-- [ ] Queue management works
-- [ ] Events are emitted
-- [ ] All unit tests pass
+- [x] Client can be created with config
+- [x] Discovery methods work
+- [x] Connection lifecycle is managed
+- [x] Playback controls work
+- [x] Volume controls work
+- [x] Queue management works
+- [x] Events are emitted
+- [x] All unit tests pass
 
 ---
 

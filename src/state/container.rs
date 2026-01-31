@@ -34,7 +34,7 @@ impl Default for ClientState {
             device: None,
             playback: PlaybackState::default(),
             current_track: None,
-            volume: 1.0,
+            volume: 0.75, // Match Volume::DEFAULT
             muted: false,
             position: 0.0,
             duration: 0.0,
