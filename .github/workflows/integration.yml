@@ -1,0 +1,91 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  integration:
+    name: Integration Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Python receiver works best on Linux and macOS
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libavformat-dev \
+            libavcodec-dev \
+            libavdevice-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev \
+            libavfilter-dev \
+            portaudio19-dev \
+            alsa-utils
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install portaudio ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          cd airplay2-receiver
+          pip install -r requirements.txt
+
+      - name: Verify Python receiver can start
+        run: |
+          cd airplay2-receiver
+          # Test that receiver can import all dependencies
+          python -c "import ap2.main; print('Python receiver dependencies OK')"
+
+      - name: Build Rust client
+        run: cargo build --release --all-features
+
+      - name: Run integration tests
+        run: cargo test --test integration_tests --release -- --test-threads=1 --nocapture
+        env:
+          RUST_LOG: info
+          # Use loopback interface for testing
+          AIRPLAY_TEST_INTERFACE: lo
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs-${{ matrix.os }}
+          path: |
+            target/integration-test-*.log
+            airplay2-receiver/received_audio*.raw
+            airplay2-receiver/rtp_packets.bin
+          retention-days: 7
