@@ -1,4 +1,4 @@
-use super::transport::{CastMode, LowerTransport, TransportHeader};
+use super::transport::{CastMode, LowerTransport, TransportHeader, TransportParseError};
 
 #[test]
 fn test_parse_basic_transport() {
@@ -37,4 +37,53 @@ fn test_response_header_generation() {
     assert!(response.contains("server_port=6000"));
     assert!(response.contains("control_port=6001"));
     assert!(response.contains("timing_port=6002"));
+}
+
+#[test]
+fn test_parse_missing_protocol() {
+    let result = TransportHeader::parse(";unicast");
+    // Split always returns at least one element, so an empty first part
+    // results in UnsupportedProtocol("") rather than MissingProtocol
+    assert!(matches!(
+        result,
+        Err(TransportParseError::UnsupportedProtocol(_))
+    ));
+}
+
+#[test]
+fn test_parse_unsupported_protocol() {
+    let result = TransportHeader::parse("HTTP/1.1;unicast");
+    assert!(matches!(
+        result,
+        Err(TransportParseError::UnsupportedProtocol(_))
+    ));
+}
+
+#[test]
+fn test_parse_invalid_port() {
+    let result = TransportHeader::parse("RTP/AVP/UDP;unicast;control_port=invalid");
+    assert!(matches!(result, Err(TransportParseError::InvalidPort)));
+}
+
+#[test]
+fn test_parse_invalid_interleaved() {
+    let result = TransportHeader::parse("RTP/AVP/TCP;unicast;interleaved=invalid");
+    assert!(matches!(
+        result,
+        Err(TransportParseError::InvalidInterleaved)
+    ));
+}
+
+#[test]
+fn test_parse_unknown_parameters_ignored() {
+    let transport =
+        TransportHeader::parse("RTP/AVP/UDP;unicast;unknown=value;another=123").unwrap();
+    assert_eq!(transport.cast, CastMode::Unicast);
+    // Unknown parameters shouldn't cause error
+}
+
+#[test]
+fn test_multicast_parsing() {
+    let transport = TransportHeader::parse("RTP/AVP/UDP;multicast").unwrap();
+    assert_eq!(transport.cast, CastMode::Multicast);
 }

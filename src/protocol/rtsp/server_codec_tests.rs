@@ -1,4 +1,4 @@
-use super::server_codec::{ResponseBuilder, RtspServerCodec};
+use super::server_codec::{ParseError, ResponseBuilder, RtspServerCodec};
 use super::{Method, StatusCode};
 
 #[test]
@@ -141,7 +141,7 @@ fn test_header_overflow() {
     let result = codec.decode();
     assert!(result.is_err());
     match result {
-        Err(super::server_codec::ParseError::InvalidHeader(msg)) => {
+        Err(ParseError::InvalidHeader(msg)) => {
             assert_eq!(msg, "Headers too large");
         }
         _ => panic!("Expected InvalidHeader error"),
@@ -162,7 +162,7 @@ fn test_body_too_large() {
     let result = codec.decode();
     assert!(result.is_err());
     match result {
-        Err(super::server_codec::ParseError::BodyTooLarge { size, max }) => {
+        Err(ParseError::BodyTooLarge { size, max }) => {
             assert_eq!(size, content_length);
             assert_eq!(max, 16 * 1024 * 1024);
         }
@@ -180,7 +180,7 @@ fn test_invalid_content_length() {
     let result = codec.decode();
     assert!(result.is_err());
     match result {
-        Err(super::server_codec::ParseError::InvalidContentLength(_)) => {}
+        Err(ParseError::InvalidContentLength(_)) => {}
         _ => panic!("Expected InvalidContentLength error"),
     }
 }
@@ -195,7 +195,7 @@ fn test_malformed_headers() {
     let result = codec.decode();
     assert!(result.is_err());
     match result {
-        Err(super::server_codec::ParseError::InvalidHeader(line)) => {
+        Err(ParseError::InvalidHeader(line)) => {
             assert_eq!(line, "InvalidHeader");
         }
         _ => panic!("Expected InvalidHeader error"),
@@ -276,4 +276,45 @@ fn test_unsupported_chunked_encoding() {
     // The remaining bytes are still in buffer and will cause error on next decode
     let result = codec.decode();
     assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_request_line_empty() {
+    let mut codec = RtspServerCodec::new();
+    codec.feed(b"\r\n\r\n");
+    let result = codec.decode();
+    assert!(result.is_err());
+    assert!(matches!(result, Err(ParseError::InvalidRequestLine(_))));
+}
+
+#[test]
+fn test_invalid_request_line_too_short() {
+    let mut codec = RtspServerCodec::new();
+    codec.feed(b"OPTIONS\r\n\r\n");
+    let result = codec.decode();
+    assert!(result.is_err());
+    assert!(matches!(result, Err(ParseError::InvalidRequestLine(_))));
+}
+
+#[test]
+fn test_invalid_protocol_version() {
+    let mut codec = RtspServerCodec::new();
+    codec.feed(b"OPTIONS * HTTP/1.1\r\n\r\n");
+    let result = codec.decode();
+    assert!(result.is_err());
+    // Implementation checks for "RTSP/" prefix
+    assert!(matches!(result, Err(ParseError::InvalidRequestLine(_))));
+}
+
+#[test]
+fn test_feed_splitting_edge_case() {
+    let mut codec = RtspServerCodec::new();
+    codec.feed(b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r");
+    // Not enough for header end yet
+    assert!(codec.decode().unwrap().is_none());
+
+    codec.feed(b"\n\r\n");
+    // Now complete
+    let request = codec.decode().unwrap().unwrap();
+    assert_eq!(request.method, Method::Options);
 }
