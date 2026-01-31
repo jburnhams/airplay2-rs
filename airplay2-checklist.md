@@ -150,8 +150,9 @@
   - [x] `PAUSE` — pause playback
   - [x] `TEARDOWN` — close session
   - [x] `RECORD` - for audio data
-  - [ ] `SET_PARAMETER` - for volume/metadata
-    - *Status*: Implemented but **not verified**.
+  - [x] `SET_PARAMETER` - for volume/metadata
+    - ✅ **VERIFIED**: `examples/verify_volume_pause.rs` successfully sets volume via RTSP
+    - Receiver logs confirm `volume` parameter set to correct decibel values (-6.02, -12.04)
 - [x] Parse RTSP responses and headers
 - [x] Handle session identifiers (session parameter)
 - [x] Implement CSeq (command sequence) counter
@@ -208,17 +209,19 @@
 - [x] Decode audio codec (PCM passthrough)
 - [ ] Resampling if sample rate mismatch
 - [x] Volume control (if supported by device)
-  - *Status*: Basic volume control implemented and **verified** against receiver (RTSP SET_PARAMETER).
+  - ✅ **VERIFIED**: Volume changes confirmed in receiver logs during playback
+  - Correct linear-to-db conversion verified (-144.0 to 0.0 dB range)
 
 ## Metadata and Control
 
 ### Playback Control
 - [x] Play command (resume playback)
-- [ ] Pause command (pause at current position)
-  - *Status*: Implemented but **not verified** (pause/resume cycle not tested).
+- [x] Pause command (pause at current position)
+  - ✅ **VERIFIED**: `examples/verify_volume_pause.rs` successfully pauses and resumes playback
+  - Receiver logs confirm `SETRATEANCHORTIME` with `rate: 0.0` (pause) and `rate: 1.0` (resume)
 - [x] Stop command (stop and close connection)
-- [ ] Volume control (if device supports)
-  - *Status*: `set_volume` implemented in client but **not verified** against receiver logs.
+- [x] Volume control (if device supports)
+  - ✅ **VERIFIED**: Confirmed volume control works during playback stream
 
 ### Device Status and Feedback
 - [x] Query device status (available, busy, offline)
