@@ -1,5 +1,5 @@
-use std::time::Duration;
 use crate::audio::AudioCodec;
+use std::time::Duration;
 
 /// Configuration for `AirPlay` client behavior
 #[derive(Debug, Clone)]
