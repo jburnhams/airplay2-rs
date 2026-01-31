@@ -61,8 +61,12 @@ async fn test_queue_shuffle_clear() {
 #[tokio::test]
 async fn test_volume_defaults() {
     let client = AirPlayClient::default_client();
-    // Default volume is 0.75
+    // Default volume is 0.75 in VolumeController
     assert!((client.volume().await - 0.75).abs() < f32::EPSILON);
+
+    // Check state consistency
+    let state = client.state().await;
+    assert!((state.volume - 0.75).abs() < f32::EPSILON, "State volume {} does not match default 0.75", state.volume);
 }
 
 #[tokio::test]
