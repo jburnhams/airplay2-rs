@@ -207,8 +207,7 @@ impl AirPlayClient {
                 .connection
                 .device()
                 .await
-                .map(|d| d.name)
-                .unwrap_or_else(|| "none".to_string());
+                .map_or_else(|| "none".to_string(), |d| d.name);
             return Err(AirPlayError::Disconnected { device_name });
         }
         Ok(())
