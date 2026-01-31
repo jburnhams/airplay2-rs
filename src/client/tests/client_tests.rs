@@ -66,7 +66,11 @@ async fn test_volume_defaults() {
 
     // Check state consistency
     let state = client.state().await;
-    assert!((state.volume - 0.75).abs() < f32::EPSILON, "State volume {} does not match default 0.75", state.volume);
+    assert!(
+        (state.volume - 0.75).abs() < f32::EPSILON,
+        "State volume {} does not match default 0.75",
+        state.volume
+    );
 }
 
 #[tokio::test]
