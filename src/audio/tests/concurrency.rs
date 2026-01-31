@@ -22,7 +22,7 @@ fn test_concurrent_producer_consumer() {
                 let written = buffer.write(&data[total_written..]);
                 total_written += written;
                 if written == 0 {
-                    thread::yield_now();
+                    thread::sleep(Duration::from_micros(10));
                 }
             }
         }
