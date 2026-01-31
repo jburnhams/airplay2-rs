@@ -221,13 +221,16 @@ def get_volume():
                 pct = 0
         vol = interpolate(pct, 0, 100, -30, 0)
     elif subsys == "Linux":
-        line_pct = subprocess.check_output(["amixer", "get", "Master"]).splitlines()[-1]
-        m = re.search(b"\[([0-9]+)%\]", line_pct)
-        if m:
-            pct = int(m.group(1))
-            if pct < 45:
-                pct = 45
-        else:
+        try:
+            line_pct = subprocess.check_output(["amixer", "get", "Master"]).splitlines()[-1]
+            m = re.search(b"\[([0-9]+)%\]", line_pct)
+            if m:
+                pct = int(m.group(1))
+                if pct < 45:
+                    pct = 45
+            else:
+                pct = 50
+        except (subprocess.CalledProcessError, FileNotFoundError):
             pct = 50
         vol = interpolate(pct, 45, 100, -30, 0)
     elif subsys == "Windows":
@@ -255,7 +258,10 @@ def set_volume(vol):
     elif subsys == "Linux":
         pct = int(interpolate(vol, -30, 0, 45, 100))
 
-        subprocess.run(["amixer", "set", "Master", f"{pct}%"])
+        try:
+            subprocess.run(["amixer", "set", "Master", f"{pct}%"])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
     elif subsys == "Windows":
         volume_session = get_pycaw_volume_session()
         if volume_session:

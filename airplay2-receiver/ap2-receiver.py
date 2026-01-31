@@ -1438,7 +1438,11 @@ if __name__ == "__main__":
                 DEVICE_ID = generate_fake_mac()
         else:
             DEVICE_ID = ifen[ni.AF_LINK][0]["addr"]
-        DEVICE_ID_BIN = int((DEVICE_ID).replace(":", ""), base=16).to_bytes(6, 'big')
+
+    if DEVICE_ID is None:
+        DEVICE_ID = generate_fake_mac()
+
+    DEVICE_ID_BIN = int((DEVICE_ID).replace(":", ""), base=16).to_bytes(6, 'big')
     if ifen.get(ni.AF_INET):
         IPV4 = ifen[ni.AF_INET][0]["addr"]
         IP4ADDR_BIN = socket.inet_pton(ni.AF_INET, IPV4)

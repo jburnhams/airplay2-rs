@@ -51,7 +51,11 @@ fn test_client_public_minimal_representation() {
     let client_pub = client.public_key();
 
     // Client public key should be padded to 384 bytes for transmission
-    assert_eq!(client_pub.len(), 384, "Client public key should be 384 bytes");
+    assert_eq!(
+        client_pub.len(),
+        384,
+        "Client public key should be 384 bytes"
+    );
 
     // But when used in M1 calculation, it should use minimal bytes
     // We verify this by checking that the implementation correctly
