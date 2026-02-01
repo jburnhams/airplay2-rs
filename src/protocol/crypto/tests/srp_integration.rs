@@ -71,10 +71,10 @@ fn test_client_public_minimal_representation() {
 
     // If the value is small, minimal should be much smaller than padded
     if minimal.len() < 384 {
-        assert_ne!(
+        assert_eq!(
             &minimal[..],
             &client_pub[384 - minimal.len()..],
-            "Should handle both padded and minimal representations"
+            "Minimal bytes should match the suffix of padded bytes"
         );
     }
 }

@@ -1,3 +1,6 @@
+mod advertiser;
+mod raop;
+
 use super::parser::{self, feature_bits};
 use crate::types::DeviceCapabilities;
 

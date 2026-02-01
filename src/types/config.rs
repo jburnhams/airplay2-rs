@@ -30,6 +30,9 @@ pub struct AirPlayConfig {
 
     /// Audio codec to use for streaming (default: PCM - uncompressed)
     pub audio_codec: AudioCodec,
+
+    /// Optional PIN for pairing (if device requires one)
+    pub pin: Option<String>,
 }
 
 impl Default for AirPlayConfig {
@@ -44,6 +47,7 @@ impl Default for AirPlayConfig {
             audio_buffer_frames: 44100,
             pairing_storage_path: None,
             audio_codec: AudioCodec::Pcm, // Default to uncompressed PCM
+            pin: None,
         }
     }
 }
@@ -102,6 +106,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn audio_codec(mut self, codec: AudioCodec) -> Self {
         self.config.audio_codec = codec;
+        self
+    }
+
+    /// Set PIN for pairing
+    #[must_use]
+    pub fn pin(mut self, pin: impl Into<String>) -> Self {
+        self.config.pin = Some(pin.into());
         self
     }
 
