@@ -654,9 +654,7 @@ async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
     // Test 1: Connect with CORRECT PIN (3939)
     tracing::info!("Test 1: Connecting with correct PIN (3939)...");
     let device = receiver.device_config();
-    let config = airplay2::AirPlayConfig::builder()
-        .pin("3939")
-        .build();
+    let config = airplay2::AirPlayConfig::builder().pin("3939").build();
 
     let client = airplay2::AirPlayClient::new(config);
     client.connect(&device).await?;
@@ -666,9 +664,7 @@ async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test 2: Connect with WRONG PIN (0000)
     tracing::info!("Test 2: Connecting with wrong PIN (0000)...");
-    let config_wrong = airplay2::AirPlayConfig::builder()
-        .pin("0000")
-        .build();
+    let config_wrong = airplay2::AirPlayConfig::builder().pin("0000").build();
     let client_wrong = airplay2::AirPlayClient::new(config_wrong);
 
     match client_wrong.connect(&device).await {
@@ -678,7 +674,10 @@ async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
             return Err("Client connected with wrong PIN! This should fail.".into());
         }
         Err(e) => {
-             tracing::info!("✅ Client failed to connect with wrong PIN as expected: {}", e);
+            tracing::info!(
+                "✅ Client failed to connect with wrong PIN as expected: {}",
+                e
+            );
         }
     }
 
