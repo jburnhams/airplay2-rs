@@ -325,6 +325,57 @@ impl ConnectionManager {
             }
         }
 
+        // Try configured PIN first if available
+        if let Some(ref pin) = self.config.pin {
+            tracing::info!("Attempting SRP Pairing with configured PIN: '{}'...", pin);
+
+            // Try standard usernames with the configured PIN
+            let usernames = ["Pair-Setup", "AirPlay", "admin"];
+
+            for user in usernames {
+                match self.pair_setup(user, pin).await {
+                    Ok((session_keys, pairing_keys)) => {
+                        tracing::info!(
+                            "SRP Pairing successful with configured PIN and User='{}'",
+                            user
+                        );
+                        *self.secure_session.lock().await =
+                            Some(crate::net::secure::HapSecureSession::new(
+                                &session_keys.encrypt_key,
+                                &session_keys.decrypt_key,
+                            ));
+                        *self.session_keys.lock().await = Some(session_keys);
+
+                        // Save pairing keys if we have storage and keys were generated
+                        if let (Some(ref mut storage), Some(keys)) =
+                            (self.pairing_storage.lock().await.as_mut(), pairing_keys)
+                        {
+                            tracing::info!("Saving pairing keys for device {}", device.id);
+                            if let Err(e) = storage.save(&device.id, &keys).await {
+                                tracing::warn!("Failed to save pairing keys: {}", e);
+                            }
+                        }
+
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "SRP Pairing failed with configured PIN and User='{}': {}",
+                            user,
+                            e
+                        );
+                        // Continue to next username
+                    }
+                }
+            }
+
+            // If configured PIN was provided but failed, we stop here.
+            return Err(AirPlayError::AuthenticationFailed {
+                message: "Authentication failed with configured PIN".to_string(),
+                recoverable: false,
+            });
+        }
+
         // Try various credentials for SRP Pairing
         // Format: (username, pin)
         let credentials = [
