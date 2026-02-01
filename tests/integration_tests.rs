@@ -640,3 +640,49 @@ async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Erro
     tracing::info!("✅ ALAC integration test passed");
     Ok(())
 }
+
+#[tokio::test]
+#[ignore] // Run with --ignored flag
+async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
+    init();
+    tracing::info!("Starting Custom PIN Pairing integration test");
+
+    // Start Python receiver
+    let receiver = PythonReceiver::start().await?;
+    sleep(Duration::from_secs(2)).await;
+
+    // Test 1: Connect with CORRECT PIN (3939)
+    tracing::info!("Test 1: Connecting with correct PIN (3939)...");
+    let device = receiver.device_config();
+    let config = airplay2::AirPlayConfig::builder()
+        .pin("3939")
+        .build();
+
+    let client = airplay2::AirPlayClient::new(config);
+    client.connect(&device).await?;
+    assert!(client.is_connected().await);
+    tracing::info!("✅ Connected successfully with correct PIN");
+    client.disconnect().await?;
+
+    // Test 2: Connect with WRONG PIN (0000)
+    tracing::info!("Test 2: Connecting with wrong PIN (0000)...");
+    let config_wrong = airplay2::AirPlayConfig::builder()
+        .pin("0000")
+        .build();
+    let client_wrong = airplay2::AirPlayClient::new(config_wrong);
+
+    match client_wrong.connect(&device).await {
+        Ok(_) => {
+            // Cleanup
+            let _ = receiver.stop().await;
+            return Err("Client connected with wrong PIN! This should fail.".into());
+        }
+        Err(e) => {
+             tracing::info!("✅ Client failed to connect with wrong PIN as expected: {}", e);
+        }
+    }
+
+    // Stop receiver
+    let _ = receiver.stop().await?;
+    Ok(())
+}
