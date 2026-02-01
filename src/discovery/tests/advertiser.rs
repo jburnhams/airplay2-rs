@@ -1,4 +1,4 @@
-use super::advertiser::*;
+use crate::discovery::advertiser::*;
 
 #[test]
 fn test_format_mac_for_service() {

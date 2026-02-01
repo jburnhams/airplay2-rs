@@ -1,4 +1,4 @@
-use super::control_receiver::*;
+use crate::receiver::control_receiver::*;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
@@ -73,6 +73,50 @@ async fn test_retransmit_packet_reception() {
     } else {
         panic!("Expected RetransmitRequest event");
     }
+
+    handle.abort();
+}
+
+#[tokio::test]
+async fn test_invalid_packet_short() {
+    let receiver_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let receiver_addr = receiver_socket.local_addr().unwrap();
+    let sender_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let (tx, mut rx) = mpsc::channel(1);
+    let receiver = ControlReceiver::new(Arc::new(receiver_socket), tx);
+    let handle = tokio::spawn(async move { receiver.run().await });
+
+    // Send < 8 bytes
+    sender_socket
+        .send_to(&[0x00; 5], receiver_addr)
+        .await
+        .unwrap();
+
+    let result = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await;
+    assert!(result.is_err()); // Timeout, ignored
+
+    handle.abort();
+}
+
+#[tokio::test]
+async fn test_unknown_type() {
+    let receiver_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let receiver_addr = receiver_socket.local_addr().unwrap();
+    let sender_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let (tx, mut rx) = mpsc::channel(1);
+    let receiver = ControlReceiver::new(Arc::new(receiver_socket), tx);
+    let handle = tokio::spawn(async move { receiver.run().await });
+
+    // Header with unknown type (e.g., 0xFF)
+    let data = [
+        0x80, 0xFF, // Unknown type
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+
+    sender_socket.send_to(&data, receiver_addr).await.unwrap();
+
+    let result = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await;
+    assert!(result.is_err()); // Timeout, ignored
 
     handle.abort();
 }

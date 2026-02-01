@@ -1,4 +1,4 @@
-use super::sequence_tracker::*;
+use crate::receiver::sequence_tracker::*;
 
 #[test]
 fn test_sequential_packets() {
