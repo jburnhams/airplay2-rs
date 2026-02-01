@@ -4,8 +4,6 @@ mod config;
 mod device;
 /// RAOP (`AirPlay` 1) types
 pub mod raop;
-#[cfg(test)]
-mod raop_tests;
 
 mod state;
 mod track;

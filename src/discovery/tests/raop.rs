@@ -1,4 +1,4 @@
-use super::raop::*;
+use crate::discovery::raop::*;
 
 #[test]
 fn test_parse_raop_service_name() {

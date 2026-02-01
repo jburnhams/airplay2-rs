@@ -1,4 +1,4 @@
-use super::session::*;
+use crate::receiver::session::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn test_addr() -> SocketAddr {

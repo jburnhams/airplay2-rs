@@ -1,4 +1,4 @@
-use super::raop::*;
+use crate::types::raop::*;
 use std::collections::HashMap;
 
 #[test]

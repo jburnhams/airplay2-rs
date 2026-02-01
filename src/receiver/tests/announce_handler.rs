@@ -1,5 +1,5 @@
-use super::announce_handler::*;
 use crate::protocol::rtsp::{Headers, Method, RtspRequest};
+use crate::receiver::announce_handler::*;
 
 #[test]
 fn test_process_announce_valid() {
@@ -33,4 +33,30 @@ fn test_process_announce_empty_body() {
 
     let err = process_announce(&request, None).unwrap_err();
     assert!(matches!(err, AnnounceError::EmptyBody));
+}
+
+#[test]
+fn test_process_announce_invalid_utf8() {
+    let request = RtspRequest {
+        method: Method::Announce,
+        uri: "rtsp://localhost/stream".to_string(),
+        headers: Headers::new(),
+        body: vec![0xFF, 0xFE, 0xFD], // Invalid UTF-8 sequence
+    };
+
+    let err = process_announce(&request, None).unwrap_err();
+    assert!(matches!(err, AnnounceError::InvalidUtf8));
+}
+
+#[test]
+fn test_process_announce_sdp_error() {
+    let request = RtspRequest {
+        method: Method::Announce,
+        uri: "rtsp://localhost/stream".to_string(),
+        headers: Headers::new(),
+        body: "invalid sdp".as_bytes().to_vec(),
+    };
+
+    let err = process_announce(&request, None).unwrap_err();
+    assert!(matches!(err, AnnounceError::SdpParse(_)));
 }
