@@ -1,5 +1,12 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 1):**
+- Implemented user-configurable PIN support in `AirPlayConfig` and `AirPlayConfigBuilder`.
+- Updated `ConnectionManager` to prioritize configured PIN for pairing.
+- Added `test_custom_pin_pairing` integration test verifying:
+    - Successful connection with correct PIN (3939).
+    - Failed connection with incorrect PIN (0000).
+
 ## Audio Codec Support
 
 ### Mandatory Codec Support
@@ -98,8 +105,9 @@
   - [x] 16-byte randomly generated salt per pairing
   - [x] Curve25519 support for post-quantum-resistant key agreement
     - *Status*: Used in Pair-Verify (M2/M3).
-- [ ] Display PIN code to user (received from device during `/pair-setup`)
-  - *Note*: Currently hardcoded/CLI driven. Protocol support exists but UI/callback **not verified**.
+- [x] Display PIN code to user (received from device during `/pair-setup`)
+  - ✅ **VERIFIED**: Implemented support for user-supplied PIN via `AirPlayConfig::pin()`.
+  - Added `test_custom_pin_pairing` integration test verifying success with correct PIN and failure with incorrect PIN.
 - [x] Implement persistent pairing storage (local secure keychain/vault)
   - *Status*: Implemented `FileStorage` in `src/protocol/pairing/storage.rs`.
 - [ ] Handle `/pair-verify` for returning devices
