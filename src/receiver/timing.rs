@@ -88,8 +88,8 @@ impl NtpTimestamp {
     /// Difference in microseconds
     #[must_use]
     pub fn diff_micros(&self, other: &Self) -> i64 {
-        let self_micros = (i64::from(self.seconds) * 1_000_000)
-            + ((i64::from(self.fraction) * 1_000_000) >> 32);
+        let self_micros =
+            (i64::from(self.seconds) * 1_000_000) + ((i64::from(self.fraction) * 1_000_000) >> 32);
         let other_micros = (i64::from(other.seconds) * 1_000_000)
             + ((i64::from(other.fraction) * 1_000_000) >> 32);
         self_micros - other_micros

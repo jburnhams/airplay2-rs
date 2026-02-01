@@ -60,7 +60,9 @@ impl PlaybackTiming {
     /// Get target latency in duration
     #[must_use]
     pub fn target_latency(&self) -> Duration {
-        Duration::from_secs_f64(f64::from(self.target_latency_samples) / f64::from(self.sample_rate))
+        Duration::from_secs_f64(
+            f64::from(self.target_latency_samples) / f64::from(self.sample_rate),
+        )
     }
 
     /// Calculate when an RTP timestamp should be played
@@ -77,8 +79,7 @@ impl PlaybackTiming {
         let samples_diff = i64::from(rtp_timestamp.wrapping_sub(ref_rtp));
 
         // Convert to duration
-        let time_diff =
-            Duration::from_secs_f64(samples_diff as f64 / f64::from(self.sample_rate));
+        let time_diff = Duration::from_secs_f64(samples_diff as f64 / f64::from(self.sample_rate));
 
         // Add target latency
         let latency = self.target_latency();
