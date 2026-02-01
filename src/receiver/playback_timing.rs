@@ -78,20 +78,19 @@ impl PlaybackTiming {
         // Calculate samples since reference
         let samples_diff = i64::from(rtp_timestamp.wrapping_sub(ref_rtp));
 
-        // Convert to duration
-        let time_diff = Duration::from_secs_f64(samples_diff as f64 / f64::from(self.sample_rate));
-
         // Add target latency
         let latency = self.target_latency();
 
         // Calculate playback time
         let playback_time = if samples_diff >= 0 {
+            let time_diff =
+                Duration::from_secs_f64(samples_diff as f64 / f64::from(self.sample_rate));
             ref_local + time_diff + latency
         } else {
             // Past timestamp
-            ref_local.checked_sub(Duration::from_secs_f64(
-                (-samples_diff) as f64 / f64::from(self.sample_rate),
-            ))? + latency
+            let time_diff =
+                Duration::from_secs_f64((-samples_diff) as f64 / f64::from(self.sample_rate));
+            ref_local.checked_sub(time_diff)? + latency
         };
 
         Some(playback_time)

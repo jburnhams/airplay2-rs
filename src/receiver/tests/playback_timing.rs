@@ -52,3 +52,24 @@ async fn test_playback_timing_past() {
     let playback = timing.playback_time(0);
     assert!(playback.is_some());
 }
+
+#[tokio::test]
+async fn test_playback_timing_negative_diff() {
+    let clock_sync = Arc::new(RwLock::new(ClockSync::new()));
+    let mut timing = PlaybackTiming::new(44100, clock_sync);
+
+    let sync = SyncPacket {
+        extension: false,
+        rtp_timestamp: 44100,
+        ntp_timestamp: NtpTimestamp::now().to_u64(),
+        rtp_timestamp_at_ntp: 44100,
+    };
+    timing.update_from_sync(&sync);
+
+    // Requesting a timestamp significantly in the past (before the reference)
+    // Reference is 44100. Request 22050 (0.5s before reference).
+    // samples_diff will be 22050 - 44100 = -22050.
+    // This previously panicked in Duration::from_secs_f64 with negative value.
+    let playback = timing.playback_time(22050);
+    assert!(playback.is_some());
+}
