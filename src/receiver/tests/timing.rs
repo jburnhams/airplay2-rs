@@ -43,25 +43,48 @@ fn test_ntp_diff_micros() {
 fn test_clock_sync_update() {
     let mut sync = ClockSync::new();
 
+    // t1: Sender transmit time = 1000.0s
     let sender = NtpTimestamp {
         seconds: 1000,
         fraction: 0,
     };
+
+    // t2: Our receive time = 1000.5s (offset +0.5s, assuming delay is negligible for first part of calc)
+    // 0x8000_0000 is exactly 0.5s in NTP fraction
     let receive = NtpTimestamp {
         seconds: 1000,
         fraction: 0x8000_0000,
-    }; // +0.5s
+    };
+
+    // t3: Our transmit time = 1000.6s
+    // 0.6s * 2^32 = 2576980377.6 -> 0x9999_9999 (approx)
     let transmit = NtpTimestamp {
         seconds: 1000,
-        fraction: 0x8000_0001,
+        fraction: 0x9999_9999,
     };
 
     sync.update(sender, receive, transmit);
 
-    // Initial update might not set everything fully stable but exchange count should be 1
-    // Accessing private fields via public methods (if available) or debug formatted string check
-    // Since we don't have public accessors for exchange_count, we check via public methods
-    assert!(sync.offset_micros() != 0 || sync.delay_micros() != 0);
+    // Calculations based on src/receiver/timing.rs logic:
+    // receive_diff (t2 - t1) = 0.5s = 500,000 micros
+    // transmit_diff (t3 - t2) = 0.1s = 100,000 micros (our processing delay)
+
+    // First update uses alpha = 0.5
+    // offset_avg = (1.0 - 0.5) * 0.0 + 0.5 * 500,000.0 = 250,000.0
+    // offset_micros = 250,000
+    // delay_micros = transmit_diff = 100,000 (roughly)
+
+    let offset = sync.offset_micros();
+    let delay = sync.delay_micros();
+
+    // 0.5s = 500,000us. Half of that is 250,000us.
+    assert_eq!(offset, 250_000);
+
+    // 0.1s = 100,000us.
+    // 0x9999_9999 (0.6) - 0x8000_0000 (0.5) = 0x1999_9999
+    // 0x1999_9999 / 2^32 * 1,000,000 = 0.1 * 1,000,000 = 100,000
+    // Allow small margin for integer arithmetic rounding
+    assert!((i64::try_from(delay).unwrap() - 100_000).abs() < 5);
 }
 
 #[test]
