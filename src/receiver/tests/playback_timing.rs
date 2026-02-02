@@ -2,6 +2,7 @@ use crate::receiver::control_receiver::SyncPacket;
 use crate::receiver::playback_timing::PlaybackTiming;
 use crate::receiver::timing::{ClockSync, NtpTimestamp};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
 
 #[tokio::test]
@@ -68,8 +69,27 @@ async fn test_playback_timing_negative_diff() {
 
     // Requesting a timestamp significantly in the past (before the reference)
     // Reference is 44100. Request 22050 (0.5s before reference).
-    // samples_diff will be 22050 - 44100 = -22050.
-    // This previously panicked in Duration::from_secs_f64 with negative value.
-    let playback = timing.playback_time(22050);
-    assert!(playback.is_some());
+    // samples_diff should be 22050 - 44100 = -22050 (approx -0.5s).
+    // Target latency is 2.0s.
+    // Expected delay from now: -0.5s + 2.0s = 1.5s (minus elapsed execution time).
+
+    let playback = timing
+        .playback_time(22050)
+        .expect("Should have playback time");
+
+    let now = Instant::now();
+
+    // If playback is in the future relative to now:
+    if playback > now {
+        let delay = playback - now;
+        // With the bug (unsigned wrapping), delay would be massive (~27 hours).
+        // Correct delay is approx 1.5s.
+        assert!(
+            delay.as_secs() < 10,
+            "Delay is too large: {delay:?}. Likely due to unsigned wrapping of negative timestamp difference.",
+        );
+    } else {
+        // If playback is already past (e.g. debugging slow test), it's definitely not 27 hours in future.
+        // This is fine.
+    }
 }

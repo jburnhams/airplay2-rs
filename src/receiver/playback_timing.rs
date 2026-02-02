@@ -76,7 +76,9 @@ impl PlaybackTiming {
         let ref_local = self.ref_local_time?;
 
         // Calculate samples since reference
-        let samples_diff = i64::from(rtp_timestamp.wrapping_sub(ref_rtp));
+        // Cast to i32 to handle wrapping (negative difference)
+        #[allow(clippy::cast_possible_wrap)]
+        let samples_diff = i64::from(rtp_timestamp.wrapping_sub(ref_rtp) as i32);
 
         // Add target latency
         let latency = self.target_latency();
