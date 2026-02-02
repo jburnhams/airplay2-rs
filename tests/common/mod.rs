@@ -1,7 +1,10 @@
 //! Common test utilities and fixtures
+#![allow(dead_code)]
 
 use std::sync::Once;
 use tracing_subscriber::{fmt, EnvFilter};
+
+pub mod python_receiver;
 
 static INIT: Once = Once::new();
 
@@ -25,5 +28,6 @@ pub fn test_config() -> airplay2::AirPlayConfig {
         connection_timeout: std::time::Duration::from_millis(500),
         state_poll_interval: std::time::Duration::from_millis(50),
         debug_protocol: true,
+        ..Default::default()
     }
 }
