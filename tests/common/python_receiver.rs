@@ -34,12 +34,12 @@ impl PythonReceiver {
         // Clean up pairings for fresh state (added for persistent pairing test)
         let pairings_dir = output_dir.join("pairings");
         if pairings_dir.exists() {
-            let _ = fs::remove_dir_all(&pairings_dir);
+            fs::remove_dir_all(&pairings_dir)?;
         }
-        let _ = fs::create_dir_all(&pairings_dir);
+        fs::create_dir_all(&pairings_dir)?;
 
         // Restore .gitignore to keep repo clean
-        let _ = fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n");
+        fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
         tracing::info!("Starting Python receiver on interface: {}", interface);
 
