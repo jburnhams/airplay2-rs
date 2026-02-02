@@ -20,6 +20,8 @@ mod control_tests;
 #[cfg(test)]
 mod packet_buffer_tests;
 #[cfg(test)]
+mod packet_loss_tests;
+#[cfg(test)]
 mod packet_tests;
 #[cfg(test)]
 mod raop_tests;

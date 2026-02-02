@@ -1,4 +1,4 @@
-use airplay2::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
+use super::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 
 #[test]
 fn test_recovery_from_packet_loss() {

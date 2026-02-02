@@ -410,8 +410,22 @@ impl ReceiverOutput {
             .into());
         }
 
-        // 5. Simple FFT-based frequency verification (optional, more accurate)
-        // For now, zero-crossing is sufficient and doesn't require additional deps
+        // 5. Robust Frequency Verification
+        // Use a wider tolerance for CI (20% instead of 5%) due to zero-crossing inaccuracies in headless envs.
+        // We rely on amplitude and continuity checks for primary validation.
+        if check_frequency {
+            let frequency_tolerance_ci = expected_frequency * 0.20; // 20% tolerance for CI safety
+
+            if frequency_error > frequency_tolerance_ci {
+                 return Err(format!(
+                    "Frequency mismatch (CI-safe): expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz tolerance)",
+                    expected_frequency,
+                    estimated_frequency,
+                    frequency_error,
+                    frequency_tolerance_ci
+                ).into());
+            }
+        }
 
         tracing::info!(
             "✓ Audio quality verified: {}Hz sine wave with good amplitude and continuity",
@@ -635,8 +649,7 @@ async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Erro
     // Verify results
     output.verify_audio_received()?;
     output.verify_rtp_received()?;
-    // Skip strict frequency check in CI due to timing variability
-    output.verify_sine_wave_quality(440.0, false)?;
+    output.verify_sine_wave_quality(440.0, true)?;
 
     tracing::info!("✅ ALAC integration test passed");
     Ok(())
