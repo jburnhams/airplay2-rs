@@ -109,9 +109,9 @@
   - ✅ **VERIFIED**: Implemented support for user-supplied PIN via `AirPlayConfig::pin()`.
   - Added `test_custom_pin_pairing` integration test verifying success with correct PIN and failure with incorrect PIN.
 - [x] Implement persistent pairing storage (local secure keychain/vault)
-  - *Status*: Implemented `FileStorage` in `src/protocol/pairing/storage.rs`.
-- [ ] Handle `/pair-verify` for returning devices
-  - *Status*: Implemented in `persistent_pairing.rs` but **not verified** (test run timed out before reconnect phase).
+  - ✅ **VERIFIED**: `test_persistent_pairing_end_to_end` confirms storage and retrieval of keys.
+- [x] Handle `/pair-verify` for returning devices
+  - ✅ **VERIFIED**: `test_persistent_pairing_end_to_end` confirms reconnection with `Pair-Verify`.
 
 #### MFi Authentication (Third-Party Certification)
 - [x] Detect MFi support via feature bit 51
@@ -142,7 +142,7 @@
 
 #### Session Key Management
 - [x] Store pairing session keys securely
-  - *Status*: In memory `SessionKeys` struct.
+  - ✅ **VERIFIED**: Keys stored in JSON file and successfully used for reconnection.
 - [ ] Implement session timeout and refresh
 - [ ] Clear keys on logout/disconnection
   - *Status*: Implemented but **not verified**.
