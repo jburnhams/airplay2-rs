@@ -8,6 +8,8 @@ pub mod codec;
 mod codec_tests;
 #[cfg(test)]
 mod compliance_tests;
+#[cfg(test)]
+mod header_parsing_tests;
 pub mod headers;
 #[cfg(test)]
 mod headers_tests;
