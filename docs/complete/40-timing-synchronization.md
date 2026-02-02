@@ -30,7 +30,7 @@ The timing protocol exchanges packets on the timing UDP port, allowing both send
 
 ### 40.1 Timing Packet Handler
 
-- [ ] **40.1.1** Implement timing request/response on timing port
+- [x] **40.1.1** Implement timing request/response on timing port
 
 **File:** `src/receiver/timing.rs`
 
@@ -315,7 +315,7 @@ impl TimingHandler {
 
 ### 40.2 RTP to Wall-Clock Mapping
 
-- [ ] **40.2.1** Map RTP timestamps to playback time
+- [x] **40.2.1** Map RTP timestamps to playback time
 
 **File:** `src/receiver/playback_timing.rs`
 
@@ -537,14 +537,14 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Receive and respond to timing requests
-- [ ] Compute clock offset from timing exchanges
-- [ ] Track round-trip delay
-- [ ] Map RTP timestamps to local playback time
-- [ ] Handle sync packet updates
-- [ ] Support configurable target latency
-- [ ] Detect stale synchronization
-- [ ] All unit tests pass
+- [x] Receive and respond to timing requests
+- [x] Compute clock offset from timing exchanges
+- [x] Track round-trip delay
+- [x] Map RTP timestamps to local playback time
+- [x] Handle sync packet updates
+- [x] Support configurable target latency
+- [x] Detect stale synchronization
+- [x] All unit tests pass
 
 ---
 
