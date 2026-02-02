@@ -19,6 +19,8 @@ mod rsa_tests;
 mod srp;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod vectors_tests;
 mod x25519;
 
 pub use self::aes::{Aes128Ctr, Aes128Gcm};

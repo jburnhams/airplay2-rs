@@ -25,6 +25,8 @@ mod packet_tests;
 mod raop_tests;
 #[cfg(test)]
 mod timing_tests;
+#[cfg(test)]
+mod wrapping_tests;
 
 pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpEncryptionMode};
 pub use control::{ControlPacket, RetransmitRequest};
