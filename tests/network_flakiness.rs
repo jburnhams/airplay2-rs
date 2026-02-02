@@ -26,7 +26,7 @@ fn test_recovery_from_packet_loss() {
     // When 55 arrives, detector should notice gap 50..54
     let mut missing_reported = Vec::new();
 
-    for packet in &all_packets[55..] {
+    for packet in all_packets.iter().take(100).skip(55) {
         let missing = detector.process(packet.sequence);
         missing_reported.extend(missing);
         buffer.push(packet.clone());
