@@ -7,9 +7,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 mod common;
-use common::python_receiver::PythonReceiver;
-use airplay2::protocol::pairing::storage::FileStorage;
 use airplay2::AirPlayClient;
+use airplay2::protocol::pairing::storage::FileStorage;
+use common::python_receiver::PythonReceiver;
 
 #[tokio::test]
 #[ignore]
@@ -19,7 +19,10 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
 
     // 1. Setup paths
     let temp_dir = std::env::temp_dir();
-    let storage_path = temp_dir.join(format!("airplay2_test_storage_{}.json", chrono::Utc::now().timestamp_millis()));
+    let storage_path = temp_dir.join(format!(
+        "airplay2_test_storage_{}.json",
+        chrono::Utc::now().timestamp_millis()
+    ));
 
     // Ensure storage file doesn't exist
     if storage_path.exists() {
@@ -56,10 +59,16 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     }
 
     // 4. Verify storage file created
-    assert!(storage_path.exists(), "Storage file should exist after pairing");
+    assert!(
+        storage_path.exists(),
+        "Storage file should exist after pairing"
+    );
     let content = std::fs::read_to_string(&storage_path)?;
     tracing::info!("Storage content: {}", content);
-    assert!(content.contains("Integration-Test-Receiver"), "Storage should contain device ID");
+    assert!(
+        content.contains("Integration-Test-Receiver"),
+        "Storage should contain device ID"
+    );
 
     // 5. Connect Client B (Reconnect with Pair-Verify)
     tracing::info!("--- Step 2: Reconnection (Pair-Verify) ---");
@@ -77,7 +86,10 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
         // and the receiver should recognize us.
         client.connect(&device).await?;
 
-        assert!(client.is_connected().await, "Client B should be connected via persistent pairing");
+        assert!(
+            client.is_connected().await,
+            "Client B should be connected via persistent pairing"
+        );
 
         // Verify we can do something authenticated, e.g. set volume
         client.set_volume(0.5).await?;
