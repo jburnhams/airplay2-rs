@@ -1,4 +1,4 @@
-use crate::audio::concealment::{ConcealmentStrategy, Concealer};
+use crate::audio::concealment::{Concealer, ConcealmentStrategy};
 
 #[test]
 fn test_silence_concealment() {

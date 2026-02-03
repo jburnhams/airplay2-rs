@@ -25,9 +25,9 @@ pub struct JitterBufferConfig {
 impl Default for JitterBufferConfig {
     fn default() -> Self {
         Self {
-            target_depth: 50,      // ~400ms at 352 samples/packet, 44.1kHz
-            min_depth: 10,         // ~80ms
-            max_depth: 200,        // ~1.6s
+            target_depth: 50, // ~400ms at 352 samples/packet, 44.1kHz
+            min_depth: 10,    // ~80ms
+            max_depth: 200,   // ~1.6s
             max_age: Duration::from_secs(3),
             packets_per_second: 44100.0 / 352.0, // ~125 packets/sec
         }

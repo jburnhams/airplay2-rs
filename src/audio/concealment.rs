@@ -55,11 +55,10 @@ impl Concealer {
             ConcealmentStrategy::Silence => {
                 vec![0u8; size]
             }
-            ConcealmentStrategy::Repeat => {
-                self.previous_audio
-                    .clone()
-                    .unwrap_or_else(|| vec![0u8; size])
-            }
+            ConcealmentStrategy::Repeat => self
+                .previous_audio
+                .clone()
+                .unwrap_or_else(|| vec![0u8; size]),
             ConcealmentStrategy::FadeOut => {
                 // Fade previous packet to silence
                 if let Some(ref prev) = self.previous_audio {
