@@ -194,45 +194,31 @@ impl PcmStreamer {
     /// Main streaming loop
     #[allow(clippy::too_many_lines)]
     async fn streaming_loop<S: AudioSource>(&self, mut source: S) -> Result<(), AirPlayError> {
-        let bytes_per_pcm_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
-        // Default to PCM packet size for buffer allocation
-        let mut packet_data = vec![0u8; bytes_per_pcm_packet];
+        let bytes_per_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
+        let packet_duration = self.format.frames_to_duration(Self::FRAMES_PER_PACKET);
+
+        tracing::debug!(
+            "Starting streaming loop: bytes_per_packet={}, packet_duration={:?}",
+            bytes_per_packet,
+            packet_duration
+        );
+
+        let mut packet_data = vec![0u8; bytes_per_packet];
         let mut cmd_rx = self.cmd_rx.lock().await;
 
-        // Initial setup for interval (will be adjusted in loop if needed)
-        let mut frames_per_packet = Self::FRAMES_PER_PACKET as u32;
-        let mut packet_duration = self.format.frames_to_duration(frames_per_packet as usize);
+        // Use interval for precise timing
         let mut interval = tokio::time::interval(packet_duration);
         // The first tick completes immediately
         interval.tick().await;
 
         // Reusable buffer for refills
-        let mut refill_buffer = vec![0u8; bytes_per_pcm_packet * 4];
+        let mut refill_buffer = vec![0u8; bytes_per_packet * 4];
         let mut packets_sent = 0u64;
 
         // Reusable buffer for RTP packet to avoid allocations
-        let mut rtp_packet_buffer = Vec::with_capacity(bytes_per_pcm_packet + 64);
+        let mut rtp_packet_buffer = Vec::with_capacity(bytes_per_packet + 64);
 
         loop {
-            // Determine codec parameters for this iteration
-            let codec_type = *self.codec_type.read().await;
-            if codec_type == AudioCodec::Aac {
-                frames_per_packet = 1024;
-            } else {
-                frames_per_packet = Self::FRAMES_PER_PACKET as u32;
-            }
-
-            // Adjust interval if duration changed
-            let new_duration = self.format.frames_to_duration(frames_per_packet as usize);
-            if new_duration != packet_duration {
-                packet_duration = new_duration;
-                // Reset interval with new period
-                interval = tokio::time::interval(packet_duration);
-                // Tick once to consume immediate tick if needed, or just let it flow
-                // Resetting interval might cause a burst or delay, but it's rare (codec switch).
-                // Ideally we shouldn't switch codecs mid-stream often.
-            }
-
             // Wait for next tick
             interval.tick().await;
 
@@ -298,14 +284,15 @@ impl PcmStreamer {
                 continue;
             }
 
+            // Pad if needed
+            if bytes_read < bytes_per_packet {
+                packet_data[bytes_read..].fill(0);
+            }
+
             // Encode payload
             let encoded_payload: Cow<'_, [u8]> = {
+                let codec_type = *self.codec_type.read().await;
                 if codec_type == AudioCodec::Alac {
-                    // Pad if needed for ALAC/PCM which expects fixed frame size
-                    if bytes_read < bytes_per_pcm_packet {
-                        packet_data[bytes_read..].fill(0);
-                    }
-
                     let mut encoder_guard = self.encoder.lock().await;
                     if let Some(encoder) = encoder_guard.as_mut() {
                         // alac-encoder 0.3.0 expects byte slice of PCM data
@@ -323,15 +310,7 @@ impl PcmStreamer {
                     } else {
                         Cow::Borrowed(&packet_data)
                     }
-                } else if codec_type == AudioCodec::Aac {
-                    // Pass-through for AAC (assuming source provides encoded frames)
-                    // Use only what was read, do NOT pad
-                    Cow::Borrowed(&packet_data[..bytes_read])
                 } else {
-                    // PCM - Pad if needed
-                    if bytes_read < bytes_per_pcm_packet {
-                        packet_data[bytes_read..].fill(0);
-                    }
                     Cow::Borrowed(&packet_data)
                 }
             };
@@ -341,11 +320,7 @@ impl PcmStreamer {
             {
                 let mut codec = self.rtp_codec.lock().await;
                 codec
-                    .encode_arbitrary_payload(
-                        &encoded_payload,
-                        frames_per_packet,
-                        &mut rtp_packet_buffer,
-                    )
+                    .encode_arbitrary_payload(&encoded_payload, &mut rtp_packet_buffer)
                     .map_err(|e| AirPlayError::RtpError {
                         message: e.to_string(),
                     })?;
@@ -445,15 +420,6 @@ impl PcmStreamer {
         );
         *self.encoder.lock().await = Some(alac_encoder::AlacEncoder::new(&format));
         *self.codec_type.write().await = AudioCodec::Alac;
-    }
-
-    /// Set codec to AAC (Pass-through)
-    ///
-    /// Note: This assumes the audio source provides already encoded AAC frames.
-    /// No re-encoding is performed.
-    pub async fn use_aac(&self) {
-        *self.encoder.lock().await = None;
-        *self.codec_type.write().await = AudioCodec::Aac;
     }
 
     /// Set codec to PCM (default)

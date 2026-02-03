@@ -5,6 +5,7 @@
 
 pub mod buffer;
 pub mod clock;
+pub mod concealment;
 pub mod convert;
 pub mod format;
 pub mod jitter;
@@ -15,6 +16,7 @@ mod tests;
 
 pub use buffer::AudioRingBuffer;
 pub use clock::{AudioClock, TimingSync};
+pub use concealment::{Concealer, ConcealmentStrategy};
 pub use convert::{convert_channels, convert_samples, from_f32, resample_linear, to_f32};
 pub use format::{
     AacProfile, AudioCodec, AudioFormat, ChannelConfig, CodecParams, SampleFormat, SampleRate,

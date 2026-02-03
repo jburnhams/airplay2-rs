@@ -1,191 +1,359 @@
-//! Jitter buffer for handling network timing variations
+//! Jitter buffer for RTP packet reordering and timing
+//!
+//! Buffers incoming packets, reorders them by sequence number,
+//! and releases them at the appropriate playback time.
 
+use crate::receiver::rtp_receiver::AudioPacket;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-/// Jitter buffer for reordering and timing RTP packets
-pub struct JitterBuffer<T> {
-    /// Buffered packets by sequence number
-    packets: BTreeMap<u16, PacketEntry<T>>,
-    /// Expected next sequence number
-    next_seq: u16,
+/// Jitter buffer configuration
+#[derive(Debug, Clone)]
+pub struct JitterBufferConfig {
     /// Target buffer depth in packets
-    target_depth: usize,
-    /// Maximum buffer size
-    max_size: usize,
-    /// Late packet threshold
-    late_threshold: u16,
-    /// Statistics
-    stats: JitterStats,
+    pub target_depth: usize,
+    /// Minimum depth before playback starts
+    pub min_depth: usize,
+    /// Maximum depth (excess packets dropped)
+    pub max_depth: usize,
+    /// Maximum age before packet is considered too old
+    pub max_age: Duration,
+    /// Packets per second (for timing calculations)
+    pub packets_per_second: f64,
 }
 
-struct PacketEntry<T> {
-    packet: T,
-    received_at: Instant,
+impl Default for JitterBufferConfig {
+    fn default() -> Self {
+        Self {
+            target_depth: 50, // ~400ms at 352 samples/packet, 44.1kHz
+            min_depth: 10,    // ~80ms
+            max_depth: 200,   // ~1.6s
+            max_age: Duration::from_secs(3),
+            packets_per_second: 44100.0 / 352.0, // ~125 packets/sec
+        }
+    }
 }
 
-/// Jitter buffer statistics
+/// Buffer state
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferState {
+    /// Filling up, not ready for playback
+    Buffering,
+    /// Normal playback
+    Playing,
+    /// Underrun, rebuffering
+    Underrun,
+}
+
+/// Statistics from the jitter buffer
 #[derive(Debug, Clone, Default)]
 pub struct JitterStats {
     /// Total packets received
     pub packets_received: u64,
-    /// Packets dropped (too late)
-    pub packets_late: u64,
-    /// Packets dropped (duplicate)
-    pub packets_duplicate: u64,
-    /// Packets dropped (buffer overflow)
-    pub packets_overflow: u64,
+    /// Packets played successfully
+    pub packets_played: u64,
+    /// Packets dropped because they were late
+    pub packets_dropped_late: u64,
+    /// Packets dropped due to buffer overflow
+    pub packets_dropped_overflow: u64,
+    /// Packets concealed (missing)
+    pub packets_concealed: u64,
+    /// Number of underrun events
+    pub underruns: u64,
     /// Current buffer depth
     pub current_depth: usize,
-    /// Average jitter in milliseconds
-    pub avg_jitter_ms: f64,
+    /// Maximum depth seen
+    pub max_depth_seen: usize,
 }
 
-/// Result of adding a packet
+/// Result of adding a packet (kept for backward compatibility if needed, though unused in doc impl)
 #[derive(Debug)]
-pub enum JitterResult<T> {
-    /// Packet buffered successfully
+pub enum JitterResult {
+    /// Packet buffered
     Buffered,
-    /// Packet was too late (already played)
-    TooLate,
-    /// Packet was a duplicate
-    Duplicate,
-    /// Buffer overflow, oldest packet returned
-    Overflow(T),
+    /// Packet dropped (late, duplicate, etc)
+    Dropped,
 }
 
-/// Result of getting next packet
+/// Next packet result (kept for backward compatibility if needed)
 #[derive(Debug)]
-pub enum NextPacket<T> {
+pub enum NextPacket {
     /// Packet ready
-    Ready(T),
-    /// Need to wait (not enough buffered)
+    Ready(AudioPacket),
+    /// Wait for more packets
     Wait,
-    /// Gap detected (missing packet)
-    Gap {
-        /// Sequence number expected
-        expected: u16,
-        /// Next available sequence number
-        available: u16,
-    },
 }
 
-impl<T> JitterBuffer<T> {
+/// Buffer health report
+#[derive(Debug, Clone)]
+pub struct BufferHealth {
+    /// Current state
+    pub state: BufferState,
+    /// Current depth
+    pub depth: usize,
+    /// Fill ratio (0.0 - 1.0)
+    pub fill_ratio: f64,
+    /// Estimated latency
+    pub estimated_latency: Duration,
+    /// Loss rate (0.0 - 1.0)
+    pub loss_rate: f64,
+    /// Total underruns
+    pub underruns: u64,
+    /// Whether the buffer is considered healthy
+    pub is_healthy: bool,
+}
+
+/// Jitter buffer for audio packets
+pub struct JitterBuffer {
+    config: JitterBufferConfig,
+    /// Packets ordered by sequence number
+    packets: BTreeMap<u16, AudioPacket>,
+    /// Next sequence number expected for playback
+    next_play_seq: Option<u16>,
+    /// Current state
+    state: BufferState,
+    /// Statistics
+    stats: JitterStats,
+    /// Last packet receive time
+    #[allow(dead_code)] // Useful for debugging/future use
+    last_receive: Option<Instant>,
+}
+
+impl JitterBuffer {
     /// Create a new jitter buffer
     #[must_use]
-    pub fn new(target_depth: usize, max_size: usize) -> Self {
+    pub fn new(config: JitterBufferConfig) -> Self {
         Self {
+            config,
             packets: BTreeMap::new(),
-            next_seq: 0,
-            target_depth,
-            max_size,
-            late_threshold: 100, // ~100 packets late is definitely too late
+            next_play_seq: None,
+            state: BufferState::Buffering,
             stats: JitterStats::default(),
+            last_receive: None,
         }
     }
 
-    /// Add a packet to the buffer
-    pub fn push(&mut self, seq: u16, packet: T) -> JitterResult<T> {
+    /// Insert a packet into the buffer
+    pub fn insert(&mut self, packet: AudioPacket) {
         self.stats.packets_received += 1;
+        self.last_receive = Some(Instant::now());
 
-        // Check for duplicate
-        if self.packets.contains_key(&seq) {
-            self.stats.packets_duplicate += 1;
-            return JitterResult::Duplicate;
+        let seq = packet.sequence;
+
+        // Check if packet is too old (behind playback point)
+        if let Some(next_seq) = self.next_play_seq {
+            #[allow(clippy::cast_possible_wrap)]
+            let diff = seq.wrapping_sub(next_seq) as i16;
+            if diff < 0 {
+                // Packet is late
+                self.stats.packets_dropped_late += 1;
+                tracing::debug!("Dropping late packet seq={}, expected={}", seq, next_seq);
+                return;
+            }
         }
 
-        // Check if too late
-        let distance = seq.wrapping_sub(self.next_seq);
-        if distance > 0x8000 && distance < 0xFFFF - self.late_threshold {
-            self.stats.packets_late += 1;
-            return JitterResult::TooLate;
+        // Check buffer overflow
+        if self.packets.len() >= self.config.max_depth {
+            self.stats.packets_dropped_overflow += 1;
+            // Drop oldest packet
+            if let Some(oldest) = self.packets.keys().next().copied() {
+                self.packets.remove(&oldest);
+            }
         }
 
-        // Check for overflow
-        let overflow_packet = if self.packets.len() >= self.max_size {
-            self.stats.packets_overflow += 1;
-            // Remove oldest
-            self.packets.pop_first().map(|(_, e)| e.packet)
+        self.packets.insert(seq, packet);
+
+        // Update max depth stat
+        if self.packets.len() > self.stats.max_depth_seen {
+            self.stats.max_depth_seen = self.packets.len();
+        }
+
+        // Check state transitions
+        self.update_state();
+    }
+
+    /// Get next packet for playback if available
+    pub fn pop(&mut self) -> Option<AudioPacket> {
+        if self.state == BufferState::Buffering {
+            return None;
+        }
+
+        let next_seq = self.next_play_seq?;
+
+        if let Some(packet) = self.packets.remove(&next_seq) {
+            self.next_play_seq = Some(next_seq.wrapping_add(1));
+            self.stats.packets_played += 1;
+            self.update_state();
+            Some(packet)
         } else {
-            None
-        };
-
-        // Insert packet
-        self.packets.insert(
-            seq,
-            PacketEntry {
-                packet,
-                received_at: Instant::now(),
-            },
-        );
-
-        self.stats.current_depth = self.packets.len();
-
-        match overflow_packet {
-            Some(p) => JitterResult::Overflow(p),
-            None => JitterResult::Buffered,
+            // Missing packet - try to conceal or skip
+            self.handle_missing_packet(next_seq)
         }
     }
 
-    /// Get the next packet in sequence
-    pub fn pop(&mut self) -> NextPacket<T> {
-        // Check if we have enough buffered
-        if self.packets.len() < self.target_depth {
-            return NextPacket::Wait;
+    /// Handle a missing packet at playback time
+    fn handle_missing_packet(&mut self, missing_seq: u16) -> Option<AudioPacket> {
+        self.stats.packets_concealed += 1;
+
+        // Find the next available packet
+        let next_available = self.packets.keys().next().copied();
+
+        if let Some(avail_seq) = next_available {
+            let gap = avail_seq.wrapping_sub(missing_seq);
+
+            if gap < 10 {
+                // Small gap, skip to available packet
+                tracing::debug!(
+                    "Concealing gap: {} packets from {} to {}",
+                    gap,
+                    missing_seq,
+                    avail_seq
+                );
+                self.next_play_seq = Some(avail_seq.wrapping_add(1));
+                let packet = self.packets.remove(&avail_seq);
+                if packet.is_some() {
+                    self.stats.packets_played += 1;
+                    self.update_state();
+                }
+                return packet;
+            }
         }
 
-        // Check if next sequence number is available
-        if let Some(entry) = self.packets.remove(&self.next_seq) {
-            self.next_seq = self.next_seq.wrapping_add(1);
-            self.stats.current_depth = self.packets.len();
-            return NextPacket::Ready(entry.packet);
-        }
-
-        // Check for gap
-        if let Some((&available_seq, _)) = self.packets.first_key_value() {
-            return NextPacket::Gap {
-                expected: self.next_seq,
-                available: available_seq,
-            };
-        }
-
-        NextPacket::Wait
+        // Large gap or no packets - advance sequence and return nothing
+        self.next_play_seq = Some(missing_seq.wrapping_add(1));
+        None
     }
 
-    /// Skip to a specific sequence number
-    pub fn skip_to(&mut self, seq: u16) {
-        self.next_seq = seq;
-        // Remove any packets before this sequence
-        self.packets.retain(|&s, _| {
-            let distance = s.wrapping_sub(seq);
-            distance < 0x8000
-        });
-        self.stats.current_depth = self.packets.len();
+    /// Update buffer state based on current depth
+    fn update_state(&mut self) {
+        let depth = self.packets.len();
+
+        match self.state {
+            BufferState::Buffering => {
+                if depth >= self.config.min_depth {
+                    self.state = BufferState::Playing;
+                    // Set initial playback sequence
+                    if self.next_play_seq.is_none() {
+                        self.next_play_seq = self.packets.keys().next().copied();
+                    }
+                    tracing::info!("Jitter buffer ready, starting playback");
+                }
+            }
+            BufferState::Playing => {
+                if depth == 0 {
+                    self.state = BufferState::Underrun;
+                    self.stats.underruns += 1;
+                    tracing::warn!("Jitter buffer underrun");
+                }
+            }
+            BufferState::Underrun => {
+                if depth >= self.config.min_depth {
+                    self.state = BufferState::Playing;
+                    tracing::info!("Recovered from underrun");
+                }
+            }
+        }
+
+        self.stats.current_depth = depth;
     }
 
-    /// Get current statistics
+    /// Get current state
     #[must_use]
-    pub fn stats(&self) -> JitterStats {
-        JitterStats {
-            current_depth: self.packets.len(),
-            ..self.stats.clone()
-        }
+    pub fn state(&self) -> BufferState {
+        self.state
     }
 
-    /// Clear the buffer
-    pub fn clear(&mut self) {
-        self.packets.clear();
-        self.stats.current_depth = 0;
+    /// Get statistics
+    #[must_use]
+    pub fn stats(&self) -> &JitterStats {
+        &self.stats
     }
 
-    /// Set the target depth
-    pub fn set_target_depth(&mut self, depth: usize) {
-        self.target_depth = depth;
+    /// Check if buffer is ready for playback
+    #[must_use]
+    pub fn is_ready(&self) -> bool {
+        self.state == BufferState::Playing
     }
 
-    /// Get buffer depth in packets
+    /// Get current depth in packets
     #[must_use]
     pub fn depth(&self) -> usize {
         self.packets.len()
+    }
+
+    /// Flush all packets (e.g., for FLUSH command)
+    pub fn flush(&mut self) {
+        self.packets.clear();
+        self.state = BufferState::Buffering;
+        self.next_play_seq = None;
+        tracing::info!("Jitter buffer flushed");
+    }
+
+    /// Flush packets from given RTP timestamp onwards
+    pub fn flush_from_timestamp(&mut self, rtp_time: u32) {
+        // Remove packets with timestamp >= rtp_time
+        // This is approximate as we track by sequence, not timestamp
+        self.packets.retain(|_, p| p.timestamp < rtp_time);
+
+        if self.packets.is_empty() {
+            self.state = BufferState::Buffering;
+            self.next_play_seq = None;
+        }
+    }
+
+    /// Remove old packets
+    pub fn prune_old(&mut self) {
+        let now = Instant::now();
+        let max_age = self.config.max_age;
+
+        self.packets
+            .retain(|_, p| now.duration_since(p.received_at) < max_age);
+    }
+
+    /// Get fill percentage (0.0 to 1.0)
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn fill_ratio(&self) -> f64 {
+        self.packets.len() as f64 / self.config.target_depth as f64
+    }
+
+    /// Check if buffer health is good
+    #[must_use]
+    pub fn is_healthy(&self) -> bool {
+        let depth = self.packets.len();
+        depth >= self.config.min_depth / 2 && depth <= self.config.max_depth
+    }
+
+    /// Get estimated latency based on buffer depth
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn estimated_latency(&self) -> Duration {
+        let packets = self.packets.len() as f64;
+        Duration::from_secs_f64(packets / self.config.packets_per_second)
+    }
+
+    /// Calculate packet loss rate
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn loss_rate(&self) -> f64 {
+        let total = self.stats.packets_received + self.stats.packets_concealed;
+        if total == 0 {
+            return 0.0;
+        }
+        self.stats.packets_concealed as f64 / total as f64
+    }
+
+    /// Get comprehensive health report
+    #[must_use]
+    pub fn health(&self) -> BufferHealth {
+        BufferHealth {
+            state: self.state,
+            depth: self.packets.len(),
+            fill_ratio: self.fill_ratio(),
+            estimated_latency: self.estimated_latency(),
+            loss_rate: self.loss_rate(),
+            underruns: self.stats.underruns,
+            is_healthy: self.is_healthy(),
+        }
     }
 }

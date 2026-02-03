@@ -85,7 +85,7 @@ fn rtp_encoding_benchmark(c: &mut Criterion) {
     c.bench_function("rtp_encode_chacha", |b| {
         b.iter(|| {
             output.clear();
-            let _ = codec.encode_arbitrary_payload(black_box(&payload), 352, &mut output);
+            let _ = codec.encode_arbitrary_payload(black_box(&payload), &mut output);
         })
     });
 }
