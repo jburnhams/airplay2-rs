@@ -31,7 +31,7 @@ The jitter buffer bridges the gap between unpredictable network arrival times an
 
 ### 41.1 Jitter Buffer Core
 
-- [ ] **41.1.1** Implement sequence-keyed jitter buffer
+- [x] **41.1.1** Implement sequence-keyed jitter buffer
 
 **File:** `src/audio/jitter.rs`
 
@@ -292,7 +292,7 @@ impl JitterBuffer {
 
 ### 41.2 Packet Loss Concealment
 
-- [ ] **41.2.1** Implement basic concealment strategies
+- [x] **41.2.1** Implement basic concealment strategies
 
 **File:** `src/audio/concealment.rs`
 
@@ -440,7 +440,7 @@ mod tests {
 
 ### 41.3 Buffer Statistics & Monitoring
 
-- [ ] **41.3.1** Implement buffer health monitoring
+- [x] **41.3.1** Implement buffer health monitoring
 
 **File:** `src/audio/jitter.rs` (additions)
 
@@ -657,17 +657,17 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Buffer receives and stores packets by sequence
-- [ ] Out-of-order packets reordered correctly
-- [ ] Late packets (behind playback) dropped
-- [ ] Buffer overflow handled (oldest dropped)
-- [ ] Buffering state transitions correctly
-- [ ] Underrun detected and recovered
-- [ ] Concealment generates appropriate fill audio
-- [ ] Flush clears buffer and resets state
-- [ ] Statistics track all relevant metrics
-- [ ] 16-bit sequence wraparound handled
-- [ ] All unit tests pass
+- [x] Buffer receives and stores packets by sequence
+- [x] Out-of-order packets reordered correctly
+- [x] Late packets (behind playback) dropped
+- [x] Buffer overflow handled (oldest dropped)
+- [x] Buffering state transitions correctly
+- [x] Underrun detected and recovered
+- [x] Concealment generates appropriate fill audio
+- [x] Flush clears buffer and resets state
+- [x] Statistics track all relevant metrics
+- [x] 16-bit sequence wraparound handled
+- [x] All unit tests pass
 
 ---
 
