@@ -310,6 +310,11 @@ impl PcmStreamer {
                     } else {
                         Cow::Borrowed(&packet_data)
                     }
+                } else if codec_type == AudioCodec::Aac {
+                    // Pass-through for AAC (assuming source provides encoded frames)
+                    // Note: This relies on the source providing correct frame sizes
+                    // compatible with FRAMES_PER_PACKET timing or flow control.
+                    Cow::Borrowed(&packet_data)
                 } else {
                     Cow::Borrowed(&packet_data)
                 }
@@ -420,6 +425,15 @@ impl PcmStreamer {
         );
         *self.encoder.lock().await = Some(alac_encoder::AlacEncoder::new(&format));
         *self.codec_type.write().await = AudioCodec::Alac;
+    }
+
+    /// Set codec to AAC (Pass-through)
+    ///
+    /// Note: This assumes the audio source provides already encoded AAC frames.
+    /// No re-encoding is performed.
+    pub async fn use_aac(&self) {
+        *self.encoder.lock().await = None;
+        *self.codec_type.write().await = AudioCodec::Aac;
     }
 
     /// Set codec to PCM (default)

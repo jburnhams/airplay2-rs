@@ -695,7 +695,12 @@ impl ConnectionManager {
                 // PCM/L16 negotiation (uncompressed audio)
                 "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
             }
-            _ => {
+            AudioCodec::Aac => {
+                // AAC-LC negotiation
+                // config=1210 (AAC-LC, 44100Hz, 2ch)
+                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr; constants=0; streamtype=5; profile-level-id=1; config=1210; sizeLength=13; indexLength=3; indexDeltaLength=3; constantDuration=1024\r\n".to_string()
+            }
+            AudioCodec::Opus => {
                 return Err(AirPlayError::InvalidParameter {
                     name: "audio_codec".to_string(),
                     message: format!("Unsupported codec: {:?}", self.config.audio_codec),

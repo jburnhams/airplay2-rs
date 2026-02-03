@@ -162,3 +162,40 @@ async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
     let _ = receiver.stop().await?;
     Ok(())
 }
+
+#[tokio::test]
+#[ignore] // Run with --ignored flag
+async fn test_aac_negotiation() -> Result<(), Box<dyn std::error::Error>> {
+    init();
+
+    tracing::info!("Starting AAC Negotiation integration test");
+
+    // Start Python receiver
+    let receiver = PythonReceiver::start().await?;
+    sleep(Duration::from_secs(2)).await;
+
+    // Create client with AAC codec
+    let device = receiver.device_config();
+    let config = airplay2::AirPlayConfig::builder()
+        .audio_codec(airplay2::audio::AudioCodec::Aac)
+        .build();
+
+    let client = airplay2::AirPlayClient::new(config);
+
+    tracing::info!("Connecting to receiver with AAC...");
+    client.connect(&device).await?;
+
+    // Verify connected
+    assert!(client.is_connected().await);
+    tracing::info!("✅ Connected successfully with AAC");
+
+    // We can't verify audio quality as we don't have an AAC encoder,
+    // but we can verify that the connection and negotiation succeeded.
+
+    client.disconnect().await?;
+
+    sleep(Duration::from_secs(1)).await;
+    let _ = receiver.stop().await?;
+
+    Ok(())
+}
