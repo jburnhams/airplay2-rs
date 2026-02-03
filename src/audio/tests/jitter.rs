@@ -90,6 +90,32 @@ fn test_late_packet_dropped() {
 }
 
 #[test]
+fn test_very_late_packet_dropped() {
+    let mut buffer = JitterBuffer::new(JitterBufferConfig {
+        min_depth: 2,
+        ..Default::default()
+    });
+
+    buffer.insert(make_packet(10, 3520));
+    buffer.insert(make_packet(11, 3872));
+
+    // Start playback (next = 10)
+    let p = buffer.pop();
+    assert_eq!(p.unwrap().sequence, 10);
+    // next = 11
+
+    // Insert a very late packet (seq = 11 - 2000 = 63547 approx with u16 wrapping)
+    // Actually, let's just use 11 - 2000.
+    // u16: 11 - 2000 = 63547.
+    // 63547 - 11 = 63536. 63536 as i16 is negative (-1999).
+    let very_late_seq = 11u16.wrapping_sub(2000);
+    buffer.insert(make_packet(very_late_seq, 0));
+
+    assert_eq!(buffer.stats().packets_dropped_late, 1);
+    assert_eq!(buffer.depth(), 1); // Should only have seq 11 left
+}
+
+#[test]
 fn test_flush() {
     let mut buffer = JitterBuffer::new(JitterBufferConfig {
         min_depth: 2,
@@ -122,6 +148,34 @@ fn test_underrun() {
     // Buffer now empty
     let result = buffer.pop();
     assert!(result.is_none());
+    assert_eq!(buffer.state(), BufferState::Underrun);
+}
+
+#[test]
+fn test_gap_skip_updates_state() {
+    let mut buffer = JitterBuffer::new(JitterBufferConfig {
+        min_depth: 2,
+        ..Default::default()
+    });
+
+    buffer.insert(make_packet(1, 352));
+    // Gap: skip 2
+    buffer.insert(make_packet(3, 1056));
+
+    // Play 1. next=2.
+    let p1 = buffer.pop();
+    assert_eq!(p1.unwrap().sequence, 1);
+    assert_eq!(buffer.state(), BufferState::Playing);
+    assert_eq!(buffer.depth(), 1);
+
+    // Pop next. Expecting 2, have 3. Gap=1 (<10). Should skip to 3.
+    // This removes 3. Buffer becomes empty. State should update to Underrun.
+    let p3 = buffer.pop();
+    assert_eq!(p3.unwrap().sequence, 3);
+
+    // Verify state updated
+    assert_eq!(buffer.depth(), 0);
+    assert_eq!(buffer.stats().current_depth, 0);
     assert_eq!(buffer.state(), BufferState::Underrun);
 }
 

@@ -144,7 +144,7 @@ impl JitterBuffer {
         if let Some(next_seq) = self.next_play_seq {
             #[allow(clippy::cast_possible_wrap)]
             let diff = seq.wrapping_sub(next_seq) as i16;
-            if diff < 0 && diff > -1000 {
+            if diff < 0 {
                 // Packet is late
                 self.stats.packets_dropped_late += 1;
                 tracing::debug!("Dropping late packet seq={}, expected={}", seq, next_seq);
@@ -210,7 +210,12 @@ impl JitterBuffer {
                     avail_seq
                 );
                 self.next_play_seq = Some(avail_seq.wrapping_add(1));
-                return self.packets.remove(&avail_seq);
+                let packet = self.packets.remove(&avail_seq);
+                if packet.is_some() {
+                    self.stats.packets_played += 1;
+                    self.update_state();
+                }
+                return packet;
             }
         }
 
