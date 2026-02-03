@@ -135,13 +135,16 @@ impl RtpCodec {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
         }
 
-        self.encode_arbitrary_payload(pcm_data, output)
+        self.encode_arbitrary_payload(pcm_data, Self::FRAMES_PER_PACKET, output)
     }
 
-    /// Encode arbitrary audio payload (e.g. ALAC) to RTP packet
+    /// Encode arbitrary audio payload (e.g. ALAC/AAC) to RTP packet
+    ///
+    /// `frames` is the number of audio frames this packet represents (for timestamp increment).
     pub fn encode_arbitrary_payload(
         &mut self,
         data: &[u8],
+        frames: u32,
         output: &mut Vec<u8>,
     ) -> Result<(), RtpCodecError> {
         // Create packet header
@@ -224,7 +227,7 @@ impl RtpCodec {
 
         // Update state for next packet
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);
+        self.timestamp = self.timestamp.wrapping_add(frames);
 
         Ok(())
     }
