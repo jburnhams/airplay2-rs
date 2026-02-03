@@ -1289,7 +1289,9 @@ impl ConnectionManager {
         self.event_tx.subscribe()
     }
 
-    fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {
+    pub(crate) fn parse_transport_ports(
+        transport_header: &str,
+    ) -> Result<(u16, u16, u16), AirPlayError> {
         let mut server_audio_port = 0;
         let mut server_ctrl_port = 0;
         let mut server_time_port = 0;
