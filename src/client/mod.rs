@@ -527,8 +527,10 @@ impl AirPlayClient {
         let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), format));
 
         // Enable ALAC encoding if configured
-        if self.config.audio_codec == AudioCodec::Alac {
-            streamer.use_alac().await;
+        match self.config.audio_codec {
+            AudioCodec::Alac => streamer.use_alac().await,
+            AudioCodec::Aac => streamer.use_aac().await,
+            _ => {}
         }
 
         // Configure encryption if available
