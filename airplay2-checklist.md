@@ -7,11 +7,6 @@
     - Successful connection with correct PIN (3939).
     - Failed connection with incorrect PIN (0000).
 
-**Work Done (Session 2):**
-- Implemented AAC-LC negotiation support in `ConnectionManager`.
-- Added `AudioCodec::Aac` support to `PcmStreamer` (pass-through mode).
-- Verified AAC negotiation with `test_aac_negotiation` integration test.
-
 ## Audio Codec Support
 
 ### Mandatory Codec Support
@@ -23,8 +18,8 @@
   - ✅ **VERIFIED**: 4 SDP tests pass, 189KB valid audio received, lossless encoding confirmed
   - End-to-end test with Python receiver confirms ALAC_44100_16_2 codec matching
   - `examples/play_alac.rs` successfully streams with `AudioCodec::Alac` configuration
-- [x] **AAC** (Advanced Audio Codec) — lossy compression
-  - ✅ **VERIFIED**: Negotiation verified with integration test. Encoding is pass-through (pending encoder implementation).
+- [ ] **AAC** (Advanced Audio Codec) — lossy compression
+  - *Status*: Pending.
 - [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
   - *Status*: Pending.
 

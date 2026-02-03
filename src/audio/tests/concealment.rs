@@ -30,6 +30,43 @@ fn test_repeat_no_previous() {
 }
 
 #[test]
+fn test_fade_out_mono() {
+    // 16-bit mono = 2 bytes per frame
+    let mut concealer = Concealer::new(ConcealmentStrategy::FadeOut, 44100, 2);
+
+    // Create a constant signal: 10 frames of 1000
+    // 1000 = 0x03E8 -> [0xE8, 0x03]
+    let mut audio = Vec::new();
+    for _ in 0..10 {
+        audio.extend_from_slice(&[0xE8, 0x03]);
+    }
+    concealer.record_good_packet(&audio);
+
+    // Conceal 10 frames
+    let output = concealer.conceal(10);
+
+    assert_eq!(output.len(), 20); // 10 frames * 2 bytes
+
+    // Check fading behavior
+    // i=0: fade=1.0 -> 1000
+    // i=9: fade=0.1 -> 100
+
+    // Check first sample (index 0)
+    let s0 = i16::from_le_bytes([output[0], output[1]]);
+    assert!(
+        (s0 - 1000).abs() < 5,
+        "First sample should be ~1000, got {s0}",
+    );
+
+    // Check last sample (index 9*2 = 18)
+    let s_last = i16::from_le_bytes([output[18], output[19]]);
+    assert!(
+        (s_last - 100).abs() < 5,
+        "Last sample should be ~100, got {s_last}",
+    );
+}
+
+#[test]
 fn test_fade_out_stereo() {
     // 16-bit stereo = 4 bytes per frame
     let mut concealer = Concealer::new(ConcealmentStrategy::FadeOut, 44100, 4);
