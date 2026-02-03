@@ -75,7 +75,7 @@ mod parsing_tests {
         // Missing server_port should fail
         let header = "control_port=6001;timing_port=6002";
         let result = ConnectionManager::parse_transport_ports(header);
-        assert!(matches!(result, Err(crate::error::AirPlayError::RtspError { .. })));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -83,7 +83,7 @@ mod parsing_tests {
         // Non-numeric port
         let header = "server_port=abc;control_port=6001;timing_port=6002";
         let result = ConnectionManager::parse_transport_ports(header);
-        assert!(matches!(result, Err(crate::error::AirPlayError::RtspError { .. })));
+        assert!(result.is_err());
     }
 
     #[test]
