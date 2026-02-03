@@ -62,7 +62,7 @@ impl Concealer {
             ConcealmentStrategy::FadeOut => {
                 // Fade previous packet to silence
                 if let Some(ref prev) = self.previous_audio {
-                    Self::fade_out(prev, size)
+                    self.fade_out(prev, size)
                 } else {
                     vec![0u8; size]
                 }
@@ -77,24 +77,33 @@ impl Concealer {
     }
 
     /// Fade audio to silence
-    fn fade_out(audio: &[u8], target_size: usize) -> Vec<u8> {
+    fn fade_out(&self, audio: &[u8], target_size: usize) -> Vec<u8> {
         let mut output = audio.to_vec();
         output.resize(target_size, 0);
 
-        // Simple linear fade for 16-bit samples
-        let sample_count = output.len() / 2;
-        for i in 0..sample_count {
-            #[allow(clippy::cast_precision_loss)]
-            let fade = 1.0 - (i as f32 / sample_count as f32);
+        // Calculate number of frames based on bytes_per_sample
+        // For 16-bit stereo (4 bytes), each frame has 2 samples
+        let frame_count = output.len() / self.bytes_per_sample;
 
-            let idx = i * 2;
-            if idx + 1 < output.len() {
-                let sample = i16::from_le_bytes([output[idx], output[idx + 1]]);
-                #[allow(clippy::cast_possible_truncation)]
-                let faded = (f32::from(sample) * fade) as i16;
-                let bytes = faded.to_le_bytes();
-                output[idx] = bytes[0];
-                output[idx + 1] = bytes[1];
+        // Process one frame at a time
+        for i in 0..frame_count {
+            #[allow(clippy::cast_precision_loss)]
+            let fade = 1.0 - (i as f32 / frame_count as f32);
+
+            let frame_start = i * self.bytes_per_sample;
+            let frame_end = frame_start + self.bytes_per_sample;
+
+            // Apply fade to all samples in this frame
+            // Assuming 16-bit samples (2 bytes each)
+            for sample_idx in (frame_start..frame_end).step_by(2) {
+                if sample_idx + 1 < output.len() {
+                    let sample = i16::from_le_bytes([output[sample_idx], output[sample_idx + 1]]);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let faded = (f32::from(sample) * fade) as i16;
+                    let bytes = faded.to_le_bytes();
+                    output[sample_idx] = bytes[0];
+                    output[sample_idx + 1] = bytes[1];
+                }
             }
         }
 
