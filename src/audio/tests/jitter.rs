@@ -88,9 +88,9 @@ fn test_slightly_late_packet_kept() {
 fn test_buffer_overflow() {
     let mut buffer = JitterBuffer::new(10, 3); // Max size 3
 
-    buffer.push(0, "packet0");
-    buffer.push(1, "packet1");
-    buffer.push(2, "packet2");
+    assert!(matches!(buffer.push(0, "packet0"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(1, "packet1"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(2, "packet2"), JitterResult::Buffered));
 
     // Push 4th packet, should cause overflow of oldest (0)
     match buffer.push(3, "packet3") {
@@ -109,10 +109,10 @@ fn test_wrapping_sequence() {
     // Start near end of u16 range
     buffer.skip_to(65534);
 
-    buffer.push(65534, "packet_high");
-    buffer.push(65535, "packet_max");
-    buffer.push(0, "packet_zero");
-    buffer.push(1, "packet_one");
+    assert!(matches!(buffer.push(65534, "packet_high"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(65535, "packet_max"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(0, "packet_zero"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(1, "packet_one"), JitterResult::Buffered));
 
     assert!(matches!(buffer.pop(), NextPacket::Ready("packet_high")));
     assert!(matches!(buffer.pop(), NextPacket::Ready("packet_max")));
@@ -124,26 +124,26 @@ fn test_wrapping_sequence() {
 fn test_skip_to() {
     let mut buffer = JitterBuffer::new(2, 10);
 
-    buffer.push(0, "packet0");
-    buffer.push(1, "packet1");
+    assert!(matches!(buffer.push(0, "packet0"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(1, "packet1"), JitterResult::Buffered));
 
     buffer.skip_to(10);
 
     // Old packets should be cleared (or at least ignored/removed)
     assert_eq!(buffer.depth(), 0);
 
-    buffer.push(10, "packet10");
+    assert!(matches!(buffer.push(10, "packet10"), JitterResult::Buffered));
     assert!(matches!(buffer.pop(), NextPacket::Wait)); // Waiting for depth
 
-    buffer.push(11, "packet11");
+    assert!(matches!(buffer.push(11, "packet11"), JitterResult::Buffered));
     assert!(matches!(buffer.pop(), NextPacket::Ready("packet10")));
 }
 
 #[test]
 fn test_clear() {
     let mut buffer = JitterBuffer::new(2, 10);
-    buffer.push(0, "packet0");
-    buffer.push(1, "packet1");
+    assert!(matches!(buffer.push(0, "packet0"), JitterResult::Buffered));
+    assert!(matches!(buffer.push(1, "packet1"), JitterResult::Buffered));
 
     assert_eq!(buffer.depth(), 2);
 
