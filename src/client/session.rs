@@ -118,9 +118,10 @@ impl RaopSessionImpl {
 
             // Read more
             let mut buf = [0u8; 4096];
-            let n = stream
-                .read(&mut buf)
+            let read_fut = stream.read(&mut buf);
+            let n = tokio::time::timeout(std::time::Duration::from_secs(10), read_fut)
                 .await
+                .map_err(|_| AirPlayError::Timeout)?
                 .map_err(|e| AirPlayError::ConnectionFailed {
                     message: format!("Read failed: {e}"),
                     source: Some(Box::new(e)),
@@ -308,7 +309,10 @@ impl AirPlaySession for RaopSessionImpl {
             title: Some(track.title.clone()),
             artist: Some(track.artist.clone()),
             album: track.album.clone(),
-            // other fields
+            genre: track.genre.clone(),
+            track_number: track.track_number,
+            disc_number: track.disc_number,
+            duration_ms: track.duration_secs.map(|s| (s * 1000.0) as u32),
             ..Default::default()
         };
 
