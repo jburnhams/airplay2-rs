@@ -54,8 +54,8 @@ async fn test_full_raop_session() {
     client.play().await.expect("play failed");
 
     // Verify server state
-    // let state = server.state();
-    // assert!(state.playing);
+    let state = server.state();
+    assert!(state.playing);
 
     // Disconnect
     client.disconnect().await.expect("disconnect failed");
@@ -143,8 +143,9 @@ async fn test_raop_metadata() {
     }
 
     // Verify
-    // let state = server.state();
-    // assert!(state.metadata.is_some());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let state = server.state();
+    assert!(state.metadata.is_some());
 
     // Cleanup
     client.disconnect().await.ok();
