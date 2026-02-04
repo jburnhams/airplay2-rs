@@ -313,9 +313,16 @@ impl AirPlaySession for RaopSessionImpl {
             track_number: track.track_number,
             disc_number: track.disc_number,
             duration_ms: track.duration_secs.map(|s| {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                {
-                    (s * 1000.0) as u32
+                let ms = s * 1000.0;
+                if ms >= f64::from(u32::MAX) {
+                    u32::MAX
+                } else if ms < 0.0 {
+                    0
+                } else {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    {
+                        ms as u32
+                    }
                 }
             }),
             ..Default::default()
