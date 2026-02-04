@@ -6,7 +6,7 @@
 #[cfg(feature = "audio-cpal")]
 mod implementation {
     use super::super::output::{
-        AudioOutput, AudioOutputError, OutputState, AudioDevice, AudioCallback
+        AudioCallback, AudioDevice, AudioOutput, AudioOutputError, OutputState,
     };
     use crate::audio::format::{AudioFormat, SampleFormat, SampleRate};
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -50,10 +50,14 @@ mod implementation {
 
     impl AudioOutput for CpalOutput {
         fn enumerate_devices(&self) -> Result<Vec<AudioDevice>, AudioOutputError> {
-            let default_name = self.host.default_output_device()
+            let default_name = self
+                .host
+                .default_output_device()
                 .map(|d| d.name().unwrap_or_default());
 
-            let devices = self.host.output_devices()
+            let devices = self
+                .host
+                .output_devices()
                 .map_err(|e| AudioOutputError::DeviceError(e.to_string()))?;
 
             let mut result = Vec::new();
@@ -96,7 +100,9 @@ mod implementation {
         }
 
         fn default_device(&self) -> Result<AudioDevice, AudioOutputError> {
-            let device = self.host.default_output_device()
+            let device = self
+                .host
+                .default_output_device()
                 .ok_or_else(|| AudioOutputError::DeviceNotFound("No default device".into()))?;
 
             let name = device.name().unwrap_or_else(|_| "Default".to_string());
@@ -116,12 +122,14 @@ mod implementation {
             format: AudioFormat,
         ) -> Result<(), AudioOutputError> {
             let device = if let Some(id) = device_id {
-                self.host.output_devices()
+                self.host
+                    .output_devices()
                     .map_err(|e| AudioOutputError::DeviceError(e.to_string()))?
                     .find(|d| d.name().ok().as_deref() == Some(id))
                     .ok_or_else(|| AudioOutputError::DeviceNotFound(id.to_string()))?
             } else {
-                self.host.default_output_device()
+                self.host
+                    .default_output_device()
                     .ok_or_else(|| AudioOutputError::DeviceNotFound("No default".into()))?
             };
 
@@ -133,14 +141,17 @@ mod implementation {
 
         fn start(&mut self, callback: AudioCallback) -> Result<(), AudioOutputError> {
             if self.command_tx.is_some() {
-                 let _ = self.stop();
+                let _ = self.stop();
             }
 
-            let device = self.device.as_ref()
+            let device = self
+                .device
+                .as_ref()
                 .ok_or_else(|| AudioOutputError::DeviceError("No device opened".into()))?
                 .clone();
 
-            let format = self.format
+            let format = self
+                .format
                 .ok_or_else(|| AudioOutputError::DeviceError("No format set".into()))?;
 
             // Store callback
@@ -240,7 +251,7 @@ mod implementation {
                         }
                     }
                 } else {
-                     tracing::error!("Failed to build stream");
+                    tracing::error!("Failed to build stream");
                 }
             });
 
@@ -259,7 +270,7 @@ mod implementation {
 
         fn pause(&mut self) -> Result<(), AudioOutputError> {
             if let Some(ref tx) = self.command_tx {
-                 let _ = tx.send(StreamCommand::Pause);
+                let _ = tx.send(StreamCommand::Pause);
             }
             self.state = OutputState::Paused;
             Ok(())
@@ -267,7 +278,7 @@ mod implementation {
 
         fn resume(&mut self) -> Result<(), AudioOutputError> {
             if let Some(ref tx) = self.command_tx {
-                 let _ = tx.send(StreamCommand::Resume);
+                let _ = tx.send(StreamCommand::Resume);
             }
             self.state = OutputState::Playing;
             Ok(())

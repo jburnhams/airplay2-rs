@@ -22,7 +22,10 @@ audio-alsa = ["dep:alsa"]
 receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 
 [dependencies]
-cpal = { version = "0.15", optional = true, default-features = false }
+cpal = { version = "0.15.3", optional = true, default-features = false }
+bytes = "1.11.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
 alsa = { version = "0.9", optional = true }
 
 # Async

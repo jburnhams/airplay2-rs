@@ -74,11 +74,7 @@ pub trait AudioOutput: Send {
     fn default_device(&self) -> Result<AudioDevice, AudioOutputError>;
 
     /// Open output stream with specified format
-    fn open(
-        &mut self,
-        device: Option<&str>,
-        format: AudioFormat,
-    ) -> Result<(), AudioOutputError>;
+    fn open(&mut self, device: Option<&str>, format: AudioFormat) -> Result<(), AudioOutputError>;
 
     /// Start playback with callback
     ///
@@ -126,17 +122,25 @@ pub fn create_default_output() -> Result<Box<dyn AudioOutput>, AudioOutputError>
         return Ok(Box::new(super::output_cpal::CpalOutput::new()?));
     }
 
-    #[cfg(all(not(any(feature = "audio-coreaudio", feature = "audio-cpal")), feature = "audio-alsa"))]
+    #[cfg(all(
+        not(any(feature = "audio-coreaudio", feature = "audio-cpal")),
+        feature = "audio-alsa"
+    ))]
     {
         // return Ok(Box::new(super::output_alsa::AlsaOutput::new()?));
         // Placeholder as alsa is not implemented yet
         return Err(AudioOutputError::DeviceError("Alsa not implemented".into()));
     }
 
-    #[cfg(not(any(feature = "audio-coreaudio", feature = "audio-cpal", feature = "audio-alsa")))]
+    #[cfg(not(any(
+        feature = "audio-coreaudio",
+        feature = "audio-cpal",
+        feature = "audio-alsa"
+    )))]
     {
         Err(AudioOutputError::DeviceError(
-            "No audio backend enabled. Enable audio-coreaudio, audio-cpal, or audio-alsa feature.".into()
+            "No audio backend enabled. Enable audio-coreaudio, audio-cpal, or audio-alsa feature."
+                .into(),
         ))
     }
 }

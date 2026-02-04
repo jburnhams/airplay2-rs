@@ -1,4 +1,2 @@
 [advisories]
-ignore = [
-    "RUSTSEC-2023-0071" # RSA Marvin Attack - No fix available, required for AirPlay 1
-]
+ignore = ["RUSTSEC-2023-0071"]

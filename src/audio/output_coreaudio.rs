@@ -5,7 +5,7 @@
 #[cfg(all(target_os = "macos", feature = "audio-coreaudio"))]
 mod implementation {
     use super::super::output::{
-        AudioOutput, AudioOutputError, OutputState, AudioDevice, AudioCallback
+        AudioCallback, AudioDevice, AudioOutput, AudioOutputError, OutputState,
     };
     use crate::audio::format::{AudioFormat, SampleRate};
     use std::time::Duration;
@@ -51,7 +51,11 @@ mod implementation {
             })
         }
 
-        fn open(&mut self, _device: Option<&str>, format: AudioFormat) -> Result<(), AudioOutputError> {
+        fn open(
+            &mut self,
+            _device: Option<&str>,
+            format: AudioFormat,
+        ) -> Result<(), AudioOutputError> {
             self.format = Some(format);
             // Would configure AudioUnit here
             Ok(())

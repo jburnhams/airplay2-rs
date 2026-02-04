@@ -1,8 +1,8 @@
 //! Audio pipeline connecting jitter buffer to output
 
-use crate::audio::output::{AudioOutput, AudioOutputError, AudioCallback};
+use crate::audio::format::{AudioCodec, AudioFormat};
 use crate::audio::jitter::JitterBuffer;
-use crate::audio::format::{AudioFormat, AudioCodec};
+use crate::audio::output::{AudioCallback, AudioOutput, AudioOutputError};
 use std::sync::{Arc, Mutex};
 
 /// Audio pipeline state
@@ -66,12 +66,8 @@ impl AudioPipeline {
                 if let Some(packet) = jitter.pop() {
                     let data = &packet.audio_data;
 
-                    let to_copy = std::cmp::min(
-                        data.len(),
-                        buffer.len() - written
-                    );
-                    buffer[written..written + to_copy]
-                        .copy_from_slice(&data[..to_copy]);
+                    let to_copy = std::cmp::min(data.len(), buffer.len() - written);
+                    buffer[written..written + to_copy].copy_from_slice(&data[..to_copy]);
                     written += to_copy;
                 } else {
                     // Underrun - fill with silence

@@ -1,5 +1,5 @@
-use crate::audio::output::{AudioDevice, AudioOutputError, create_default_output};
 use crate::audio::format::{AudioFormat, SampleRate};
+use crate::audio::output::{AudioDevice, AudioOutputError, create_default_output};
 
 #[test]
 fn test_audio_device_struct() {
@@ -43,18 +43,26 @@ fn test_audio_output_error_display() {
 fn test_create_default_output_no_features() {
     let result = create_default_output();
 
-    #[cfg(any(feature = "audio-coreaudio", feature = "audio-cpal", feature = "audio-alsa"))]
+    #[cfg(any(
+        feature = "audio-coreaudio",
+        feature = "audio-cpal",
+        feature = "audio-alsa"
+    ))]
     {
         // If we are on linux/macos with features enabled, it might succeed (if device available) or fail with DeviceError/DeviceNotFound (if no device).
         // But in CI environment, it might fail to find device.
         // We just want to ensure it doesn't panic.
         match result {
-            Ok(_) => {},
-            Err(_) => {}, // Accept failure to init backend in headless env
+            Ok(_) => {}
+            Err(_) => {} // Accept failure to init backend in headless env
         }
     }
 
-    #[cfg(not(any(feature = "audio-coreaudio", feature = "audio-cpal", feature = "audio-alsa")))]
+    #[cfg(not(any(
+        feature = "audio-coreaudio",
+        feature = "audio-cpal",
+        feature = "audio-alsa"
+    )))]
     {
         assert!(result.is_err());
         match result {
