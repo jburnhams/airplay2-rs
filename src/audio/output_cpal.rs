@@ -177,6 +177,8 @@ mod implementation {
             let (tx, rx) = mpsc::channel();
             self.command_tx = Some(tx);
 
+            let (status_tx, status_rx) = mpsc::channel();
+
             // Spawn thread
             thread::spawn(move || {
                 let err_fn = |err| tracing::error!("CPAL stream error: {}", err);
@@ -237,31 +239,47 @@ mod implementation {
                             None,
                         )
                     }
-                    _ => return, // Error handling in thread? hard.
-                };
-
-                if let Ok(stream) = stream_result {
-                    if let Err(e) = stream.play() {
-                        tracing::error!("Failed to play stream: {}", e);
+                    _ => {
+                        let _ = status_tx.send(Err(AudioOutputError::FormatNotSupported(format)));
                         return;
                     }
+                };
 
-                    // Command loop
-                    loop {
-                        match rx.recv() {
-                            Ok(StreamCommand::Stop) | Err(_) => break, // Channel closed
-                            Ok(StreamCommand::Pause) => {
-                                let _ = stream.pause();
-                            }
-                            Ok(StreamCommand::Resume) => {
-                                let _ = stream.play();
+                match stream_result {
+                    Ok(stream) => {
+                        if let Err(e) = stream.play() {
+                            let _ = status_tx.send(Err(AudioOutputError::StreamError(e.to_string())));
+                            return;
+                        }
+
+                        // Notify success
+                        if status_tx.send(Ok(())).is_err() {
+                            return; // Caller dropped receiver
+                        }
+
+                        // Command loop
+                        loop {
+                            match rx.recv() {
+                                Ok(StreamCommand::Stop) | Err(_) => break, // Channel closed
+                                Ok(StreamCommand::Pause) => {
+                                    let _ = stream.pause();
+                                }
+                                Ok(StreamCommand::Resume) => {
+                                    let _ = stream.play();
+                                }
                             }
                         }
                     }
-                } else {
-                    tracing::error!("Failed to build stream");
+                    Err(e) => {
+                        let _ = status_tx.send(Err(AudioOutputError::DeviceError(e.to_string())));
+                    }
                 }
             });
+
+            // Wait for initialization
+            status_rx
+                .recv()
+                .map_err(|_| AudioOutputError::DeviceError("Audio thread panicked".into()))??;
 
             self.state = OutputState::Playing;
 

@@ -67,6 +67,11 @@ impl AudioPipeline {
     ///
     /// Panics if the jitter buffer lock cannot be acquired.
     pub fn start(&mut self) -> Result<(), AudioOutputError> {
+        // Enforce PCM for now as decoding is not implemented
+        if !matches!(self.decoder, Some(AudioDecoder::Pcm)) {
+            return Err(AudioOutputError::FormatNotSupported(self.format));
+        }
+
         self.output.open(None, self.format)?;
 
         let jitter = self.jitter_buffer.clone();
