@@ -2,10 +2,10 @@
 
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
+use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse};
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
 use async_trait::async_trait;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 /// Common session operations for both `AirPlay` 1 and 2
@@ -98,7 +98,7 @@ impl RaopSessionImpl {
             .write_all(&bytes)
             .await
             .map_err(|e| AirPlayError::ConnectionFailed {
-            message: format!("Write failed: {e}"),
+                message: format!("Write failed: {e}"),
                 source: Some(Box::new(e)),
                 device_name: format!("{}:{}", self.server_addr, self.server_port),
             })?;
@@ -122,7 +122,7 @@ impl RaopSessionImpl {
                 .read(&mut buf)
                 .await
                 .map_err(|e| AirPlayError::ConnectionFailed {
-                message: format!("Read failed: {e}"),
+                    message: format!("Read failed: {e}"),
                     source: Some(Box::new(e)),
                     device_name: format!("{}:{}", self.server_addr, self.server_port),
                 })?;
@@ -153,7 +153,7 @@ impl AirPlaySession for RaopSessionImpl {
             TcpStream::connect(&addr)
                 .await
                 .map_err(|e| AirPlayError::ConnectionFailed {
-            message: format!("Connect failed: {e}"),
+                    message: format!("Connect failed: {e}"),
                     source: Some(Box::new(e)),
                     device_name: addr.clone(),
                 })?;
