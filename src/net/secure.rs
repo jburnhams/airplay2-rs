@@ -5,7 +5,12 @@
 
 use crate::error::AirPlayError;
 use byteorder::{ByteOrder, LittleEndian};
-use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, Key, KeyInit, Nonce, Tag};
+#[allow(deprecated)]
+use chacha20poly1305::aead::AeadInPlace;
+use chacha20poly1305::{
+    aead::KeyInit,
+    ChaCha20Poly1305, Key, Nonce, Tag,
+};
 
 /// HAP secure session state
 pub struct HapSecureSession {
@@ -20,8 +25,8 @@ impl HapSecureSession {
     #[must_use]
     pub fn new(encrypt_key: &[u8; 32], decrypt_key: &[u8; 32]) -> Self {
         Self {
-            encrypt_cipher: ChaCha20Poly1305::new(Key::from_slice(encrypt_key)),
-            decrypt_cipher: ChaCha20Poly1305::new(Key::from_slice(decrypt_key)),
+            encrypt_cipher: ChaCha20Poly1305::new(&Key::from(*encrypt_key)),
+            decrypt_cipher: ChaCha20Poly1305::new(&Key::from(*decrypt_key)),
             encrypt_count: 0,
             decrypt_count: 0,
         }
@@ -46,12 +51,13 @@ impl HapSecureSession {
 
             let mut nonce_bytes = [0u8; 12];
             LittleEndian::write_u64(&mut nonce_bytes[4..12], self.encrypt_count);
-            let nonce = Nonce::from_slice(&nonce_bytes);
+            let nonce = Nonce::from(nonce_bytes);
 
             let mut buffer = chunk.to_vec();
+            #[allow(deprecated)]
             let tag = self
                 .encrypt_cipher
-                .encrypt_in_place_detached(nonce, &len_bytes, &mut buffer)
+                .encrypt_in_place_detached(&nonce, &len_bytes, &mut buffer)
                 .map_err(|_| AirPlayError::AuthenticationFailed {
                     message: "Encryption failed".to_string(),
                     recoverable: false,
@@ -94,13 +100,19 @@ impl HapSecureSession {
 
         let mut nonce_bytes = [0u8; 12];
         LittleEndian::write_u64(&mut nonce_bytes[4..12], self.decrypt_count);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::from(nonce_bytes);
 
         let mut buffer = data[2..2 + len].to_vec();
-        let tag = Tag::from_slice(&data[2 + len..2 + len + 16]);
+        let tag = Tag::try_from(&data[2 + len..2 + len + 16]).map_err(|_| {
+            AirPlayError::AuthenticationFailed {
+                message: "Invalid tag length".to_string(),
+                recoverable: false,
+            }
+        })?;
 
+        #[allow(deprecated)]
         self.decrypt_cipher
-            .decrypt_in_place_detached(nonce, &data[0..2], &mut buffer, tag)
+            .decrypt_in_place_detached(&nonce, &data[0..2], &mut buffer, &tag)
             .map_err(|_| AirPlayError::AuthenticationFailed {
                 message: "Decryption failed".to_string(),
                 recoverable: false,

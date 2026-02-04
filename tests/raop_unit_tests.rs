@@ -47,13 +47,15 @@ mod crypto_tests {
         let public = private.public_key();
 
         // Encrypt with public
+        use airplay2::protocol::crypto::CompatibleOsRng;
         use rand::rngs::OsRng;
         use rsa::Oaep;
         use sha1::Sha1;
 
         let plaintext = b"test AES key 16b";
-        let padding = Oaep::new::<Sha1>();
-        let encrypted = public.encrypt(&mut OsRng, padding, plaintext).unwrap();
+        let padding = Oaep::<Sha1>::new();
+        let mut rng = CompatibleOsRng(OsRng);
+        let encrypted = public.encrypt(&mut rng, padding, plaintext).unwrap();
 
         // Decrypt with private
         let decrypted = private.decrypt_oaep(&encrypted).unwrap();

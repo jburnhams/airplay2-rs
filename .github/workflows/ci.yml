@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: cargo check --all-features
 
   fmt:
@@ -39,6 +41,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
   test:
@@ -52,6 +56,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: cargo test --all-features
 
   doc:
@@ -61,6 +68,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: cargo doc --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
@@ -74,6 +83,8 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: cargo llvm-cov --all-features --lcov --output-path lcov.info
       - uses: codecov/codecov-action@v4

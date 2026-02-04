@@ -102,6 +102,7 @@ fn test_session_key_generation() {
 #[test]
 fn test_session_keys_with_test_keypair() {
     // Generate AES key and IV
+    use crate::protocol::crypto::CompatibleOsRng;
     use rand::rngs::OsRng;
     use rsa::Oaep;
     use sha1::Sha1;
@@ -116,8 +117,9 @@ fn test_session_keys_with_test_keypair() {
 
     // Encrypt with public key
     let public = private.public_key();
-    let padding = Oaep::new::<Sha1>();
-    let encrypted = public.encrypt(&mut OsRng, padding, &aes_key).unwrap();
+    let padding = Oaep::<Sha1>::new();
+    let mut rng = CompatibleOsRng(OsRng);
+    let encrypted = public.encrypt(&mut rng, padding, &aes_key).unwrap();
 
     // Encode as SDP attributes
     let rsaaeskey = BASE64.encode(&encrypted);

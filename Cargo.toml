@@ -15,8 +15,16 @@ readme = "README.md"
 default = ["tokio-runtime", "raop"]
 tokio-runtime = ["tokio", "tokio-util"]
 raop = ["rsa", "sha1"]
+receiver = []
+audio-coreaudio = ["dep:coreaudio-rs"]
+audio-cpal = ["dep:cpal"]
+audio-alsa = ["dep:alsa"]
+receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 
 [dependencies]
+cpal = { version = "0.15.3", optional = true, default-features = false }
+bytes = "1.11.1"
+
 # Async
 # Pinned to 1.38.2 to align socket2 dependency (0.5) with mdns-sd
 tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
@@ -35,27 +43,29 @@ mdns-sd = "0.12"
 hostname = "0.4"
 
 # Crypto
-rsa = { version = "0.9", optional = true }
-sha1 = { version = "0.10", features = ["oid"], optional = true }
+rsa = { version = "0.10.0-rc.15", optional = true }
+sha1 = { version = "0.11.0-rc.5", features = ["oid"], optional = true }
 base64 = "0.22"
-srp = "0.6"
+srp = "0.7.0-rc.1"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-traits = "0.2"
 byteorder = "1.5"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-chacha20poly1305 = "0.10"
-aes-gcm = "0.10"
+chacha20poly1305 = "0.11.0-rc.3"
+aes-gcm = "0.11.0-rc.3"
 aes = "0.8"
 ctr = "0.9"
-hkdf = "0.12"
-sha2 = "0.10"
+hkdf = "0.13.0-rc.5"
+sha2 = "0.11.0-rc.5"
 rand = "0.8"
+rand_core_10 = { package = "rand_core", version = "0.10.0" }
+crypto-bigint = "0.7.0-rc.25"
 curve25519-dalek = "4.1"
 zeroize = "1.8"
 
 # Serialization
-bytes = "1.9"
+# bytes = "1.9" # Already defined above
 
 # Audio processing
 rubato = "0.14"           # Audio resampling
@@ -64,6 +74,9 @@ alac-encoder = "0.3"      # ALAC encoding
 # Persistent storage (optional)
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+alsa = { version = "0.9", optional = true }
 
 [dev-dependencies]
 tokio = { version = "=1.38.2", features = ["full", "test-util"] }
@@ -81,3 +94,6 @@ nix = { version = "0.29", features = ["signal"] }
 [[bench]]
 name = "protocol_benchmarks"
 harness = false
+
+[target.'cfg(target_os = "macos")'.dependencies]
+coreaudio-rs = { version = "0.14", optional = true }

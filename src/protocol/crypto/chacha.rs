@@ -50,11 +50,13 @@ impl ChaCha20Poly1305Cipher {
             });
         }
 
-        let cipher =
-            ChaChaImpl::new_from_slice(key).map_err(|_| CryptoError::InvalidKeyLength {
+        let key_generic =
+            chacha20poly1305::Key::try_from(key).map_err(|_| CryptoError::InvalidKeyLength {
                 expected: 32,
                 actual: key.len(),
             })?;
+
+        let cipher = ChaChaImpl::new(&key_generic);
 
         Ok(Self { cipher })
     }
@@ -64,7 +66,7 @@ impl ChaCha20Poly1305Cipher {
     /// Returns ciphertext with appended 16-byte tag
     pub fn encrypt(&self, nonce: &Nonce, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
         self.cipher
-            .encrypt(ChaChaNonce::from_slice(&nonce.0), plaintext)
+            .encrypt(&ChaChaNonce::from(nonce.0), plaintext)
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))
     }
 
@@ -79,7 +81,7 @@ impl ChaCha20Poly1305Cipher {
 
         self.cipher
             .encrypt(
-                ChaChaNonce::from_slice(&nonce.0),
+                &ChaChaNonce::from(nonce.0),
                 Payload {
                     msg: plaintext,
                     aad,
@@ -93,7 +95,7 @@ impl ChaCha20Poly1305Cipher {
     /// Input should be ciphertext with appended 16-byte tag
     pub fn decrypt(&self, nonce: &Nonce, ciphertext: &[u8]) -> Result<Vec<u8>, CryptoError> {
         self.cipher
-            .decrypt(ChaChaNonce::from_slice(&nonce.0), ciphertext)
+            .decrypt(&ChaChaNonce::from(nonce.0), ciphertext)
             .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))
     }
 
@@ -108,7 +110,7 @@ impl ChaCha20Poly1305Cipher {
 
         self.cipher
             .decrypt(
-                ChaChaNonce::from_slice(&nonce.0),
+                &ChaChaNonce::from(nonce.0),
                 Payload {
                     msg: ciphertext,
                     aad,
