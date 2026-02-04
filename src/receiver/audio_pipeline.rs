@@ -31,6 +31,10 @@ pub struct AacDecoder;
 
 impl AudioPipeline {
     /// Create a new audio pipeline
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the pipeline cannot be initialized.
     pub fn new(
         jitter_buffer: Arc<Mutex<JitterBuffer>>,
         output: Box<dyn AudioOutput>,
@@ -41,6 +45,7 @@ impl AudioPipeline {
             AudioCodec::Alac => Some(AudioDecoder::Alac(AlacDecoder)),
             AudioCodec::Aac => Some(AudioDecoder::Aac(AacDecoder)),
             AudioCodec::Pcm => Some(AudioDecoder::Pcm),
+            #[allow(clippy::match_wildcard_for_single_variants)]
             _ => None, // Handle Opus or others
         };
 
@@ -53,6 +58,14 @@ impl AudioPipeline {
     }
 
     /// Start the audio pipeline
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the output cannot be opened or started.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the jitter buffer lock cannot be acquired.
     pub fn start(&mut self) -> Result<(), AudioOutputError> {
         self.output.open(None, self.format)?;
 
@@ -71,7 +84,7 @@ impl AudioPipeline {
                     written += to_copy;
                 } else {
                     // Underrun - fill with silence
-                    for b in buffer[written..].iter_mut() {
+                    for b in &mut buffer[written..] {
                         *b = 0;
                     }
                     break;
@@ -85,11 +98,19 @@ impl AudioPipeline {
     }
 
     /// Stop the pipeline
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the output cannot be stopped.
     pub fn stop(&mut self) -> Result<(), AudioOutputError> {
         self.output.stop()
     }
 
     /// Set volume
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the volume cannot be set.
     pub fn set_volume(&mut self, volume: f32) -> Result<(), AudioOutputError> {
         self.output.set_volume(volume)
     }

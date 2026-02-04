@@ -41,11 +41,19 @@ impl AppleRsaPublicKey {
 
     /// Load the Apple public key
     pub fn load() -> Result<Self, CryptoError> {
-        use rsa::BigUint;
+        use crypto_bigint::BoxedUint;
 
-        let n = BigUint::parse_bytes(Self::MODULUS_HEX.as_bytes(), 16)
-            .ok_or_else(|| CryptoError::InvalidPublicKey)?;
-        let e = BigUint::from(Self::EXPONENT);
+        // Pad hex string to expected length (256 chars for 1024 bits)
+        let hex = Self::MODULUS_HEX;
+        let padded = if hex.len() < sizes::MODULUS_BYTES * 2 {
+            format!("{:0>width$}", hex, width = sizes::MODULUS_BYTES * 2)
+        } else {
+            hex.to_string()
+        };
+
+        let n = Option::from(BoxedUint::from_be_hex(&padded, sizes::MODULUS_BITS as u32))
+            .ok_or(CryptoError::InvalidPublicKey)?;
+        let e = BoxedUint::from(Self::EXPONENT);
 
         let inner = rsa::RsaPublicKey::new(n, e).map_err(|_| CryptoError::InvalidPublicKey)?;
 
@@ -56,7 +64,6 @@ impl AppleRsaPublicKey {
     ///
     /// Used to encrypt the AES key for the device
     pub fn encrypt_oaep(&self, plaintext: &[u8]) -> Result<Vec<u8>, CryptoError> {
-        use rand::rngs::OsRng;
         use rsa::Oaep;
         use sha1::Sha1;
 
@@ -68,9 +75,10 @@ impl AppleRsaPublicKey {
             )));
         }
 
-        let padding = Oaep::new::<Sha1>();
+        let padding = Oaep::<Sha1>::new();
+        let mut rng = CompatibleOsRng(rand::rngs::OsRng);
         self.inner
-            .encrypt(&mut OsRng, padding, plaintext)
+            .encrypt(&mut rng, padding, plaintext)
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))
     }
 
@@ -102,9 +110,8 @@ pub struct RaopRsaPrivateKey {
 impl RaopRsaPrivateKey {
     /// Generate a new RSA key pair for testing
     pub fn generate() -> Result<Self, CryptoError> {
-        use rand::rngs::OsRng;
-
-        let inner = rsa::RsaPrivateKey::new(&mut OsRng, sizes::MODULUS_BITS)
+        let mut rng = CompatibleOsRng(rand::rngs::OsRng);
+        let inner = rsa::RsaPrivateKey::new(&mut rng, sizes::MODULUS_BITS)
             .map_err(|_| CryptoError::RngError)?;
 
         Ok(Self { inner })
@@ -130,7 +137,7 @@ impl RaopRsaPrivateKey {
         use rsa::Oaep;
         use sha1::Sha1;
 
-        let padding = Oaep::new::<Sha1>();
+        let padding = Oaep::<Sha1>::new();
         self.inner
             .decrypt(padding, ciphertext)
             .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))
@@ -155,3 +162,27 @@ impl RaopRsaPrivateKey {
         self.inner.to_public_key()
     }
 }
+
+pub struct CompatibleOsRng(pub rand::rngs::OsRng);
+
+impl rand_core_10::TryRng for CompatibleOsRng {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        use rand::RngCore;
+        Ok(self.0.next_u32())
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        use rand::RngCore;
+        Ok(self.0.next_u64())
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
+        use rand::RngCore;
+        self.0.fill_bytes(dest); // Panics on error, satisfying Infallible
+        Ok(())
+    }
+}
+
+impl rand_core_10::TryCryptoRng for CompatibleOsRng {}

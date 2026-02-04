@@ -24,10 +24,10 @@ fn test_srp_handshake() {
     let salt = b"randomsalt";
 
     // Use Client to compute verifier (simulating registration)
-    let helper_client = ::srp::client::SrpClient::<sha2::Sha512>::new(&::srp::groups::G_3072);
+    let helper_client = ::srp::Client::<::srp::groups::G3072, sha2::Sha512>::new();
     let verifier = helper_client.compute_verifier(username, password, salt);
 
-    let server = ::srp::server::SrpServer::<sha2::Sha512>::new(&::srp::groups::G_3072);
+    let server = ::srp::Server::<::srp::groups::G3072, sha2::Sha512>::new();
 
     // Server generates ephemeral B
     let mut b_bytes = [0u8; 32];
@@ -44,7 +44,7 @@ fn test_srp_handshake() {
 
     // 5. Server verifies client
     let server_verifier = server
-        .process_reply(&b_bytes, &verifier, client_a)
+        .process_reply(&b_bytes, &verifier, client_a, username, salt)
         .expect("Server failed to process reply");
 
     server_verifier
@@ -70,11 +70,11 @@ fn test_srp_invalid_password_fails() {
     let salt = b"salt";
 
     // Helper for registration
-    let helper_client = ::srp::client::SrpClient::<sha2::Sha512>::new(&::srp::groups::G_3072);
+    let helper_client = ::srp::Client::<::srp::groups::G3072, sha2::Sha512>::new();
     // Server registered with "wrong" password
     let verifier = helper_client.compute_verifier(username, b"wrong", salt);
 
-    let server = ::srp::server::SrpServer::<sha2::Sha512>::new(&::srp::groups::G_3072);
+    let server = ::srp::Server::<::srp::groups::G3072, sha2::Sha512>::new();
     let mut b_bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut b_bytes);
     let server_b_pub = server.compute_public_ephemeral(&b_bytes, &verifier);
@@ -87,7 +87,7 @@ fn test_srp_invalid_password_fails() {
     let client_m1 = client_verifier.client_proof();
 
     let server_verifier = server
-        .process_reply(&b_bytes, &verifier, client.public_key())
+        .process_reply(&b_bytes, &verifier, client.public_key(), username, salt)
         .unwrap();
 
     // Verification should fail

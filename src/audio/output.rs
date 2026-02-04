@@ -1,7 +1,7 @@
 //! Audio output abstraction
 //!
 //! Platform-agnostic trait for audio playback with implementations
-//! for CoreAudio, CPAL, ALSA, etc.
+//! for `CoreAudio`, CPAL, ALSA, etc.
 
 use crate::audio::format::{AudioFormat, SampleRate};
 use std::time::Duration;
@@ -68,32 +68,64 @@ pub type AudioCallback = Box<dyn FnMut(&mut [u8]) -> usize + Send + 'static>;
 /// Implementations provide platform-specific audio playback.
 pub trait AudioOutput: Send {
     /// Get available output devices
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if device enumeration fails.
     fn enumerate_devices(&self) -> Result<Vec<AudioDevice>, AudioOutputError>;
 
     /// Get the default output device
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the default device cannot be determined.
     fn default_device(&self) -> Result<AudioDevice, AudioOutputError>;
 
     /// Open output stream with specified format
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the device cannot be opened or the format is not supported.
     fn open(&mut self, device: Option<&str>, format: AudioFormat) -> Result<(), AudioOutputError>;
 
     /// Start playback with callback
     ///
     /// The callback is invoked to fill output buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if playback cannot be started.
     fn start(&mut self, callback: AudioCallback) -> Result<(), AudioOutputError>;
 
     /// Stop playback
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if playback cannot be stopped.
     fn stop(&mut self) -> Result<(), AudioOutputError>;
 
     /// Pause playback
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if playback cannot be paused.
     fn pause(&mut self) -> Result<(), AudioOutputError>;
 
     /// Resume playback
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if playback cannot be resumed.
     fn resume(&mut self) -> Result<(), AudioOutputError>;
 
     /// Get current state
     fn state(&self) -> OutputState;
 
     /// Set volume (0.0 to 1.0)
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if volume cannot be set.
     fn set_volume(&mut self, volume: f32) -> Result<(), AudioOutputError>;
 
     /// Get current volume
@@ -106,20 +138,27 @@ pub trait AudioOutput: Send {
     fn format(&self) -> Option<AudioFormat>;
 
     /// Close the output
+    ///
+    /// # Errors
+    ///
+    /// Returns `AudioOutputError` if the output cannot be closed.
     fn close(&mut self) -> Result<(), AudioOutputError>;
 }
 
 /// Create the default audio output for the current platform
+///
+/// # Errors
+///
+/// Returns `AudioOutputError` if the default output cannot be created.
 pub fn create_default_output() -> Result<Box<dyn AudioOutput>, AudioOutputError> {
     #[cfg(all(feature = "audio-coreaudio", target_os = "macos"))]
     {
         return Ok(Box::new(super::output_coreaudio::CoreAudioOutput::new()?));
     }
 
-    #[cfg(feature = "audio-cpal")]
+    #[cfg(all(feature = "audio-cpal", not(all(feature = "audio-coreaudio", target_os = "macos"))))]
     {
-        #[allow(unreachable_code)]
-        return Ok(Box::new(super::output_cpal::CpalOutput::new()?));
+        Ok(Box::new(super::output_cpal::CpalOutput::new()?))
     }
 
     #[cfg(all(

@@ -5,6 +5,7 @@ use airplay2::protocol::raop::encryption::{
 
 #[test]
 fn test_key_exchange_simulation() {
+    use airplay2::protocol::crypto::CompatibleOsRng;
     use rand::RngCore;
     use rand::rngs::OsRng;
     use rsa::Oaep;
@@ -22,11 +23,12 @@ fn test_key_exchange_simulation() {
 
     // Client encrypts AES key with server's public key (Simulating what AirPlay Sender does)
     let public = server_key.public_key();
-    let padding = Oaep::new::<Sha1>();
+    let padding = Oaep::<Sha1>::new();
 
     // Using rsa::Encryptor trait method
+    let mut rng = CompatibleOsRng(OsRng);
     let encrypted_key = public
-        .encrypt(&mut OsRng, padding, &client_aes_key)
+        .encrypt(&mut rng, padding, &client_aes_key)
         .unwrap();
 
     // Server decrypts to get AES key

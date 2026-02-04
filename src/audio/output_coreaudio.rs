@@ -12,6 +12,7 @@ mod implementation {
 
     // Note: This is a skeleton. Full implementation would use coreaudio-rs crate.
 
+    /// CoreAudio output implementation
     pub struct CoreAudioOutput {
         state: OutputState,
         volume: f32,
@@ -20,6 +21,11 @@ mod implementation {
     }
 
     impl CoreAudioOutput {
+        /// Create a new CoreAudio output
+        ///
+        /// # Errors
+        ///
+        /// Returns `AudioOutputError` if the output cannot be initialized.
         pub fn new() -> Result<Self, AudioOutputError> {
             Ok(Self {
                 state: OutputState::Stopped,

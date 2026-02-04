@@ -33,6 +33,10 @@ mod implementation {
 
     impl CpalOutput {
         /// Create a new CPAL output
+        ///
+        /// # Errors
+        ///
+        /// Returns `AudioOutputError` if the audio host cannot be initialized.
         pub fn new() -> Result<Self, AudioOutputError> {
             let host = cpal::default_host();
 
@@ -78,13 +82,15 @@ mod implementation {
                         if let Some(rate) = SampleRate::from_hz(config.max_sample_rate().0) {
                             supported_rates.push(rate);
                         }
-                        supported_channels.push(config.channels() as u8);
+                        if let Ok(channels) = u8::try_from(config.channels()) {
+                            supported_channels.push(channels);
+                        }
                     }
                 }
 
                 supported_rates.sort_by_key(|r| r.as_u32());
                 supported_rates.dedup();
-                supported_channels.sort();
+                supported_channels.sort_unstable();
                 supported_channels.dedup();
 
                 result.push(AudioDevice {
@@ -161,7 +167,7 @@ mod implementation {
 
             // Configure stream
             let config = cpal::StreamConfig {
-                channels: format.channels.channels() as u16,
+                channels: u16::from(format.channels.channels()),
                 sample_rate: cpal::SampleRate(format.sample_rate.as_u32()),
                 buffer_size: cpal::BufferSize::Default,
             };
@@ -182,7 +188,7 @@ mod implementation {
                             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                                 let bytes: &mut [u8] = unsafe {
                                     std::slice::from_raw_parts_mut(
-                                        data.as_mut_ptr() as *mut u8,
+                                        data.as_mut_ptr().cast::<u8>(),
                                         data.len() * 2,
                                     )
                                 };
@@ -195,7 +201,10 @@ mod implementation {
                                 // Apply volume
                                 let vol = *volume_ref.lock().unwrap();
                                 for sample in data.iter_mut() {
-                                    *sample = (*sample as f32 * vol) as i16;
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    {
+                                        *sample = (f32::from(*sample) * vol) as i16;
+                                    }
                                 }
                             },
                             err_fn,
@@ -208,7 +217,7 @@ mod implementation {
                             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                                 let bytes: &mut [u8] = unsafe {
                                     std::slice::from_raw_parts_mut(
-                                        data.as_mut_ptr() as *mut u8,
+                                        data.as_mut_ptr().cast::<u8>(),
                                         data.len() * 4,
                                     )
                                 };
@@ -240,14 +249,13 @@ mod implementation {
                     // Command loop
                     loop {
                         match rx.recv() {
-                            Ok(StreamCommand::Stop) => break,
+                            Ok(StreamCommand::Stop) | Err(_) => break, // Channel closed
                             Ok(StreamCommand::Pause) => {
                                 let _ = stream.pause();
                             }
                             Ok(StreamCommand::Resume) => {
                                 let _ = stream.play();
                             }
-                            Err(_) => break, // Channel closed
                         }
                     }
                 } else {

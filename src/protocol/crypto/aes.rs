@@ -69,11 +69,13 @@ impl Aes128Gcm {
             });
         }
 
-        let cipher =
-            aes_gcm::Aes128Gcm::new_from_slice(key).map_err(|_| CryptoError::InvalidKeyLength {
+        let key_generic = aes_gcm::Key::<aes_gcm::Aes128Gcm>::try_from(key).map_err(|_| {
+            CryptoError::InvalidKeyLength {
                 expected: 16,
                 actual: key.len(),
-            })?;
+            }
+        })?;
+        let cipher = aes_gcm::Aes128Gcm::new(&key_generic);
 
         Ok(Self { cipher })
     }
@@ -89,8 +91,14 @@ impl Aes128Gcm {
             });
         }
 
+        let nonce_generic =
+            aes_gcm::Nonce::try_from(nonce).map_err(|_| CryptoError::InvalidKeyLength {
+                expected: lengths::AES_GCM_NONCE,
+                actual: nonce.len(),
+            })?;
+
         self.cipher
-            .encrypt(aes_gcm::Nonce::from_slice(nonce), plaintext)
+            .encrypt(&nonce_generic, plaintext)
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))
     }
 
@@ -105,8 +113,14 @@ impl Aes128Gcm {
             });
         }
 
+        let nonce_generic =
+            aes_gcm::Nonce::try_from(nonce).map_err(|_| CryptoError::InvalidKeyLength {
+                expected: lengths::AES_GCM_NONCE,
+                actual: nonce.len(),
+            })?;
+
         self.cipher
-            .decrypt(aes_gcm::Nonce::from_slice(nonce), ciphertext)
+            .decrypt(&nonce_generic, ciphertext)
             .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))
     }
 }

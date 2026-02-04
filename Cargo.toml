@@ -43,22 +43,24 @@ mdns-sd = "0.12"
 hostname = "0.4"
 
 # Crypto
-rsa = { version = "0.9", optional = true }
-sha1 = { version = "0.10", features = ["oid"], optional = true }
+rsa = { version = "0.10.0-rc.15", optional = true }
+sha1 = { version = "0.11.0-rc.5", features = ["oid"], optional = true }
 base64 = "0.22"
-srp = "0.6"
+srp = "0.7.0-rc.1"
 num-bigint = { version = "0.4", features = ["rand"] }
 num-traits = "0.2"
 byteorder = "1.5"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-chacha20poly1305 = "0.10"
-aes-gcm = "0.10"
+chacha20poly1305 = "0.11.0-rc.3"
+aes-gcm = "0.11.0-rc.3"
 aes = "0.8"
 ctr = "0.9"
-hkdf = "0.12"
-sha2 = "0.10"
+hkdf = "0.13.0-rc.5"
+sha2 = "0.11.0-rc.5"
 rand = "0.8"
+rand_core_10 = { package = "rand_core", version = "0.10.0" }
+crypto-bigint = "0.7.0-rc.25"
 curve25519-dalek = "4.1"
 zeroize = "1.8"
 

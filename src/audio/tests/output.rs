@@ -52,9 +52,8 @@ fn test_create_default_output_no_features() {
         // If we are on linux/macos with features enabled, it might succeed (if device available) or fail with DeviceError/DeviceNotFound (if no device).
         // But in CI environment, it might fail to find device.
         // We just want to ensure it doesn't panic.
-        match result {
-            Ok(_) => {}
-            Err(_) => {} // Accept failure to init backend in headless env
+        if result.is_ok() || result.is_err() {
+            // Accept failure to init backend in headless env
         }
     }
 
