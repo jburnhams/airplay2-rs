@@ -27,9 +27,7 @@ fn test_key_exchange_simulation() {
 
     // Using rsa::Encryptor trait method
     let mut rng = CompatibleOsRng(OsRng);
-    let encrypted_key = public
-        .encrypt(&mut rng, padding, &client_aes_key)
-        .unwrap();
+    let encrypted_key = public.encrypt(&mut rng, padding, &client_aes_key).unwrap();
 
     // Server decrypts to get AES key
     let decrypted_key = server_key.decrypt_oaep(&encrypted_key).unwrap();

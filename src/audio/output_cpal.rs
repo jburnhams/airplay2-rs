@@ -50,6 +50,145 @@ mod implementation {
                 callback: Arc::new(Mutex::new(None)),
             })
         }
+
+        #[allow(clippy::too_many_arguments)]
+        fn spawn_stream_thread(
+            device: cpal::Device,
+            config: cpal::StreamConfig,
+            sample_format: SampleFormat,
+            callback_ref: Arc<Mutex<Option<AudioCallback>>>,
+            volume_ref: Arc<Mutex<f32>>,
+            rx: mpsc::Receiver<StreamCommand>,
+            status_tx: mpsc::Sender<Result<(), AudioOutputError>>,
+        ) {
+            thread::spawn(move || {
+                let err_fn = |err| tracing::error!("CPAL stream error: {}", err);
+
+                let stream_result = Self::build_stream(
+                    &device,
+                    &config,
+                    sample_format,
+                    callback_ref,
+                    volume_ref,
+                    err_fn,
+                );
+
+                match stream_result {
+                    Ok(stream) => {
+                        if let Err(e) = stream.play() {
+                            let _ =
+                                status_tx.send(Err(AudioOutputError::StreamError(e.to_string())));
+                            return;
+                        }
+
+                        // Notify success
+                        if status_tx.send(Ok(())).is_err() {
+                            return; // Caller dropped receiver
+                        }
+
+                        Self::run_command_loop(stream.as_ref(), &rx);
+                    }
+                    Err(e) => {
+                        let _ = status_tx.send(Err(e));
+                    }
+                }
+            });
+        }
+
+        fn build_stream<E>(
+            device: &cpal::Device,
+            config: &cpal::StreamConfig,
+            sample_format: SampleFormat,
+            callback_ref: Arc<Mutex<Option<AudioCallback>>>,
+            volume_ref: Arc<Mutex<f32>>,
+            err_fn: E,
+        ) -> Result<Box<dyn StreamTrait>, AudioOutputError>
+        where
+            E: Fn(cpal::StreamError) + Send + 'static + Copy,
+        {
+            match sample_format {
+                SampleFormat::I16 => {
+                    let stream = device
+                        .build_output_stream(
+                            config,
+                            move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                                let bytes: &mut [u8] = unsafe {
+                                    std::slice::from_raw_parts_mut(
+                                        data.as_mut_ptr().cast::<u8>(),
+                                        data.len() * 2,
+                                    )
+                                };
+
+                                let mut cb = callback_ref.lock().unwrap();
+                                if let Some(ref mut callback) = *cb {
+                                    callback(bytes);
+                                }
+
+                                // Apply volume
+                                let vol = *volume_ref.lock().unwrap();
+                                for sample in data.iter_mut() {
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    {
+                                        *sample = (f32::from(*sample) * vol) as i16;
+                                    }
+                                }
+                            },
+                            err_fn,
+                            None,
+                        )
+                        .map_err(|e| AudioOutputError::DeviceError(e.to_string()))?;
+                    Ok(Box::new(stream))
+                }
+                SampleFormat::F32 => {
+                    let stream = device
+                        .build_output_stream(
+                            config,
+                            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                                let bytes: &mut [u8] = unsafe {
+                                    std::slice::from_raw_parts_mut(
+                                        data.as_mut_ptr().cast::<u8>(),
+                                        data.len() * 4,
+                                    )
+                                };
+
+                                let mut cb = callback_ref.lock().unwrap();
+                                if let Some(ref mut callback) = *cb {
+                                    callback(bytes);
+                                }
+
+                                // Apply volume
+                                let vol = *volume_ref.lock().unwrap();
+                                for sample in data.iter_mut() {
+                                    *sample *= vol;
+                                }
+                            },
+                            err_fn,
+                            None,
+                        )
+                        .map_err(|e| AudioOutputError::DeviceError(e.to_string()))?;
+                    Ok(Box::new(stream))
+                }
+                _ => Err(AudioOutputError::FormatNotSupported(AudioFormat {
+                    sample_format,
+                    sample_rate: SampleRate::Hz44100, // Dummy
+                    channels: crate::audio::format::ChannelConfig::Stereo, // Dummy
+                })),
+            }
+        }
+
+        fn run_command_loop(stream: &dyn StreamTrait, rx: &mpsc::Receiver<StreamCommand>) {
+            loop {
+                match rx.recv() {
+                    Ok(StreamCommand::Stop) | Err(_) => break, // Channel closed
+                    Ok(StreamCommand::Pause) => {
+                        let _ = stream.pause();
+                    }
+                    Ok(StreamCommand::Resume) => {
+                        let _ = stream.play();
+                    }
+                }
+            }
+        }
     }
 
     impl AudioOutput for CpalOutput {
@@ -180,101 +319,15 @@ mod implementation {
             let (status_tx, status_rx) = mpsc::channel();
 
             // Spawn thread
-            thread::spawn(move || {
-                let err_fn = |err| tracing::error!("CPAL stream error: {}", err);
-
-                let stream_result = match sample_format {
-                    SampleFormat::I16 => {
-                        device.build_output_stream(
-                            &config,
-                            move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                                let bytes: &mut [u8] = unsafe {
-                                    std::slice::from_raw_parts_mut(
-                                        data.as_mut_ptr().cast::<u8>(),
-                                        data.len() * 2,
-                                    )
-                                };
-
-                                let mut cb = callback_ref.lock().unwrap();
-                                if let Some(ref mut callback) = *cb {
-                                    callback(bytes);
-                                }
-
-                                // Apply volume
-                                let vol = *volume_ref.lock().unwrap();
-                                for sample in data.iter_mut() {
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    {
-                                        *sample = (f32::from(*sample) * vol) as i16;
-                                    }
-                                }
-                            },
-                            err_fn,
-                            None,
-                        )
-                    }
-                    SampleFormat::F32 => {
-                        device.build_output_stream(
-                            &config,
-                            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                                let bytes: &mut [u8] = unsafe {
-                                    std::slice::from_raw_parts_mut(
-                                        data.as_mut_ptr().cast::<u8>(),
-                                        data.len() * 4,
-                                    )
-                                };
-
-                                let mut cb = callback_ref.lock().unwrap();
-                                if let Some(ref mut callback) = *cb {
-                                    callback(bytes);
-                                }
-
-                                // Apply volume
-                                let vol = *volume_ref.lock().unwrap();
-                                for sample in data.iter_mut() {
-                                    *sample *= vol;
-                                }
-                            },
-                            err_fn,
-                            None,
-                        )
-                    }
-                    _ => {
-                        let _ = status_tx.send(Err(AudioOutputError::FormatNotSupported(format)));
-                        return;
-                    }
-                };
-
-                match stream_result {
-                    Ok(stream) => {
-                        if let Err(e) = stream.play() {
-                            let _ = status_tx.send(Err(AudioOutputError::StreamError(e.to_string())));
-                            return;
-                        }
-
-                        // Notify success
-                        if status_tx.send(Ok(())).is_err() {
-                            return; // Caller dropped receiver
-                        }
-
-                        // Command loop
-                        loop {
-                            match rx.recv() {
-                                Ok(StreamCommand::Stop) | Err(_) => break, // Channel closed
-                                Ok(StreamCommand::Pause) => {
-                                    let _ = stream.pause();
-                                }
-                                Ok(StreamCommand::Resume) => {
-                                    let _ = stream.play();
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let _ = status_tx.send(Err(AudioOutputError::DeviceError(e.to_string())));
-                    }
-                }
-            });
+            Self::spawn_stream_thread(
+                device,
+                config,
+                sample_format,
+                callback_ref,
+                volume_ref,
+                rx,
+                status_tx,
+            );
 
             // Wait for initialization
             status_rx

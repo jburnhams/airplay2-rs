@@ -156,7 +156,10 @@ pub fn create_default_output() -> Result<Box<dyn AudioOutput>, AudioOutputError>
         return Ok(Box::new(super::output_coreaudio::CoreAudioOutput::new()?));
     }
 
-    #[cfg(all(feature = "audio-cpal", not(all(feature = "audio-coreaudio", target_os = "macos"))))]
+    #[cfg(all(
+        feature = "audio-cpal",
+        not(all(feature = "audio-coreaudio", target_os = "macos"))
+    ))]
     {
         Ok(Box::new(super::output_cpal::CpalOutput::new()?))
     }
