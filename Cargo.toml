@@ -25,9 +25,6 @@ receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 cpal = { version = "0.15.3", optional = true, default-features = false }
 bytes = "1.11.1"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-alsa = { version = "0.9", optional = true }
-
 # Async
 # Pinned to 1.38.2 to align socket2 dependency (0.5) with mdns-sd
 tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
@@ -66,7 +63,7 @@ curve25519-dalek = "4.1"
 zeroize = "1.8"
 
 # Serialization
-bytes = "1.9"
+# bytes = "1.9" # Already defined above
 
 # Audio processing
 rubato = "0.14"           # Audio resampling
@@ -75,6 +72,9 @@ alac-encoder = "0.3"      # ALAC encoding
 # Persistent storage (optional)
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+alsa = { version = "0.9", optional = true }
 
 [dev-dependencies]
 tokio = { version = "=1.38.2", features = ["full", "test-util"] }
