@@ -1,8 +1,26 @@
 use crate::client::{ClientConfig, PreferredProtocol, SelectedProtocol, UnifiedAirPlayClient};
+use crate::testing::mock_raop_server::{MockRaopConfig, MockRaopServer};
 use crate::types::{AirPlayDevice, DeviceCapabilities};
 use std::net::{IpAddr, Ipv4Addr};
 
-fn create_device(airplay2: bool, raop: bool) -> AirPlayDevice {
+async fn create_device_with_server(
+    airplay2: bool,
+    raop: bool,
+) -> (AirPlayDevice, Option<MockRaopServer>) {
+    let mut server = None;
+    let mut raop_port = None;
+
+    if raop {
+        let config = MockRaopConfig {
+            rtsp_port: 0, // Dynamic
+            ..Default::default()
+        };
+        let mut s = MockRaopServer::new(config);
+        s.start().await.expect("failed to start mock server");
+        raop_port = Some(s.config.rtsp_port);
+        server = Some(s);
+    }
+
     let mut device = AirPlayDevice {
         id: "test".to_string(),
         name: "Test Device".to_string(),
@@ -10,7 +28,7 @@ fn create_device(airplay2: bool, raop: bool) -> AirPlayDevice {
         addresses: vec![IpAddr::V4(Ipv4Addr::LOCALHOST)],
         port: 7000,
         capabilities: DeviceCapabilities::default(),
-        raop_port: None,
+        raop_port,
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
     };
@@ -18,11 +36,8 @@ fn create_device(airplay2: bool, raop: bool) -> AirPlayDevice {
     if airplay2 {
         device.capabilities.airplay2 = true;
     }
-    if raop {
-        device.raop_port = Some(5000);
-    }
 
-    device
+    (device, server)
 }
 
 #[tokio::test]
@@ -34,7 +49,7 @@ async fn test_unified_client_defaults() {
 
 #[tokio::test]
 async fn test_unified_client_connect_raop() {
-    let device = create_device(false, true);
+    let (device, _server) = create_device_with_server(false, true).await;
     let mut client = UnifiedAirPlayClient::new();
 
     client.connect(device).await.unwrap();
@@ -52,33 +67,18 @@ async fn test_unified_client_connect_raop() {
 
 #[tokio::test]
 async fn test_unified_client_connect_airplay2() {
-    let device = create_device(true, false);
+    let (device, _server) = create_device_with_server(true, false).await;
     let mut client = UnifiedAirPlayClient::new();
 
-    // AirPlay2SessionImpl::connect calls client.connect, which might fail if no real device
-    // But ConnectionManager uses mDNS resolution etc.
-    // So this might fail in a unit test environment if it tries to open network connections.
-    // RaopSessionImpl connect was stubbed to Ok.
-    // AirPlayClient connect tries to connect.
-
-    // We should expect failure or mock it.
-    // Since we can't easily mock AirPlayClient inside AirPlay2SessionImpl without refactoring injection,
-    // we might skip actual connection test for AirPlay2 if it does I/O.
-
-    // However, let's see if we can at least test selection logic.
-    // If connect fails, we catch error.
-
+    // AirPlay2 connection will likely fail as we don't mock it here,
+    // but we expect it to TRY connecting.
     let result = client.connect(device).await;
-    // It will likely fail to connect to 127.0.0.1:7000
     assert!(result.is_err());
-
-    // But we can check if it selected AirPlay 2 before failing?
-    // connect returns Result. If it fails, state is not updated (session is None).
 }
 
 #[tokio::test]
 async fn test_unified_client_force_protocol() {
-    let device = create_device(true, true);
+    let (device, _server) = create_device_with_server(true, true).await;
     let config = ClientConfig {
         preferred_protocol: PreferredProtocol::ForceRaop,
         ..Default::default()
