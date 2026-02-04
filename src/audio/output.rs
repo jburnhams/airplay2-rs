@@ -131,7 +131,10 @@ pub trait AudioOutput: Send {
     /// Get current volume
     fn volume(&self) -> f32;
 
-    /// Get output latency
+    /// Get output latency.
+    ///
+    /// This is the time from when a sample is submitted to when it is played.
+    /// Note that for some backends, this may be an estimate.
     fn latency(&self) -> Duration;
 
     /// Get the actual format being used
