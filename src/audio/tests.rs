@@ -5,3 +5,4 @@ mod concurrency;
 mod format;
 mod jitter;
 mod output;
+mod jitter_extended;

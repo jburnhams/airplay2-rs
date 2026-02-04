@@ -1,5 +1,13 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 2):**
+- Debugged and fixed `tests/common/python_receiver.rs` to use `python3` and improved logging, enabling integration tests to run successfully.
+- Verified **Custom PIN Pairing** (`test_custom_pin_pairing`).
+- Verified **PCM Streaming** (`test_pcm_streaming_end_to_end`).
+- Verified **ALAC Streaming** (`test_alac_streaming_end_to_end`).
+- Verified **Persistent Pairing** (`test_persistent_pairing_end_to_end`).
+- Confirmed implicit verification of **Dynamic Port Allocation** through successful streaming tests.
+
 **Work Done (Session 1):**
 - Implemented user-configurable PIN support in `AirPlayConfig` and `AirPlayConfigBuilder`.
 - Updated `ConnectionManager` to prioritize configured PIN for pairing.
@@ -190,8 +198,8 @@
 
 ### Port Configuration
 - [x] AirPlay streaming: Port 7000 (TCP)
-- [ ] Dynamic port allocation: Support server-negotiated ports
-  - *Status*: Parsing `Transport` header ports implemented but **not verified** (confirmed usage of dynamic ports).
+- [x] Dynamic port allocation: Support server-negotiated ports
+  - ✅ **VERIFIED**: Implicitly verified by streaming tests. Client correctly parses `server_port` and `control_port` from RTSP SETUP response to establish RTP/Control sessions with Python receiver.
 
 ## Time Synchronization
 

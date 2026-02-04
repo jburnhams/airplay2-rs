@@ -42,8 +42,11 @@ impl PythonReceiver {
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
         tracing::info!("Starting Python receiver on interface: {}", interface);
+        tracing::debug!("Current dir: {:?}", std::env::current_dir());
+        tracing::debug!("Output dir: {:?}", output_dir);
+        tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut process = Command::new("python")
+        let mut process = Command::new("python3")
             .arg("ap2-receiver.py")
             .arg("--netiface")
             .arg(&interface)
@@ -53,7 +56,8 @@ impl PythonReceiver {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn()
+            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
 
         // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
