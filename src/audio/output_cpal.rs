@@ -145,6 +145,7 @@ mod implementation {
             Ok(())
         }
 
+        #[allow(clippy::too_many_lines)]
         fn start(&mut self, callback: AudioCallback) -> Result<(), AudioOutputError> {
             if self.command_tx.is_some() {
                 let _ = self.stop();
@@ -248,7 +249,8 @@ mod implementation {
                 match stream_result {
                     Ok(stream) => {
                         if let Err(e) = stream.play() {
-                            let _ = status_tx.send(Err(AudioOutputError::StreamError(e.to_string())));
+                            let _ =
+                                status_tx.send(Err(AudioOutputError::StreamError(e.to_string())));
                             return;
                         }
 

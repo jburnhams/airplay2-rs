@@ -45,8 +45,7 @@ impl AudioPipeline {
             AudioCodec::Alac => Some(AudioDecoder::Alac(AlacDecoder)),
             AudioCodec::Aac => Some(AudioDecoder::Aac(AacDecoder)),
             AudioCodec::Pcm => Some(AudioDecoder::Pcm),
-            #[allow(clippy::match_wildcard_for_single_variants)]
-            _ => None, // Handle Opus or others
+            AudioCodec::Opus => None, // Handle Opus or others
         };
 
         Ok(Self {

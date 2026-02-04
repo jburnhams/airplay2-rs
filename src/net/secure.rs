@@ -7,10 +7,7 @@ use crate::error::AirPlayError;
 use byteorder::{ByteOrder, LittleEndian};
 #[allow(deprecated)]
 use chacha20poly1305::aead::AeadInPlace;
-use chacha20poly1305::{
-    aead::KeyInit,
-    ChaCha20Poly1305, Key, Nonce, Tag,
-};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, Tag, aead::KeyInit};
 
 /// HAP secure session state
 pub struct HapSecureSession {

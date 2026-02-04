@@ -21,8 +21,8 @@ fn test_oaep_encrypt_decrypt() {
     let public = private.public_key();
 
     // Encrypt with public key
-    use ::rsa::Oaep;
     use crate::protocol::crypto::rsa::CompatibleOsRng;
+    use ::rsa::Oaep;
     use rand::rngs::OsRng;
     use sha1::Sha1;
 

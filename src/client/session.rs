@@ -312,7 +312,12 @@ impl AirPlaySession for RaopSessionImpl {
             genre: track.genre.clone(),
             track_number: track.track_number,
             disc_number: track.disc_number,
-            duration_ms: track.duration_secs.map(|s| (s * 1000.0) as u32),
+            duration_ms: track.duration_secs.map(|s| {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                {
+                    (s * 1000.0) as u32
+                }
+            }),
             ..Default::default()
         };
 
