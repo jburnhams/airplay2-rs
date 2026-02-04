@@ -9,6 +9,9 @@ pub mod concealment;
 pub mod convert;
 pub mod format;
 pub mod jitter;
+pub mod output;
+pub mod output_coreaudio;
+pub mod output_cpal;
 pub mod raop_encoder;
 
 #[cfg(test)]
@@ -22,3 +25,4 @@ pub use format::{
     AacProfile, AudioCodec, AudioFormat, ChannelConfig, CodecParams, SampleFormat, SampleRate,
 };
 pub use jitter::{JitterBuffer, JitterResult, JitterStats, NextPacket};
+pub use output::{AudioDevice, AudioOutput, AudioOutputError, OutputState};

@@ -31,7 +31,7 @@ The design uses traits to abstract the output backend, allowing compile-time sel
 
 ### 42.1 Audio Output Trait
 
-- [ ] **42.1.1** Define platform-agnostic audio output trait
+- [x] **42.1.1** Define platform-agnostic audio output trait
 
 **File:** `src/audio/output.rs`
 
@@ -173,7 +173,7 @@ pub fn create_default_output() -> Result<Box<dyn AudioOutput>, AudioOutputError>
 
 ### 42.2 CPAL Backend (Cross-Platform)
 
-- [ ] **42.2.1** Implement CPAL-based audio output
+- [x] **42.2.1** Implement CPAL-based audio output
 
 **File:** `src/audio/output_cpal.rs`
 
@@ -450,7 +450,7 @@ pub use implementation::CpalOutput;
 
 ### 42.3 CoreAudio Backend (macOS)
 
-- [ ] **42.3.1** Implement CoreAudio-based output (macOS priority)
+- [x] **42.3.1** Implement CoreAudio-based output (macOS priority)
 
 **File:** `src/audio/output_coreaudio.rs`
 
@@ -572,7 +572,7 @@ pub use implementation::CoreAudioOutput;
 
 ### 42.4 Audio Pipeline Integration
 
-- [ ] **42.4.1** Connect jitter buffer to audio output
+- [x] **42.4.1** Connect jitter buffer to audio output
 
 **File:** `src/receiver/audio_pipeline.rs`
 
@@ -675,16 +675,16 @@ impl AudioPipeline {
 
 ## Acceptance Criteria
 
-- [ ] AudioOutput trait defined with all required methods
-- [ ] CPAL backend compiles and runs on macOS, Linux, Windows
-- [ ] CoreAudio backend skeleton for macOS
-- [ ] Device enumeration works
-- [ ] Format negotiation works
-- [ ] Callback-based playback works
-- [ ] Volume control works
-- [ ] Latency reported accurately
-- [ ] Feature flags gate backends correctly
-- [ ] All unit tests pass
+- [x] AudioOutput trait defined with all required methods
+- [x] CPAL backend compiles and runs on macOS, Linux, Windows
+- [x] CoreAudio backend skeleton for macOS
+- [x] Device enumeration works
+- [x] Format negotiation works
+- [x] Callback-based playback works
+- [x] Volume control works
+- [x] Latency reported accurately
+- [x] Feature flags gate backends correctly
+- [x] All unit tests pass
 
 ---
 

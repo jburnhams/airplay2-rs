@@ -3,6 +3,7 @@
 //! This module contains the server-side logic for accepting AirPlay sessions.
 
 pub mod announce_handler;
+pub mod audio_pipeline;
 pub mod rtsp_handler;
 pub mod session;
 pub mod session_manager;

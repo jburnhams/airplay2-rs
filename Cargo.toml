@@ -15,8 +15,16 @@ readme = "README.md"
 default = ["tokio-runtime", "raop"]
 tokio-runtime = ["tokio", "tokio-util"]
 raop = ["rsa", "sha1"]
+receiver = []
+audio-coreaudio = ["dep:coreaudio-rs"]
+audio-cpal = ["dep:cpal"]
+audio-alsa = ["dep:alsa"]
+receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 
 [dependencies]
+cpal = { version = "0.15", optional = true, default-features = false }
+alsa = { version = "0.9", optional = true }
+
 # Async
 # Pinned to 1.38.2 to align socket2 dependency (0.5) with mdns-sd
 tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
@@ -81,3 +89,6 @@ nix = { version = "0.29", features = ["signal"] }
 [[bench]]
 name = "protocol_benchmarks"
 harness = false
+
+[target.'cfg(target_os = "macos")'.dependencies]
+coreaudio-rs = { version = "0.14", optional = true }
