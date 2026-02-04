@@ -42,9 +42,9 @@ impl PythonReceiver {
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
         tracing::info!("Starting Python receiver on interface: {}", interface);
-        tracing::info!("Current dir: {:?}", std::env::current_dir());
-        tracing::info!("Output dir: {:?}", output_dir);
-        tracing::info!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
+        tracing::debug!("Current dir: {:?}", std::env::current_dir());
+        tracing::debug!("Output dir: {:?}", output_dir);
+        tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
         let mut process = Command::new("python3")
             .arg("ap2-receiver.py")
