@@ -18,6 +18,8 @@ impl SineSource48k {
             channels: ChannelConfig::Stereo,
             sample_format: SampleFormat::I16,
         };
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
         let max_samples = (48000.0 * duration_secs) as usize;
 
         Self {
@@ -51,7 +53,9 @@ impl AudioSource for SineSource48k {
             }
 
             let sample = (self.phase * 2.0 * PI).sin();
-            let value = (sample * i16::MAX as f32) as i16;
+
+            #[allow(clippy::cast_possible_truncation)]
+            let value = (sample * f32::from(i16::MAX)) as i16;
             let bytes = value.to_le_bytes();
 
             chunk[0] = bytes[0];
@@ -96,17 +100,25 @@ fn test_resampling_48k_to_44k_sine() {
 
     // Verify length
     // 1 second of 44.1k Stereo I16 = 44100 * 4 bytes = 176400 bytes.
-    let expected_bytes = 176400;
+    let expected_bytes = 176_400;
     // Allow some tolerance due to block sizes
-    let diff = (output_data.len() as i32 - expected_bytes as i32).abs();
-    println!("Output bytes: {}, Expected: {}, Diff: {}", output_data.len(), expected_bytes, diff);
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::unnecessary_cast)]
+    let diff = (i32::try_from(output_data.len()).unwrap() - expected_bytes as i32).abs();
+    println!(
+        "Output bytes: {}, Expected: {}, Diff: {}",
+        output_data.len(),
+        expected_bytes,
+        diff
+    );
     assert!(diff < 4096 * 4); // Within a few blocks
 
     // Verify frequency by zero crossing
     let mut samples = Vec::new();
     for chunk in output_data.chunks_exact(4) {
         let left = i16::from_le_bytes([chunk[0], chunk[1]]);
-        samples.push(left as f32);
+        samples.push(f32::from(left));
     }
 
     let mut zero_crossings = 0;
@@ -118,10 +130,12 @@ fn test_resampling_48k_to_44k_sine() {
         prev_sample = sample;
     }
 
+    #[allow(clippy::cast_precision_loss)]
     let duration = samples.len() as f32 / 44100.0;
+    #[allow(clippy::cast_precision_loss)]
     let frequency = (zero_crossings as f32 / duration) / 2.0;
 
-    println!("Estimated frequency: {:.1} Hz", frequency);
+    println!("Estimated frequency: {frequency:.1} Hz");
     // Tolerance increased to 30Hz due to FFT resampling artifacts/phase shifts in block processing
     assert!((frequency - 440.0).abs() < 30.0);
 }

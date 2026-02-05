@@ -3,8 +3,8 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_truncation)]
 
-use super::source::AudioSource;
 use super::ResamplingSource;
+use super::source::AudioSource;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
@@ -136,6 +136,7 @@ impl PcmStreamer {
         mut source: S,
     ) -> Result<(), AirPlayError> {
         // Check format compatibility
+        #[allow(clippy::if_not_else)]
         if source.format() != self.format {
             tracing::info!(
                 "Source format ({:?}) differs from output format ({:?}). Enabling resampling.",
@@ -143,12 +144,11 @@ impl PcmStreamer {
                 self.format
             );
 
-            let mut resampled = ResamplingSource::new(source, self.format).map_err(|e| {
-                AirPlayError::IoError {
-                    message: format!("Failed to create resampler: {}", e),
+            let mut resampled =
+                ResamplingSource::new(source, self.format).map_err(|e| AirPlayError::IoError {
+                    message: format!("Failed to create resampler: {e}"),
                     source: Some(Box::new(e)),
-                }
-            })?;
+                })?;
 
             *self.state.write().await = StreamerState::Buffering;
 

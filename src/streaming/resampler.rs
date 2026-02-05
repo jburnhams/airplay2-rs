@@ -1,6 +1,6 @@
 //! Audio resampling source using `rubato`
 
-use crate::audio::{convert::convert_channels, AudioFormat, SampleFormat};
+use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels};
 use crate::streaming::source::AudioSource;
 use rubato::{FftFixedIn, Resampler};
 use std::io;
@@ -22,6 +22,11 @@ pub struct ResamplingSource<S: AudioSource> {
 
 impl<S: AudioSource> ResamplingSource<S> {
     /// Create a new resampling source
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input format is unsupported (e.g. not I16) or if
+    /// the resampler cannot be initialized.
     pub fn new(source: S, output_format: AudioFormat) -> io::Result<Self> {
         let input_format = source.format();
 
@@ -46,7 +51,7 @@ impl<S: AudioSource> ResamplingSource<S> {
         let chunk_size = 1024; // Reasonable chunk size
 
         let resampler = FftFixedIn::<f32>::new(input_rate, output_rate, chunk_size, 2, channels)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         // Pre-allocate buffers
         let input_buffer = resampler.input_buffer_allocate(true);
@@ -69,6 +74,7 @@ impl<S: AudioSource> ResamplingSource<S> {
     }
 
     /// Process next chunk of audio
+    #[allow(clippy::cast_possible_truncation)]
     fn process_next_chunk(&mut self) -> io::Result<bool> {
         let input_frames_needed = self.resampler.input_frames_next();
         let bytes_needed = input_frames_needed * self.input_format.bytes_per_frame();
@@ -80,7 +86,9 @@ impl<S: AudioSource> ResamplingSource<S> {
         // Read from inner source
         let mut total_read = 0;
         while total_read < bytes_needed {
-            let n = self.inner.read(&mut self.input_bytes_buffer[total_read..bytes_needed])?;
+            let n = self
+                .inner
+                .read(&mut self.input_bytes_buffer[total_read..bytes_needed])?;
             if n == 0 {
                 break;
             }
@@ -115,17 +123,19 @@ impl<S: AudioSource> ResamplingSource<S> {
                 // Read i16
                 let sample_i16 = i16::from_le_bytes([
                     self.input_bytes_buffer[byte_index],
-                    self.input_bytes_buffer[byte_index + 1]
+                    self.input_bytes_buffer[byte_index + 1],
                 ]);
 
-                let sample_f32 = (sample_i16 as f32) / (i16::MAX as f32);
-                self.input_buffer[ch].push(sample_f32);
+                let sample_float = f32::from(sample_i16) / f32::from(i16::MAX);
+                self.input_buffer[ch].push(sample_float);
             }
         }
 
         // Resample
-        let (_, output_frames) = self.resampler.process_into_buffer(&self.input_buffer, &mut self.output_buffer, None)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        let (_, output_frames) = self
+            .resampler
+            .process_into_buffer(&self.input_buffer, &mut self.output_buffer, None)
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         // Convert planar f32 back to interleaved bytes
         // Assuming I16 output
@@ -140,6 +150,7 @@ impl<S: AudioSource> ResamplingSource<S> {
         }
 
         // 2. Convert channels if needed
+        #[allow(clippy::if_not_else)]
         let final_f32 = if self.input_format.channels != self.output_format.channels {
             convert_channels(
                 &interleaved_f32,
@@ -158,7 +169,7 @@ impl<S: AudioSource> ResamplingSource<S> {
 
         for sample in final_f32 {
             let clamped = sample.clamp(-1.0, 1.0);
-            let value = (clamped * i16::MAX as f32) as i16;
+            let value = (clamped * f32::from(i16::MAX)) as i16;
             let bytes = value.to_le_bytes();
             self.output_bytes_buffer.extend_from_slice(&bytes);
         }
@@ -173,6 +184,7 @@ impl<S: AudioSource> AudioSource for ResamplingSource<S> {
         self.output_format
     }
 
+    #[allow(clippy::needless_continue)]
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let mut total_written = 0;
 
@@ -183,7 +195,7 @@ impl<S: AudioSource> AudioSource for ResamplingSource<S> {
             if available > 0 {
                 let to_copy = available.min(buffer.len() - total_written);
                 buffer[total_written..total_written + to_copy].copy_from_slice(
-                    &self.output_bytes_buffer[self.output_offset..self.output_offset + to_copy]
+                    &self.output_bytes_buffer[self.output_offset..self.output_offset + to_copy],
                 );
                 self.output_offset += to_copy;
                 total_written += to_copy;

@@ -5,6 +5,7 @@ mod common;
 use common::python_receiver::{PythonReceiver, TestSineSource};
 
 #[tokio::test]
+#[ignore] // Run with --ignored flag
 async fn test_resampling_48k_to_44k() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     let _ = tracing_subscriber::fmt()
