@@ -1,5 +1,6 @@
 import socket
 import multiprocessing
+import select
 import enum
 import threading
 import time
@@ -744,7 +745,10 @@ class AudioRealtime(Audio):
         try:
             while True:
 
-                if rtspconn.poll(0):
+                # Monitor both the socket (for RTP) and the control pipe (for flush/progress)
+                rlist, _, _ = select.select([self.socket, rtspconn], [], [])
+
+                if rtspconn in rlist:
                     message = rtspconn.recv()
                     if str.startswith(message, "flush_seq_rtptime"):
                         flush_seq, self.anchorRTPTimestamp = map(int, str.split(message, "-")[-2:])
@@ -754,16 +758,17 @@ class AudioRealtime(Audio):
                     elif str.startswith(message, "progress"):
                         startTS, currentTS, stopTS = map(int, str.split(message, "-")[-1:][0].split('/'))
 
-                data, address = self.socket.recvfrom(2048)
-                if data:
-                    # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
-                    if SAVE_RAW_RTP:
-                        with open("rtp_packets.bin", "ab") as f:
-                            f.write(data)
-                    pkt = RTP_REALTIME(data)
-                    lastRecvdSeqNo = pkt.sequence_no
-                    self.log(pkt)
-                    self.rtp_buffer.append(pkt)
+                if self.socket in rlist:
+                    data, address = self.socket.recvfrom(2048)
+                    if data:
+                        # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
+                        if SAVE_RAW_RTP:
+                            with open("rtp_packets.bin", "ab") as f:
+                                f.write(data)
+                        pkt = RTP_REALTIME(data)
+                        lastRecvdSeqNo = pkt.sequence_no
+                        self.log(pkt)
+                        self.rtp_buffer.append(pkt)
                 """ realtime can get crunchy. Let it fill. """
                 if (
                     self.rtp_buffer.is_full()  # or amount() > 0.x
