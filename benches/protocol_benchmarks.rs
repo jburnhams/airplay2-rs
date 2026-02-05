@@ -136,7 +136,7 @@ criterion_group!(
     crypto_benchmark,
     rtsp_encoding_benchmark,
     rtp_encoding_benchmark,
-    packet_buffer_benchmark
+    packet_buffer_benchmark,
     packet_loss_detector_benchmark
 );
 criterion_main!(benches);
