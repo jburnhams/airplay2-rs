@@ -4,6 +4,9 @@ use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
+use aes::Aes128;
+use aes::cipher::generic_array::GenericArray;
+use aes::cipher::KeyInit;
 use std::time::{Duration, Instant};
 
 /// RAOP streaming configuration
@@ -40,6 +43,8 @@ pub struct RaopStreamer {
     timestamp: u32,
     /// Session encryption keys
     keys: RaopSessionKeys,
+    /// Pre-computed block cipher for key reuse
+    aes_cipher: Aes128,
     /// Packet buffer for retransmission
     buffer: PacketBuffer,
     /// Timing synchronization
@@ -62,11 +67,15 @@ impl RaopStreamer {
     /// Create new streamer
     #[must_use]
     pub fn new(keys: RaopSessionKeys, config: RaopStreamConfig) -> Self {
+        let key_generic = GenericArray::from_slice(keys.aes_key());
+        let aes_cipher = Aes128::new(key_generic);
+
         Self {
             config,
             sequence: 0,
             timestamp: 0,
             keys,
+            aes_cipher,
             buffer: PacketBuffer::new(PacketBuffer::DEFAULT_SIZE),
             timing: TimingSync::new(),
             is_first_packet: true,
@@ -133,8 +142,8 @@ impl RaopStreamer {
     fn encrypt_audio_in_place(&self, data: &mut [u8]) {
         use crate::protocol::crypto::Aes128Ctr;
 
-        let mut cipher =
-            Aes128Ctr::new(self.keys.aes_key(), self.keys.aes_iv()).expect("invalid AES keys");
+        let mut cipher = Aes128Ctr::new_with_cipher(&self.aes_cipher, self.keys.aes_iv())
+            .expect("invalid AES keys");
 
         // AES-CTR encryption in place
         cipher.apply_keystream(data);
