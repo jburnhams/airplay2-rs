@@ -22,7 +22,7 @@ fn test_decode_invalid_utf8_header_value() {
 fn test_decode_header_line_too_long() {
     let mut codec = RtspCodec::new().with_max_size(1024);
     let junk = "A".repeat(1025);
-    let data = format!("RTSP/1.0 200 OK\r\nHeader: {}\r\n\r\n", junk);
+    let data = format!("RTSP/1.0 200 OK\r\nHeader: {junk}\r\n\r\n");
 
     let result = codec.feed(data.as_bytes());
     assert!(matches!(
