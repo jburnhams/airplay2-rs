@@ -107,7 +107,6 @@ impl<S: AudioSource> ResamplingSource<S> {
         // Convert input bytes to planar f32
         // Assuming I16 input
         let channels = self.input_format.channels.channels() as usize;
-        let frames = input_frames_needed;
 
         for ch in 0..channels {
             self.input_buffer[ch].clear();
@@ -115,22 +114,21 @@ impl<S: AudioSource> ResamplingSource<S> {
         }
 
         // De-interleave and convert
-        let channels = self.input_format.channels.channels() as usize;
-        let frames = input_frames_needed;
+        for i in 0..input_frames_needed {
+            for ch in 0..channels {
+                let sample_index = i * channels + ch;
+                let byte_index = sample_index * 2;
 
-        for ch in 0..channels {
-            self.input_buffer[ch].clear();
-            self.input_buffer[ch].reserve(frames);
+                // Read i16
+                let sample_i16 = i16::from_le_bytes([
+                    self.input_bytes_buffer[byte_index],
+                    self.input_bytes_buffer[byte_index + 1],
+                ]);
+
+                let sample_float = f32::from(sample_i16) / f32::from(i16::MAX);
+                self.input_buffer[ch].push(sample_float);
+            }
         }
-
-        self.input_bytes_buffer[..frames * self.input_format.bytes_per_frame()]
-            .chunks_exact(2)
-            .map(|b| i16::from_le_bytes(b.try_into().unwrap()))
-            .map(|s| (s as f32) / (i16::MAX as f32))
-            .enumerate()
-            .for_each(|(i, sample)| {
-                self.input_buffer[i % channels].push(sample);
-            });
 
         // Resample
         let (_, output_frames) = self
