@@ -796,7 +796,7 @@ class AudioRealtime(Audio):
                                         time.sleep((delay - 2) * 1e-3)
 
                                     if rtp.sequence_no % 20 == 0:
-                                        self.audio_screen_logger.debug(f'playout offset: {delay:+3.2} msec (relative to self)')
+                                        self.audio_screen_logger.debug('playout offset: %+3.2f msec (relative to self)', delay)
 
                                 audio = self.process(rtp)
 
