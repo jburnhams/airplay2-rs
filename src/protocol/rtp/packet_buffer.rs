@@ -1,5 +1,6 @@
 //! Packet buffer for retransmission support
 
+use bytes::Bytes;
 use std::collections::VecDeque;
 
 /// Audio packet with sequence tracking
@@ -10,7 +11,7 @@ pub struct BufferedPacket {
     /// RTP timestamp
     pub timestamp: u32,
     /// Encoded packet data (ready for retransmission)
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 /// Circular buffer for recently sent packets

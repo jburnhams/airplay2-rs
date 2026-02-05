@@ -13,7 +13,7 @@ fn packet_buffer_benchmark(c: &mut Criterion) {
         buffer.push(BufferedPacket {
             sequence: i as u16,
             timestamp: i as u32 * 352,
-            data: vec![0u8; 10], // Small payload
+            data: vec![0u8; 10].into(), // Small payload
         });
     }
 
