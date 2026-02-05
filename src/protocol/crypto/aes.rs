@@ -1,7 +1,7 @@
 use super::{CryptoError, lengths};
 use aes::Aes128;
-use aes::cipher::{BlockEncrypt, KeyInit};
 use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{BlockEncrypt, KeyInit};
 
 /// AES-128-CTR stream cipher for audio encryption
 pub struct Aes128Ctr {
