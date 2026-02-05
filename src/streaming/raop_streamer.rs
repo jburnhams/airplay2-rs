@@ -1,6 +1,5 @@
 //! RAOP audio streaming coordinator
 
-use bytes::Bytes;
 use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
@@ -8,6 +7,7 @@ use crate::protocol::rtp::raop_timing::TimingSync;
 use aes::Aes128;
 use aes::cipher::KeyInit;
 use aes::cipher::generic_array::GenericArray;
+use bytes::Bytes;
 use std::time::{Duration, Instant};
 
 /// RAOP streaming configuration
