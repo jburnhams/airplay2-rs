@@ -1,5 +1,6 @@
 //! RAOP audio streaming coordinator
 
+use bytes::Bytes;
 use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
@@ -99,7 +100,7 @@ impl RaopStreamer {
     /// Encode audio frame to RTP packet
     ///
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
-    pub fn encode_frame(&mut self, audio_data: &[u8]) -> Vec<u8> {
+    pub fn encode_frame(&mut self, audio_data: &[u8]) -> Bytes {
         // Pre-allocate buffer with exact size
         let mut encoded = Vec::with_capacity(RaopAudioPacket::HEADER_SIZE + audio_data.len());
 
@@ -123,12 +124,15 @@ impl RaopStreamer {
         // The payload starts after HEADER_SIZE
         self.encrypt_audio_in_place(&mut encoded[RaopAudioPacket::HEADER_SIZE..]);
 
+        // Convert to Bytes for efficient cloning
+        let encoded_bytes = Bytes::from(encoded);
+
         // Buffer for retransmission
         if self.config.enable_retransmit {
             self.buffer.push(BufferedPacket {
                 sequence: self.sequence,
                 timestamp: self.timestamp,
-                data: encoded.clone(),
+                data: encoded_bytes.clone(),
             });
         }
 
@@ -136,7 +140,7 @@ impl RaopStreamer {
         self.sequence = self.sequence.wrapping_add(1);
         self.timestamp = self.timestamp.wrapping_add(self.config.samples_per_packet);
 
-        encoded
+        encoded_bytes
     }
 
     fn encrypt_audio_in_place(&self, data: &mut [u8]) {
