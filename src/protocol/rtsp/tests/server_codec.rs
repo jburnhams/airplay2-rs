@@ -1,5 +1,5 @@
-use super::server_codec::{ParseError, ResponseBuilder, RtspServerCodec};
-use super::{Method, StatusCode};
+use crate::protocol::rtsp::server_codec::{ParseError, ResponseBuilder, RtspServerCodec};
+use crate::protocol::rtsp::{Method, StatusCode};
 
 #[test]
 fn test_parse_options_request() {

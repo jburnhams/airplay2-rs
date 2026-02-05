@@ -1,5 +1,4 @@
-use super::headers::names;
-use super::*;
+use crate::protocol::rtsp::{Headers, Method, RtspResponse, RtspSession, SessionState, StatusCode};
 
 #[test]
 fn test_session_initial_state() {

@@ -1,5 +1,4 @@
-use super::control::*;
-use crate::protocol::rtp::packet::RtpDecodeError;
+use crate::protocol::rtp::{ControlPacket, RetransmitRequest, RtpDecodeError};
 
 #[test]
 fn test_retransmit_request_encode() {

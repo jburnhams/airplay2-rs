@@ -1,6 +1,6 @@
-use super::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
-use super::raop::{RaopAudioPacket, RaopPayloadType, RetransmitRequest, SyncPacket};
-use super::timing::NtpTimestamp;
+use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
+use crate::protocol::rtp::raop::{RaopAudioPacket, RaopPayloadType, RetransmitRequest, SyncPacket};
+use crate::protocol::rtp::timing::NtpTimestamp;
 
 #[test]
 fn test_sync_packet_encode_decode() {

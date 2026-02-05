@@ -1,4 +1,4 @@
-use super::*;
+use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
 #[test]
 fn test_status_code_classification() {

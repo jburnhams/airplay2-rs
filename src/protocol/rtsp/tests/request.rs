@@ -1,4 +1,4 @@
-use super::*;
+use crate::protocol::rtsp::{Method, RtspRequest};
 
 #[test]
 fn test_request_encode_simple() {
