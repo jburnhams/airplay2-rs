@@ -23,7 +23,13 @@ fn packet_buffer_benchmark(c: &mut Criterion) {
         group.bench_with_input(
             criterion::BenchmarkId::new("get_range", count),
             count,
-            |b, &count| b.iter(|| buffer.get_range(black_box(0), black_box(count as u16)).count()),
+            |b, &count| {
+                b.iter(|| {
+                    buffer
+                        .get_range(black_box(0), black_box(count as u16))
+                        .count()
+                })
+            },
         );
     }
     group.finish();
