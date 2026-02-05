@@ -1,5 +1,5 @@
-use bytes::Bytes;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
+use bytes::Bytes;
 
 #[test]
 fn test_packet_buffer_new() {
