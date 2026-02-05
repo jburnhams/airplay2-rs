@@ -20,11 +20,11 @@ fn packet_buffer_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("packet_buffer");
 
     for count in [10, 50, 100].iter() {
-        group.bench_with_input(criterion::BenchmarkId::new("get_range", count), count, |b, &count| {
-            b.iter(|| {
-                buffer.get_range(black_box(0), black_box(count as u16))
-            })
-        });
+        group.bench_with_input(
+            criterion::BenchmarkId::new("get_range", count),
+            count,
+            |b, &count| b.iter(|| buffer.get_range(black_box(0), black_box(count as u16))),
+        );
     }
     group.finish();
 }
