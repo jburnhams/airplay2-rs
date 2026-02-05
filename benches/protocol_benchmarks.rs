@@ -2,7 +2,8 @@ use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
 use airplay2::protocol::raop::RaopSessionKeys;
 use airplay2::protocol::rtp::RtpCodec;
-use airplay2::streaming::raop_streamer::{RaopStreamConfig, RaopStreamer, PacketLossDetector};
+use airplay2::protocol::rtp::packet_buffer::PacketLossDetector;
+use airplay2::streaming::raop_streamer::{RaopStreamConfig, RaopStreamer};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
 
