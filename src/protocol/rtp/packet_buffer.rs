@@ -121,8 +121,6 @@ impl PacketLossDetector {
             return Vec::new();
         }
 
-        let mut missing = Vec::new();
-
         // Calculate how many packets were skipped
         let diff = sequence.wrapping_sub(self.expected_seq);
 
@@ -132,12 +130,16 @@ impl PacketLossDetector {
             return Vec::new();
         }
 
-        if diff > 0 && diff < 100 {
+        let missing = if diff > 0 && diff < 100 {
+            let mut missing = Vec::with_capacity(diff as usize);
             // Packets were lost
             for i in 0..diff {
                 missing.push(self.expected_seq.wrapping_add(i));
             }
-        }
+            missing
+        } else {
+            Vec::new()
+        };
 
         // Update expected
         self.expected_seq = sequence.wrapping_add(1);

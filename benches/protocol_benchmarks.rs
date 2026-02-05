@@ -2,7 +2,7 @@ use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
 use airplay2::protocol::raop::RaopSessionKeys;
 use airplay2::protocol::rtp::RtpCodec;
-use airplay2::streaming::raop_streamer::{RaopStreamConfig, RaopStreamer};
+use airplay2::streaming::raop_streamer::{RaopStreamConfig, RaopStreamer, PacketLossDetector};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
 
@@ -115,12 +115,28 @@ fn raop_streamer_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
+fn packet_loss_detector_benchmark(c: &mut Criterion) {
+    c.bench_function("packet_loss_detector_gaps", |b| {
+        let mut detector = PacketLossDetector::new();
+        // Initialize
+        detector.process(0);
+        let mut seq: u16 = 0;
+
+        b.iter(|| {
+            // Advance by 10 to create a gap of 9 packets
+            seq = seq.wrapping_add(10);
+            detector.process(black_box(seq))
+        })
+    });
+}
+
 criterion_group!(
     benches,
     plist_benchmark,
     crypto_benchmark,
     rtsp_encoding_benchmark,
     rtp_encoding_benchmark,
-    raop_streamer_benchmark
+    raop_streamer_benchmark,
+    packet_loss_detector_benchmark
 );
 criterion_main!(benches);
