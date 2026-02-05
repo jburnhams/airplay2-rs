@@ -61,7 +61,7 @@ pub fn parse_dmap_metadata(data: &[u8]) -> Result<TrackMetadata, MetadataError> 
         offset += 8;
 
         if offset + length > data.len() {
-            break;
+            return Err(MetadataError::IncompleteData);
         }
 
         let value = &data[offset..offset + length];
