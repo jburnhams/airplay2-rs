@@ -1,4 +1,4 @@
-use super::packet_buffer::*;
+use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 
 #[test]
 fn test_packet_buffer_new() {

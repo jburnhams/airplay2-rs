@@ -1,5 +1,5 @@
-use super::codec::{RtspCodec, RtspCodecError};
-use super::*;
+use crate::protocol::rtsp::StatusCode;
+use crate::protocol::rtsp::codec::{RtspCodec, RtspCodecError};
 
 #[test]
 fn test_decode_simple_response() {

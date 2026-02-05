@@ -1,5 +1,5 @@
-use super::*;
 use crate::protocol::rtsp::headers::names;
+use crate::protocol::rtsp::{Method, RtspSession};
 
 #[test]
 fn test_spec_compliance_options_request() {

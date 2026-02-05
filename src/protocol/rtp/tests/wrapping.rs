@@ -1,4 +1,4 @@
-use super::packet_buffer::PacketLossDetector;
+use crate::protocol::rtp::packet_buffer::PacketLossDetector;
 
 #[test]
 fn test_wrap_basic() {

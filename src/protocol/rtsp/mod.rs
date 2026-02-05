@@ -4,30 +4,15 @@
 #![allow(dead_code)]
 
 pub mod codec;
-#[cfg(test)]
-mod codec_tests;
-#[cfg(test)]
-mod compliance_tests;
-#[cfg(test)]
-mod header_parsing_tests;
 pub mod headers;
-#[cfg(test)]
-mod headers_tests;
 pub mod request;
-#[cfg(test)]
-mod request_tests;
 pub mod response;
-#[cfg(test)]
-mod response_tests;
 pub mod server_codec;
-#[cfg(test)]
-mod server_codec_tests;
 pub mod session;
-#[cfg(test)]
-mod session_tests;
 pub mod transport;
+
 #[cfg(test)]
-mod transport_tests;
+mod tests;
 
 pub use codec::{RtspCodec, RtspCodecError};
 pub use headers::Headers;

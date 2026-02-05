@@ -1,4 +1,4 @@
-use super::codec::{RtspCodec, RtspCodecError};
+use crate::protocol::rtsp::codec::{RtspCodec, RtspCodecError};
 
 #[test]
 fn test_parse_empty_header_value() {

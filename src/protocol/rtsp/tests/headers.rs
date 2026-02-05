@@ -1,5 +1,5 @@
-use super::Headers;
-use super::headers::names;
+use crate::protocol::rtsp::Headers;
+use crate::protocol::rtsp::headers::names;
 
 #[test]
 fn test_new_headers_is_empty() {
