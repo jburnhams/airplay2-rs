@@ -27,7 +27,7 @@ pub struct HandleResult {
     pub start_streaming: bool,
     /// Should stop streaming (for TEARDOWN)
     pub stop_streaming: bool,
-    /// Parameter updates (from SET_PARAMETER)
+    /// Parameter updates (from `SET_PARAMETER`)
     pub parameter_updates: Vec<ParameterUpdate>,
 }
 

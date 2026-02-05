@@ -1,14 +1,14 @@
-//! Volume handling for AirPlay receiver
+//! Volume handling for `AirPlay` receiver
 
 use std::str::FromStr;
 
-/// AirPlay volume range
+/// `AirPlay` volume range
 /// -144.0 dB = silence
 /// 0.0 dB = full volume
 const VOLUME_MIN_DB: f32 = -144.0;
 const VOLUME_MAX_DB: f32 = 0.0;
 
-/// Volume update from SET_PARAMETER
+/// Volume update from `SET_PARAMETER`
 #[derive(Debug, Clone, Copy)]
 pub struct VolumeUpdate {
     /// Volume in dB (-144.0 to 0.0)
@@ -21,6 +21,7 @@ pub struct VolumeUpdate {
 
 impl VolumeUpdate {
     /// Create from dB value
+    #[must_use]
     pub fn from_db(db: f32) -> Self {
         let db = db.clamp(VOLUME_MIN_DB, VOLUME_MAX_DB);
         let muted = db <= VOLUME_MIN_DB;
@@ -30,9 +31,10 @@ impl VolumeUpdate {
     }
 }
 
-/// Parse volume from SET_PARAMETER body
+/// Parse volume from `SET_PARAMETER` body
 ///
 /// Format: "volume: -15.000000\r\n"
+#[must_use]
 pub fn parse_volume_parameter(body: &str) -> Option<VolumeUpdate> {
     for line in body.lines() {
         let line = line.trim();
@@ -52,6 +54,7 @@ pub fn parse_volume_parameter(body: &str) -> Option<VolumeUpdate> {
 /// Convert dB volume to linear (0.0 to 1.0)
 ///
 /// Uses power law: linear = 10^(dB/20)
+#[must_use]
 pub fn db_to_linear(db: f32) -> f32 {
     if db <= VOLUME_MIN_DB {
         return 0.0;
@@ -65,6 +68,7 @@ pub fn db_to_linear(db: f32) -> f32 {
 }
 
 /// Convert linear volume (0.0 to 1.0) to dB
+#[must_use]
 pub fn linear_to_db(linear: f32) -> f32 {
     if linear <= 0.0 {
         return VOLUME_MIN_DB;

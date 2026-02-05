@@ -1,4 +1,4 @@
-use crate::receiver::volume_handler::{parse_volume_parameter, db_to_linear, linear_to_db};
+use crate::receiver::volume_handler::{db_to_linear, linear_to_db, parse_volume_parameter};
 
 #[test]
 fn test_parse_volume() {

@@ -15,16 +15,19 @@ pub struct PlaybackProgress {
 
 impl PlaybackProgress {
     /// Get current position as Duration
+    #[must_use]
     pub fn position(&self) -> Duration {
         Duration::from_secs_f64(self.current)
     }
 
     /// Get total duration
+    #[must_use]
     pub fn duration(&self) -> Duration {
         Duration::from_secs_f64(self.end)
     }
 
     /// Get progress as percentage (0.0 to 1.0)
+    #[must_use]
     pub fn percentage(&self) -> f64 {
         if self.end <= 0.0 {
             return 0.0;
@@ -33,15 +36,17 @@ impl PlaybackProgress {
     }
 
     /// Get remaining time
+    #[must_use]
     pub fn remaining(&self) -> Duration {
         Duration::from_secs_f64((self.end - self.current).max(0.0))
     }
 }
 
-/// Parse progress from SET_PARAMETER body
+/// Parse progress from `SET_PARAMETER` body
 ///
 /// Format: "progress: start/current/end\r\n"
 /// Values are in seconds (can be floating point)
+#[must_use]
 pub fn parse_progress(body: &str) -> Option<PlaybackProgress> {
     for line in body.lines() {
         let line = line.trim();
@@ -54,7 +59,11 @@ pub fn parse_progress(body: &str) -> Option<PlaybackProgress> {
                 let current: f64 = parts[1].parse().ok()?;
                 let end: f64 = parts[2].parse().ok()?;
 
-                return Some(PlaybackProgress { start, current, end });
+                return Some(PlaybackProgress {
+                    start,
+                    current,
+                    end,
+                });
             }
         }
     }

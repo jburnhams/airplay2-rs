@@ -1,4 +1,4 @@
-use crate::receiver::progress_handler::{parse_progress, PlaybackProgress};
+use crate::receiver::progress_handler::{PlaybackProgress, parse_progress};
 
 #[test]
 fn test_parse_progress() {

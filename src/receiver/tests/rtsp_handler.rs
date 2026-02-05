@@ -257,7 +257,9 @@ fn test_unknown_method() {
 fn test_set_parameter_integration() {
     let session = ReceiverSession::new(test_addr());
     let mut request = create_request(Method::SetParameter);
-    request.headers.insert("Content-Type".to_string(), "text/parameters".to_string());
+    request
+        .headers
+        .insert("Content-Type".to_string(), "text/parameters".to_string());
     request.body = b"volume: -20.0\r\n".to_vec();
 
     let result = handle_request(&request, &session, None);

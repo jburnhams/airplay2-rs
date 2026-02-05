@@ -15,6 +15,7 @@ pub struct Artwork {
 
 impl Artwork {
     /// Create from raw image data
+    #[must_use]
     pub fn from_data(data: Vec<u8>) -> Option<Self> {
         let mime_type = detect_image_type(&data)?;
 
@@ -27,11 +28,13 @@ impl Artwork {
     }
 
     /// Check if artwork is JPEG
+    #[must_use]
     pub fn is_jpeg(&self) -> bool {
         self.mime_type == "image/jpeg"
     }
 
     /// Check if artwork is PNG
+    #[must_use]
     pub fn is_png(&self) -> bool {
         self.mime_type == "image/png"
     }
@@ -56,7 +59,8 @@ fn detect_image_type(data: &[u8]) -> Option<String> {
     None
 }
 
-/// Parse artwork from SET_PARAMETER body
+/// Parse artwork from `SET_PARAMETER` body
+#[must_use]
 pub fn parse_artwork(content_type: &str, data: &[u8]) -> Option<Artwork> {
     if content_type.contains("image/jpeg") || content_type.contains("image/png") {
         Artwork::from_data(data.to_vec())

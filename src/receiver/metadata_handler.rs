@@ -1,7 +1,7 @@
-//! Track metadata handling for AirPlay receiver
+//! Track metadata handling for `AirPlay` receiver
 //!
 //! Parses DMAP (Digital Media Access Protocol) encoded metadata
-//! from SET_PARAMETER requests.
+//! from `SET_PARAMETER` requests.
 
 /// Track metadata
 #[derive(Debug, Clone, Default)]
@@ -28,18 +28,22 @@ pub struct TrackMetadata {
 
 /// DMAP tag codes for metadata
 mod dmap_tags {
-    pub const ITEM_NAME: &[u8] = b"minm";        // Title
-    pub const ITEM_ARTIST: &[u8] = b"asar";      // Artist
-    pub const ITEM_ALBUM: &[u8] = b"asal";       // Album
-    pub const ITEM_GENRE: &[u8] = b"asgn";       // Genre
-    pub const TRACK_NUMBER: &[u8] = b"astn";     // Track number
-    pub const TRACK_COUNT: &[u8] = b"astc";      // Track count
-    pub const DISC_NUMBER: &[u8] = b"asdn";      // Disc number
-    pub const DISC_COUNT: &[u8] = b"asdc";       // Disc count
-    pub const DURATION: &[u8] = b"astm";         // Duration (ms)
+    pub const ITEM_NAME: &[u8] = b"minm"; // Title
+    pub const ITEM_ARTIST: &[u8] = b"asar"; // Artist
+    pub const ITEM_ALBUM: &[u8] = b"asal"; // Album
+    pub const ITEM_GENRE: &[u8] = b"asgn"; // Genre
+    pub const TRACK_NUMBER: &[u8] = b"astn"; // Track number
+    pub const TRACK_COUNT: &[u8] = b"astc"; // Track count
+    pub const DISC_NUMBER: &[u8] = b"asdn"; // Disc number
+    pub const DISC_COUNT: &[u8] = b"asdc"; // Disc count
+    pub const DURATION: &[u8] = b"astm"; // Duration (ms)
 }
 
 /// Parse DMAP metadata from binary data
+///
+/// # Errors
+/// Returns `MetadataError::InvalidFormat` if the DMAP data structure is corrupted or invalid.
+/// Returns `MetadataError::IncompleteData` if the data buffer ends unexpectedly.
 pub fn parse_dmap_metadata(data: &[u8]) -> Result<TrackMetadata, MetadataError> {
     let mut metadata = TrackMetadata::default();
     let mut offset = 0;
@@ -78,29 +82,24 @@ pub fn parse_dmap_metadata(data: &[u8]) -> Result<TrackMetadata, MetadataError> 
                 metadata.genre = Some(String::from_utf8_lossy(value).into_owned());
             }
             t if t == dmap_tags::TRACK_NUMBER && length >= 4 => {
-                metadata.track_number = Some(u32::from_be_bytes([
-                    value[0], value[1], value[2], value[3]
-                ]));
+                metadata.track_number =
+                    Some(u32::from_be_bytes([value[0], value[1], value[2], value[3]]));
             }
             t if t == dmap_tags::TRACK_COUNT && length >= 4 => {
-                metadata.track_count = Some(u32::from_be_bytes([
-                    value[0], value[1], value[2], value[3]
-                ]));
+                metadata.track_count =
+                    Some(u32::from_be_bytes([value[0], value[1], value[2], value[3]]));
             }
             t if t == dmap_tags::DISC_NUMBER && length >= 4 => {
-                metadata.disc_number = Some(u32::from_be_bytes([
-                    value[0], value[1], value[2], value[3]
-                ]));
+                metadata.disc_number =
+                    Some(u32::from_be_bytes([value[0], value[1], value[2], value[3]]));
             }
             t if t == dmap_tags::DISC_COUNT && length >= 4 => {
-                metadata.disc_count = Some(u32::from_be_bytes([
-                    value[0], value[1], value[2], value[3]
-                ]));
+                metadata.disc_count =
+                    Some(u32::from_be_bytes([value[0], value[1], value[2], value[3]]));
             }
             t if t == dmap_tags::DURATION && length >= 4 => {
-                metadata.duration_ms = Some(u32::from_be_bytes([
-                    value[0], value[1], value[2], value[3]
-                ]));
+                metadata.duration_ms =
+                    Some(u32::from_be_bytes([value[0], value[1], value[2], value[3]]));
             }
             _ => {
                 // Unknown tag, skip

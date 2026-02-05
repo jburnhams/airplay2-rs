@@ -1,12 +1,12 @@
-//! SET_PARAMETER request routing
+//! `SET_PARAMETER` request routing
 
+use super::artwork_handler::{Artwork, parse_artwork};
+use super::metadata_handler::{TrackMetadata, parse_dmap_metadata};
+use super::progress_handler::{PlaybackProgress, parse_progress};
+use super::volume_handler::{VolumeUpdate, parse_volume_parameter};
 use crate::protocol::rtsp::RtspRequest;
-use super::volume_handler::{parse_volume_parameter, VolumeUpdate};
-use super::metadata_handler::{parse_dmap_metadata, TrackMetadata};
-use super::artwork_handler::{parse_artwork, Artwork};
-use super::progress_handler::{parse_progress, PlaybackProgress};
 
-/// Result of processing SET_PARAMETER
+/// Result of processing `SET_PARAMETER`
 #[derive(Debug)]
 pub enum ParameterUpdate {
     /// Volume update
@@ -21,12 +21,12 @@ pub enum ParameterUpdate {
     Unknown(String),
 }
 
-/// Process SET_PARAMETER request
+/// Process `SET_PARAMETER` request
+#[must_use]
 pub fn process_set_parameter(request: &RtspRequest) -> Vec<ParameterUpdate> {
     let mut updates = Vec::new();
 
-    let content_type = request.headers.get("Content-Type")
-        .unwrap_or("");
+    let content_type = request.headers.get("Content-Type").unwrap_or("");
 
     let body = &request.body;
     let body_str = String::from_utf8_lossy(body);
