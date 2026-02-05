@@ -1,6 +1,8 @@
 use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
+use airplay2::protocol::raop::RaopSessionKeys;
 use airplay2::protocol::rtp::RtpCodec;
+use airplay2::streaming::raop_streamer::{RaopStreamConfig, RaopStreamer};
 use airplay2::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
@@ -115,6 +117,29 @@ fn rtp_encoding_benchmark(c: &mut Criterion) {
     });
 }
 
+fn raop_streamer_benchmark(c: &mut Criterion) {
+    let keys = RaopSessionKeys::generate().expect("failed to generate keys");
+    let config = RaopStreamConfig::default();
+    let mut streamer = RaopStreamer::new(keys, config);
+
+    // ALAC frame is typically compressed, but we pass raw bytes or whatever the streamer expects.
+    // The streamer expects `audio_data: &[u8]`.
+    // Let's assume a typical ALAC frame size or PCM size.
+    // Config default samples_per_packet = 352.
+    // If PCM (16-bit stereo), that's 352 * 4 = 1408 bytes.
+    let frame = vec![0u8; 1408];
+
+    let mut group = c.benchmark_group("raop_streamer");
+    group.throughput(Throughput::Bytes(frame.len() as u64));
+
+    group.bench_function("encode_frame", |b| {
+        b.iter(|| {
+            let _ = streamer.encode_frame(black_box(&frame));
+        })
+    });
+    group.finish();
+}
+
 fn packet_loss_detector_benchmark(c: &mut Criterion) {
     c.bench_function("packet_loss_detector_gaps", |b| {
         let mut detector = PacketLossDetector::new();
@@ -136,6 +161,7 @@ criterion_group!(
     crypto_benchmark,
     rtsp_encoding_benchmark,
     rtp_encoding_benchmark,
+    raop_streamer_benchmark,
     packet_buffer_benchmark,
     packet_loss_detector_benchmark
 );

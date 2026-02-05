@@ -4,6 +4,7 @@ use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
+use bytes::Bytes;
 use aes::Aes128;
 use aes::cipher::KeyInit;
 use aes::cipher::generic_array::GenericArray;
@@ -99,7 +100,7 @@ impl RaopStreamer {
     /// Encode audio frame to RTP packet
     ///
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
-    pub fn encode_frame(&mut self, audio_data: &[u8]) -> Vec<u8> {
+    pub fn encode_frame(&mut self, audio_data: &[u8]) -> Bytes {
         // Pre-allocate buffer with exact size
         let mut encoded = Vec::with_capacity(RaopAudioPacket::HEADER_SIZE + audio_data.len());
 
