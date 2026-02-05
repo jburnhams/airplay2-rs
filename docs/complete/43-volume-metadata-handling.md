@@ -31,7 +31,7 @@ These features enable rich display of "now playing" information on the receiver.
 
 ### 43.1 Volume Handling
 
-- [ ] **43.1.1** Parse and apply volume from SET_PARAMETER
+- [x] **43.1.1** Parse and apply volume from SET_PARAMETER
 
 **File:** `src/receiver/volume_handler.rs`
 
@@ -155,7 +155,7 @@ mod tests {
 
 ### 43.2 Metadata Parsing
 
-- [ ] **43.2.1** Parse DMAP-encoded track metadata
+- [x] **43.2.1** Parse DMAP-encoded track metadata
 
 **File:** `src/receiver/metadata_handler.rs`
 
@@ -289,7 +289,7 @@ pub enum MetadataError {
 
 ### 43.3 Artwork Handling
 
-- [ ] **43.3.1** Parse and store album artwork
+- [x] **43.3.1** Parse and store album artwork
 
 **File:** `src/receiver/artwork_handler.rs`
 
@@ -366,7 +366,7 @@ pub fn parse_artwork(content_type: &str, data: &[u8]) -> Option<Artwork> {
 
 ### 43.4 Progress Updates
 
-- [ ] **43.4.1** Parse playback progress
+- [x] **43.4.1** Parse playback progress
 
 **File:** `src/receiver/progress_handler.rs`
 
@@ -466,7 +466,7 @@ mod tests {
 
 ### 43.5 SET_PARAMETER Router
 
-- [ ] **43.5.1** Route SET_PARAMETER to appropriate handler
+- [x] **43.5.1** Route SET_PARAMETER to appropriate handler
 
 **File:** `src/receiver/set_parameter_handler.rs`
 
@@ -569,13 +569,13 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Volume parsing works for all valid dB values
-- [ ] dB to linear conversion accurate
-- [ ] DMAP metadata parsing extracts all fields
-- [ ] Artwork detection works for JPEG and PNG
-- [ ] Progress parsing works with floating point values
-- [ ] SET_PARAMETER routing selects correct handler
-- [ ] All unit tests pass
+- [x] Volume parsing works for all valid dB values
+- [x] dB to linear conversion accurate
+- [x] DMAP metadata parsing extracts all fields
+- [x] Artwork detection works for JPEG and PNG
+- [x] Progress parsing works with floating point values
+- [x] SET_PARAMETER routing selects correct handler
+- [x] All unit tests pass
 
 ---
 
