@@ -55,9 +55,26 @@ impl PacketBuffer {
         start: u16,
         count: u16,
     ) -> impl Iterator<Item = &'a BufferedPacket> + 'a {
-        (0..count).filter_map(move |i| {
-            let seq = start.wrapping_add(i);
-            self.get(seq)
+        let mut requested_seqs = (0..count).map(move |i| start.wrapping_add(i)).peekable();
+
+        self.packets.iter().filter(move |packet| {
+            while let Some(&seq) = requested_seqs.peek() {
+                let diff = packet.sequence.wrapping_sub(seq);
+                if diff > 0 && diff < 0x8000 {
+                    requested_seqs.next();
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(&seq) = requested_seqs.peek() {
+                if packet.sequence == seq {
+                    requested_seqs.next();
+                    return true;
+                }
+            }
+
+            false
         })
     }
 
