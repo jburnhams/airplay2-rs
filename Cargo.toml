@@ -95,5 +95,9 @@ nix = { version = "0.29", features = ["signal"] }
 name = "protocol_benchmarks"
 harness = false
 
+[[bench]]
+name = "raop_benchmarks"
+harness = false
+
 [target.'cfg(target_os = "macos")'.dependencies]
 coreaudio-rs = { version = "0.14", optional = true }
