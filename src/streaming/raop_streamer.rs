@@ -4,6 +4,9 @@ use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
+use aes::Aes128;
+use aes::cipher::generic_array::GenericArray;
+use aes::cipher::KeyInit;
 use std::time::{Duration, Instant};
 
 /// RAOP streaming configuration
@@ -40,6 +43,8 @@ pub struct RaopStreamer {
     timestamp: u32,
     /// Session encryption keys
     keys: RaopSessionKeys,
+    /// Pre-computed block cipher for key reuse
+    aes_cipher: Aes128,
     /// Packet buffer for retransmission
     buffer: PacketBuffer,
     /// Timing synchronization
@@ -62,11 +67,15 @@ impl RaopStreamer {
     /// Create new streamer
     #[must_use]
     pub fn new(keys: RaopSessionKeys, config: RaopStreamConfig) -> Self {
+        let key_generic = GenericArray::from_slice(keys.aes_key());
+        let aes_cipher = Aes128::new(key_generic);
+
         Self {
             config,
             sequence: 0,
             timestamp: 0,
             keys,
+            aes_cipher,
             buffer: PacketBuffer::new(PacketBuffer::DEFAULT_SIZE),
             timing: TimingSync::new(),
             is_first_packet: true,
@@ -91,19 +100,28 @@ impl RaopStreamer {
     ///
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
     pub fn encode_frame(&mut self, audio_data: &[u8]) -> Vec<u8> {
-        // Encrypt audio if keys are set
-        let encrypted = self.encrypt_audio(audio_data);
+        // Pre-allocate buffer with exact size
+        let mut encoded = Vec::with_capacity(RaopAudioPacket::HEADER_SIZE + audio_data.len());
 
-        // Create packet
-        let mut packet =
-            RaopAudioPacket::new(self.sequence, self.timestamp, self.config.ssrc, encrypted);
+        // Write header directly
+        RaopAudioPacket::write_header(
+            &mut encoded,
+            self.is_first_packet,
+            self.sequence,
+            self.timestamp,
+            self.config.ssrc,
+        );
 
         if self.is_first_packet {
-            packet = packet.with_marker();
             self.is_first_packet = false;
         }
 
-        let encoded = packet.encode();
+        // Append audio data
+        encoded.extend_from_slice(audio_data);
+
+        // Encrypt payload in place
+        // The payload starts after HEADER_SIZE
+        self.encrypt_audio_in_place(&mut encoded[RaopAudioPacket::HEADER_SIZE..]);
 
         // Buffer for retransmission
         if self.config.enable_retransmit {
@@ -121,16 +139,14 @@ impl RaopStreamer {
         encoded
     }
 
-    fn encrypt_audio(&self, data: &[u8]) -> Vec<u8> {
+    fn encrypt_audio_in_place(&self, data: &mut [u8]) {
         use crate::protocol::crypto::Aes128Ctr;
 
-        let mut cipher =
-            Aes128Ctr::new(self.keys.aes_key(), self.keys.aes_iv()).expect("invalid AES keys");
+        let mut cipher = Aes128Ctr::new_with_cipher(&self.aes_cipher, self.keys.aes_iv())
+            .expect("invalid AES keys");
 
-        // AES-CTR encryption
-        let mut encrypted = data.to_vec();
-        cipher.apply_keystream(&mut encrypted);
-        encrypted
+        // AES-CTR encryption in place
+        cipher.apply_keystream(data);
     }
 
     /// Handle retransmit request

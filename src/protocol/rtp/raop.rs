@@ -207,18 +207,29 @@ impl RaopAudioPacket {
         self
     }
 
+    /// Write RTP header directly to buffer
+    pub fn write_header(buf: &mut Vec<u8>, marker: bool, sequence: u16, timestamp: u32, ssrc: u32) {
+        // RTP header
+        buf.push(0x80); // V=2, P=0, X=0, CC=0
+        buf.push(0x60 | if marker { 0x80 } else { 0x00 }); // PT=0x60, M bit
+
+        buf.extend_from_slice(&sequence.to_be_bytes());
+        buf.extend_from_slice(&timestamp.to_be_bytes());
+        buf.extend_from_slice(&ssrc.to_be_bytes());
+    }
+
     /// Encode to bytes
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(Self::HEADER_SIZE + self.payload.len());
 
-        // RTP header
-        buf.push(0x80); // V=2, P=0, X=0, CC=0
-        buf.push(0x60 | if self.marker { 0x80 } else { 0x00 }); // PT=0x60, M bit
-
-        buf.extend_from_slice(&self.sequence.to_be_bytes());
-        buf.extend_from_slice(&self.timestamp.to_be_bytes());
-        buf.extend_from_slice(&self.ssrc.to_be_bytes());
+        Self::write_header(
+            &mut buf,
+            self.marker,
+            self.sequence,
+            self.timestamp,
+            self.ssrc,
+        );
 
         // Payload
         buf.extend_from_slice(&self.payload);
