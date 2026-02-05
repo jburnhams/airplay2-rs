@@ -50,15 +50,11 @@ impl PacketBuffer {
 
     /// Get a range of packets for retransmission
     #[must_use]
-    pub fn get_range(&self, start: u16, count: u16) -> Vec<&BufferedPacket> {
-        let mut result = Vec::with_capacity(count as usize);
-        for i in 0..count {
+    pub fn get_range<'a>(&'a self, start: u16, count: u16) -> impl Iterator<Item = &'a BufferedPacket> + 'a {
+        (0..count).filter_map(move |i| {
             let seq = start.wrapping_add(i);
-            if let Some(packet) = self.get(seq) {
-                result.push(packet);
-            }
-        }
-        result
+            self.get(seq)
+        })
     }
 
     /// Clear the buffer

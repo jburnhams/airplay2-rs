@@ -154,7 +154,6 @@ impl RaopStreamer {
     pub fn handle_retransmit(&self, seq_start: u16, count: u16) -> Vec<Vec<u8>> {
         self.buffer
             .get_range(seq_start, count)
-            .into_iter()
             .map(|p| {
                 // Wrap in retransmit response header
                 let mut response = Vec::with_capacity(4 + p.data.len());

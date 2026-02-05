@@ -62,13 +62,13 @@ fn test_packet_buffer_get_range() {
         });
     }
 
-    let range = buffer.get_range(101, 3); // 101, 102, 103
+    let range: Vec<_> = buffer.get_range(101, 3).collect(); // 101, 102, 103
     assert_eq!(range.len(), 3);
     assert_eq!(range[0].sequence, 101);
     assert_eq!(range[2].sequence, 103);
 
     // Partial range
-    let range = buffer.get_range(103, 5); // 103, 104
+    let range: Vec<_> = buffer.get_range(103, 5).collect(); // 103, 104
     assert_eq!(range.len(), 2);
     assert_eq!(range[0].sequence, 103);
     assert_eq!(range[1].sequence, 104);
@@ -92,7 +92,7 @@ fn test_packet_buffer_get_range_wrapping() {
     // Request range crossing the boundary: 65535, 0
     // start=65535, count=2 -> start+count = 1 (wrapped)
     // Range 65535..1 is empty in Rust!
-    let range = buffer.get_range(65535, 2);
+    let range: Vec<_> = buffer.get_range(65535, 2).collect();
 
     assert_eq!(range.len(), 2, "Should return 2 packets for wrapping range");
     assert_eq!(range[0].sequence, 65535);
