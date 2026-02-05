@@ -771,8 +771,12 @@ class AudioRealtime(Audio):
                             self.log(pkt)
                             self.rtp_buffer.append(pkt)
                     except OSError as e:
-                        self.audio_screen_logger.error(f"Error receiving audio packet: {e}")
-                        break
+                        # If the socket is closed (EBADF), break the loop.
+                        # Otherwise (e.g. ConnectionRefused from ICMP), log and continue.
+                        if e.errno == 9:  # EBADF
+                            self.audio_screen_logger.error(f"Socket closed (EBADF), stopping audio thread: {e}")
+                            break
+                        self.audio_screen_logger.error(f"Error receiving audio packet (ignoring): {e}")
                 """ realtime can get crunchy. Let it fill. """
                 if (
                     self.rtp_buffer.is_full()  # or amount() > 0.x
