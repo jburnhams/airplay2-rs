@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use airplay2::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 
 #[test]
@@ -66,17 +67,17 @@ fn test_reordered_packets_handling() {
     let p1 = BufferedPacket {
         sequence: 1,
         timestamp: 352,
-        data: vec![].into(),
+        data: Bytes::new(),
     };
     let p2 = BufferedPacket {
         sequence: 2,
         timestamp: 704,
-        data: vec![].into(),
+        data: Bytes::new(),
     };
     let p3 = BufferedPacket {
         sequence: 3,
         timestamp: 1056,
-        data: vec![].into(),
+        data: Bytes::new(),
     };
 
     // Receive 1, then 3 (gap 2), then 2 (reordered)

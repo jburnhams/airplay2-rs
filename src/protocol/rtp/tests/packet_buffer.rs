@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 
 #[test]
@@ -38,7 +39,7 @@ fn test_packet_buffer_overflow() {
         buffer.push(BufferedPacket {
             sequence: i,
             timestamp: u32::from(i),
-            data: vec![].into(),
+            data: Bytes::new(),
         });
     }
 
@@ -58,7 +59,7 @@ fn test_packet_buffer_get_range() {
         buffer.push(BufferedPacket {
             sequence: i,
             timestamp: u32::from(i),
-            data: vec![].into(),
+            data: Bytes::new(),
         });
     }
 
@@ -85,7 +86,7 @@ fn test_packet_buffer_get_range_wrapping() {
         buffer.push(BufferedPacket {
             sequence: seq,
             timestamp: u32::from(seq),
-            data: vec![].into(),
+            data: Bytes::new(),
         });
     }
 
@@ -105,7 +106,7 @@ fn test_packet_buffer_clear() {
     buffer.push(BufferedPacket {
         sequence: 1,
         timestamp: 0,
-        data: vec![].into(),
+        data: Bytes::new(),
     });
     buffer.clear();
     assert!(buffer.is_empty());
@@ -119,14 +120,14 @@ fn test_sequence_range() {
     buffer.push(BufferedPacket {
         sequence: 10,
         timestamp: 0,
-        data: vec![].into(),
+        data: Bytes::new(),
     });
     assert_eq!(buffer.sequence_range(), Some((10, 10)));
 
     buffer.push(BufferedPacket {
         sequence: 11,
         timestamp: 0,
-        data: vec![].into(),
+        data: Bytes::new(),
     });
     assert_eq!(buffer.sequence_range(), Some((10, 11)));
 }

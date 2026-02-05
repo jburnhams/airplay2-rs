@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use crate::protocol::rtp::raop::{RaopAudioPacket, RaopPayloadType, RetransmitRequest, SyncPacket};
 use crate::protocol::rtp::timing::NtpTimestamp;
@@ -75,17 +76,17 @@ fn test_buffer_overflow() {
     buffer.push(BufferedPacket {
         sequence: 1,
         timestamp: 0,
-        data: vec![].into(),
+        data: Bytes::new(),
     });
     buffer.push(BufferedPacket {
         sequence: 2,
         timestamp: 0,
-        data: vec![].into(),
+        data: Bytes::new(),
     });
     buffer.push(BufferedPacket {
         sequence: 3,
         timestamp: 0,
-        data: vec![].into(),
+        data: Bytes::new(),
     });
 
     assert!(buffer.get(1).is_none()); // Evicted
