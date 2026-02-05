@@ -52,7 +52,8 @@ impl PacketBuffer {
     #[must_use]
     pub fn get_range(&self, start: u16, count: u16) -> Vec<&BufferedPacket> {
         let mut result = Vec::with_capacity(count as usize);
-        for seq in start..(start.wrapping_add(count)) {
+        for i in 0..count {
+            let seq = start.wrapping_add(i);
             if let Some(packet) = self.get(seq) {
                 result.push(packet);
             }

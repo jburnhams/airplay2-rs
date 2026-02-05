@@ -75,6 +75,31 @@ fn test_packet_buffer_get_range() {
 }
 
 #[test]
+fn test_packet_buffer_get_range_wrapping() {
+    let mut buffer = PacketBuffer::new(10);
+
+    // Push packets around the wrapping boundary
+    // 65534, 65535, 0, 1
+    let seqs = [65534, 65535, 0, 1];
+    for &seq in &seqs {
+        buffer.push(BufferedPacket {
+            sequence: seq,
+            timestamp: u32::from(seq),
+            data: vec![],
+        });
+    }
+
+    // Request range crossing the boundary: 65535, 0
+    // start=65535, count=2 -> start+count = 1 (wrapped)
+    // Range 65535..1 is empty in Rust!
+    let range = buffer.get_range(65535, 2);
+
+    assert_eq!(range.len(), 2, "Should return 2 packets for wrapping range");
+    assert_eq!(range[0].sequence, 65535);
+    assert_eq!(range[1].sequence, 0);
+}
+
+#[test]
 fn test_packet_buffer_clear() {
     let mut buffer = PacketBuffer::new(5);
     buffer.push(BufferedPacket {
