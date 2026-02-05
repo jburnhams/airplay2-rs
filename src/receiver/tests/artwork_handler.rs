@@ -12,3 +12,11 @@ fn test_artwork_detection() {
     let artwork = Artwork::from_data(png_data).unwrap();
     assert!(artwork.is_png());
 }
+
+#[test]
+fn test_artwork_detection_short_jpeg() {
+    // Short JPEG buffer (just magic bytes)
+    let jpeg_data = vec![0xFF, 0xD8, 0xFF];
+    let artwork = Artwork::from_data(jpeg_data).unwrap();
+    assert!(artwork.is_jpeg());
+}

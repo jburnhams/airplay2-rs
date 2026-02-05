@@ -42,21 +42,13 @@ impl Artwork {
 
 /// Detect image type from magic bytes
 fn detect_image_type(data: &[u8]) -> Option<String> {
-    if data.len() < 4 {
-        return None;
+    match data {
+        // JPEG: starts with FF D8 FF
+        [0xFF, 0xD8, 0xFF, ..] => Some("image/jpeg".to_string()),
+        // PNG: starts with 89 50 4E 47
+        [0x89, 0x50, 0x4E, 0x47, ..] => Some("image/png".to_string()),
+        _ => None,
     }
-
-    // JPEG: starts with FF D8 FF
-    if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
-        return Some("image/jpeg".to_string());
-    }
-
-    // PNG: starts with 89 50 4E 47
-    if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
-        return Some("image/png".to_string());
-    }
-
-    None
 }
 
 /// Parse artwork from `SET_PARAMETER` body
