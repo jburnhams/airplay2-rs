@@ -124,7 +124,7 @@ fn handle_announce(
             }
         }
         Err(e) => {
-            tracing::warn!("Failed to process ANNOUNCE request: {}", e);
+            tracing::warn!(client = %session.client_addr(), "Failed to process ANNOUNCE request: {}", e);
             error_result(StatusCode::BAD_REQUEST, cseq)
         }
     }
