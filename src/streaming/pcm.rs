@@ -3,6 +3,7 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_truncation)]
 
+use super::ResamplingSource;
 use super::source::AudioSource;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
@@ -135,22 +136,40 @@ impl PcmStreamer {
         mut source: S,
     ) -> Result<(), AirPlayError> {
         // Check format compatibility
+        #[allow(clippy::if_not_else)]
         if source.format() != self.format {
-            return Err(AirPlayError::InvalidParameter {
-                name: "format".to_string(),
-                message: "Source format doesn't match streamer format".to_string(),
-            });
+            tracing::info!(
+                "Source format ({:?}) differs from output format ({:?}). Enabling resampling.",
+                source.format(),
+                self.format
+            );
+
+            let mut resampled =
+                ResamplingSource::new(source, self.format).map_err(|e| AirPlayError::IoError {
+                    message: format!("Failed to create resampler: {e}"),
+                    source: Some(Box::new(e)),
+                })?;
+
+            *self.state.write().await = StreamerState::Buffering;
+
+            // Fill buffer initially
+            self.fill_buffer(&mut resampled)?;
+
+            *self.state.write().await = StreamerState::Streaming;
+
+            // Start streaming loop
+            self.streaming_loop(resampled).await
+        } else {
+            *self.state.write().await = StreamerState::Buffering;
+
+            // Fill buffer initially
+            self.fill_buffer(&mut source)?;
+
+            *self.state.write().await = StreamerState::Streaming;
+
+            // Start streaming loop
+            self.streaming_loop(source).await
         }
-
-        *self.state.write().await = StreamerState::Buffering;
-
-        // Fill buffer initially
-        self.fill_buffer(&mut source)?;
-
-        *self.state.write().await = StreamerState::Streaming;
-
-        // Start streaming loop
-        self.streaming_loop(source).await
     }
 
     /// Fill the audio buffer from source

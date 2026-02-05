@@ -497,6 +497,27 @@ impl TestSineSource {
             max_samples,
         }
     }
+
+    pub fn new_with_sample_rate(frequency: f32, duration_secs: f32, sample_rate: u32) -> Self {
+        let format = airplay2::audio::AudioFormat {
+            sample_rate: match sample_rate {
+                48000 => airplay2::audio::SampleRate::Hz48000,
+                44100 => airplay2::audio::SampleRate::Hz44100,
+                _ => airplay2::audio::SampleRate::Hz44100, // Default fallback
+            },
+            channels: airplay2::audio::ChannelConfig::Stereo,
+            sample_format: airplay2::audio::SampleFormat::I16,
+        };
+        let max_samples = (sample_rate as f32 * duration_secs) as usize;
+
+        Self {
+            phase: 0.0,
+            frequency,
+            format,
+            samples_generated: 0,
+            max_samples,
+        }
+    }
 }
 
 impl airplay2::streaming::AudioSource for TestSineSource {
