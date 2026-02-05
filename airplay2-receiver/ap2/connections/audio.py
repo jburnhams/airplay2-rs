@@ -759,16 +759,20 @@ class AudioRealtime(Audio):
                         startTS, currentTS, stopTS = map(int, str.split(message, "-")[-1:][0].split('/'))
 
                 if self.socket in rlist:
-                    data, address = self.socket.recvfrom(2048)
-                    if data:
-                        # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
-                        if SAVE_RAW_RTP:
-                            with open("rtp_packets.bin", "ab") as f:
-                                f.write(data)
-                        pkt = RTP_REALTIME(data)
-                        lastRecvdSeqNo = pkt.sequence_no
-                        self.log(pkt)
-                        self.rtp_buffer.append(pkt)
+                    try:
+                        data, address = self.socket.recvfrom(2048)
+                        if data:
+                            # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
+                            if SAVE_RAW_RTP:
+                                with open("rtp_packets.bin", "ab") as f:
+                                    f.write(data)
+                            pkt = RTP_REALTIME(data)
+                            lastRecvdSeqNo = pkt.sequence_no
+                            self.log(pkt)
+                            self.rtp_buffer.append(pkt)
+                    except OSError as e:
+                        self.audio_screen_logger.error(f"Error receiving audio packet: {e}")
+                        break
                 """ realtime can get crunchy. Let it fill. """
                 if (
                     self.rtp_buffer.is_full()  # or amount() > 0.x
