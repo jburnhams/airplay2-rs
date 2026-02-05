@@ -1,8 +1,33 @@
 use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
 use airplay2::protocol::rtp::RtpCodec;
+use airplay2::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
+
+fn packet_buffer_benchmark(c: &mut Criterion) {
+    let mut buffer = PacketBuffer::new(PacketBuffer::DEFAULT_SIZE);
+
+    // Fill buffer
+    for i in 0..PacketBuffer::DEFAULT_SIZE {
+        buffer.push(BufferedPacket {
+            sequence: i as u16,
+            timestamp: i as u32 * 352,
+            data: vec![0u8; 10], // Small payload
+        });
+    }
+
+    let mut group = c.benchmark_group("packet_buffer");
+
+    for count in [10, 50, 100].iter() {
+        group.bench_with_input(criterion::BenchmarkId::new("get_range", count), count, |b, &count| {
+            b.iter(|| {
+                buffer.get_range(black_box(0), black_box(count as u16))
+            })
+        });
+    }
+    group.finish();
+}
 
 fn plist_benchmark(c: &mut Criterion) {
     // 1. Prepare data
@@ -95,6 +120,7 @@ criterion_group!(
     plist_benchmark,
     crypto_benchmark,
     rtsp_encoding_benchmark,
-    rtp_encoding_benchmark
+    rtp_encoding_benchmark,
+    packet_buffer_benchmark
 );
 criterion_main!(benches);
