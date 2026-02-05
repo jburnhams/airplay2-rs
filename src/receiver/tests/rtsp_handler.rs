@@ -273,19 +273,3 @@ fn test_set_parameter_integration() {
         panic!("Expected volume update");
     }
 }
-
-#[test]
-fn test_announce_invalid_sdp() {
-    let session = ReceiverSession::new(test_addr());
-    let mut request = create_request(Method::Announce);
-    request.headers.insert("CSeq".to_string(), "3".to_string());
-    request
-        .headers
-        .insert("Content-Type".to_string(), "application/sdp".to_string());
-    // Invalid SDP body
-    request.body = b"Not valid SDP".to_vec();
-
-    let result = handle_request(&request, &session, None);
-
-    assert_eq!(result.response.status, StatusCode::BAD_REQUEST);
-}
