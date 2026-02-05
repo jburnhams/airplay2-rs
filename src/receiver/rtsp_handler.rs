@@ -123,8 +123,8 @@ fn handle_announce(
                 parameter_updates: Vec::new(),
             }
         }
-        Err(e) => {
-            tracing::warn!(client = %session.client_addr(), "Failed to process ANNOUNCE request: {}", e);
+        Err(_) => {
+            // TODO: Log error?
             error_result(StatusCode::BAD_REQUEST, cseq)
         }
     }

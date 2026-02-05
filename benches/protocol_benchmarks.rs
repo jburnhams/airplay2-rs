@@ -3,33 +3,8 @@ use airplay2::protocol::plist::{PlistValue, decode, encode};
 use airplay2::protocol::raop::RaopSessionKeys;
 use airplay2::protocol::rtp::RtpCodec;
 use airplay2::streaming::raop_streamer::{RaopStreamConfig, RaopStreamer};
-use airplay2::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::collections::HashMap;
-
-fn packet_buffer_benchmark(c: &mut Criterion) {
-    let mut buffer = PacketBuffer::new(PacketBuffer::DEFAULT_SIZE);
-
-    // Fill buffer
-    for i in 0..PacketBuffer::DEFAULT_SIZE {
-        buffer.push(BufferedPacket {
-            sequence: i as u16,
-            timestamp: i as u32 * 352,
-            data: vec![0u8; 10], // Small payload
-        });
-    }
-
-    let mut group = c.benchmark_group("packet_buffer");
-
-    for count in [10, 50, 100].iter() {
-        group.bench_with_input(
-            criterion::BenchmarkId::new("get_range", count),
-            count,
-            |b, &count| b.iter(|| buffer.get_range(black_box(0), black_box(count as u16))),
-        );
-    }
-    group.finish();
-}
 
 fn plist_benchmark(c: &mut Criterion) {
     // 1. Prepare data
@@ -140,29 +115,12 @@ fn raop_streamer_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-fn packet_loss_detector_benchmark(c: &mut Criterion) {
-    c.bench_function("packet_loss_detector_gaps", |b| {
-        let mut detector = PacketLossDetector::new();
-        // Initialize
-        detector.process(0);
-        let mut seq: u16 = 0;
-
-        b.iter(|| {
-            // Advance by 10 to create a gap of 9 packets
-            seq = seq.wrapping_add(10);
-            detector.process(black_box(seq))
-        })
-    });
-}
-
 criterion_group!(
     benches,
     plist_benchmark,
     crypto_benchmark,
     rtsp_encoding_benchmark,
     rtp_encoding_benchmark,
-    raop_streamer_benchmark,
-    packet_buffer_benchmark,
-    packet_loss_detector_benchmark
+    raop_streamer_benchmark
 );
 criterion_main!(benches);

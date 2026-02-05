@@ -52,9 +52,8 @@ impl PacketBuffer {
     /// Get a range of packets for retransmission
     #[must_use]
     pub fn get_range(&self, start: u16, count: u16) -> Vec<&BufferedPacket> {
-        let mut result = Vec::with_capacity(count as usize);
-        for i in 0..count {
-            let seq = start.wrapping_add(i);
+        let mut result = Vec::new();
+        for seq in start..(start.wrapping_add(count)) {
             if let Some(packet) = self.get(seq) {
                 result.push(packet);
             }
@@ -122,6 +121,8 @@ impl PacketLossDetector {
             return Vec::new();
         }
 
+        let mut missing = Vec::new();
+
         // Calculate how many packets were skipped
         let diff = sequence.wrapping_sub(self.expected_seq);
 
@@ -131,16 +132,12 @@ impl PacketLossDetector {
             return Vec::new();
         }
 
-        let missing = if diff > 0 && diff < 100 {
-            let mut missing = Vec::with_capacity(diff as usize);
+        if diff > 0 && diff < 100 {
             // Packets were lost
             for i in 0..diff {
                 missing.push(self.expected_seq.wrapping_add(i));
             }
-            missing
-        } else {
-            Vec::new()
-        };
+        }
 
         // Update expected
         self.expected_seq = sequence.wrapping_add(1);
