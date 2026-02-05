@@ -106,7 +106,7 @@ fn test_buffer_range() {
         });
     }
 
-    let range = buffer.get_range(1, 3);
+    let range: Vec<_> = buffer.get_range(1, 3).collect();
     assert_eq!(range.len(), 3);
     assert_eq!(range[0].sequence, 1);
     assert_eq!(range[2].sequence, 3);
