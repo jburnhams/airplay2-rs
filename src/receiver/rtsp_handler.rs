@@ -10,6 +10,7 @@ use crate::protocol::rtsp::{
 };
 use crate::receiver::announce_handler;
 use crate::receiver::session::{ReceiverSession, SessionState, StreamParameters};
+use crate::receiver::set_parameter_handler::{self, ParameterUpdate};
 
 /// Result of handling an RTSP request
 #[derive(Debug)]
@@ -26,6 +27,8 @@ pub struct HandleResult {
     pub start_streaming: bool,
     /// Should stop streaming (for TEARDOWN)
     pub stop_streaming: bool,
+    /// Parameter updates (from SET_PARAMETER)
+    pub parameter_updates: Vec<ParameterUpdate>,
 }
 
 /// Ports allocated during SETUP
@@ -91,6 +94,7 @@ fn handle_options(cseq: u32) -> HandleResult {
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -116,6 +120,7 @@ fn handle_announce(
                 stream_params: Some(params),
                 start_streaming: false,
                 stop_streaming: false,
+                parameter_updates: Vec::new(),
             }
         }
         Err(_) => {
@@ -167,6 +172,7 @@ fn handle_setup(request: &RtspRequest, cseq: u32, _session: &ReceiverSession) ->
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -196,6 +202,7 @@ fn handle_record(request: &RtspRequest, cseq: u32, session: &ReceiverSession) ->
         stream_params: None,
         start_streaming: true,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -214,6 +221,7 @@ fn handle_pause(cseq: u32, session: &ReceiverSession) -> HandleResult {
         stream_params: None,
         start_streaming: false,
         stop_streaming: false, // Keep session alive, just pause output
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -239,6 +247,7 @@ fn handle_flush(request: &RtspRequest, cseq: u32, session: &ReceiverSession) -> 
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -253,6 +262,7 @@ fn handle_teardown(cseq: u32, _session: &ReceiverSession) -> HandleResult {
         stream_params: None,
         start_streaming: false,
         stop_streaming: true,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -289,6 +299,7 @@ fn handle_get_parameter(
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -298,11 +309,8 @@ fn handle_set_parameter(
     cseq: u32,
     _session: &ReceiverSession,
 ) -> HandleResult {
-    // Content-Type determines what's being set
-    let _content_type = request.headers.get("Content-Type").unwrap_or("");
-
-    // Delegate to appropriate handler based on content type
-    // Section 43 handles the detailed parsing
+    // Process parameter updates
+    let parameter_updates = set_parameter_handler::process_set_parameter(request);
 
     let response = ResponseBuilder::ok().cseq(cseq).build();
 
@@ -313,6 +321,7 @@ fn handle_set_parameter(
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates,
     }
 }
 
@@ -332,6 +341,7 @@ fn handle_post(_request: &RtspRequest, cseq: u32, _session: &ReceiverSession) ->
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 
@@ -351,6 +361,7 @@ fn error_result(status: StatusCode, cseq: u32) -> HandleResult {
         stream_params: None,
         start_streaming: false,
         stop_streaming: false,
+        parameter_updates: Vec::new(),
     }
 }
 

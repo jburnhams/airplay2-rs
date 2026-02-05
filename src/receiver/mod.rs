@@ -15,5 +15,11 @@ pub mod rtp_receiver;
 pub mod sequence_tracker;
 pub mod timing;
 
+pub mod artwork_handler;
+pub mod metadata_handler;
+pub mod progress_handler;
+pub mod set_parameter_handler;
+pub mod volume_handler;
+
 #[cfg(test)]
 mod tests;

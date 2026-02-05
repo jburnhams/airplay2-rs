@@ -1,6 +1,7 @@
 use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
 use crate::receiver::rtsp_handler::*;
 use crate::receiver::session::{ReceiverSession, SessionState};
+use crate::receiver::set_parameter_handler::ParameterUpdate;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn test_addr() -> SocketAddr {
@@ -250,4 +251,23 @@ fn test_unknown_method() {
     let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[test]
+fn test_set_parameter_integration() {
+    let session = ReceiverSession::new(test_addr());
+    let mut request = create_request(Method::SetParameter);
+    request.headers.insert("Content-Type".to_string(), "text/parameters".to_string());
+    request.body = b"volume: -20.0\r\n".to_vec();
+
+    let result = handle_request(&request, &session, None);
+
+    assert_eq!(result.response.status, StatusCode::OK);
+    assert_eq!(result.parameter_updates.len(), 1);
+
+    if let ParameterUpdate::Volume(vol) = &result.parameter_updates[0] {
+        assert!((vol.db - -20.0).abs() < 0.01);
+    } else {
+        panic!("Expected volume update");
+    }
 }
