@@ -8,7 +8,6 @@ use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioCodec};
 use common::python_receiver::{PythonReceiver, TestSineSource};
 
 #[tokio::test]
-#[ignore] // Fails with python-ap2 receiver (Disconnected during ANNOUNCE), likely due to feature flags or SDP handling issues
 async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     common::init_logging();
     tracing::info!("Starting AAC Streaming integration test");
