@@ -112,9 +112,8 @@ async fn test_finished_state() {
     let format = AudioFormat::CD_QUALITY;
     let streamer = PcmStreamer::new(sender, format);
 
-// Small source
-let bytes_per_packet = PcmStreamer::FRAMES_PER_PACKET * format.bytes_per_frame();
-let data = vec![1u8; bytes_per_packet * 2]; // 2 packets
+    // Small source
+    let data = vec![1u8; 1408 * 2]; // 2 packets
     let source = SliceSource::new(data, format);
 
     streamer.stream(source).await.unwrap();
@@ -133,9 +132,8 @@ async fn test_alac_encoding_usage() {
     // Enable ALAC
     streamer.use_alac().await;
 
-// Source data (silence compresses well)
-let bytes_per_packet = PcmStreamer::FRAMES_PER_PACKET * format.bytes_per_frame();
-let data = vec![0u8; bytes_per_packet * 10];
+    // Source data (silence compresses well)
+    let data = vec![0u8; 1408 * 10];
     let source = SliceSource::new(data, format);
 
     streamer.stream(source).await.unwrap();
@@ -176,10 +174,12 @@ async fn test_resampling_integration() {
         sample_format: SampleFormat::I16,
     };
 
-// 100ms of audio
-let duration_secs = 0.1;
-let num_samples = (source_format.sample_rate.as_u32() as f64 * duration_secs) as usize;
-let data = vec![0u8; num_samples * source_format.bytes_per_frame()];
+    // 100ms of audio
+    let duration_secs = 0.1;
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    let num_samples = (f64::from(source_format.sample_rate.as_u32()) * duration_secs) as usize;
+    let data = vec![0u8; num_samples * source_format.bytes_per_frame()];
     let source = SliceSource::new(data, source_format);
 
     // This should trigger resampling internally
