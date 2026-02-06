@@ -106,6 +106,13 @@ jobs:
           AIRPLAY_TEST_INTERFACE: ${{ runner.os == 'macOS' && 'lo0' || 'lo' }}
         timeout-minutes: 10
 
+      - name: Run AAC streaming test
+        run: cargo test --test aac_streaming --release -- --ignored --test-threads=1 --nocapture
+        env:
+          RUST_LOG: info
+          AIRPLAY_TEST_INTERFACE: ${{ runner.os == 'macOS' && 'lo0' || 'lo' }}
+        timeout-minutes: 5
+
       - name: Upload test artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
