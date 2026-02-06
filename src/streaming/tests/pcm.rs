@@ -112,8 +112,9 @@ async fn test_finished_state() {
     let format = AudioFormat::CD_QUALITY;
     let streamer = PcmStreamer::new(sender, format);
 
-    // Small source
-    let data = vec![1u8; 1408 * 2]; // 2 packets
+// Small source
+let bytes_per_packet = PcmStreamer::FRAMES_PER_PACKET * format.bytes_per_frame();
+let data = vec![1u8; bytes_per_packet * 2]; // 2 packets
     let source = SliceSource::new(data, format);
 
     streamer.stream(source).await.unwrap();
