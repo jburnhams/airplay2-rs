@@ -1,3 +1,4 @@
+mod aac_encoder;
 mod buffer;
 mod clock;
 mod concealment;

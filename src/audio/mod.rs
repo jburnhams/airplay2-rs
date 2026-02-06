@@ -3,6 +3,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+pub mod aac_encoder;
 pub mod buffer;
 pub mod clock;
 pub mod concealment;
@@ -17,6 +18,7 @@ pub mod raop_encoder;
 #[cfg(test)]
 mod tests;
 
+pub use aac_encoder::AacEncoder;
 pub use buffer::AudioRingBuffer;
 pub use clock::{AudioClock, TimingSync};
 pub use concealment::{Concealer, ConcealmentStrategy};
