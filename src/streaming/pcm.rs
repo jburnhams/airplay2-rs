@@ -482,6 +482,10 @@ impl PcmStreamer {
     }
 
     /// Set codec to AAC
+    ///
+    /// # Panics
+    ///
+    /// Panics if the AAC encoder cannot be initialized (e.g. invalid parameters).
     pub async fn use_aac(&self) {
         // Standard AAC-LC: 44100Hz, Stereo, ~128kbps (or 256kbps for high quality)
         // AirPlay often uses 256kbps?

@@ -32,8 +32,8 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
         tracing::error!("Connection failed: {}", e);
         let output = receiver.stop().await?;
         if output.log_path.exists() {
-             let logs = std::fs::read_to_string(&output.log_path)?;
-             println!("Receiver Logs (Connection Failed):\n{}", logs);
+            let logs = std::fs::read_to_string(&output.log_path)?;
+            println!("Receiver Logs (Connection Failed):\n{}", logs);
         }
         return Err(e.into());
     }
@@ -48,8 +48,8 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
         tracing::error!("Streaming failed: {}", e);
         let output = receiver.stop().await?;
         if output.log_path.exists() {
-             let logs = std::fs::read_to_string(&output.log_path)?;
-             println!("Receiver Logs (Streaming Failed):\n{}", logs);
+            let logs = std::fs::read_to_string(&output.log_path)?;
+            println!("Receiver Logs (Streaming Failed):\n{}", logs);
         }
         return Err(e.into());
     }

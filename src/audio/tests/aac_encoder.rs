@@ -18,9 +18,12 @@ fn test_aac_encoding() {
     let output2 = encoder.encode(&input).expect("Encoding failed");
 
     // We expect some data eventually
-    assert!(output.len() > 0 || output2.len() > 0, "Encoder produced no output after 2 frames");
+    assert!(
+        !output.is_empty() || !output2.is_empty(),
+        "Encoder produced no output after 2 frames"
+    );
 
-    if output.len() > 0 {
+    if !output.is_empty() {
         // AAC frame header + data
         println!("Output size: {}", output.len());
     }
