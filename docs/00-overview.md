@@ -646,3 +646,57 @@ receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 3. Section 39 → 40, 41 (parallel)
 4. Section 41, 40, 42, 43 → 44
 5. Section 44 → 45
+
+## Integration Testing (Third-Party & Self-Loopback)
+
+Comprehensive integration testing validates both client and receiver against third-party implementations (shairport-sync, pyatv) and via self-loopback regression tests.
+
+### Integration Test Documentation Sections
+
+| Section | Title | Description |
+|---------|-------|-------------|
+| 63 | Integration Test Strategy | Master test matrix, phasing, risk assessment, dependency graph |
+| 64 | Subprocess Management Framework | Generic process lifecycle, port allocation, log capture, cleanup |
+| 65 | Audio Verification Framework | Sine wave analysis, codec verification, latency measurement |
+| 66 | shairport-sync Setup | Build from source, configuration, subprocess wrapper |
+| 67 | AP1 Client vs shairport-sync | RAOP client tests: discovery, RSA auth, streaming, errors |
+| 68 | AP2 Client vs shairport-sync | AP2 client tests: HomeKit pairing, encrypted streaming, PTP |
+| 69 | pyatv Setup | Installation, driver scripts, AP1/AP2 modes |
+| 70 | AP2 Receiver vs pyatv | AP2 receiver tests: advertisement, pairing, streaming |
+| 71 | AP1 Receiver vs pyatv | RAOP receiver tests: SDP, encryption, timing |
+| 72 | Loopback Test Infrastructure | In-process harness, universal receiver, parametric runner |
+| 73 | AP2 Loopback Tests | Full AP2 lifecycle, codec matrix, encryption, stress |
+| 74 | AP1 Loopback Tests | Full RAOP lifecycle, codec matrix, encryption modes |
+| 75 | Cross-Protocol Tests | AP1→universal receiver, mixed sessions, protocol negotiation |
+| 76 | Integration CI/CD | GitHub Actions workflows, Docker, artifacts, reporting |
+
+### Integration Test Dependencies
+
+```
+63 (Strategy)
+ │
+ ├── 64 (Subprocess Framework)
+ │    └── 66 (shairport-sync Setup)
+ │    │    ├── 67 (AP1 Client vs shairport-sync)
+ │    │    └── 68 (AP2 Client vs shairport-sync)
+ │    └── 69 (pyatv Setup)
+ │         ├── 70 (AP2 Receiver vs pyatv)
+ │         └── 71 (AP1 Receiver vs pyatv)
+ │
+ ├── 65 (Audio Verification) ← used by all test sections
+ │
+ ├── 72 (Loopback Infrastructure)
+ │    ├── 73 (AP2 Loopback)
+ │    ├── 74 (AP1 Loopback)
+ │    └── 75 (Cross-Protocol)
+ │
+ └── 76 (CI/CD) ← depends on all above
+```
+
+### Stream IT: Integration Test Implementation
+
+Phase 0: 64, 65 (shared infrastructure)
+Phase 1a: 66 → 67, 68 (shairport-sync track, parallel with 1b)
+Phase 1b: 69 → 70, 71 (pyatv track, parallel with 1a)
+Phase 2: 72 → 73, 74, 75 (loopback, after Phase 1 validates correctness)
+Phase 3: 76 (CI/CD, built incrementally)
