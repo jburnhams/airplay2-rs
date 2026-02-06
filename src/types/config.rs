@@ -33,6 +33,9 @@ pub struct AirPlayConfig {
 
     /// Optional PIN for pairing (if device requires one)
     pub pin: Option<String>,
+
+    /// Bitrate for AAC encoding (bps) (default: 128_000)
+    pub aac_bitrate: u32,
 }
 
 impl Default for AirPlayConfig {
@@ -48,6 +51,7 @@ impl Default for AirPlayConfig {
             pairing_storage_path: None,
             audio_codec: AudioCodec::Pcm, // Default to uncompressed PCM
             pin: None,
+            aac_bitrate: 128_000,
         }
     }
 }
@@ -113,6 +117,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn pin(mut self, pin: impl Into<String>) -> Self {
         self.config.pin = Some(pin.into());
+        self
+    }
+
+    /// Set AAC bitrate in bits per second (default: 128_000)
+    #[must_use]
+    pub fn aac_bitrate(mut self, bitrate: u32) -> Self {
+        self.config.aac_bitrate = bitrate;
         self
     }
 

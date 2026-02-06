@@ -241,6 +241,9 @@ impl PcmStreamer {
         // Reusable buffer for RTP packet to avoid allocations
         let mut rtp_packet_buffer = Vec::with_capacity(bytes_per_packet + 64);
 
+        // Reusable buffer for samples to avoid allocations
+        let mut samples_buffer = Vec::with_capacity(bytes_per_packet / 2);
+
         loop {
             // Wait for next tick
             interval.tick().await;
@@ -340,12 +343,14 @@ impl PcmStreamer {
                         if let Some(encoder) = encoder_guard.as_mut() {
                             // Convert bytes to i16 (Little Endian)
                             // We assume input is always I16 Little Endian (standard AirPlay/PCM)
-                            let samples: Vec<i16> = packet_data
-                                .chunks_exact(2)
-                                .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
-                                .collect();
+                            samples_buffer.clear();
+                            samples_buffer.extend(
+                                packet_data
+                                    .chunks_exact(2)
+                                    .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]])),
+                            );
 
-                            match encoder.encode(&samples) {
+                            match encoder.encode(&samples_buffer) {
                                 Ok(encoded) => {
                                     // Add AU Header Section for mpeg4-generic (RFC 3640)
                                     // AU-headers-length: 16 bits (0x0010) = 16
@@ -486,15 +491,12 @@ impl PcmStreamer {
     /// # Panics
     ///
     /// Panics if the AAC encoder cannot be initialized (e.g. invalid parameters).
-    pub async fn use_aac(&self) {
-        // Standard AAC-LC: 44100Hz, Stereo, ~128kbps (or 256kbps for high quality)
-        // AirPlay often uses 256kbps?
-        // Let's use 64000bps (64kbps) for efficiency or 128000bps.
-        // Python receiver doesn't check bitrate.
+    pub async fn use_aac(&self, bitrate: u32) {
+        // Standard AAC-LC: 44100Hz, Stereo
         let encoder = AacEncoder::new(
             self.format.sample_rate.as_u32(),
             u32::from(self.format.channels.channels()),
-            128_000,
+            bitrate,
         )
         .expect("Failed to initialize AAC encoder");
 
