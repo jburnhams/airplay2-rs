@@ -170,7 +170,6 @@ impl AudioSource for SineSource {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Start Receiver
     let receiver = PythonReceiver::start().await?;

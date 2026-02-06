@@ -56,7 +56,7 @@ class SDPHandler():
                 elif 'mpeg4-generic/' in self.audio_encoding:
                     self.audio_format = self.SDPAudioFormat.AAC
                     discard, self.audio_format_sr, self.audio_format_ch = self.audio_encoding.split('/')
-                    self.audio_format_bd = 16
+                    self.audio_format_bd = '16'
                 else:
                     self.audio_format = self.SDPAudioFormat.PCM
                     self.audio_format_bd, self.audio_format_sr, self.audio_format_ch = self.audio_encoding.split('/')
@@ -104,13 +104,11 @@ class SDPHandler():
                             self.aac_mode = x[start:].rstrip(';')
                     self.audio_desc = 'AAC_ELD'
                 for f in AirplayAudFmt:
-                    print(f"Checking {f.name} against bd={self.audio_format_bd} sr={self.audio_format_sr} ch={self.audio_format_ch} desc={self.audio_desc}")
                     if(self.audio_desc in f.name
-                        and self.audio_format_bd in f.name
+                        and (self.audio_format_bd in f.name or self.audio_format == self.SDPAudioFormat.AAC)
                         and self.audio_format_sr in f.name
                         and self.audio_format_ch in f.name
                        ):
-                        print(f"Matched {f.name}")
                         self.AirplayAudFmt = f.value
                         self.audio_format_bd = int(self.audio_format_bd)
                         self.audio_format_ch = int(self.audio_format_ch)

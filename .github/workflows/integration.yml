@@ -99,12 +99,14 @@ jobs:
           echo "✓ Receiver startup test passed"
 
       - name: Run integration tests
-        run: cargo test --test integration_tests --release -- --ignored --test-threads=1 --nocapture
+        run: |
+          cd integration_tests
+          cargo test --release -- --test-threads=1 --nocapture
         env:
           RUST_LOG: info
           # Loopback interface (lo0 for macOS, lo for Linux)
           AIRPLAY_TEST_INTERFACE: ${{ runner.os == 'macOS' && 'lo0' || 'lo' }}
-        timeout-minutes: 10
+        timeout-minutes: 15
 
       - name: Upload test artifacts on failure
         if: failure()
