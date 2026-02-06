@@ -176,8 +176,10 @@ async fn test_resampling_integration() {
         sample_format: SampleFormat::I16,
     };
 
-    // 100ms of audio
-    let data = vec![0u8; 4800 * 4];
+// 100ms of audio
+let duration_secs = 0.1;
+let num_samples = (source_format.sample_rate.as_u32() as f64 * duration_secs) as usize;
+let data = vec![0u8; num_samples * source_format.bytes_per_frame()];
     let source = SliceSource::new(data, source_format);
 
     // This should trigger resampling internally
