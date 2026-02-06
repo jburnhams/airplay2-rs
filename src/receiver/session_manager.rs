@@ -288,23 +288,24 @@ impl SessionManager {
         // Let's modify to retry a few times if binding fails.
 
         for _ in 0..5 {
-            match Self::try_bind_sockets(audio_port, control_port, timing_port).await {
-                Ok(sockets_struct) => {
-                    let ports = sockets_struct.ports();
-                    let mut sockets_lock = self.sockets.lock().await;
-                    *sockets_lock = Some(sockets_struct);
-                    return Ok(ports);
-                }
-                Err(_) => {
-                    // If failed, try next trio
-                    let (na, _nc, _nt) = {
-                        let mut allocator = self.port_allocator.lock().await;
-                        allocator.allocate_trio()
-                    };
-                    // Continue with new ports
-                    if na == audio_port { break; } // Avoid infinite loop if allocator wraps
-                }
+            if let Ok(sockets_struct) =
+                Self::try_bind_sockets(audio_port, control_port, timing_port).await
+            {
+                let ports = sockets_struct.ports();
+                let mut sockets_lock = self.sockets.lock().await;
+                *sockets_lock = Some(sockets_struct);
+                return Ok(ports);
             }
+
+            // If failed, try next trio
+            let (na, _nc, _nt) = {
+                let mut allocator = self.port_allocator.lock().await;
+                allocator.allocate_trio()
+            };
+            // Continue with new ports
+            if na == audio_port {
+                break;
+            } // Avoid infinite loop if allocator wraps
         }
 
         // Fallback: Bind to 0 (OS chooses)
@@ -329,11 +330,19 @@ impl SessionManager {
         Ok(ports)
     }
 
-    async fn try_bind_sockets(ap: u16, cp: u16, tp: u16) -> Result<AllocatedSockets, std::io::Error> {
+    async fn try_bind_sockets(
+        ap: u16,
+        cp: u16,
+        tp: u16,
+    ) -> Result<AllocatedSockets, std::io::Error> {
         let audio = UdpSocket::bind(format!("0.0.0.0:{ap}")).await?;
         let control = UdpSocket::bind(format!("0.0.0.0:{cp}")).await?;
         let timing = UdpSocket::bind(format!("0.0.0.0:{tp}")).await?;
-        Ok(AllocatedSockets { audio, control, timing })
+        Ok(AllocatedSockets {
+            audio,
+            control,
+            timing,
+        })
     }
 
     /// Get reference to allocated sockets
