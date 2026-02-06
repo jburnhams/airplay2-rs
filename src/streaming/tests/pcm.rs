@@ -133,8 +133,9 @@ async fn test_alac_encoding_usage() {
     // Enable ALAC
     streamer.use_alac().await;
 
-    // Source data (silence compresses well)
-    let data = vec![0u8; 1408 * 10];
+// Source data (silence compresses well)
+let bytes_per_packet = PcmStreamer::FRAMES_PER_PACKET * format.bytes_per_frame();
+let data = vec![0u8; bytes_per_packet * 10];
     let source = SliceSource::new(data, format);
 
     streamer.stream(source).await.unwrap();
