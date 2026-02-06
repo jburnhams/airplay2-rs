@@ -34,7 +34,7 @@ pub struct AirPlayConfig {
     /// Optional PIN for pairing (if device requires one)
     pub pin: Option<String>,
 
-    /// Bitrate for AAC encoding (bps) (default: 128_000)
+    /// Bitrate for AAC encoding (bps) (default: `128_000`)
     pub aac_bitrate: u32,
 }
 
@@ -120,7 +120,7 @@ impl AirPlayConfigBuilder {
         self
     }
 
-    /// Set AAC bitrate in bits per second (default: 128_000)
+    /// Set AAC bitrate in bits per second (default: `128_000`)
     #[must_use]
     pub fn aac_bitrate(mut self, bitrate: u32) -> Self {
         self.config.aac_bitrate = bitrate;
