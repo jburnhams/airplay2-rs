@@ -5,6 +5,7 @@
 
 use super::ResamplingSource;
 use super::source::AudioSource;
+use crate::audio::aac_encoder::AacEncoder;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
@@ -68,6 +69,8 @@ pub struct PcmStreamer {
     cmd_rx: Mutex<mpsc::Receiver<StreamerCommand>>,
     /// ALAC encoder
     encoder: Mutex<Option<alac_encoder::AlacEncoder>>,
+    /// AAC encoder
+    encoder_aac: Mutex<Option<AacEncoder>>,
     /// Codec type
     codec_type: RwLock<AudioCodec>,
 }
@@ -111,6 +114,7 @@ impl PcmStreamer {
             cmd_tx,
             cmd_rx: Mutex::new(cmd_rx),
             encoder: Mutex::new(None),
+            encoder_aac: Mutex::new(None),
             codec_type: RwLock::new(AudioCodec::Pcm),
         }
     }
@@ -311,26 +315,61 @@ impl PcmStreamer {
             // Encode payload
             let encoded_payload: Cow<'_, [u8]> = {
                 let codec_type = *self.codec_type.read().await;
-                if codec_type == AudioCodec::Alac {
-                    let mut encoder_guard = self.encoder.lock().await;
-                    if let Some(encoder) = encoder_guard.as_mut() {
-                        // alac-encoder 0.3.0 expects byte slice of PCM data
-                        // and a FormatDescription for that input
-                        let input_format = alac_encoder::FormatDescription::pcm::<i16>(
-                            self.format.sample_rate.as_u32() as f64,
-                            self.format.channels.channels() as u32,
-                        );
+                match codec_type {
+                    AudioCodec::Alac => {
+                        let mut encoder_guard = self.encoder.lock().await;
+                        if let Some(encoder) = encoder_guard.as_mut() {
+                            // alac-encoder 0.3.0 expects byte slice of PCM data
+                            // and a FormatDescription for that input
+                            let input_format = alac_encoder::FormatDescription::pcm::<i16>(
+                                self.format.sample_rate.as_u32() as f64,
+                                self.format.channels.channels() as u32,
+                            );
 
-                        let mut out_buffer = vec![0u8; 4096];
+                            let mut out_buffer = vec![0u8; 4096];
 
-                        let size = encoder.encode(&input_format, &packet_data, &mut out_buffer);
-                        out_buffer.truncate(size);
-                        Cow::Owned(out_buffer)
-                    } else {
-                        Cow::Borrowed(&packet_data)
+                            let size = encoder.encode(&input_format, &packet_data, &mut out_buffer);
+                            out_buffer.truncate(size);
+                            Cow::Owned(out_buffer)
+                        } else {
+                            Cow::Borrowed(&packet_data)
+                        }
                     }
-                } else {
-                    Cow::Borrowed(&packet_data)
+                    AudioCodec::Aac => {
+                        let mut encoder_guard = self.encoder_aac.lock().await;
+                        if let Some(encoder) = encoder_guard.as_mut() {
+                            // Convert bytes to i16 (Little Endian)
+                            // We assume input is always I16 Little Endian (standard AirPlay/PCM)
+                            let samples: Vec<i16> = packet_data
+                                .chunks_exact(2)
+                                .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+                                .collect();
+
+                            match encoder.encode(&samples) {
+                                Ok(encoded) => {
+                                    // Add AU Header Section for mpeg4-generic (RFC 3640)
+                                    // AU-headers-length: 16 bits (0x0010) = 16
+                                    // AU-header: size (13 bits) | index (3 bits)
+                                    let mut payload = Vec::with_capacity(4 + encoded.len());
+                                    payload.extend_from_slice(&[0x00, 0x10]);
+
+                                    let size = encoded.len() as u16;
+                                    let header = (size << 3) & 0xFFF8;
+                                    payload.extend_from_slice(&header.to_be_bytes());
+
+                                    payload.extend_from_slice(&encoded);
+                                    Cow::Owned(payload)
+                                }
+                                Err(e) => {
+                                    tracing::error!("AAC encoding error: {}", e);
+                                    Cow::Borrowed(&packet_data) // Fallback (will likely sound like static)
+                                }
+                            }
+                        } else {
+                            Cow::Borrowed(&packet_data)
+                        }
+                    }
+                    _ => Cow::Borrowed(&packet_data),
                 }
             };
 
@@ -438,12 +477,32 @@ impl PcmStreamer {
             self.format.channels.channels() as u32,
         );
         *self.encoder.lock().await = Some(alac_encoder::AlacEncoder::new(&format));
+        *self.encoder_aac.lock().await = None;
         *self.codec_type.write().await = AudioCodec::Alac;
+    }
+
+    /// Set codec to AAC
+    pub async fn use_aac(&self) {
+        // Standard AAC-LC: 44100Hz, Stereo, ~128kbps (or 256kbps for high quality)
+        // AirPlay often uses 256kbps?
+        // Let's use 64000bps (64kbps) for efficiency or 128000bps.
+        // Python receiver doesn't check bitrate.
+        let encoder = AacEncoder::new(
+            self.format.sample_rate.as_u32(),
+            u32::from(self.format.channels.channels()),
+            128_000,
+        )
+        .expect("Failed to initialize AAC encoder");
+
+        *self.encoder_aac.lock().await = Some(encoder);
+        *self.encoder.lock().await = None;
+        *self.codec_type.write().await = AudioCodec::Aac;
     }
 
     /// Set codec to PCM (default)
     pub async fn use_pcm(&self) {
         *self.encoder.lock().await = None;
+        *self.encoder_aac.lock().await = None;
         *self.codec_type.write().await = AudioCodec::Pcm;
     }
 }

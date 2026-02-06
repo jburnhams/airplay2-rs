@@ -17,6 +17,11 @@ pub struct PythonReceiver {
 impl PythonReceiver {
     /// Start the Python receiver
     pub async fn start() -> Result<Self, Box<dyn std::error::Error>> {
+        Self::start_with_args(&[]).await
+    }
+
+    /// Start the Python receiver with additional arguments
+    pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
         let output_dir = std::env::current_dir()?.join("airplay2-receiver");
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
@@ -46,10 +51,17 @@ impl PythonReceiver {
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut process = Command::new("python3")
+        let mut command = Command::new("python3");
+        command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface)
+            .arg(&interface);
+
+        for arg in args {
+            command.arg(arg);
+        }
+
+        let mut process = command
             .current_dir(&output_dir)
             .env("AIRPLAY_FILE_SINK", "1")
             .env("AIRPLAY_SAVE_RTP", "1")
