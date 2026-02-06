@@ -12,7 +12,6 @@ use airplay2::protocol::pairing::storage::FileStorage;
 use common::python_receiver::PythonReceiver;
 
 #[tokio::test]
-#[ignore]
 async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     common::init_logging();
     tracing::info!("Starting Persistent Pairing integration test");
