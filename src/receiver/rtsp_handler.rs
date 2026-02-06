@@ -40,10 +40,6 @@ pub struct AllocatedPorts {
     pub control_port: u16,
     /// UDP port for timing/sync
     pub timing_port: u16,
-    /// Client's control port
-    pub client_control_port: Option<u16>,
-    /// Client's timing port
-    pub client_timing_port: Option<u16>,
 }
 
 /// Handle an incoming RTSP request
@@ -151,8 +147,6 @@ fn handle_setup(request: &RtspRequest, cseq: u32, _session: &ReceiverSession) ->
         audio_port: 0, // Placeholder
         control_port: 0,
         timing_port: 0,
-        client_control_port: client_transport.control_port,
-        client_timing_port: client_transport.timing_port,
     };
 
     // Generate session ID
