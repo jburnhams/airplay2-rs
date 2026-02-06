@@ -7,10 +7,6 @@ mod source;
 mod url;
 
 #[cfg(test)]
-mod raop_streamer_tests;
-#[cfg(test)]
-mod resampler_tests;
-#[cfg(test)]
 mod tests;
 
 pub use pcm::{PcmStreamer, RtpSender, StreamerState};

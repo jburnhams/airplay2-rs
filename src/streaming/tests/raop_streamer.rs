@@ -1,5 +1,5 @@
-use super::{RaopStreamConfig, RaopStreamer};
 use crate::protocol::raop::RaopSessionKeys;
+use crate::streaming::{RaopStreamConfig, RaopStreamer};
 
 fn create_test_keys() -> RaopSessionKeys {
     RaopSessionKeys {

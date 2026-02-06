@@ -55,3 +55,61 @@ fn test_concurrent_producer_consumer() {
     producer.join().unwrap();
     consumer.join().unwrap();
 }
+
+#[test]
+fn test_spsc_stress() {
+    let capacity = 1024 * 16;
+    let buffer = Arc::new(AudioRingBuffer::new(capacity));
+    let buffer_reader = buffer.clone();
+
+    // 10 MB total
+    let total_bytes = 1024 * 1024 * 10;
+    // Use smaller chunk size to force more partial writes/reads
+    let chunk_size = 512;
+
+    let writer_handle = thread::spawn(move || {
+        let mut written_total = 0;
+        let mut val: u8 = 0;
+
+        while written_total < total_bytes {
+            // Prepare a chunk of data
+            let mut data = vec![0u8; chunk_size];
+            for b in &mut data {
+                *b = val;
+                val = val.wrapping_add(1);
+            }
+
+            let mut chunk_written = 0;
+            while chunk_written < chunk_size {
+                let n = buffer.write(&data[chunk_written..]);
+                chunk_written += n;
+                if n == 0 {
+                    thread::yield_now();
+                }
+            }
+            written_total += chunk_size;
+        }
+    });
+
+    let reader_handle = thread::spawn(move || {
+        let mut read_total = 0;
+        let mut temp_buf = vec![0u8; chunk_size];
+        let mut expected_val: u8 = 0;
+
+        while read_total < total_bytes {
+            let n = buffer_reader.read(&mut temp_buf);
+            if n > 0 {
+                for &b in &temp_buf[..n] {
+                    assert_eq!(b, expected_val, "Data corruption at index {read_total}");
+                    expected_val = expected_val.wrapping_add(1);
+                    read_total += 1;
+                }
+            } else {
+                thread::yield_now();
+            }
+        }
+    });
+
+    writer_handle.join().unwrap();
+    reader_handle.join().unwrap();
+}
