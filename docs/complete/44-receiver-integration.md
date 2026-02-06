@@ -35,7 +35,7 @@ The result is a simple, event-driven receiver that can be started with a few lin
 
 ### 44.1 Receiver Configuration
 
-- [ ] **44.1.1** Define comprehensive configuration
+- [x] **44.1.1** Define comprehensive configuration
 
 **File:** `src/receiver/config.rs`
 
@@ -129,7 +129,7 @@ impl ReceiverConfig {
 
 ### 44.2 Receiver Events
 
-- [ ] **44.2.1** Define event types for callbacks
+- [x] **44.2.1** Define event types for callbacks
 
 **File:** `src/receiver/events.rs`
 
@@ -217,7 +217,7 @@ pub type EventCallback = Box<dyn Fn(ReceiverEvent) + Send + Sync + 'static>;
 
 ### 44.3 Main Receiver Struct
 
-- [ ] **44.3.1** Implement AirPlayReceiver
+- [x] **44.3.1** Implement AirPlayReceiver
 
 **File:** `src/receiver/server.rs`
 
@@ -500,7 +500,7 @@ pub enum ReceiverError {
 
 ### 44.4 Public API
 
-- [ ] **44.4.1** Export receiver in library
+- [x] **44.4.1** Export receiver in library
 
 **File:** `src/receiver/mod.rs`
 
@@ -726,16 +726,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Acceptance Criteria
 
-- [ ] AirPlayReceiver starts and advertises on network
-- [ ] Clients can discover receiver via mDNS
-- [ ] RTSP connections accepted and handled
-- [ ] Audio streams played through output device
-- [ ] Events emitted for all state changes
-- [ ] Clean shutdown with resource cleanup
-- [ ] Configuration options work correctly
-- [ ] Example application runs successfully
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] AirPlayReceiver starts and advertises on network
+- [x] Clients can discover receiver via mDNS
+- [x] RTSP connections accepted and handled
+- [x] Audio streams played through output device
+- [x] Events emitted for all state changes
+- [x] Clean shutdown with resource cleanup
+- [x] Configuration options work correctly
+- [x] Example application runs successfully
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 
