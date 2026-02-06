@@ -18,7 +18,7 @@ pub use codec::{RtspCodec, RtspCodecError};
 pub use headers::Headers;
 pub use request::{RtspRequest, RtspRequestBuilder};
 pub use response::{RtspResponse, StatusCode};
-pub use server_codec::RtspServerCodec;
+pub use server_codec::{encode_response, RtspServerCodec};
 pub use session::{RtspSession, SessionState};
 
 /// RTSP methods used in `AirPlay`

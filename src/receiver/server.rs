@@ -1,17 +1,18 @@
 //! Main `AirPlay` receiver implementation
 
 use super::config::ReceiverConfig;
-use super::events::ReceiverEvent;
+use super::events::{ReceiverEvent};
 use super::session_manager::{SessionManager, SessionManagerConfig};
-use crate::discovery::advertiser::{AdvertiserConfig, AsyncRaopAdvertiser};
-use crate::net::{AsyncReadExt, AsyncWriteExt};
-use crate::protocol::rtsp::RtspServerCodec;
+use crate::discovery::advertiser::{AsyncRaopAdvertiser, AdvertiserConfig};
+use crate::protocol::rtsp::{RtspServerCodec, encode_response, RtspRequest};
 use crate::protocol::rtsp::transport::TransportHeader;
+use crate::net::{AsyncReadExt, AsyncWriteExt};
+use super::set_parameter_handler::ParameterUpdate;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{RwLock, broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 /// `AirPlay` 1 receiver
 pub struct AirPlayReceiver {
@@ -90,13 +91,11 @@ impl AirPlayReceiver {
             ..Default::default()
         };
 
-        let advertiser = AsyncRaopAdvertiser::start(advertiser_config)
-            .await
+        let advertiser = AsyncRaopAdvertiser::start(advertiser_config).await
             .map_err(|e| ReceiverError::Advertisement(e.to_string()))?;
 
         // Start TCP listener
-        let listener = TcpListener::bind(format!("0.0.0.0:{}", self.config.port))
-            .await
+        let listener = TcpListener::bind(format!("0.0.0.0:{}", self.config.port)).await
             .map_err(|e| ReceiverError::Network(e.to_string()))?;
 
         let actual_port = listener.local_addr()?.port();
@@ -188,7 +187,7 @@ async fn handle_connection(
     addr: SocketAddr,
     session_manager: Arc<SessionManager>,
     event_tx: broadcast::Sender<ReceiverEvent>,
-    _config: ReceiverConfig,
+    config: ReceiverConfig,
 ) -> Result<(), ReceiverError> {
     let _ = event_tx.send(ReceiverEvent::ClientConnected {
         address: addr,
@@ -196,17 +195,18 @@ async fn handle_connection(
     });
 
     // Start session
-    let _session_id = session_manager
-        .start_session(addr)
-        .await
+    let _session_id = session_manager.start_session(addr).await
         .map_err(|e| ReceiverError::Session(e.to_string()))?;
+
+    // Use config to setup pipeline later (placeholder to avoid unused warning)
+    tracing::debug!("Session started with config: {:?}", config.name);
 
     let mut codec = RtspServerCodec::new();
     let mut buf = vec![0u8; 4096];
 
     loop {
         let n = match stream.read(&mut buf).await {
-            Ok(0) => break, // Connection closed
+            Ok(0) => break,  // Connection closed
             Ok(n) => n,
             Err(e) => {
                 tracing::error!("Read error: {}", e);
@@ -218,52 +218,30 @@ async fn handle_connection(
 
         while let Ok(Some(request)) = codec.decode() {
             // Process request
-            let mut result = session_manager
-                .with_session(|session| {
-                    crate::receiver::rtsp_handler::handle_request(
-                        &request, session, None, // rsa_private_key, pass if needed (TODO)
-                    )
-                })
-                .await
-                .map_err(|e| ReceiverError::Session(e.to_string()))?;
+            let mut result = session_manager.with_session(|session| {
+                crate::receiver::rtsp_handler::handle_request(
+                    &request,
+                    session,
+                    None, // rsa_private_key, pass if needed (TODO)
+                )
+            }).await.map_err(|e| ReceiverError::Session(e.to_string()))?;
+
+            // Handle parameter updates
+            process_parameter_updates(&result.parameter_updates, &session_manager, &event_tx).await;
 
             // Handle port allocation for SETUP
             if let Some(ref ports_req) = result.allocated_ports {
-                let (audio_port, control_port, timing_port) = session_manager
-                    .allocate_sockets()
-                    .await
-                    .map_err(|e| ReceiverError::Network(e.to_string()))?;
-
-                // Store sockets and client info in session
-                let _ = session_manager
-                    .with_session(|session| {
-                        session.set_sockets(crate::receiver::session::SessionSockets {
-                            audio_port,
-                            control_port,
-                            timing_port,
-                            client_control_port: ports_req.client_control_port,
-                            client_timing_port: ports_req.client_timing_port,
-                            client_addr: Some(addr),
-                        });
-                    })
-                    .await;
-
-                // Update Transport header in response
-                if let Some(transport_str) = request.headers.get("Transport") {
-                    if let Ok(transport) = TransportHeader::parse(transport_str) {
-                        let new_header =
-                            transport.to_response_header(audio_port, control_port, timing_port);
-                        result
-                            .response
-                            .headers
-                            .insert("Transport".to_string(), new_header);
-                    }
-                }
+                handle_setup_ports(
+                    ports_req,
+                    &request,
+                    &mut result.response,
+                    &session_manager,
+                    addr
+                ).await?;
             }
 
             // Send response
-            let response_bytes =
-                crate::protocol::rtsp::server_codec::encode_response(&result.response);
+            let response_bytes = encode_response(&result.response);
             if stream.write_all(&response_bytes).await.is_err() {
                 break;
             }
@@ -299,6 +277,70 @@ async fn handle_connection(
         reason: "Connection closed".to_string(),
     });
 
+    Ok(())
+}
+
+async fn process_parameter_updates(
+    updates: &[ParameterUpdate],
+    session_manager: &SessionManager,
+    event_tx: &broadcast::Sender<ReceiverEvent>
+) {
+    for update in updates {
+        match update {
+            ParameterUpdate::Volume(vol_update) => {
+                // Update session volume
+                let vol_db = vol_update.db;
+                session_manager.set_volume(vol_db).await;
+
+                let _ = event_tx.send(ReceiverEvent::VolumeChanged {
+                    db: vol_db,
+                    linear: vol_update.linear,
+                    muted: vol_update.muted,
+                });
+            }
+            ParameterUpdate::Metadata(metadata) => {
+                let _ = event_tx.send(ReceiverEvent::MetadataUpdated(metadata.clone()));
+            }
+            ParameterUpdate::Progress(progress) => {
+                let _ = event_tx.send(ReceiverEvent::ProgressUpdated(*progress));
+            }
+            ParameterUpdate::Artwork(artwork) => {
+                let _ = event_tx.send(ReceiverEvent::ArtworkUpdated(artwork.clone()));
+            }
+            ParameterUpdate::Unknown(_) => {}
+        }
+    }
+}
+
+async fn handle_setup_ports(
+    ports_req: &crate::receiver::rtsp_handler::AllocatedPorts,
+    request: &RtspRequest,
+    response: &mut crate::protocol::rtsp::RtspResponse,
+    session_manager: &SessionManager,
+    addr: SocketAddr,
+) -> Result<(), ReceiverError> {
+    let (audio_port, control_port, timing_port) = session_manager.allocate_sockets().await
+            .map_err(|e| ReceiverError::Network(e.to_string()))?;
+
+    // Store sockets and client info in session
+    let _ = session_manager.with_session(|session| {
+            session.set_sockets(crate::receiver::session::SessionSockets {
+                audio_port,
+                control_port,
+                timing_port,
+                client_control_port: ports_req.client_control_port,
+                client_timing_port: ports_req.client_timing_port,
+                client_addr: Some(addr),
+            });
+        }).await;
+
+        // Update Transport header in response
+        if let Some(transport_str) = request.headers.get("Transport") {
+            if let Ok(transport) = TransportHeader::parse(transport_str) {
+                let new_header = transport.to_response_header(audio_port, control_port, timing_port);
+                response.headers.insert("Transport".to_string(), new_header);
+            }
+        }
     Ok(())
 }
 
