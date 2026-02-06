@@ -204,3 +204,51 @@ fn test_can_send_comprehensive() {
     assert!(session.can_send(Method::Teardown));
     assert!(session.can_send(Method::SetParameter));
 }
+
+#[test]
+fn test_announce_request_body() {
+    let mut session = RtspSession::new("192.168.1.10", 7000);
+    let sdp = "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\n";
+    let request = session.announce_request(sdp);
+
+    assert_eq!(request.method, Method::Announce);
+    assert_eq!(
+        request.headers.get("Content-Type").unwrap(),
+        "application/sdp"
+    );
+    assert_eq!(request.body, sdp.as_bytes());
+}
+
+#[test]
+fn test_setup_stream_request_header() {
+    let mut session = RtspSession::new("192.168.1.10", 7000);
+    let transport = "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record";
+    let request = session.setup_stream_request(transport);
+
+    assert_eq!(request.method, Method::Setup);
+    assert_eq!(request.uri, "/rtp/audio");
+    assert_eq!(request.headers.get("Transport").unwrap(), transport);
+}
+
+#[test]
+fn test_record_request_headers() {
+    let mut session = RtspSession::new("192.168.1.10", 7000);
+    // Move to Setup state first
+    let response = RtspResponse {
+        version: "RTSP/1.0".to_string(),
+        status: StatusCode::OK,
+        reason: "OK".to_string(),
+        headers: Headers::new(),
+        body: Vec::new(),
+    };
+    session
+        .process_response(Method::Options, &response)
+        .unwrap();
+    session.process_response(Method::Setup, &response).unwrap();
+
+    let request = session.record_request();
+
+    assert_eq!(request.method, Method::Record);
+    assert_eq!(request.headers.get("Range").unwrap(), "npt=0-");
+    assert_eq!(request.headers.get("RTP-Info").unwrap(), "seq=0;rtptime=0");
+}

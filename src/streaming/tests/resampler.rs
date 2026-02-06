@@ -1,6 +1,6 @@
-use super::resampler::ResamplingSource;
-use super::source::AudioSource;
 use crate::audio::{AudioFormat, ChannelConfig, SampleFormat, SampleRate};
+use crate::streaming::AudioSource;
+use crate::streaming::ResamplingSource;
 use std::io;
 
 struct SineSource48k {
