@@ -100,7 +100,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          cargo test --release -- --test-threads=1 --nocapture
+          cargo test --release -- --test-threads=1 --nocapture --ignored
         env:
           RUST_LOG: info
           # Loopback interface (lo0 for macOS, lo for Linux)
