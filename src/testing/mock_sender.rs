@@ -224,9 +224,7 @@ impl MockSender {
         socket.send(&packet).await?;
 
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self
-            .timestamp
-            .wrapping_add(self.config.frames_per_packet);
+        self.timestamp = self.timestamp.wrapping_add(self.config.frames_per_packet);
 
         Ok(())
     }
