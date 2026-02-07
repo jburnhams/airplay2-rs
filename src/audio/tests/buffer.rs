@@ -49,3 +49,48 @@ fn test_peek() {
     // Data should still be there
     assert_eq!(buffer.available(), 5);
 }
+
+#[test]
+fn test_buffer_wrapping_randomized() {
+    use rand::Rng;
+
+    let buffer = AudioRingBuffer::new(100);
+    let mut rng = rand::thread_rng();
+
+    let mut current_val: u8 = 0;
+    let mut expected_val: u8 = 0;
+
+    for _ in 0..1000 {
+        // Randomly choose write or read action
+        // Bias towards writing if empty, reading if full
+        let available = buffer.available();
+        let should_write = if available == 0 {
+            true
+        } else if buffer.free() == 0 {
+            false
+        } else {
+            rng.gen_bool(0.5)
+        };
+
+        if should_write {
+            let space = buffer.free();
+            let write_size = rng.gen_range(1..=space.max(1));
+            let mut data = Vec::with_capacity(write_size);
+            for _ in 0..write_size {
+                data.push(current_val);
+                current_val = current_val.wrapping_add(1);
+            }
+            buffer.write(&data);
+        } else {
+            let available = buffer.available();
+            let read_size = rng.gen_range(1..=available.max(1));
+            let mut out = vec![0u8; read_size];
+            let n = buffer.read(&mut out);
+
+            for &b in &out[..n] {
+                assert_eq!(b, expected_val);
+                expected_val = expected_val.wrapping_add(1);
+            }
+        }
+    }
+}

@@ -113,3 +113,75 @@ fn test_spsc_stress() {
     writer_handle.join().unwrap();
     reader_handle.join().unwrap();
 }
+
+#[test]
+fn test_spsc_randomized_stress() {
+    use rand::Rng;
+
+    let capacity = 1024 * 64; // 64KB
+    let buffer = Arc::new(AudioRingBuffer::new(capacity));
+    let buffer_reader = buffer.clone();
+
+    // 50 MB total to really stress it
+    let total_bytes = 1024 * 1024 * 50;
+
+    let writer_handle = thread::spawn(move || {
+        let mut rng = rand::thread_rng();
+        let mut written_total = 0;
+        let mut val: u8 = 0;
+
+        while written_total < total_bytes {
+            // Randomize write size between 1 and 4096
+            let write_size = rng.gen_range(1..=4096);
+            let size = write_size.min(total_bytes - written_total);
+
+            // Generate data
+            let mut data = Vec::with_capacity(size);
+            for _ in 0..size {
+                data.push(val);
+                val = val.wrapping_add(1);
+            }
+
+            let mut chunk_written = 0;
+            while chunk_written < size {
+                let n = buffer.write(&data[chunk_written..]);
+                chunk_written += n;
+                if n == 0 {
+                    // Backoff slightly to let reader catch up
+                    thread::yield_now();
+                }
+            }
+            written_total += size;
+        }
+    });
+
+    let reader_handle = thread::spawn(move || {
+        let mut rng = rand::thread_rng();
+        let mut read_total = 0;
+        let mut temp_buf = vec![0u8; 8192];
+        let mut expected_val: u8 = 0;
+
+        while read_total < total_bytes {
+            // Randomize read size
+            let read_size = rng.gen_range(1..=temp_buf.len());
+
+            let n = buffer_reader.read(&mut temp_buf[..read_size]);
+            if n > 0 {
+                for &b in &temp_buf[..n] {
+                    if b != expected_val {
+                        panic!(
+                            "Data corruption at index {read_total}: expected {expected_val}, got {b}"
+                        );
+                    }
+                    expected_val = expected_val.wrapping_add(1);
+                    read_total += 1;
+                }
+            } else {
+                thread::yield_now();
+            }
+        }
+    });
+
+    writer_handle.join().unwrap();
+    reader_handle.join().unwrap();
+}

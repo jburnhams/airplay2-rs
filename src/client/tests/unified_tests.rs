@@ -89,3 +89,51 @@ async fn test_unified_client_force_protocol() {
     client.connect(device).await.unwrap();
     assert_eq!(client.protocol(), Some(SelectedProtocol::Raop));
 }
+
+#[tokio::test]
+async fn test_connection_failure_handling() {
+    let device = AirPlayDevice {
+        id: "test".to_string(),
+        name: "Test Device".to_string(),
+        model: None,
+        addresses: vec![IpAddr::V4(Ipv4Addr::LOCALHOST)],
+        port: 7000,
+        capabilities: DeviceCapabilities::default(),
+        raop_port: Some(12345), // Random port likely closed
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+    };
+
+    // Configure to force RAOP to use that port
+    let config = ClientConfig {
+        preferred_protocol: PreferredProtocol::ForceRaop,
+        ..Default::default()
+    };
+
+    let mut client = UnifiedAirPlayClient::with_config(config);
+    let result = client.connect(device).await;
+
+    assert!(result.is_err());
+    assert!(!client.is_connected());
+    assert!(client.protocol().is_none());
+}
+
+#[tokio::test]
+async fn test_protocol_preference_e2e() {
+    // Device with both, but only RAOP server running
+    let (device, _server) = create_device_with_server(true, true).await;
+
+    // 1. Prefer AirPlay 2 (default) -> Should try AP2 and fail
+    let mut client = UnifiedAirPlayClient::new();
+    let result = client.connect(device.clone()).await;
+    assert!(result.is_err()); // Failed to connect to AP2
+
+    // 2. Prefer RAOP -> Should connect to RAOP
+    let config = ClientConfig {
+        preferred_protocol: PreferredProtocol::PreferRaop,
+        ..Default::default()
+    };
+    let mut client = UnifiedAirPlayClient::with_config(config);
+    client.connect(device).await.unwrap();
+    assert_eq!(client.protocol(), Some(SelectedProtocol::Raop));
+}
