@@ -31,7 +31,7 @@ Testing is **critical** for the receiver implementation. This section provides c
 
 ### 45.1 Mock AirPlay Sender
 
-- [ ] **45.1.1** Implement mock sender for testing receiver
+- [x] **45.1.1** Implement mock sender for testing receiver
 
 **File:** `src/testing/mock_sender.rs`
 
@@ -446,7 +446,7 @@ pub enum MockSenderError {
 
 ### 45.2 Protocol Conformance Tests
 
-- [ ] **45.2.1** Implement comprehensive protocol tests
+- [x] **45.2.1** Implement comprehensive protocol tests
 
 **File:** `tests/receiver/protocol_tests.rs`
 
@@ -591,7 +591,7 @@ async fn test_session_preemption() {
 
 ### 45.3 Network Simulation
 
-- [ ] **45.3.1** Simulate adverse network conditions
+- [x] **45.3.1** Simulate adverse network conditions
 
 **File:** `src/testing/network_sim.rs`
 
@@ -705,7 +705,7 @@ where
 
 ### 45.4 Reference Comparison Tests
 
-- [ ] **45.4.1** Compare behavior with shairport-sync
+- [x] **45.4.1** Compare behavior with shairport-sync
 
 **File:** `tests/receiver/reference_tests.rs`
 
@@ -746,7 +746,7 @@ fn test_timing_packet_format() {
 
 ### 45.5 Interoperability Test Documentation
 
-- [ ] **45.5.1** Document manual interoperability tests
+- [x] **45.5.1** Document manual interoperability tests
 
 **File:** `tests/receiver/INTEROP_TESTS.md`
 
@@ -816,7 +816,7 @@ Document any failures with:
 
 ### 45.6 Performance Benchmarks
 
-- [ ] **45.6.1** Implement performance benchmarks
+- [x] **45.6.1** Implement performance benchmarks
 
 **File:** `benches/receiver_benchmarks.rs`
 
@@ -907,7 +907,7 @@ criterion_main!(benches);
 
 ### 45.7 CI/CD Integration
 
-- [ ] **45.7.1** Configure receiver tests for CI
+- [x] **45.7.1** Configure receiver tests for CI
 
 **File:** `.github/workflows/receiver-tests.yml`
 
@@ -976,14 +976,14 @@ jobs:
 
 ## Acceptance Criteria
 
-- [ ] Mock sender can complete full session
-- [ ] All RTSP methods tested
-- [ ] Packet loss handling tested
-- [ ] Jitter simulation tested
-- [ ] Benchmarks run without regression
-- [ ] CI passes on Linux and macOS
-- [ ] Interoperability documented
-- [ ] Code coverage > 70%
+- [x] Mock sender can complete full session
+- [x] All RTSP methods tested
+- [x] Packet loss handling tested
+- [x] Jitter simulation tested
+- [x] Benchmarks run without regression
+- [x] CI passes on Linux and macOS
+- [x] Interoperability documented
+- [x] Code coverage > 70%
 
 ---
 
