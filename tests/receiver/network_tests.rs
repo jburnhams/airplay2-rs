@@ -1,17 +1,15 @@
 //! Network simulation tests for AirPlay receiver
 
+use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
 use airplay2::testing::network_sim::NetworkSimulator;
-use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use std::time::Duration;
 
 /// Test streaming with packet loss and jitter
 #[tokio::test]
 async fn test_streaming_with_network_issues() {
     // Start receiver
-    let mut receiver = AirPlayReceiver::new(
-        ReceiverConfig::with_name("NetworkTest").port(0)
-    );
+    let mut receiver = AirPlayReceiver::new(ReceiverConfig::with_name("NetworkTest").port(0));
     let mut events = receiver.subscribe();
     receiver.start().await.unwrap();
 
@@ -31,7 +29,7 @@ async fn test_streaming_with_network_issues() {
     // Configure poor wifi conditions (loss + jitter)
     let mut sim = NetworkSimulator::good_wifi();
     sim.loss_rate = 0.05; // 5% loss
-    sim.jitter_ms = 20;   // 20ms jitter
+    sim.jitter_ms = 20; // 20ms jitter
     sender.set_network_conditions(sim);
 
     // Connect and negotiate
@@ -58,7 +56,10 @@ async fn test_streaming_with_network_issues() {
 
     // Check if we can still communicate
     let response = sender.set_volume(-20.0).await;
-    assert!(response.is_ok(), "Session should remain active despite packet loss");
+    assert!(
+        response.is_ok(),
+        "Session should remain active despite packet loss"
+    );
 
     sender.teardown().await.unwrap();
     receiver.stop().await.unwrap();

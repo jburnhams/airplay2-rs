@@ -233,9 +233,7 @@ impl MockSender {
 
         // Advance state immediately (sender logic)
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self
-            .timestamp
-            .wrapping_add(self.config.frames_per_packet);
+        self.timestamp = self.timestamp.wrapping_add(self.config.frames_per_packet);
 
         // Apply network simulation
         if let Some(sim) = &self.network_sim {
