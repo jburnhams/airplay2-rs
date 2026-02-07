@@ -100,5 +100,9 @@ harness = false
 name = "raop_benchmarks"
 harness = false
 
+[[bench]]
+name = "receiver_benchmarks"
+harness = false
+
 [target.'cfg(target_os = "macos")'.dependencies]
 coreaudio-rs = { version = "0.14", optional = true }
