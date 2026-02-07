@@ -3,8 +3,8 @@
 //! These tests compare our receiver behavior against shairport-sync
 //! to ensure compatibility.
 
-use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
 use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
+use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
 
 /// Compare RTSP response formats
 #[tokio::test]
@@ -26,10 +26,20 @@ async fn test_options_response_format() {
     let response = sender.options().await.unwrap();
     assert_eq!(response.status.0, 200);
 
-    let public = response.headers.get("Public").expect("Missing Public header");
+    let public = response
+        .headers
+        .get("Public")
+        .expect("Missing Public header");
     let expected_methods = [
-        "ANNOUNCE", "SETUP", "RECORD", "PAUSE", "FLUSH",
-        "TEARDOWN", "OPTIONS", "GET_PARAMETER", "SET_PARAMETER"
+        "ANNOUNCE",
+        "SETUP",
+        "RECORD",
+        "PAUSE",
+        "FLUSH",
+        "TEARDOWN",
+        "OPTIONS",
+        "GET_PARAMETER",
+        "SET_PARAMETER",
     ];
 
     for method in expected_methods {

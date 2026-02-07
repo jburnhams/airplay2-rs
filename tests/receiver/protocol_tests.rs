@@ -1,16 +1,14 @@
 //! Protocol conformance tests for AirPlay receiver
 
-use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
 use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
+use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
 use std::time::Duration;
 
 /// Test complete session negotiation
 #[tokio::test]
 async fn test_complete_session() {
     // Start receiver
-    let mut receiver = AirPlayReceiver::new(
-        ReceiverConfig::with_name("Test").port(0)
-    );
+    let mut receiver = AirPlayReceiver::new(ReceiverConfig::with_name("Test").port(0));
     let mut events = receiver.subscribe();
     receiver.start().await.unwrap();
 
@@ -59,9 +57,7 @@ async fn test_complete_session() {
 /// Test volume control
 #[tokio::test]
 async fn test_volume_control() {
-    let mut receiver = AirPlayReceiver::new(
-        ReceiverConfig::with_name("Test").port(0)
-    );
+    let mut receiver = AirPlayReceiver::new(ReceiverConfig::with_name("Test").port(0));
     let mut events = receiver.subscribe();
     receiver.start().await.unwrap();
 
@@ -98,7 +94,8 @@ async fn test_volume_control() {
                 Err(_) => return false,
             }
         }
-    }).await;
+    })
+    .await;
 
     assert!(result.unwrap_or(false), "VolumeChanged event not received");
 
@@ -109,10 +106,7 @@ async fn test_volume_control() {
 /// Test session preemption
 #[tokio::test]
 async fn test_session_preemption() {
-    let mut receiver = AirPlayReceiver::new(
-        ReceiverConfig::with_name("Test")
-            .port(0)
-    );
+    let mut receiver = AirPlayReceiver::new(ReceiverConfig::with_name("Test").port(0));
     let mut events = receiver.subscribe();
     receiver.start().await.unwrap();
 
@@ -142,7 +136,7 @@ async fn test_session_preemption() {
 
     sender2.connect().await.unwrap();
     let response = sender2.options().await.unwrap();
-    assert_eq!(response.status.0, 200);  // Should succeed with preemption
+    assert_eq!(response.status.0, 200); // Should succeed with preemption
 
     receiver.stop().await.unwrap();
 }

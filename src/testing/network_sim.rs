@@ -17,6 +17,7 @@ pub struct NetworkSimulator {
 
 impl NetworkSimulator {
     /// Perfect network (no issues)
+    #[must_use]
     pub fn perfect() -> Self {
         Self {
             loss_rate: 0.0,
@@ -26,7 +27,8 @@ impl NetworkSimulator {
         }
     }
 
-    /// Good WiFi conditions
+    /// Good `WiFi` conditions
+    #[must_use]
     pub fn good_wifi() -> Self {
         Self {
             loss_rate: 0.001,
@@ -36,7 +38,8 @@ impl NetworkSimulator {
         }
     }
 
-    /// Moderate WiFi conditions
+    /// Moderate `WiFi` conditions
+    #[must_use]
     pub fn moderate_wifi() -> Self {
         Self {
             loss_rate: 0.01,
@@ -46,7 +49,8 @@ impl NetworkSimulator {
         }
     }
 
-    /// Poor WiFi conditions
+    /// Poor `WiFi` conditions
+    #[must_use]
     pub fn poor_wifi() -> Self {
         Self {
             loss_rate: 0.05,
@@ -57,6 +61,7 @@ impl NetworkSimulator {
     }
 
     /// Very poor conditions (stress test)
+    #[must_use]
     pub fn stress_test() -> Self {
         Self {
             loss_rate: 0.10,
@@ -67,11 +72,13 @@ impl NetworkSimulator {
     }
 
     /// Should this packet be dropped?
+    #[must_use]
     pub fn should_drop(&self) -> bool {
         rand::thread_rng().gen_bool(self.loss_rate)
     }
 
     /// Get delay for this packet
+    #[must_use]
     pub fn get_delay(&self) -> Duration {
         let jitter: u32 = if self.jitter_ms > 0 {
             rand::thread_rng().gen_range(0..self.jitter_ms)
@@ -79,16 +86,20 @@ impl NetworkSimulator {
             0
         };
 
-        Duration::from_millis((self.delay_ms + jitter) as u64)
+        Duration::from_millis(u64::from(self.delay_ms + jitter))
     }
 
     /// Should this packet be reordered?
+    #[must_use]
     pub fn should_reorder(&self) -> bool {
         rand::thread_rng().gen_bool(self.reorder_rate)
     }
 }
 
 /// Run test with network conditions
+///
+/// # Errors
+/// Returns error if the test function returns an error.
 pub async fn with_network_conditions<F, Fut>(
     _conditions: NetworkSimulator,
     test: F,

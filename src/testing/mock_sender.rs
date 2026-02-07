@@ -1,11 +1,12 @@
-//! Mock AirPlay sender for testing the receiver
+//! Mock `AirPlay` sender for testing the receiver
 //!
-//! Simulates an AirPlay sender (like iTunes) to test receiver functionality
+//! Simulates an `AirPlay` sender (like iTunes) to test receiver functionality
 //! without requiring real hardware or software.
 
 use crate::net::{AsyncReadExt, AsyncWriteExt};
-use crate::protocol::rtsp::{RtspResponse, Method, Headers};
+use crate::protocol::rtsp::{Headers, Method, RtspResponse};
 use crate::receiver::timing::NtpTimestamp;
+use std::fmt::Write;
 use std::net::SocketAddr;
 use tokio::net::{TcpStream, UdpSocket};
 
@@ -47,7 +48,7 @@ impl Default for MockSenderConfig {
     }
 }
 
-/// Mock AirPlay sender
+/// Mock `AirPlay` sender
 pub struct MockSender {
     config: MockSenderConfig,
     rtsp_stream: Option<TcpStream>,
@@ -71,6 +72,7 @@ struct ServerPorts {
 
 impl MockSender {
     /// Create a new mock sender
+    #[must_use]
     pub fn new(config: MockSenderConfig) -> Self {
         Self {
             config,
@@ -87,6 +89,9 @@ impl MockSender {
     }
 
     /// Connect to receiver
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if connection fails.
     pub async fn connect(&mut self) -> Result<(), MockSenderError> {
         let stream = TcpStream::connect(self.config.receiver_addr).await?;
         self.rtsp_stream = Some(stream);
@@ -94,11 +99,17 @@ impl MockSender {
     }
 
     /// Perform OPTIONS request
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if request fails.
     pub async fn options(&mut self) -> Result<RtspResponse, MockSenderError> {
         self.send_rtsp_request(Method::Options, "*", None).await
     }
 
     /// Perform ANNOUNCE with SDP
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if request fails.
     pub async fn announce(&mut self) -> Result<RtspResponse, MockSenderError> {
         let sdp = self.build_sdp();
         let uri = format!("rtsp://{}/1234", self.config.receiver_addr);
@@ -107,10 +118,14 @@ impl MockSender {
             Method::Announce,
             &uri,
             Some(("application/sdp", sdp.as_bytes())),
-        ).await
+        )
+        .await
     }
 
     /// Perform SETUP
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if request fails.
     pub async fn setup(&mut self) -> Result<RtspResponse, MockSenderError> {
         // Bind local UDP sockets
         let audio_socket = UdpSocket::bind("0.0.0.0:0").await?;
@@ -121,23 +136,24 @@ impl MockSender {
         let timing_port = timing_socket.local_addr()?.port();
 
         let transport = format!(
-            "RTP/AVP/UDP;unicast;mode=record;control_port={};timing_port={}",
-            control_port, timing_port
+            "RTP/AVP/UDP;unicast;mode=record;control_port={control_port};timing_port={timing_port}",
         );
 
         let uri = format!("rtsp://{}/1234", self.config.receiver_addr);
 
-        let response = self.send_rtsp_request_with_headers(
-            Method::Setup,
-            &uri,
-            vec![("Transport", &transport)],
-            None,
-        ).await?;
+        let response = self
+            .send_rtsp_request_with_headers(
+                Method::Setup,
+                &uri,
+                vec![("Transport", &transport)],
+                None,
+            )
+            .await?;
 
         // Parse response for server ports and session
         if response.status.0 == 200 {
             self.session_id = response.headers.get("Session").map(ToString::to_string);
-            self.server_ports = self.parse_transport(&response);
+            self.server_ports = Self::parse_transport(&response);
 
             self.audio_socket = Some(audio_socket);
             self.control_socket = Some(control_socket);
@@ -145,12 +161,9 @@ impl MockSender {
 
             // Connect audio socket to server
             if let Some(ref ports) = self.server_ports {
-                let server_audio = SocketAddr::new(
-                    self.config.receiver_addr.ip(),
-                    ports.audio,
-                );
+                let server_audio = SocketAddr::new(self.config.receiver_addr.ip(), ports.audio);
                 if let Some(ref socket) = self.audio_socket {
-                     socket.connect(server_audio).await?;
+                    socket.connect(server_audio).await?;
                 }
             }
         }
@@ -159,6 +172,9 @@ impl MockSender {
     }
 
     /// Perform RECORD
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if request fails.
     pub async fn record(&mut self) -> Result<RtspResponse, MockSenderError> {
         let uri = format!("rtsp://{}/1234", self.config.receiver_addr);
 
@@ -167,53 +183,76 @@ impl MockSender {
             &uri,
             vec![
                 ("Range", "npt=0-"),
-                ("RTP-Info", &format!("seq={};rtptime={}", self.sequence, self.timestamp)),
+                (
+                    "RTP-Info",
+                    &format!("seq={};rtptime={}", self.sequence, self.timestamp),
+                ),
             ],
             None,
-        ).await
+        )
+        .await
     }
 
     /// Send an audio packet
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if send fails.
+    #[allow(clippy::cast_possible_truncation)]
     pub async fn send_audio(&mut self, audio_data: &[u8]) -> Result<(), MockSenderError> {
-        let socket = self.audio_socket.as_ref()
+        let socket = self
+            .audio_socket
+            .as_ref()
             .ok_or(MockSenderError::NotSetup)?;
 
         // Build RTP packet
         let mut packet = vec![
-            0x80, 0x60,  // V=2, PT=96
-            (self.sequence >> 8) as u8, self.sequence as u8,
-            (self.timestamp >> 24) as u8, (self.timestamp >> 16) as u8,
-            (self.timestamp >> 8) as u8, self.timestamp as u8,
-            0x12, 0x34, 0x56, 0x78,  // SSRC
+            0x80,
+            0x60, // V=2, PT=96
+            (self.sequence >> 8) as u8,
+            self.sequence as u8,
+            (self.timestamp >> 24) as u8,
+            (self.timestamp >> 16) as u8,
+            (self.timestamp >> 8) as u8,
+            self.timestamp as u8,
+            0x12,
+            0x34,
+            0x56,
+            0x78, // SSRC
         ];
         packet.extend_from_slice(audio_data);
 
         socket.send(&packet).await?;
 
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self.timestamp.wrapping_add(self.config.frames_per_packet);
+        self.timestamp = self
+            .timestamp
+            .wrapping_add(self.config.frames_per_packet);
 
         Ok(())
     }
 
     /// Send a sync packet
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if send fails.
     pub async fn send_sync(&mut self) -> Result<(), MockSenderError> {
-        let socket = self.control_socket.as_ref()
+        let socket = self
+            .control_socket
+            .as_ref()
             .ok_or(MockSenderError::NotSetup)?;
 
-        let ports = self.server_ports.as_ref()
+        let ports = self
+            .server_ports
+            .as_ref()
             .ok_or(MockSenderError::NotSetup)?;
 
-        let server_control = SocketAddr::new(
-            self.config.receiver_addr.ip(),
-            ports.control,
-        );
+        let server_control = SocketAddr::new(self.config.receiver_addr.ip(), ports.control);
 
         // Build sync packet
         let now_ntp = NtpTimestamp::now();
         let mut packet = vec![
-            0x90, 0xD4,  // Sync packet type
-            0x00, 0x00,  // Sequence (unused)
+            0x90, 0xD4, // Sync packet type
+            0x00, 0x00, // Sequence (unused)
         ];
 
         // RTP timestamp
@@ -231,22 +270,29 @@ impl MockSender {
     }
 
     /// Perform TEARDOWN
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if request fails.
     pub async fn teardown(&mut self) -> Result<RtspResponse, MockSenderError> {
         let uri = format!("rtsp://{}/1234", self.config.receiver_addr);
         self.send_rtsp_request(Method::Teardown, &uri, None).await
     }
 
     /// Set volume
+    ///
+    /// # Errors
+    /// Returns `MockSenderError` if request fails.
     pub async fn set_volume(&mut self, db: f32) -> Result<RtspResponse, MockSenderError> {
         let uri = format!("rtsp://{}/1234", self.config.receiver_addr);
-        let body = format!("volume: {:.6}\r\n", db);
+        let body = format!("volume: {db:.6}\r\n");
 
         self.send_rtsp_request_with_headers(
             Method::SetParameter,
             &uri,
             vec![("Content-Type", "text/parameters")],
             Some(("text/parameters", body.as_bytes())),
-        ).await
+        )
+        .await
     }
 
     // Helper methods
@@ -281,7 +327,8 @@ impl MockSender {
         uri: &str,
         body: Option<(&str, &[u8])>,
     ) -> Result<RtspResponse, MockSenderError> {
-        self.send_rtsp_request_with_headers(method, uri, vec![], body).await
+        self.send_rtsp_request_with_headers(method, uri, vec![], body)
+            .await
     }
 
     async fn send_rtsp_request_with_headers(
@@ -291,26 +338,29 @@ impl MockSender {
         headers: Vec<(&str, &str)>,
         body: Option<(&str, &[u8])>,
     ) -> Result<RtspResponse, MockSenderError> {
-        let stream = self.rtsp_stream.as_mut()
+        let stream = self
+            .rtsp_stream
+            .as_mut()
             .ok_or(MockSenderError::NotConnected)?;
 
         self.cseq += 1;
 
         // Build request
-        let mut request = format!("{} {} RTSP/1.0\r\n", method.as_str(), uri);
-        request.push_str(&format!("CSeq: {}\r\n", self.cseq));
+        let mut request = String::new();
+        let _ = write!(request, "{} {} RTSP/1.0\r\n", method.as_str(), uri);
+        let _ = write!(request, "CSeq: {}\r\n", self.cseq);
 
         if let Some(ref session) = self.session_id {
-            request.push_str(&format!("Session: {}\r\n", session));
+            let _ = write!(request, "Session: {session}\r\n");
         }
 
         for (name, value) in headers {
-            request.push_str(&format!("{}: {}\r\n", name, value));
+            let _ = write!(request, "{name}: {value}\r\n");
         }
 
         if let Some((content_type, data)) = body {
-            request.push_str(&format!("Content-Type: {}\r\n", content_type));
-            request.push_str(&format!("Content-Length: {}\r\n", data.len()));
+            let _ = write!(request, "Content-Type: {content_type}\r\n");
+            let _ = write!(request, "Content-Length: {}\r\n", data.len());
             request.push_str("\r\n");
             stream.write_all(request.as_bytes()).await?;
             stream.write_all(data).await?;
@@ -323,23 +373,23 @@ impl MockSender {
         let mut buf = vec![0u8; 4096];
         let n = stream.read(&mut buf).await?;
 
-        self.parse_response(&buf[..n])
+        Self::parse_response(&buf[..n])
     }
 
-    fn parse_response(&self, data: &[u8]) -> Result<RtspResponse, MockSenderError> {
+    fn parse_response(data: &[u8]) -> Result<RtspResponse, MockSenderError> {
         let text = String::from_utf8_lossy(data);
         let mut lines = text.lines();
 
         // Status line
-        let status_line = lines.next()
-            .ok_or(MockSenderError::InvalidResponse)?;
+        let status_line = lines.next().ok_or(MockSenderError::InvalidResponse)?;
 
         let parts: Vec<&str> = status_line.split_whitespace().collect();
         if parts.len() < 2 {
             return Err(MockSenderError::InvalidResponse);
         }
 
-        let status_code: u16 = parts[1].parse()
+        let status_code: u16 = parts[1]
+            .parse()
             .map_err(|_| MockSenderError::InvalidResponse)?;
 
         // Headers
@@ -365,7 +415,7 @@ impl MockSender {
         })
     }
 
-    fn parse_transport(&self, response: &RtspResponse) -> Option<ServerPorts> {
+    fn parse_transport(response: &RtspResponse) -> Option<ServerPorts> {
         let transport = response.headers.get("Transport")?;
 
         let mut audio = 0u16;
@@ -387,7 +437,11 @@ impl MockSender {
         }
 
         if audio > 0 && control > 0 && timing > 0 {
-            Some(ServerPorts { audio, control, timing })
+            Some(ServerPorts {
+                audio,
+                control,
+                timing,
+            })
         } else {
             None
         }

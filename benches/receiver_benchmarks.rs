@@ -1,8 +1,8 @@
 //! Performance benchmarks for receiver components
 
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
 use airplay2::audio::jitter::{JitterBuffer, JitterBufferConfig};
 use airplay2::receiver::rtp_receiver::AudioPacket;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::time::Instant;
 
 fn jitter_buffer_insert(c: &mut Criterion) {
@@ -57,10 +57,7 @@ fn jitter_buffer_pop(c: &mut Criterion) {
 fn rtp_header_parse(c: &mut Criterion) {
     c.bench_function("rtp_parse", |b| {
         let packet = vec![
-            0x80, 0x60,
-            0x00, 0x01,
-            0x00, 0x00, 0x01, 0x60,
-            0x12, 0x34, 0x56, 0x78,
+            0x80, 0x60, 0x00, 0x01, 0x00, 0x00, 0x01, 0x60, 0x12, 0x34, 0x56, 0x78,
         ];
 
         b.iter(|| {
