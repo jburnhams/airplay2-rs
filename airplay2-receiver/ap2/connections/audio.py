@@ -584,7 +584,7 @@ class Audio:
 
         if 'AAC_LC' in self.af:
             # Skip 4 bytes AU header for RFC 3640 compliance workaround
-            if len(data) > 4:
+            if len(data) >= 4:
                 data = data[4:]
 
         packet = av.packet.Packet(data)
