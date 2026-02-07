@@ -1,4 +1,4 @@
-use super::encryption::*;
+use crate::protocol::raop::encryption::*;
 
 #[test]
 fn test_encrypt_decrypt_roundtrip() {

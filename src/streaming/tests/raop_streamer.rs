@@ -76,3 +76,45 @@ fn test_sync_packet() {
     let packet = streamer.create_sync_packet();
     assert_eq!(packet.len(), 20); // SyncPacket::SIZE
 }
+
+#[test]
+fn test_sequence_wrapping() {
+    let keys = create_test_keys();
+    let config = RaopStreamConfig::default();
+    let mut streamer = RaopStreamer::new(keys, config);
+    let frame = vec![0u8; 10]; // Small frame
+
+    // Current sequence is 0
+    assert_eq!(streamer.sequence(), 0);
+
+    // Advance to 65535
+    for _ in 0..65535 {
+        streamer.encode_frame(&frame);
+    }
+    assert_eq!(streamer.sequence(), 65535);
+
+    // Trigger wrap
+    streamer.encode_frame(&frame);
+    assert_eq!(streamer.sequence(), 0); // Wraps to 0
+
+    // Check buffer still works (optional)
+}
+
+#[test]
+fn test_timing_packet_generation_interval() {
+    let keys = create_test_keys();
+    let config = RaopStreamConfig::default();
+    let mut streamer = RaopStreamer::new(keys, config);
+
+    // Initially false (because initialized with now())
+    // Unless test runs extremely slow or system clock jumps.
+    assert!(!streamer.should_send_sync());
+    assert!(!streamer.should_send_timing());
+
+    let _sync = streamer.create_sync_packet();
+    let _timing = streamer.create_timing_request();
+
+    // Should still be false (reset)
+    assert!(!streamer.should_send_sync());
+    assert!(!streamer.should_send_timing());
+}
