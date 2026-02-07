@@ -6,8 +6,10 @@
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::{Headers, Method, RtspResponse};
 use crate::receiver::timing::NtpTimestamp;
+use crate::testing::network_sim::NetworkSimulator;
 use std::fmt::Write;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::{TcpStream, UdpSocket};
 
 /// Mock sender configuration
@@ -52,14 +54,15 @@ impl Default for MockSenderConfig {
 pub struct MockSender {
     config: MockSenderConfig,
     rtsp_stream: Option<TcpStream>,
-    audio_socket: Option<UdpSocket>,
-    control_socket: Option<UdpSocket>,
-    timing_socket: Option<UdpSocket>,
+    audio_socket: Option<Arc<UdpSocket>>,
+    control_socket: Option<Arc<UdpSocket>>,
+    timing_socket: Option<Arc<UdpSocket>>,
     cseq: u32,
     session_id: Option<String>,
     server_ports: Option<ServerPorts>,
     sequence: u16,
     timestamp: u32,
+    network_sim: Option<NetworkSimulator>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,7 +88,13 @@ impl MockSender {
             server_ports: None,
             sequence: 0,
             timestamp: 0,
+            network_sim: None,
         }
+    }
+
+    /// Set network simulation conditions
+    pub fn set_network_conditions(&mut self, sim: NetworkSimulator) {
+        self.network_sim = Some(sim);
     }
 
     /// Connect to receiver
@@ -128,9 +137,9 @@ impl MockSender {
     /// Returns `MockSenderError` if request fails.
     pub async fn setup(&mut self) -> Result<RtspResponse, MockSenderError> {
         // Bind local UDP sockets
-        let audio_socket = UdpSocket::bind("0.0.0.0:0").await?;
-        let control_socket = UdpSocket::bind("0.0.0.0:0").await?;
-        let timing_socket = UdpSocket::bind("0.0.0.0:0").await?;
+        let audio_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+        let control_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+        let timing_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
         let control_port = control_socket.local_addr()?.port();
         let timing_port = timing_socket.local_addr()?.port();
@@ -202,7 +211,8 @@ impl MockSender {
         let socket = self
             .audio_socket
             .as_ref()
-            .ok_or(MockSenderError::NotSetup)?;
+            .ok_or(MockSenderError::NotSetup)?
+            .clone();
 
         // Build RTP packet
         let mut packet = vec![
@@ -221,10 +231,33 @@ impl MockSender {
         ];
         packet.extend_from_slice(audio_data);
 
-        socket.send(&packet).await?;
-
+        // Advance state immediately (sender logic)
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self.timestamp.wrapping_add(self.config.frames_per_packet);
+        self.timestamp = self
+            .timestamp
+            .wrapping_add(self.config.frames_per_packet);
+
+        // Apply network simulation
+        if let Some(sim) = &self.network_sim {
+            if sim.should_drop() {
+                return Ok(());
+            }
+
+            let delay = sim.get_delay();
+            if delay.is_zero() && !sim.should_reorder() {
+                socket.send(&packet).await?;
+            } else {
+                // Simulate delay/reordering by spawning a task
+                tokio::spawn(async move {
+                    if !delay.is_zero() {
+                        tokio::time::sleep(delay).await;
+                    }
+                    let _ = socket.send(&packet).await;
+                });
+            }
+        } else {
+            socket.send(&packet).await?;
+        }
 
         Ok(())
     }
@@ -237,7 +270,8 @@ impl MockSender {
         let socket = self
             .control_socket
             .as_ref()
-            .ok_or(MockSenderError::NotSetup)?;
+            .ok_or(MockSenderError::NotSetup)?
+            .clone();
 
         let ports = self
             .server_ports
@@ -262,7 +296,24 @@ impl MockSender {
         // RTP timestamp at NTP
         packet.extend_from_slice(&self.timestamp.to_be_bytes());
 
-        socket.send_to(&packet, server_control).await?;
+        // Apply network simulation
+        if let Some(sim) = &self.network_sim {
+            if sim.should_drop() {
+                return Ok(());
+            }
+
+            let delay = sim.get_delay();
+            if delay.is_zero() {
+                socket.send_to(&packet, server_control).await?;
+            } else {
+                tokio::spawn(async move {
+                    tokio::time::sleep(delay).await;
+                    let _ = socket.send_to(&packet, server_control).await;
+                });
+            }
+        } else {
+            socket.send_to(&packet, server_control).await?;
+        }
 
         Ok(())
     }
