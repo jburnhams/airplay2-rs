@@ -168,7 +168,10 @@ fn test_spsc_randomized_stress() {
             let n = buffer_reader.read(&mut temp_buf[..read_size]);
             if n > 0 {
                 for &b in &temp_buf[..n] {
-                    assert_eq!(b, expected_val, "Data corruption at index {read_total}: expected {expected_val}, got {b}");
+                    assert_eq!(
+                        b, expected_val,
+                        "Data corruption at index {read_total}: expected {expected_val}, got {b}"
+                    );
                     expected_val = expected_val.wrapping_add(1);
                     read_total += 1;
                 }
