@@ -93,7 +93,10 @@ class SDPHandler():
                 elif self.audio_format == self.SDPAudioFormat.OPUS:
                     self.audio_desc = 'OPUS'
                 if 'mode=' in self.audio_fmtp:
-                    self.audio_format = self.SDPAudioFormat.AAC_ELD
+                    is_hbr = 'mode=AAC-hbr' in self.audio_fmtp
+                    if not is_hbr:
+                        self.audio_format = self.SDPAudioFormat.AAC_ELD
+
                     for x in self.afp:
                         if 'constantDuration=' in x:
                             start = x.find('constantDuration=') + len('constantDuration=')
@@ -102,7 +105,9 @@ class SDPHandler():
                         elif 'mode=' in x:
                             start = x.find('mode=') + len('mode=')
                             self.aac_mode = x[start:].rstrip(';')
-                    self.audio_desc = 'AAC_ELD'
+
+                    if not is_hbr:
+                        self.audio_desc = 'AAC_ELD'
                 for f in AirplayAudFmt:
                     if(self.audio_desc in f.name
                         and (self.audio_format_bd in f.name or self.audio_format == self.SDPAudioFormat.AAC)

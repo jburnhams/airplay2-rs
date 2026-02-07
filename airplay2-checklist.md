@@ -1,5 +1,11 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 4):**
+- **AAC Streaming Verification**:
+  - Moved integration tests to `tests/` directory for standard execution.
+  - Patched `python-ap2` receiver to fix SDP negotiation bug (`mode=AAC-hbr` misidentified as `AAC_ELD`) and to support RFC 3640 AU headers (by stripping them for `av` decoding).
+  - Verified **AAC Streaming** (`test_aac_streaming_end_to_end`) with patched receiver.
+
 **Work Done (Session 3):**
 - **AAC Codec Implementation**:
   - Added `fdk-aac` dependency (v0.8.0).
@@ -36,8 +42,9 @@
   - End-to-end test with Python receiver confirms ALAC_44100_16_2 codec matching
   - `examples/play_alac.rs` successfully streams with `AudioCodec::Alac` configuration
 - [x] **AAC** (Advanced Audio Codec) — lossy compression
-  - ⚠️ **IMPLEMENTED**: Codec implemented using `fdk-aac` and integrated into streamer.
-  - *Status*: Unit tests pass. Integration verification with `python-ap2` pending (receiver rejects connection, likely due to feature flags).
+  - ✅ **VERIFIED**: Codec implemented using `fdk-aac` and integrated into streamer.
+  - End-to-end test with Python receiver (`tests/aac_streaming.rs`) confirms AAC negotiation and streaming.
+  - Note: Patched python receiver to handle `mode=AAC-hbr` correctly and skip AU headers.
 - [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
   - *Status*: Pending.
 

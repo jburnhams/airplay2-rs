@@ -581,6 +581,12 @@ class Audio:
             # rtp.payloads tuple: type, ts_offset (samples ago), length
             # Set data to start at last block (add all lengths), skip redundancy for now.
             data = data[reduce(add, [row[-1] for row in rtp.block_list]):]
+
+        if 'AAC_LC' in self.af:
+            # Skip 4 bytes AU header for RFC 3640 compliance workaround
+            if len(data) > 4:
+                data = data[4:]
+
         packet = av.packet.Packet(data)
         if(len(data) > 0):
             try:
