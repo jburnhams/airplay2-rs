@@ -1,7 +1,7 @@
 use crate::client::{ClientConfig, PreferredProtocol, SelectedProtocol, UnifiedAirPlayClient};
 use crate::testing::mock_raop_server::{MockRaopConfig, MockRaopServer};
 use crate::types::{AirPlayDevice, DeviceCapabilities};
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, TcpListener};
 
 async fn create_device_with_server(
     airplay2: bool,
@@ -92,6 +92,12 @@ async fn test_unified_client_force_protocol() {
 
 #[tokio::test]
 async fn test_connection_failure_handling() {
+    // Find a free port by binding temporarily
+    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind temporary listener");
+    let port = listener.local_addr().unwrap().port();
+    // Drop listener to close port
+    drop(listener);
+
     let device = AirPlayDevice {
         id: "test".to_string(),
         name: "Test Device".to_string(),
@@ -99,7 +105,7 @@ async fn test_connection_failure_handling() {
         addresses: vec![IpAddr::V4(Ipv4Addr::LOCALHOST)],
         port: 7000,
         capabilities: DeviceCapabilities::default(),
-        raop_port: Some(12345), // Random port likely closed
+        raop_port: Some(port), // Valid but closed port
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
     };
