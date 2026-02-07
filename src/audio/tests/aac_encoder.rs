@@ -37,7 +37,7 @@ fn test_encoder_configurations() {
     let _ = encoder.encode(&input).expect("Encoding failed");
 
     // Stereo, higher bitrate
-    let mut encoder = AacEncoder::new(48000, 2, 128000).expect("Stereo encoder failed");
+    let mut encoder = AacEncoder::new(48000, 2, 128_000).expect("Stereo encoder failed");
     let input = vec![0i16; 2048]; // 2 channels
     let _ = encoder.encode(&input).expect("Encoding failed");
 }
