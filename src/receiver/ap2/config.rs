@@ -196,15 +196,10 @@ impl Ap2ConfigBuilder {
         self
     }
 
+    /// Set the audio buffer size in milliseconds.
+    #[must_use]
     pub fn buffer_size_ms(mut self, ms: u32) -> Self {
         self.config.buffer_size_ms = ms;
-        self
-    }
-
-    /// Disable multi-room support
-    #[must_use]
-    pub fn without_multi_room(mut self) -> Self {
-        self.config.multi_room_enabled = false;
         self
     }
 
@@ -222,14 +217,9 @@ impl Ap2ConfigBuilder {
             return Err(ConfigError::InvalidName("Name cannot be empty".into()));
         }
 
-        let parts: Vec<&str> = self.config.device_id.split(':').collect();
-        if parts.len() != 6
-            || parts
-                .iter()
-                .any(|p| p.len() != 2 || !p.chars().all(|c| c.is_ascii_hexdigit()))
-        {
+        if self.config.device_id.len() != 17 {
             return Err(ConfigError::InvalidDeviceId(
-                "Device ID must be in MAC address format (e.g., AA:BB:CC:DD:EE:FF)".into(),
+                "Device ID must be in MAC address format".into(),
             ));
         }
 

@@ -56,10 +56,12 @@ impl Ap2SessionState {
     #[must_use]
     pub fn allows_method(&self, method: &str) -> bool {
         match self {
-            Self::Connected => matches!(method, "OPTIONS" | "GET" | "POST"),
-            Self::InfoExchanged => matches!(method, "OPTIONS" | "GET" | "POST"),
-            Self::PairingSetup { .. } => matches!(method, "OPTIONS" | "POST"),
-            Self::PairingVerify { .. } => matches!(method, "OPTIONS" | "POST"),
+            Self::Connected | Self::InfoExchanged => {
+                matches!(method, "OPTIONS" | "GET" | "POST")
+            }
+            Self::PairingSetup { .. } | Self::PairingVerify { .. } => {
+                matches!(method, "OPTIONS" | "POST")
+            }
             Self::Paired => matches!(
                 method,
                 "OPTIONS" | "GET" | "POST" | "SETUP" | "GET_PARAMETER" | "SET_PARAMETER"
