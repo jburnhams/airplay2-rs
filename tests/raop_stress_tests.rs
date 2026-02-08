@@ -85,5 +85,5 @@ async fn test_metadata_flood() {
     // Assuming mock server stores last metadata
     assert!(state.metadata.is_some());
 
-    client.disconnect().await.ok();
+    client.disconnect().await.expect("clean disconnect failed");
 }
