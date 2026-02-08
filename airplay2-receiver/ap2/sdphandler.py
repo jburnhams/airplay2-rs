@@ -1,6 +1,12 @@
 from enum import Enum
 from ap2.connections.audio import AudioSetup
+import re
 
+class AACSetup:
+    def __init__(self, data):
+        self.extradata = data
+    def get_extra_data(self):
+        return self.extradata
 
 class SDPHandler():
     # systemcrash 2021
@@ -97,12 +103,22 @@ class SDPHandler():
                     for x in self.afp:
                         if 'constantDuration=' in x:
                             start = x.find('constantDuration=') + len('constantDuration=')
-                            self.constantDuration = int(x[start:].rstrip(';'))
+                            self.constantDuration = int(x[start:].split(';')[0]) # robust parsing
                             self.spf = self.constantDuration
                         elif 'mode=' in x:
                             start = x.find('mode=') + len('mode=')
-                            self.aac_mode = x[start:].rstrip(';')
+                            self.aac_mode = x[start:].split(';')[0]
                     self.audio_desc = 'AAC_ELD'
+
+                    # Parse config for AAC/AAC_ELD
+                    match = re.search(r'config=([0-9a-fA-F]+)', self.audio_fmtp)
+                    if match:
+                        try:
+                            config_bytes = bytes.fromhex(match.group(1))
+                            self.params = AACSetup(config_bytes)
+                        except ValueError:
+                            pass
+
                 for f in AirplayAudFmt:
                     if(self.audio_desc in f.name
                         and (self.audio_format_bd in f.name or self.audio_format == self.SDPAudioFormat.AAC)

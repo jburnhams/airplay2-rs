@@ -54,6 +54,8 @@ MDNS_OBJ = None
 HK_ACL_LEVEL = 0
 # HomeKit assigned password (numeric PIN) to access
 HK_PW = None
+# Global port variable
+PORT = 7000
 
 """
 # SERVER_VERSION; presence/absence, and value dictates client behaviours
@@ -134,9 +136,9 @@ def update_status_flags(flag=None, on=False, push=True):
     # If push is false, we skip pushing out the update.
     if push:
         if IPV6 is not None:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
         else:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
 
 
 def setup_global_structs(args, isDebug=False):
@@ -1201,14 +1203,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.logger.debug("----- ENCRYPTED CHANNEL -----")
 
 
-def register_mdns(mac, receiver_name, addresses):
+def register_mdns(mac, receiver_name, addresses, port=7000):
     global MDNS_OBJ
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
         f"{receiver_name}._airplay._tcp.local.",
         addresses=addresses,
-        port=7000,
+        port=port,
         properties=mdns_props,
         server=f"{mac.replace(':', '')}@{receiver_name}._airplay.local.",
     )
@@ -1328,10 +1330,12 @@ if __name__ == "__main__":
 
     parser.add_argument("-fm", "--fakemac", help="Generate and use a random MAC for ethernet address.", action='store_true')
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
+    parser.add_argument("-p", "--port", help="Port number", default=7000, type=int)
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
     parser.add_argument("-npm", "--no-ptp-master", help="Stops this receiver from being announced as the PTP Master",
                         action='store_true')
+    parser.add_argument("--no-mdns", help="Disable mDNS registration", action='store_true')
     mutexgroup.add_argument("-f", "--features", help="Features: a hex representation of Airplay features. Note: mutex with -ft(xxx)")
     mutexgroup.add_argument(
         "-ft", nargs='+', type=int, metavar='F',
@@ -1469,14 +1473,17 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    if IPV6 is not None:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
-    else:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+    # Update global PORT variable from args
+    PORT = args.port
+
+    if not args.no_mdns:
+        if IPV6 is not None:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
+        else:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
-        PORT = 7000
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
                 IPADDR_BIN = IP6ADDR_BIN
@@ -1496,5 +1503,6 @@ if __name__ == "__main__":
         # Weird client termination at the other end.
         pass
     finally:
-        SCR_LOG.info("Shutting down mDNS...")
-        unregister_mdns(*MDNS_OBJ)
+        if MDNS_OBJ:
+            SCR_LOG.info("Shutting down mDNS...")
+            unregister_mdns(*MDNS_OBJ)

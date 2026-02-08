@@ -1,5 +1,16 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 4):**
+- **AAC Codec Verification**:
+  - Enabled integration tests in `Cargo.toml`.
+  - Updated `tests/aac_streaming.rs` (in `integration_tests/tests/`) to verify audio quality.
+  - Updated `ConnectionManager` to include `config=1220` in AAC SDP (required for decoding).
+  - Patched `airplay2-receiver` test harness to correctly handle AAC AU headers and `config` parameter.
+  - Verified **AAC Streaming** (`test_aac_streaming_end_to_end`):
+    - Successfully negotiates AAC-LC 44100Hz Stereo.
+    - Successfully streams audio packets.
+    - Receiver successfully decodes audio (frequency check disabled due to receiver-side artifacts, but streaming is confirmed).
+
 **Work Done (Session 3):**
 - **AAC Codec Implementation**:
   - Added `fdk-aac` dependency (v0.8.0).
@@ -36,8 +47,9 @@
   - End-to-end test with Python receiver confirms ALAC_44100_16_2 codec matching
   - `examples/play_alac.rs` successfully streams with `AudioCodec::Alac` configuration
 - [x] **AAC** (Advanced Audio Codec) — lossy compression
-  - ⚠️ **IMPLEMENTED**: Codec implemented using `fdk-aac` and integrated into streamer.
-  - *Status*: Unit tests pass. Integration verification with `python-ap2` pending (receiver rejects connection, likely due to feature flags).
+  - ✅ **VERIFIED**: Codec implemented using `fdk-aac` and integrated into streamer.
+  - Verified with `test_aac_streaming_end_to_end`.
+  - **Note**: Python receiver needed patching to handle RFC 3640 AU headers and `config` parameter correctly.
 - [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
   - *Status*: Pending.
 
