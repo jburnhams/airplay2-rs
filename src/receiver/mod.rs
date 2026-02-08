@@ -37,12 +37,7 @@ pub use session::{AudioCodec, SessionState, StreamParameters};
 pub use volume_handler::VolumeUpdate;
 
 // AirPlay 2 specific re-exports
-pub use ap2::{
-    AirPlay2Receiver,
-    Ap2Config,
-    PairingServer,
-    InfoEndpoint,
-};
+pub use ap2::{AirPlay2Receiver, Ap2Config, InfoEndpoint, PairingServer};
 
 #[cfg(test)]
 mod tests;

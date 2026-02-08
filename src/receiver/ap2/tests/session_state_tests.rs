@@ -5,14 +5,30 @@ fn test_valid_pairing_flow() {
     let mut state = Ap2SessionState::Connected;
 
     state = state.transition_to(Ap2SessionState::InfoExchanged).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingSetup { step: 1 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingSetup { step: 2 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingSetup { step: 3 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingSetup { step: 4 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingVerify { step: 1 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingVerify { step: 2 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingVerify { step: 3 }).unwrap();
-    state = state.transition_to(Ap2SessionState::PairingVerify { step: 4 }).unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingSetup { step: 1 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingSetup { step: 2 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingSetup { step: 3 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingSetup { step: 4 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingVerify { step: 1 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingVerify { step: 2 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingVerify { step: 3 })
+        .unwrap();
+    state = state
+        .transition_to(Ap2SessionState::PairingVerify { step: 4 })
+        .unwrap();
     state = state.transition_to(Ap2SessionState::Paired).unwrap();
 
     assert!(state.is_authenticated());

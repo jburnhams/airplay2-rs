@@ -90,11 +90,7 @@ impl Ap2SessionState {
     pub fn is_authenticated(&self) -> bool {
         matches!(
             self,
-            Self::Paired
-                | Self::SetupPhase1
-                | Self::SetupPhase2
-                | Self::Streaming
-                | Self::Paused
+            Self::Paired | Self::SetupPhase1 | Self::SetupPhase2 | Self::Streaming | Self::Paused
         )
     }
 

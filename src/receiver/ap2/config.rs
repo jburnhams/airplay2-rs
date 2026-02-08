@@ -57,11 +57,7 @@ impl Default for Ap2Config {
             firmware_version: env!("CARGO_PKG_VERSION").to_string(),
             server_port: 7000,
             password: None,
-            audio_formats: vec![
-                AudioFormat::Pcm,
-                AudioFormat::Alac,
-                AudioFormat::AacEld,
-            ],
+            audio_formats: vec![AudioFormat::Pcm, AudioFormat::Alac, AudioFormat::AacEld],
             multi_room_enabled: true,
             buffer_size_ms: 2000,
             max_sessions: 1,
@@ -117,24 +113,24 @@ impl Ap2Config {
         let mut flags: u64 = 0;
 
         // Core features (always enabled)
-        flags |= 1 << 0;   // Video supported (even if we only do audio)
-        flags |= 1 << 1;   // Photo supported
-        flags |= 1 << 7;   // Audio
-        flags |= 1 << 9;   // Audio redundant (FEC)
-        flags |= 1 << 14;  // MFi soft auth
-        flags |= 1 << 17;  // Supports pairing
-        flags |= 1 << 18;  // Supports PIN pairing
-        flags |= 1 << 27;  // Supports unified media control
+        flags |= 1 << 0; // Video supported (even if we only do audio)
+        flags |= 1 << 1; // Photo supported
+        flags |= 1 << 7; // Audio
+        flags |= 1 << 9; // Audio redundant (FEC)
+        flags |= 1 << 14; // MFi soft auth
+        flags |= 1 << 17; // Supports pairing
+        flags |= 1 << 18; // Supports PIN pairing
+        flags |= 1 << 27; // Supports unified media control
 
         // Optional features
         if self.multi_room_enabled {
-            flags |= 1 << 40;  // Buffered audio
-            flags |= 1 << 41;  // PTP clock
-            flags |= 1 << 46;  // HomeKit pairing
+            flags |= 1 << 40; // Buffered audio
+            flags |= 1 << 41; // PTP clock
+            flags |= 1 << 46; // HomeKit pairing
         }
 
         if self.password.is_some() {
-            flags |= 1 << 15;  // Password required
+            flags |= 1 << 15; // Password required
         }
 
         flags
@@ -223,7 +219,7 @@ impl Ap2ConfigBuilder {
 
         if self.config.device_id.len() != 17 {
             return Err(ConfigError::InvalidDeviceId(
-                "Device ID must be in MAC address format".into()
+                "Device ID must be in MAC address format".into(),
             ));
         }
 
