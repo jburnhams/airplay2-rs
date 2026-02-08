@@ -84,8 +84,8 @@ fn test_audio_decryptor_partial_block() {
     // 16 bytes + 5 bytes
     let mut data = vec![0u8; 21];
     // Fill with some pattern
-    for i in 0..21 {
-        data[i] = i as u8;
+    for (i, byte) in data.iter_mut().enumerate() {
+        *byte = u8::try_from(i).unwrap();
     }
 
     let result = decryptor.decrypt(&data).unwrap();
