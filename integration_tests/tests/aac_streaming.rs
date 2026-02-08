@@ -12,9 +12,9 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     common::init_logging();
     tracing::info!("Starting AAC Streaming integration test");
 
-    // 1. Start Receiver with explicit AAC feature flag (bit 20 = 1048576)
+    // 1. Start Receiver with explicit AAC feature flag (bit 20)
     // Although default flags might include it, we force it to be robust.
-    let receiver = PythonReceiver::start_with_args(&["-ftor", "1048576"]).await?;
+    let receiver = PythonReceiver::start_with_args(&["-ftor", &(1 << 20).to_string()]).await?;
 
     // Give receiver time to start
     sleep(Duration::from_secs(2)).await;
