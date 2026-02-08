@@ -117,55 +117,44 @@ impl Ap2SessionState {
     /// # Errors
     ///
     /// Returns `StateError::InvalidTransition` if the transition is not allowed.
-    #[allow(clippy::match_same_arms)]
     pub fn transition_to(&self, new_state: Ap2SessionState) -> Result<Ap2SessionState, StateError> {
-        let valid = match (self, &new_state) {
+        // Error state is always a valid target
+        if let Ap2SessionState::Error { .. } = new_state {
+            return Ok(new_state);
+        }
+
+        // Teardown is valid from most states (except Connected/Error)
+        if matches!(new_state, Ap2SessionState::Teardown)
+            && !matches!(self, Self::Connected | Self::Error { .. })
+        {
+            return Ok(new_state);
+        }
+
+        let valid = matches!(
+            (self, &new_state),
             // From Connected
-            (Self::Connected, Self::InfoExchanged) => true,
-            (Self::Connected, Self::PairingSetup { step: 1 }) => true,
-
+            (Self::Connected, Self::InfoExchanged | Self::PairingSetup { step: 1 })
             // From InfoExchanged
-            (Self::InfoExchanged, Self::PairingSetup { step: 1 }) => true,
-
+            | (Self::InfoExchanged, Self::PairingSetup { step: 1 })
             // Pairing setup progression
-            (Self::PairingSetup { step: 1 }, Self::PairingSetup { step: 2 }) => true,
-            (Self::PairingSetup { step: 2 }, Self::PairingSetup { step: 3 }) => true,
-            (Self::PairingSetup { step: 3 }, Self::PairingSetup { step: 4 }) => true,
-            (Self::PairingSetup { step: 4 }, Self::PairingVerify { step: 1 }) => true,
-
+            | (Self::PairingSetup { step: 1 }, Self::PairingSetup { step: 2 })
+            | (Self::PairingSetup { step: 2 }, Self::PairingSetup { step: 3 })
+            | (Self::PairingSetup { step: 3 }, Self::PairingSetup { step: 4 })
+            | (Self::PairingSetup { step: 4 }, Self::PairingVerify { step: 1 })
             // Pairing verify progression
-            (Self::PairingVerify { step: 1 }, Self::PairingVerify { step: 2 }) => true,
-            (Self::PairingVerify { step: 2 }, Self::PairingVerify { step: 3 }) => true,
-            (Self::PairingVerify { step: 3 }, Self::PairingVerify { step: 4 }) => true,
-            (Self::PairingVerify { step: 4 }, Self::Paired) => true,
-
+            | (Self::PairingVerify { step: 1 }, Self::PairingVerify { step: 2 })
+            | (Self::PairingVerify { step: 2 }, Self::PairingVerify { step: 3 })
+            | (Self::PairingVerify { step: 3 }, Self::PairingVerify { step: 4 })
+            | (Self::PairingVerify { step: 4 }, Self::Paired)
             // From Paired
-            (Self::Paired, Self::SetupPhase1) => true,
-
+            | (Self::Paired, Self::SetupPhase1)
             // From SetupPhase1
-            (Self::SetupPhase1, Self::SetupPhase2) => true,
-            (Self::SetupPhase1, Self::Teardown) => true,
-
-            // From SetupPhase2
-            (Self::SetupPhase2, Self::Streaming) => true,
-            (Self::SetupPhase2, Self::Teardown) => true,
-
+            | (Self::SetupPhase1, Self::SetupPhase2)
+            // From SetupPhase2 or Paused to Streaming
+            | (Self::SetupPhase2 | Self::Paused, Self::Streaming)
             // From Streaming
-            (Self::Streaming, Self::Paused) => true,
-            (Self::Streaming, Self::Teardown) => true,
-
-            // From Paused
-            (Self::Paused, Self::Streaming) => true,
-            (Self::Paused, Self::Teardown) => true,
-
-            // Error can be reached from anywhere
-            (_, Self::Error { .. }) => true,
-
-            // Teardown can be reached from most states
-            (_, Self::Teardown) if !matches!(self, Self::Connected | Self::Error { .. }) => true,
-
-            _ => false,
-        };
+            | (Self::Streaming, Self::Paused)
+        );
 
         if valid {
             Ok(new_state)
