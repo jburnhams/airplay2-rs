@@ -1,15 +1,33 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
+
+/// Helper to recursively copy a directory
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
 
 /// Python receiver wrapper for testing
 pub struct PythonReceiver {
     process: Child,
     output_dir: PathBuf,
+    // Keep temp dir alive
+    _temp_dir: TempDir,
     #[allow(dead_code)]
     interface: String,
     port: u16,
@@ -23,7 +41,14 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
-        let output_dir = std::env::current_dir()?.join("airplay2-receiver");
+        // Create a temporary directory for this test instance to avoid collisions
+        let temp_dir = tempfile::tempdir()?;
+        let output_dir = temp_dir.path().to_path_buf();
+        let source_dir = std::env::current_dir()?.join("airplay2-receiver");
+
+        // Copy receiver code to temp dir
+        copy_dir_all(&source_dir, &output_dir)?;
+
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
             if cfg!(target_os = "macos") {
@@ -39,32 +64,31 @@ impl PythonReceiver {
             listener.local_addr()?.port()
         };
 
-        // Clean up any previous test outputs
+        // Clean up any previous test outputs (in the temp dir)
         let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
         let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
 
-        // Clean up pairings for fresh state (added for persistent pairing test)
+        // Clean up pairings for fresh state
         let pairings_dir = output_dir.join("pairings");
         if pairings_dir.exists() {
             fs::remove_dir_all(&pairings_dir)?;
         }
         fs::create_dir_all(&pairings_dir)?;
 
-        // Restore .gitignore to keep repo clean
-        fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
-
         tracing::info!("Starting Python receiver on interface: {}, port: {}", interface, port);
         tracing::debug!("Current dir: {:?}", std::env::current_dir());
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        // Use "python" command which works on Windows and usually in venvs/CI
+        let mut command = Command::new("python");
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
             .arg(&interface)
             .arg("--port")
-            .arg(port.to_string());
+            .arg(port.to_string())
+            .arg("--no-mdns");
 
         for arg in args {
             command.arg(arg);
@@ -192,6 +216,7 @@ impl PythonReceiver {
         Ok(Self {
             process,
             output_dir,
+            _temp_dir: temp_dir,
             interface,
             port,
         })

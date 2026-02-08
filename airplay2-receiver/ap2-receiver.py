@@ -1335,6 +1335,7 @@ if __name__ == "__main__":
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
     parser.add_argument("-npm", "--no-ptp-master", help="Stops this receiver from being announced as the PTP Master",
                         action='store_true')
+    parser.add_argument("--no-mdns", help="Disable mDNS registration", action='store_true')
     mutexgroup.add_argument("-f", "--features", help="Features: a hex representation of Airplay features. Note: mutex with -ft(xxx)")
     mutexgroup.add_argument(
         "-ft", nargs='+', type=int, metavar='F',
@@ -1475,10 +1476,11 @@ if __name__ == "__main__":
     # Update global PORT variable from args
     PORT = args.port
 
-    if IPV6 is not None:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
-    else:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
+    if not args.no_mdns:
+        if IPV6 is not None:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
+        else:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
@@ -1501,5 +1503,6 @@ if __name__ == "__main__":
         # Weird client termination at the other end.
         pass
     finally:
-        SCR_LOG.info("Shutting down mDNS...")
-        unregister_mdns(*MDNS_OBJ)
+        if MDNS_OBJ:
+            SCR_LOG.info("Shutting down mDNS...")
+            unregister_mdns(*MDNS_OBJ)
