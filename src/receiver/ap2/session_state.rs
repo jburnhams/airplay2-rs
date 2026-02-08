@@ -142,20 +142,15 @@ impl Ap2SessionState {
 
             // From SetupPhase1
             (Self::SetupPhase1, Self::SetupPhase2) => true,
-            (Self::SetupPhase1, Self::Teardown) => true,
 
             // From SetupPhase2
             (Self::SetupPhase2, Self::Streaming) => true,
-            (Self::SetupPhase2, Self::Teardown) => true,
 
             // From Streaming
             (Self::Streaming, Self::Paused) => true,
-            (Self::Streaming, Self::Teardown) => true,
 
             // From Paused
             (Self::Paused, Self::Streaming) => true,
-            (Self::Paused, Self::Teardown) => true,
-
             // Error can be reached from anywhere
             (_, Self::Error { .. }) => true,
 
