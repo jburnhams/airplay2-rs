@@ -196,10 +196,15 @@ impl Ap2ConfigBuilder {
         self
     }
 
-    /// Set the audio buffer size in milliseconds
-    #[must_use]
     pub fn buffer_size_ms(mut self, ms: u32) -> Self {
         self.config.buffer_size_ms = ms;
+        self
+    }
+
+    /// Disable multi-room support
+    #[must_use]
+    pub fn without_multi_room(mut self) -> Self {
+        self.config.multi_room_enabled = false;
         self
     }
 
