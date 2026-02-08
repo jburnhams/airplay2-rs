@@ -116,8 +116,8 @@ class SDPHandler():
                         try:
                             config_bytes = bytes.fromhex(match.group(1))
                             self.params = AACSetup(config_bytes)
-                        except ValueError as e:
-                            print(f"Warning: Could not parse AAC config from SDP: {e}")
+                        except ValueError:
+                            pass
 
                 for f in AirplayAudFmt:
                     if(self.audio_desc in f.name

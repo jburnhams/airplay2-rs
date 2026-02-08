@@ -24,28 +24,31 @@ class FileAudioSink:
 
     def open(self):
         """Open the file for writing."""
-        self.file = open(self.filename, "wb")
+        # Ensure file exists/truncated? No, we use append mode consistently.
+        # We don't keep the file open to avoid buffering issues and race conditions.
         self.start_time = time.time()
         print(
-            f"[FileAudioSink] Opened {self.filename} for writing (rate={self.rate}, channels={self.channels}, width={self.sample_width})"
+            f"[FileAudioSink] Prepared {self.filename} for writing (rate={self.rate}, channels={self.channels}, width={self.sample_width})"
         )
         return self
 
     def write(self, data):
         """Write audio data to the file."""
-        if self.file:
-            self.file.write(data)
-            self.file.flush() # Force flush
+        # Open, write, close to ensure data is flushed and handle multiple writers
+        try:
+            with open(self.filename, "ab") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+
             self.bytes_written += len(data)
             # Log progress periodically
             with open("sink_debug.log", "a") as f:
-                 f.write(f"Wrote {len(data)} bytes\n")
-            if (
-                self.bytes_written % (self.rate * self.channels * self.sample_width)
-                == 0
-            ):
-                # ... same ...
-                pass
+                 f.write(f"Wrote {len(data)} bytes to {os.path.abspath(self.filename)} (CWD: {os.getcwd()})\n")
+        except Exception as e:
+             with open("sink_debug.log", "a") as f:
+                 f.write(f"Write failed: {e}\n")
+
         return len(data)
 
     def get_output_latency(self):
@@ -54,16 +57,14 @@ class FileAudioSink:
 
     def close(self):
         """Close the file and optionally convert to WAV."""
-        if self.file:
-            self.file.close()
-            print(
-                f"[FileAudioSink] Closed {self.filename} - total {self.bytes_written} bytes"
-            )
+        print(
+            f"[FileAudioSink] Closed {self.filename} - total {self.bytes_written} bytes"
+        )
 
-            # Also write a WAV file for easy playback
-            wav_filename = self.filename.replace(".raw", ".wav")
-            self._write_wav(wav_filename)
-            self.file = None
+        # Also write a WAV file for easy playback
+        wav_filename = self.filename.replace(".raw", ".wav")
+        self._write_wav(wav_filename)
+        self.file = None
 
     def _write_wav(self, wav_filename):
         """Convert the raw file to WAV format."""

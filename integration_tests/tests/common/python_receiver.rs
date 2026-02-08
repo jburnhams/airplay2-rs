@@ -14,7 +14,9 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
         let entry = entry?;
         let ty = entry.file_type()?;
         if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            if entry.file_name() != "__pycache__" {
+                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            }
         } else {
             fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
         }
@@ -49,6 +51,19 @@ impl PythonReceiver {
         // Copy receiver code to temp dir
         copy_dir_all(&source_dir, &output_dir)?;
 
+        // Debug: Print audio_file_sink.py content to verify copy
+        let sink_py_path = output_dir.join("ap2/connections/audio_file_sink.py");
+        if let Ok(content) = fs::read_to_string(&sink_py_path) {
+            tracing::info!("DEBUG: audio_file_sink.py content snippet:\n{}", &content[..500.min(content.len())]);
+             if content.contains("sink_debug.log") {
+                 tracing::info!("DEBUG: audio_file_sink.py contains 'sink_debug.log'");
+             } else {
+                 tracing::warn!("DEBUG: audio_file_sink.py DOES NOT contain 'sink_debug.log'");
+             }
+        } else {
+             tracing::warn!("DEBUG: Could not read audio_file_sink.py at {:?}", sink_py_path);
+        }
+
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
             if cfg!(target_os = "macos") {
@@ -68,12 +83,19 @@ impl PythonReceiver {
         let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
         let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
 
-        // Clean up pairings for fresh state
+        // Clean up pairings for fresh state (in the temp dir)
         let pairings_dir = output_dir.join("pairings");
         if pairings_dir.exists() {
             fs::remove_dir_all(&pairings_dir)?;
         }
         fs::create_dir_all(&pairings_dir)?;
+
+        // Ensure we explicitly create the pairings directory before starting the process
+        // This is critical because the Python code expects this directory to exist or
+        // to be able to write to it relative to the current working directory.
+        if !pairings_dir.exists() {
+             return Err(format!("Failed to create pairings directory at {:?}", pairings_dir).into());
+        }
 
         tracing::info!("Starting Python receiver on interface: {}, port: {}", interface, port);
         tracing::debug!("Current dir: {:?}", std::env::current_dir());
@@ -88,7 +110,8 @@ impl PythonReceiver {
             .arg(&interface)
             .arg("--port")
             .arg(port.to_string())
-            .arg("--no-mdns");
+            .arg("--no-mdns")
+            .arg("--debug"); // Enable debug logs to catch audio/decoding errors
 
         for arg in args {
             command.arg(arg);
@@ -252,6 +275,16 @@ impl PythonReceiver {
         let _ = self.process.kill().await;
         let _ = self.process.wait().await;
 
+        // Debug: List files in output dir
+        if let Ok(entries) = fs::read_dir(&self.output_dir) {
+            tracing::info!("Files in output dir:");
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    tracing::info!(" - {:?} ({} bytes)", entry.file_name(), metadata.len());
+                }
+            }
+        }
+
         // Read output files
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
         let rtp_path = self.output_dir.join("rtp_packets.bin");
@@ -268,10 +301,12 @@ impl PythonReceiver {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
 
+        // Keep temp dir alive by moving it to the output struct
         Ok(ReceiverOutput {
             audio_data,
             rtp_data,
             log_path,
+            _temp_dir: self._temp_dir,
         })
     }
 
@@ -303,6 +338,9 @@ pub struct ReceiverOutput {
     pub rtp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
+    // Keep temp dir alive until analysis is done
+    #[allow(dead_code)]
+    pub _temp_dir: TempDir,
 }
 
 impl ReceiverOutput {
