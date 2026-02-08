@@ -41,7 +41,9 @@ async fn test_streaming_loop() {
     let streamer = PcmStreamer::new(sender, format);
 
     // Create source
-    let data = vec![1u8; 20000]; // Should produce many packets
+    // Increase size to ensure it doesn't finish before we check state
+    // 200,000 bytes at 44.1kHz stereo 16-bit (176,400 bytes/sec) is > 1 second
+    let data = vec![1u8; 200_000];
     let source = SliceSource::new(data, format);
 
     // Start streaming in background
