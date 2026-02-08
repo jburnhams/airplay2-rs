@@ -117,7 +117,7 @@ Sender (iOS/macOS)                    Receiver (Us)
 
 ### 46.1 Component Mapping
 
-- [ ] **46.1.1** Map existing components to receiver needs
+- [x] **46.1.1** Map existing components to receiver needs
 
 **Reuse Analysis:**
 
@@ -141,7 +141,7 @@ Sender (iOS/macOS)                    Receiver (Us)
 
 ### 46.2 New Components Required
 
-- [ ] **46.2.1** Identify components that must be created new
+- [x] **46.2.1** Identify components that must be created new
 
 **New Components:**
 
@@ -163,7 +163,7 @@ Sender (iOS/macOS)                    Receiver (Us)
 
 ### 46.3 Directory Structure
 
-- [ ] **46.3.1** Define the receiver module structure
+- [x] **46.3.1** Define the receiver module structure
 
 **File:** `src/receiver/mod.rs` (extended)
 
@@ -230,7 +230,7 @@ pub use info_endpoint::InfoEndpoint;
 
 ### 46.4 Configuration Types
 
-- [ ] **46.4.1** Define AirPlay 2 receiver configuration
+- [x] **46.4.1** Define AirPlay 2 receiver configuration
 
 **File:** `src/receiver/ap2/config.rs`
 
@@ -469,7 +469,7 @@ pub enum ConfigError {
 
 ### 46.5 Session States
 
-- [ ] **46.5.1** Define AirPlay 2 receiver session states
+- [x] **46.5.1** Define AirPlay 2 receiver session states
 
 **File:** `src/receiver/ap2/session_state.rs`
 
@@ -704,13 +704,13 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Component mapping complete with reuse strategy for each
-- [ ] New component list identifies all required implementations
-- [ ] Directory structure defined and documented
-- [ ] Configuration types support all receiver options
-- [ ] Session state machine handles full AirPlay 2 flow
-- [ ] State transitions validated with tests
-- [ ] Feature flags correctly calculated from config
+- [x] Component mapping complete with reuse strategy for each
+- [x] New component list identifies all required implementations
+- [x] Directory structure defined and documented
+- [x] Configuration types support all receiver options
+- [x] Session state machine handles full AirPlay 2 flow
+- [x] State transitions validated with tests
+- [x] Feature flags correctly calculated from config
 
 ---
 

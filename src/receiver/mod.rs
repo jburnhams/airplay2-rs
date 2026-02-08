@@ -24,6 +24,8 @@ pub mod progress_handler;
 pub mod set_parameter_handler;
 pub mod volume_handler;
 
+pub mod ap2;
+
 // Public exports
 pub use artwork_handler::Artwork;
 pub use config::ReceiverConfig;
@@ -33,6 +35,9 @@ pub use progress_handler::PlaybackProgress;
 pub use server::{AirPlayReceiver, ReceiverError, ReceiverState};
 pub use session::{AudioCodec, SessionState, StreamParameters};
 pub use volume_handler::VolumeUpdate;
+
+// AirPlay 2 specific re-exports
+pub use ap2::{AirPlay2Receiver, Ap2Config, InfoEndpoint, PairingServer};
 
 #[cfg(test)]
 mod tests;
