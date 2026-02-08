@@ -75,6 +75,41 @@ async fn test_packet_reception() {
     handle.abort();
 }
 
+#[test]
+fn test_audio_decryptor_partial_block() {
+    let key = [0x00; 16];
+    let iv = [0x00; 16];
+    let decryptor = AudioDecryptor::new(key, iv);
+
+    // 16 bytes + 5 bytes
+    let mut data = vec![0u8; 21];
+    // Fill with some pattern
+    for i in 0..21 {
+        data[i] = i as u8;
+    }
+
+    let result = decryptor.decrypt(&data).unwrap();
+
+    assert_eq!(result.len(), 21);
+    // Last 5 bytes should match input (unencrypted)
+    assert_eq!(&result[16..], &data[16..]);
+    // First 16 bytes should be decrypted (changed)
+    assert_ne!(&result[..16], &data[..16]);
+}
+
+#[test]
+fn test_decrypt_corrupt_data() {
+    let key = [0x00; 16];
+    let iv = [0x00; 16];
+    let decryptor = AudioDecryptor::new(key, iv);
+
+    // Garbage data
+    let data = vec![0xFF; 100];
+    let result = decryptor.decrypt(&data);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 100);
+}
+
 #[tokio::test]
 async fn test_packet_reception_invalid_payload_type() {
     let receiver_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();

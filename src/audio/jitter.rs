@@ -224,6 +224,42 @@ impl JitterBuffer {
         None
     }
 
+    /// Determine the starting sequence number handling wrapping
+    fn determine_start_sequence(&self) -> Option<u16> {
+        if self.packets.is_empty() {
+            return None;
+        }
+
+        let keys: Vec<u16> = self.packets.keys().copied().collect();
+        if keys.len() == 1 {
+            return Some(keys[0]);
+        }
+
+        let mut max_gap = 0u32;
+        let mut max_gap_index = 0;
+
+        for i in 0..keys.len() - 1 {
+            let diff = u32::from(keys[i + 1]) - u32::from(keys[i]);
+            if diff > max_gap {
+                max_gap = diff;
+                max_gap_index = i;
+            }
+        }
+
+        // Check wrap-around gap (keys[0] vs keys[last])
+        let wrap_gap = u32::from(keys[0]) + 65536 - u32::from(*keys.last().unwrap());
+
+        // If the linear gap is larger than the wrap gap, it means the sequence wraps "inside" the u16 range.
+        if max_gap > wrap_gap {
+            // The sequence is wrapping around 0 in the buffer.
+            // The logical order is keys[max_gap_index+1] ... keys[last] -> keys[0] ... keys[max_gap_index]
+            Some(keys[max_gap_index + 1])
+        } else {
+            // Standard order
+            Some(keys[0])
+        }
+    }
+
     /// Update buffer state based on current depth
     fn update_state(&mut self) {
         let depth = self.packets.len();
@@ -234,7 +270,7 @@ impl JitterBuffer {
                     self.state = BufferState::Playing;
                     // Set initial playback sequence
                     if self.next_play_seq.is_none() {
-                        self.next_play_seq = self.packets.keys().next().copied();
+                        self.next_play_seq = self.determine_start_sequence();
                     }
                     tracing::info!("Jitter buffer ready, starting playback");
                 }
