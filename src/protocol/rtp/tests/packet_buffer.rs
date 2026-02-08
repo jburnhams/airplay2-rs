@@ -197,3 +197,43 @@ fn test_loss_detector_reorder() {
     let missing = detector.process(101);
     assert!(missing.is_empty());
 }
+
+#[test]
+fn test_loss_detector_large_gap() {
+    let mut detector = PacketLossDetector::new();
+    detector.process(100);
+    // expected = 101
+
+    // Skip 200 packets (jump to 301)
+    let missing = detector.process(301);
+
+    // Should NOT report 200 missing packets (threshold is 100)
+    assert!(missing.is_empty());
+
+    // But should update expected to 302
+    let missing = detector.process(303);
+    assert_eq!(missing, vec![302]);
+}
+
+#[test]
+fn test_buffer_complex_range() {
+    let mut buffer = PacketBuffer::new(20);
+    // Insert 10, 12, 15
+    let seqs = [10, 12, 15];
+    for &seq in &seqs {
+        buffer.push(BufferedPacket {
+            sequence: seq,
+            timestamp: 0,
+            data: Bytes::new(),
+        });
+    }
+
+    // Request range 10..16 (count 6)
+    // Should get 10, 12, 15
+    let packets: Vec<_> = buffer.get_range(10, 6).collect();
+
+    assert_eq!(packets.len(), 3);
+    assert_eq!(packets[0].sequence, 10);
+    assert_eq!(packets[1].sequence, 12);
+    assert_eq!(packets[2].sequence, 15);
+}

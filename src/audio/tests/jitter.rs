@@ -194,3 +194,66 @@ fn test_wraparound_sequence() {
     assert_eq!(buffer.pop().unwrap().sequence, 65535);
     assert_eq!(buffer.pop().unwrap().sequence, 0);
 }
+
+#[test]
+fn test_duplicate_packets() {
+    let mut buffer = JitterBuffer::new(JitterBufferConfig {
+        min_depth: 3,
+        ..Default::default()
+    });
+
+    buffer.insert(make_packet(1, 352));
+    buffer.insert(make_packet(2, 704));
+    // Duplicate packet 2
+    buffer.insert(make_packet(2, 704));
+    buffer.insert(make_packet(3, 1056));
+
+    assert_eq!(buffer.depth(), 3); // Should still be 3 unique packets
+
+    assert_eq!(buffer.pop().unwrap().sequence, 1);
+    assert_eq!(buffer.pop().unwrap().sequence, 2);
+    assert_eq!(buffer.pop().unwrap().sequence, 3);
+}
+
+#[test]
+fn test_gap_fill() {
+    let mut buffer = JitterBuffer::new(JitterBufferConfig {
+        min_depth: 3,
+        ..Default::default()
+    });
+
+    buffer.insert(make_packet(1, 352));
+    buffer.insert(make_packet(3, 1056));
+
+    // Not ready yet (depth 2)
+    assert!(!buffer.is_ready());
+
+    // Fill the gap
+    buffer.insert(make_packet(2, 704));
+
+    assert!(buffer.is_ready());
+    assert_eq!(buffer.pop().unwrap().sequence, 1);
+    assert_eq!(buffer.pop().unwrap().sequence, 2);
+    assert_eq!(buffer.pop().unwrap().sequence, 3);
+}
+
+#[test]
+fn test_wrapping_gap() {
+    let mut buffer = JitterBuffer::new(JitterBufferConfig {
+        min_depth: 3,
+        ..Default::default()
+    });
+
+    buffer.insert(make_packet(65535, 352));
+    buffer.insert(make_packet(1, 1056));
+
+    // Missing 0 (wrap point)
+
+    // Fill the gap
+    buffer.insert(make_packet(0, 704));
+
+    assert!(buffer.is_ready());
+    assert_eq!(buffer.pop().unwrap().sequence, 65535);
+    assert_eq!(buffer.pop().unwrap().sequence, 0);
+    assert_eq!(buffer.pop().unwrap().sequence, 1);
+}
