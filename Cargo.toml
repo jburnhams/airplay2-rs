@@ -106,3 +106,11 @@ harness = false
 
 [target.'cfg(target_os = "macos")'.dependencies]
 coreaudio-rs = { version = "0.14", optional = true }
+
+[[test]]
+name = "integration_tests"
+path = "integration_tests/tests/integration_tests.rs"
+
+[[test]]
+name = "aac_streaming"
+path = "integration_tests/tests/aac_streaming.rs"
