@@ -24,7 +24,10 @@ pub mod progress_handler;
 pub mod set_parameter_handler;
 pub mod volume_handler;
 
+pub mod ap2;
+
 // Public exports
+pub use ap2::Ap2Config;
 pub use artwork_handler::Artwork;
 pub use config::ReceiverConfig;
 pub use events::{EventCallback, ReceiverEvent};
