@@ -12,6 +12,7 @@ pub struct PythonReceiver {
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
+    port: u16,
 }
 
 impl PythonReceiver {
@@ -32,6 +33,12 @@ impl PythonReceiver {
             }
         });
 
+        // Find a free port
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+            listener.local_addr()?.port()
+        };
+
         // Clean up any previous test outputs
         let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
         let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
@@ -46,7 +53,7 @@ impl PythonReceiver {
         // Restore .gitignore to keep repo clean
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
-        tracing::info!("Starting Python receiver on interface: {}", interface);
+        tracing::info!("Starting Python receiver on interface: {}, port: {}", interface, port);
         tracing::debug!("Current dir: {:?}", std::env::current_dir());
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
@@ -55,7 +62,9 @@ impl PythonReceiver {
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("--port")
+            .arg(port.to_string());
 
         for arg in args {
             command.arg(arg);
@@ -184,6 +193,7 @@ impl PythonReceiver {
             process,
             output_dir,
             interface,
+            port,
         })
     }
 
@@ -249,7 +259,7 @@ impl PythonReceiver {
             name: "Integration-Test-Receiver".to_string(),
             model: Some("AirPlay2-Receiver".to_string()),
             addresses: vec!["127.0.0.1".parse().unwrap()],
-            port: 7000,
+            port: self.port,
             capabilities: airplay2::DeviceCapabilities {
                 airplay2: true,
                 supports_transient_pairing: true,
