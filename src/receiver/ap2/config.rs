@@ -222,9 +222,14 @@ impl Ap2ConfigBuilder {
             return Err(ConfigError::InvalidName("Name cannot be empty".into()));
         }
 
-        if self.config.device_id.len() != 17 {
+        let parts: Vec<&str> = self.config.device_id.split(':').collect();
+        if parts.len() != 6
+            || parts
+                .iter()
+                .any(|p| p.len() != 2 || !p.chars().all(|c| c.is_ascii_hexdigit()))
+        {
             return Err(ConfigError::InvalidDeviceId(
-                "Device ID must be in MAC address format".into(),
+                "Device ID must be in MAC address format (e.g., AA:BB:CC:DD:EE:FF)".into(),
             ));
         }
 
