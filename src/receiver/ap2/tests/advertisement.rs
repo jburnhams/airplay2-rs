@@ -26,7 +26,7 @@ fn test_feature_flags_in_txt() {
     let features = txt.get(txt_keys::FEATURES).unwrap();
 
     // Should have two hex values
-    assert!(features.contains(","));
+    assert!(features.contains(','));
     assert!(features.starts_with("0x") || features.starts_with("0X"));
 }
 

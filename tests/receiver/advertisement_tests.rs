@@ -9,11 +9,14 @@ use std::time::Duration;
 #[ignore] // Integration tests often fail in restricted CI environments due to mDNS networking
 async fn test_advertise_and_discover() {
     let config = Ap2Config::new("Integration Test Speaker");
-    let advertiser = Ap2ServiceAdvertiser::new(config.clone())
-        .expect("Failed to create advertiser");
+    let advertiser =
+        Ap2ServiceAdvertiser::new(config.clone()).expect("Failed to create advertiser");
 
     // Start advertising
-    advertiser.start().await.expect("Failed to start advertising");
+    advertiser
+        .start()
+        .await
+        .expect("Failed to start advertising");
 
     // Give mDNS time to propagate
     tokio::time::sleep(Duration::from_millis(2000)).await;
@@ -24,9 +27,7 @@ async fn test_advertise_and_discover() {
         .expect("Discovery failed");
 
     // Find our device
-    let our_device = devices
-        .iter()
-        .find(|d| d.name == config.name);
+    let our_device = devices.iter().find(|d| d.name == config.name);
 
     assert!(
         our_device.is_some(),
@@ -46,8 +47,7 @@ async fn test_advertise_and_discover() {
 #[ignore] // Integration tests often fail in restricted CI environments due to mDNS networking
 async fn test_name_update() {
     let config = Ap2Config::new("Original Name");
-    let mut advertiser = Ap2ServiceAdvertiser::new(config)
-        .expect("Failed to create advertiser");
+    let mut advertiser = Ap2ServiceAdvertiser::new(config).expect("Failed to create advertiser");
 
     advertiser.start().await.expect("Failed to start");
 
@@ -74,8 +74,8 @@ async fn test_name_update() {
 #[tokio::test]
 async fn test_stop_removes_service() {
     let config = Ap2Config::new("Disappearing Speaker");
-    let advertiser = Ap2ServiceAdvertiser::new(config.clone())
-        .expect("Failed to create advertiser");
+    let advertiser =
+        Ap2ServiceAdvertiser::new(config.clone()).expect("Failed to create advertiser");
 
     advertiser.start().await.expect("Failed to start");
     tokio::time::sleep(Duration::from_millis(500)).await;

@@ -1,15 +1,18 @@
-//! AirPlay 2 Service Advertisement
+//! `AirPlay` 2 Service Advertisement
 //!
-//! Handles mDNS advertisement for the AirPlay 2 receiver, making it
+//! Handles mDNS advertisement for the `AirPlay` 2 receiver, making it
 //! discoverable by iOS/macOS devices on the local network.
 
 use crate::receiver::ap2::config::Ap2Config;
+use base64::Engine;
+use ed25519_dalek::SigningKey;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// TXT record keys for AirPlay 2 service advertisement
+/// TXT record keys for `AirPlay` 2 service advertisement
 pub mod txt_keys {
     /// Access control level (0=any, 1=same network)
     pub const ACL: &str = "acl";
@@ -45,7 +48,7 @@ pub mod txt_keys {
     pub const VOLUME_CONTROL: &str = "vv";
 }
 
-/// Builder for AirPlay 2 TXT records
+/// Builder for `AirPlay` 2 TXT records
 #[derive(Debug, Clone)]
 pub struct Ap2TxtRecord {
     entries: HashMap<String, String>,
@@ -53,28 +56,20 @@ pub struct Ap2TxtRecord {
 
 impl Ap2TxtRecord {
     /// Create TXT record from receiver configuration
+    #[must_use]
     pub fn from_config(config: &Ap2Config, public_key: &[u8; 32]) -> Self {
         let mut entries = HashMap::new();
 
         // Device identification
-        entries.insert(
-            txt_keys::DEVICE_ID.to_string(),
-            config.device_id.clone(),
-        );
-        entries.insert(
-            txt_keys::MODEL.to_string(),
-            config.model.clone(),
-        );
+        entries.insert(txt_keys::DEVICE_ID.to_string(), config.device_id.clone());
+        entries.insert(txt_keys::MODEL.to_string(), config.model.clone());
         entries.insert(
             txt_keys::MANUFACTURER.to_string(),
             config.manufacturer.clone(),
         );
 
         if let Some(ref serial) = config.serial_number {
-            entries.insert(
-                txt_keys::SERIAL_NUMBER.to_string(),
-                serial.clone(),
-            );
+            entries.insert(txt_keys::SERIAL_NUMBER.to_string(), serial.clone());
         }
 
         // Version information
@@ -84,16 +79,13 @@ impl Ap2TxtRecord {
         );
         entries.insert(
             txt_keys::SOURCE_VERSION.to_string(),
-            "366.0".to_string(),  // AirPlay 2 protocol version
+            "366.0".to_string(), // AirPlay 2 protocol version
         );
-        entries.insert(
-            txt_keys::PROTOCOL_VERSION.to_string(),
-            "1.1".to_string(),
-        );
+        entries.insert(txt_keys::PROTOCOL_VERSION.to_string(), "1.1".to_string());
 
         // Feature flags (split into two 32-bit parts for compatibility)
         let features = config.feature_flags();
-        let features_str = format!("0x{:X},0x{:X}", features & 0xFFFFFFFF, features >> 32);
+        let features_str = format!("0x{:X},0x{:X}", features & 0xFFFF_FFFF, features >> 32);
         entries.insert(txt_keys::FEATURES.to_string(), features_str);
 
         // Status flags
@@ -103,7 +95,6 @@ impl Ap2TxtRecord {
         );
 
         // Public key for pairing (Ed25519, base64 encoded)
-        use base64::Engine;
         let pk_b64 = base64::engine::general_purpose::STANDARD.encode(public_key);
         entries.insert(txt_keys::PUBLIC_KEY.to_string(), pk_b64);
 
@@ -122,8 +113,6 @@ impl Ap2TxtRecord {
 
     /// Derive pairing identity UUID from device ID
     fn derive_pairing_identity(device_id: &str) -> String {
-        use sha2::{Sha256, Digest};
-
         // Hash device ID to create deterministic UUID
         let mut hasher = Sha256::new();
         hasher.update(device_id.as_bytes());
@@ -133,11 +122,22 @@ impl Ap2TxtRecord {
         // Format as UUID (version 4 format, but deterministic)
         format!(
             "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-            hash[0], hash[1], hash[2], hash[3],
-            hash[4], hash[5],
-            (hash[6] & 0x0f) | 0x40, hash[7],  // Version 4
-            (hash[8] & 0x3f) | 0x80, hash[9],  // Variant 1
-            hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]
+            hash[0],
+            hash[1],
+            hash[2],
+            hash[3],
+            hash[4],
+            hash[5],
+            (hash[6] & 0x0f) | 0x40,
+            hash[7], // Version 4
+            (hash[8] & 0x3f) | 0x80,
+            hash[9], // Variant 1
+            hash[10],
+            hash[11],
+            hash[12],
+            hash[13],
+            hash[14],
+            hash[15]
         )
     }
 
@@ -147,8 +147,9 @@ impl Ap2TxtRecord {
     }
 
     /// Get a specific entry
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&str> {
-        self.entries.get(key).map(|s| s.as_str())
+        self.entries.get(key).map(String::as_str)
     }
 
     /// Update an entry
@@ -157,6 +158,7 @@ impl Ap2TxtRecord {
     }
 
     /// Convert to mdns-sd compatible format
+    #[must_use]
     pub fn to_txt_properties(&self) -> Vec<(String, String)> {
         self.entries
             .iter()
@@ -165,10 +167,10 @@ impl Ap2TxtRecord {
     }
 }
 
-/// Service type for AirPlay 2
+/// Service type for `AirPlay` 2
 pub const AIRPLAY2_SERVICE_TYPE: &str = "_airplay._tcp.local.";
 
-/// AirPlay 2 service advertiser
+/// `AirPlay` 2 service advertiser
 ///
 /// Manages mDNS advertisement of the receiver on the local network.
 /// Uses the same mdns-sd crate as the discovery module.
@@ -188,9 +190,13 @@ struct Ed25519Keypair {
 
 impl Ap2ServiceAdvertiser {
     /// Create a new advertiser with the given configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns error if mDNS daemon initialization fails.
     pub fn new(config: Ap2Config) -> Result<Self, AdvertisementError> {
-        let daemon = ServiceDaemon::new()
-            .map_err(|e| AdvertisementError::MdnsInit(e.to_string()))?;
+        let daemon =
+            ServiceDaemon::new().map_err(|e| AdvertisementError::MdnsInit(e.to_string()))?;
 
         // Generate or load keypair for this device
         let keypair = Self::generate_keypair(&config.device_id);
@@ -205,8 +211,6 @@ impl Ap2ServiceAdvertiser {
 
     /// Generate deterministic Ed25519 keypair from device ID
     fn generate_keypair(device_id: &str) -> Ed25519Keypair {
-        use sha2::{Sha256, Digest};
-
         // Derive seed from device ID (deterministic)
         let mut hasher = Sha256::new();
         hasher.update(device_id.as_bytes());
@@ -214,7 +218,6 @@ impl Ap2ServiceAdvertiser {
         let seed: [u8; 32] = hasher.finalize().into();
 
         // Generate Ed25519 keypair from seed
-        use ed25519_dalek::SigningKey;
         let signing_key = SigningKey::from_bytes(&seed);
         let verifying_key = signing_key.verifying_key();
 
@@ -225,19 +228,24 @@ impl Ap2ServiceAdvertiser {
     }
 
     /// Start advertising the service
+    ///
+    /// # Errors
+    ///
+    /// Returns error if service creation or registration fails.
     pub async fn start(&self) -> Result<(), AdvertisementError> {
         let txt = Ap2TxtRecord::from_config(&self.config, &self.keypair.public);
 
         // Get local hostname
-        let hostname = hostname::get()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "airplay-receiver".to_string());
+        let hostname = hostname::get().map_or_else(
+            |_| "airplay-receiver".to_string(),
+            |s| s.to_string_lossy().to_string(),
+        );
 
         let service_info = ServiceInfo::new(
             AIRPLAY2_SERVICE_TYPE,
             &self.config.name,
-            &format!("{}.local.", hostname),
-            "",  // Let mdns-sd determine IP
+            &format!("{hostname}.local."),
+            "", // Let mdns-sd determine IP
             self.config.server_port,
             txt.to_txt_properties()
                 .into_iter()
@@ -263,6 +271,10 @@ impl Ap2ServiceAdvertiser {
     }
 
     /// Stop advertising the service
+    ///
+    /// # Errors
+    ///
+    /// Returns error if unregistration fails.
     pub async fn stop(&self) -> Result<(), AdvertisementError> {
         if let Some(service_info) = self.service_info.write().await.take() {
             self.daemon
@@ -276,6 +288,10 @@ impl Ap2ServiceAdvertiser {
     }
 
     /// Update the advertised service name
+    ///
+    /// # Errors
+    ///
+    /// Returns error if re-registration fails.
     pub async fn update_name(&mut self, new_name: String) -> Result<(), AdvertisementError> {
         // Stop current advertisement
         self.stop().await?;
@@ -288,6 +304,10 @@ impl Ap2ServiceAdvertiser {
     }
 
     /// Update feature flags (e.g., when multi-room is enabled/disabled)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if re-registration fails.
     pub async fn update_features(&self) -> Result<(), AdvertisementError> {
         // Re-register with updated TXT record
         self.stop().await?;
@@ -295,11 +315,13 @@ impl Ap2ServiceAdvertiser {
     }
 
     /// Get the public key for pairing
+    #[must_use]
     pub fn public_key(&self) -> &[u8; 32] {
         &self.keypair.public
     }
 
     /// Get the current configuration
+    #[must_use]
     pub fn config(&self) -> &Ap2Config {
         &self.config
     }

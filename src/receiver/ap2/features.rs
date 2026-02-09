@@ -1,11 +1,11 @@
-//! AirPlay 2 Feature Flags
+//! `AirPlay` 2 Feature Flags
 //!
 //! Feature flags advertise receiver capabilities to senders.
 //! They are transmitted as a 64-bit value in the TXT record.
 
 /// Feature flag bit positions
 ///
-/// These are the known feature flags for AirPlay 2. The complete
+/// These are the known feature flags for `AirPlay` 2. The complete
 /// list is not publicly documented by Apple.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -34,11 +34,11 @@ pub enum FeatureFlag {
     Reserved10 = 10,
     /// Bit 11: Audio redundant (FEC/retransmission)
     AudioRedundant = 11,
-    /// Bit 12: FairPlay secure auth
+    /// Bit 12: `FairPlay` secure auth
     FairPlaySecureAuth = 12,
     /// Bit 13: Photo caching
     PhotoCaching = 13,
-    /// Bit 14: Authentication setup (MFi soft)
+    /// Bit 14: Authentication setup (`MFi` soft)
     AuthenticationSetup = 14,
     /// Bit 15: Metadata features (bit 1)
     MetadataFeatures1 = 15,
@@ -74,13 +74,13 @@ pub enum FeatureFlag {
     SupportsScreenMirroring2 = 41,
     /// Bit 42: Supports unified pair setup/verify
     SupportsUnifiedPairSetupAndVerify = 42,
-    /// Bit 46: Supports HomeKit pairing
+    /// Bit 46: Supports `HomeKit` pairing
     SupportsHomeKit = 46,
-    /// Bit 48: Supports CoreUtils pairing
+    /// Bit 48: Supports `CoreUtils` pairing
     SupportsCoreUtilsPairing = 48,
     /// Bit 50: Supports persistent credentials
     SupportsPersistentCredentials = 50,
-    /// Bit 51: Supports AirPlay video v2
+    /// Bit 51: Supports `AirPlay` video v2
     SupportsAirPlayVideoV2 = 51,
     /// Bit 52: Audio meta-data via TXT record
     AudioMetadataTxtRecord = 52,
@@ -90,6 +90,7 @@ pub enum FeatureFlag {
 
 impl FeatureFlag {
     /// Convert to bit mask
+    #[must_use]
     pub fn mask(&self) -> u64 {
         1u64 << (*self as u8)
     }
@@ -103,11 +104,13 @@ pub struct FeatureFlags {
 
 impl FeatureFlags {
     /// Create empty feature set
+    #[must_use]
     pub fn new() -> Self {
         Self { flags: 0 }
     }
 
     /// Create default feature set for audio-only receiver
+    #[must_use]
     pub fn audio_receiver() -> Self {
         let mut flags = Self::new();
 
@@ -136,6 +139,7 @@ impl FeatureFlags {
     }
 
     /// Create feature set for multi-room capable receiver
+    #[must_use]
     pub fn multi_room_receiver() -> Self {
         let mut flags = Self::audio_receiver();
 
@@ -159,25 +163,25 @@ impl FeatureFlags {
     }
 
     /// Check if a feature flag is set
+    #[must_use]
     pub fn has(&self, flag: FeatureFlag) -> bool {
         (self.flags & flag.mask()) != 0
     }
 
     /// Get raw flags value
+    #[must_use]
     pub fn raw(&self) -> u64 {
         self.flags
     }
 
     /// Format for TXT record (two 32-bit hex values)
+    #[must_use]
     pub fn to_txt_value(&self) -> String {
-        format!(
-            "0x{:X},0x{:X}",
-            self.flags & 0xFFFFFFFF,
-            self.flags >> 32
-        )
+        format!("0x{:X},0x{:X}", self.flags & 0xFFFF_FFFF, self.flags >> 32)
     }
 
     /// Parse from TXT record value
+    #[must_use]
     pub fn from_txt_value(value: &str) -> Option<Self> {
         let parts: Vec<&str> = value.split(',').collect();
         if parts.len() != 2 {
@@ -188,7 +192,7 @@ impl FeatureFlags {
         let high = u32::from_str_radix(parts[1].trim_start_matches("0x"), 16).ok()?;
 
         Some(Self {
-            flags: (low as u64) | ((high as u64) << 32),
+            flags: u64::from(low) | (u64::from(high) << 32),
         })
     }
 }
@@ -217,6 +221,7 @@ pub enum StatusFlag {
 
 impl StatusFlag {
     /// Get the bit mask for this flag
+    #[must_use]
     pub fn mask(&self) -> u32 {
         1u32 << (*self as u8)
     }
@@ -230,11 +235,13 @@ pub struct StatusFlags {
 
 impl StatusFlags {
     /// Create a new empty status flags set
+    #[must_use]
     pub fn new() -> Self {
         Self { flags: 0 }
     }
 
     /// Default status for a working receiver
+    #[must_use]
     pub fn healthy() -> Self {
         let mut flags = Self::new();
         flags.set(StatusFlag::SupportsPin);
@@ -242,6 +249,7 @@ impl StatusFlags {
     }
 
     /// Status when password is configured
+    #[must_use]
     pub fn with_password() -> Self {
         let mut flags = Self::healthy();
         flags.set(StatusFlag::RequiresPassword);
@@ -262,16 +270,19 @@ impl StatusFlags {
     }
 
     /// Check if a status flag is set
+    #[must_use]
     pub fn has(&self, flag: StatusFlag) -> bool {
         (self.flags & flag.mask()) != 0
     }
 
     /// Get raw flags value
+    #[must_use]
     pub fn raw(&self) -> u32 {
         self.flags
     }
 
     /// Format for TXT record (32-bit hex value)
+    #[must_use]
     pub fn to_txt_value(&self) -> String {
         format!("0x{:X}", self.flags)
     }

@@ -3,7 +3,7 @@
 use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc, Mutex};
+use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// Errors from service advertisement
 #[derive(Debug, thiserror::Error)]
@@ -662,7 +662,7 @@ impl AsyncRaopAdvertiser {
 }
 
 /// Generic service advertiser that can be used for both
-/// AirPlay 1 (RAOP) and AirPlay 2 receivers
+/// `AirPlay` 1 (RAOP) and `AirPlay` 2 receivers
 pub struct ServiceAdvertiser {
     daemon: ServiceDaemon,
     registered_services: Arc<Mutex<HashMap<String, ServiceInfo>>>,
@@ -695,7 +695,7 @@ impl ServiceAdvertiser {
         port: u16,
         txt_records: &[(String, String)],
     ) -> Result<String, AdvertiserError> {
-        let hostname = self.get_hostname();
+        let hostname = Self::get_hostname();
 
         let service_info = ServiceInfo::new(
             service_type,
@@ -712,8 +712,7 @@ impl ServiceAdvertiser {
 
         let fullname = service_info.get_fullname().to_string();
 
-        self.daemon
-            .register(service_info.clone())?;
+        self.daemon.register(service_info.clone())?;
 
         self.registered_services
             .lock()
@@ -729,9 +728,14 @@ impl ServiceAdvertiser {
     ///
     /// Returns error if mDNS unregistration fails.
     pub async fn unregister(&self, fullname: &str) -> Result<(), AdvertiserError> {
-        if self.registered_services.lock().await.remove(fullname).is_some() {
-            self.daemon
-                .unregister(fullname)?;
+        if self
+            .registered_services
+            .lock()
+            .await
+            .remove(fullname)
+            .is_some()
+        {
+            self.daemon.unregister(fullname)?;
         }
         Ok(())
     }
@@ -752,10 +756,11 @@ impl ServiceAdvertiser {
         Ok(())
     }
 
-    fn get_hostname(&self) -> String {
-        hostname::get()
-            .map(|s| format!("{}.local.", s.to_string_lossy()))
-            .unwrap_or_else(|_| "airplay-receiver.local.".to_string())
+    fn get_hostname() -> String {
+        hostname::get().map_or_else(
+            |_| "airplay-receiver.local.".to_string(),
+            |s| format!("{}.local.", s.to_string_lossy()),
+        )
     }
 }
 
