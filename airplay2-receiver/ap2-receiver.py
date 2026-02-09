@@ -427,47 +427,51 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.logger.info(f'{self.command}: {self.path}')
         self.logger.debug(self.headers)
 
-        if self.headers["Content-Type"] == 'application/sdp':
-            content_len = int(self.headers["Content-Length"])
-            if content_len > 0:
-                sdp_body = self.rfile.read(content_len).decode('utf-8')
-                self.logger.debug(sdp_body)
-                sdp = SDPHandler(sdp_body)
-                if hasattr(sdp, 'params'):
-                    self.aud_params = sdp.params
-                else:
-                    self.aud_params = None
-                if sdp.has_mfi:
-                    self.logger.warning("MFi not possible on this hardware.")
-                    self.send_response(404)
-                    self.hap = None
-                else:
-                    if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
-                       and int((FEATURES & FeatureFlags.getFeature19ALAC(FeatureFlags))) == 0):
-                        self.logger.warning("This receiver not configured for ALAC (set flag 19).")
-                        self.send_response(404)
-                        self.hap = None
-                    elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
-                          and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
-                        self.logger.warning("This receiver not configured for AAC (set flag 20).")
-                        self.send_response(404)
-                        self.hap = None
-                    elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
-                          and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
-                        self.logger.warning("This receiver not configured for AAC (set flag 20/21).")
+        try:
+            if self.headers["Content-Type"] == 'application/sdp':
+                content_len = int(self.headers["Content-Length"])
+                if content_len > 0:
+                    sdp_body = self.rfile.read(content_len).decode('utf-8')
+                    self.logger.debug(sdp_body)
+                    sdp = SDPHandler(sdp_body)
+                    if hasattr(sdp, 'params'):
+                        self.aud_params = sdp.params
+                    else:
+                        self.aud_params = None
+                    if sdp.has_mfi:
+                        self.logger.warning("MFi not possible on this hardware.")
                         self.send_response(404)
                         self.hap = None
                     else:
-                        if sdp.has_fp and self.fairplay_keymsg:
-                            self.logger.debug('Got FP AES Key from SDP')
-                            self.aeskeyobj = FairPlayAES(fpaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv, keymsg=self.fairplay_keymsg)
-                        elif sdp.has_rsa:
-                            self.aeskeyobj = FairPlayAES(rsaaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv)
-                        self.send_response(200)
-                        self.send_header("Server", self.version_string())
-                        self.send_header("CSeq", self.headers["CSeq"])
-                        self.end_headers()
-                self.sdp = sdp
+                        if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
+                           and int((FEATURES & FeatureFlags.getFeature19ALAC(FeatureFlags))) == 0):
+                            self.logger.warning("This receiver not configured for ALAC (set flag 19).")
+                            self.send_response(404)
+                            self.hap = None
+                        elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
+                              and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
+                            self.logger.warning("This receiver not configured for AAC (set flag 20).")
+                            self.send_response(404)
+                            self.hap = None
+                        elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
+                              and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
+                            self.logger.warning("This receiver not configured for AAC (set flag 20/21).")
+                            self.send_response(404)
+                            self.hap = None
+                        else:
+                            if sdp.has_fp and self.fairplay_keymsg:
+                                self.logger.debug('Got FP AES Key from SDP')
+                                self.aeskeyobj = FairPlayAES(fpaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv, keymsg=self.fairplay_keymsg)
+                            elif sdp.has_rsa:
+                                self.aeskeyobj = FairPlayAES(rsaaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv)
+                            self.send_response(200)
+                            self.send_header("Server", self.version_string())
+                            self.send_header("CSeq", self.headers["CSeq"])
+                            self.end_headers()
+                    self.sdp = sdp
+        except Exception:
+            self.logger.error(f"Exception in do_ANNOUNCE: {traceback.format_exc()}")
+            self.send_error(500)
 
     def do_FLUSHBUFFERED(self):
         self.logger.info(f'{self.command}: {self.path}')
