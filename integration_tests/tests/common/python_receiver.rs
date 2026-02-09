@@ -79,7 +79,8 @@ impl PythonReceiver {
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("--no-mdns");
 
         for arg in args {
             command.arg(arg);

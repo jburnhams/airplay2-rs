@@ -7,8 +7,16 @@ import time
 import os
 
 import av
+# Configuration flags
+SAVE_RAW_RTP = os.environ.get("AIRPLAY_SAVE_RTP", "0") == "1"
+SKIP_DECODE = os.environ.get("AIRPLAY_SKIP_DECODE", "0") == "1"
+USE_FILE_SINK = os.environ.get("AIRPLAY_FILE_SINK", "0") == "1"
+
 try:
-    import pyaudio
+    if not USE_FILE_SINK:
+        import pyaudio
+    else:
+        pyaudio = None
 except ImportError:
     pyaudio = None
 from Crypto.Cipher import ChaCha20_Poly1305
@@ -21,10 +29,6 @@ from functools import reduce
 
 from ..utils import get_file_logger, get_screen_logger, get_free_socket
 from .audio_file_sink import get_audio_backend
-
-# Configuration flags
-SAVE_RAW_RTP = os.environ.get("AIRPLAY_SAVE_RTP", "0") == "1"
-SKIP_DECODE = os.environ.get("AIRPLAY_SKIP_DECODE", "0") == "1"
 
 
 class RTP:

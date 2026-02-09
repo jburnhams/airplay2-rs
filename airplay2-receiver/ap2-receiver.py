@@ -55,6 +55,9 @@ HK_ACL_LEVEL = 0
 # HomeKit assigned password (numeric PIN) to access
 HK_PW = None
 
+# Global flag to disable mDNS
+NO_MDNS = False
+
 """
 # SERVER_VERSION; presence/absence, and value dictates client behaviours
 Set above 360 to trigger remote control
@@ -133,10 +136,11 @@ def update_status_flags(flag=None, on=False, push=True):
     setup_global_structs(args, isDebug=DEBUG)
     # If push is false, we skip pushing out the update.
     if push:
-        if IPV6 is not None:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
-        else:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+        if not NO_MDNS:
+            if IPV6 is not None:
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+            else:
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
 
 
 def setup_global_structs(args, isDebug=False):
@@ -1330,6 +1334,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
+    parser.add_argument("-nm", "--no-mdns", help="Disable mDNS/Zeroconf registration", action='store_true')
     parser.add_argument("-npm", "--no-ptp-master", help="Stops this receiver from being announced as the PTP Master",
                         action='store_true')
     mutexgroup.add_argument("-f", "--features", help="Features: a hex representation of Airplay features. Note: mutex with -ft(xxx)")
@@ -1378,6 +1383,7 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     DISABLE_PTP_MASTER = args.no_ptp_master
+    NO_MDNS = args.no_mdns
     DEV_PROPS = DeviceProperties(PI, DEBUG)
     DEV_NAME = args.mdns
     if(parser.get_default('mdns') != DEV_NAME):
@@ -1469,10 +1475,13 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    if IPV6 is not None:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+    if not args.no_mdns:
+        if IPV6 is not None:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+        else:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
     else:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+        SCR_LOG.info("mDNS disabled by user")
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
@@ -1496,5 +1505,6 @@ if __name__ == "__main__":
         # Weird client termination at the other end.
         pass
     finally:
-        SCR_LOG.info("Shutting down mDNS...")
-        unregister_mdns(*MDNS_OBJ)
+        if MDNS_OBJ:
+            SCR_LOG.info("Shutting down mDNS...")
+            unregister_mdns(*MDNS_OBJ)
