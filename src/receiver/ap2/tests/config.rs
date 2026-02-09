@@ -17,10 +17,16 @@ fn test_feature_flags() {
 
     // Check required bits
     assert_eq!(flags & (1 << 0), 1 << 0, "Video supported bit missing");
-    assert_eq!(flags & (1 << 7), 1 << 7, "Audio supported bit missing");
+    assert_eq!(flags & (1 << 9), 1 << 9, "Audio supported bit missing");
 
     // Check multi-room bits
-    assert_eq!(flags & (1 << 40), 1 << 40, "Buffered audio bit missing");
+    // Note: Original code used bit 40 for buffered audio, but updated specs use bit 38
+    assert_eq!(
+        flags & (1 << 38),
+        1 << 38,
+        "Buffered audio (bit 38) missing"
+    );
+    assert_eq!(flags & (1 << 40), 1 << 40, "PTP (bit 40) missing");
 }
 
 #[test]

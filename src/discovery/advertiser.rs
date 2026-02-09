@@ -3,7 +3,7 @@
 use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, mpsc, Mutex};
 
 /// Errors from service advertisement
 #[derive(Debug, thiserror::Error)]
@@ -658,5 +658,109 @@ impl AsyncRaopAdvertiser {
     /// Shutdown the advertiser
     pub async fn shutdown(self) {
         let _ = self.command_tx.send(AdvertiserCommand::Shutdown).await;
+    }
+}
+
+/// Generic service advertiser that can be used for both
+/// AirPlay 1 (RAOP) and AirPlay 2 receivers
+pub struct ServiceAdvertiser {
+    daemon: ServiceDaemon,
+    registered_services: Arc<Mutex<HashMap<String, ServiceInfo>>>,
+}
+
+impl ServiceAdvertiser {
+    /// Create a new service advertiser
+    ///
+    /// # Errors
+    ///
+    /// Returns error if mDNS daemon initialization fails.
+    pub fn new() -> Result<Self, AdvertiserError> {
+        let daemon = ServiceDaemon::new()?;
+
+        Ok(Self {
+            daemon,
+            registered_services: Arc::new(Mutex::new(HashMap::new())),
+        })
+    }
+
+    /// Register a service
+    ///
+    /// # Errors
+    ///
+    /// Returns error if service creation or registration fails.
+    pub async fn register(
+        &self,
+        service_type: &str,
+        name: &str,
+        port: u16,
+        txt_records: &[(String, String)],
+    ) -> Result<String, AdvertiserError> {
+        let hostname = self.get_hostname();
+
+        let service_info = ServiceInfo::new(
+            service_type,
+            name,
+            &hostname,
+            "",
+            port,
+            txt_records
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<HashMap<String, String>>(),
+        )
+        .map_err(AdvertiserError::Mdns)?;
+
+        let fullname = service_info.get_fullname().to_string();
+
+        self.daemon
+            .register(service_info.clone())?;
+
+        self.registered_services
+            .lock()
+            .await
+            .insert(fullname.clone(), service_info);
+
+        Ok(fullname)
+    }
+
+    /// Unregister a service by fullname
+    ///
+    /// # Errors
+    ///
+    /// Returns error if mDNS unregistration fails.
+    pub async fn unregister(&self, fullname: &str) -> Result<(), AdvertiserError> {
+        if self.registered_services.lock().await.remove(fullname).is_some() {
+            self.daemon
+                .unregister(fullname)?;
+        }
+        Ok(())
+    }
+
+    /// Unregister all services
+    ///
+    /// # Errors
+    ///
+    /// Returns error if mDNS unregistration fails.
+    pub async fn unregister_all(&self) -> Result<(), AdvertiserError> {
+        let services = self.registered_services.lock().await;
+        for fullname in services.keys() {
+            let _ = self.daemon.unregister(fullname);
+        }
+        drop(services);
+
+        self.registered_services.lock().await.clear();
+        Ok(())
+    }
+
+    fn get_hostname(&self) -> String {
+        hostname::get()
+            .map(|s| format!("{}.local.", s.to_string_lossy()))
+            .unwrap_or_else(|_| "airplay-receiver.local.".to_string())
+    }
+}
+
+impl Default for ServiceAdvertiser {
+    fn default() -> Self {
+        Self::new().expect("Failed to create service advertiser")
     }
 }

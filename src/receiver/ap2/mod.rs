@@ -5,6 +5,8 @@
 //! from the client implementation.
 
 pub mod config;
+pub mod features;
+pub mod advertisement;
 pub mod session_state;
 // pub mod receiver;
 // pub mod pairing_server;
@@ -23,6 +25,8 @@ mod tests;
 
 // Re-exports
 pub use config::Ap2Config;
+pub use advertisement::{Ap2TxtRecord, Ap2ServiceAdvertiser};
+pub use features::{FeatureFlag, FeatureFlags, StatusFlag, StatusFlags};
 pub use session_state::Ap2SessionState;
 // pub use receiver::AirPlay2Receiver;
 // pub use pairing_server::PairingServer;

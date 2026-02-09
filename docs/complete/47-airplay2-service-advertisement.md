@@ -34,7 +34,7 @@ AirPlay 2 uses the `_airplay._tcp.local` service type (different from AirPlay 1'
 
 ### 47.1 TXT Record Builder
 
-- [ ] **47.1.1** Implement TXT record generation for AirPlay 2
+- [x] **47.1.1** Implement TXT record generation for AirPlay 2
 
 **File:** `src/receiver/ap2/advertisement.rs`
 
@@ -246,7 +246,7 @@ mod txt_tests {
 
 ### 47.2 Service Advertiser
 
-- [ ] **47.2.1** Implement the mDNS service advertiser
+- [x] **47.2.1** Implement the mDNS service advertiser
 
 **File:** `src/receiver/ap2/advertisement.rs` (continued)
 
@@ -437,7 +437,7 @@ pub enum AdvertisementError {
 
 ### 47.3 Feature Flags Documentation
 
-- [ ] **47.3.1** Document all AirPlay 2 feature flags
+- [x] **47.3.1** Document all AirPlay 2 feature flags
 
 **File:** `src/receiver/ap2/features.rs`
 
@@ -762,7 +762,7 @@ mod tests {
 
 ### 47.4 Integration with Existing Discovery
 
-- [ ] **47.4.1** Extend discovery module for advertising
+- [x] **47.4.1** Extend discovery module for advertising
 
 **File:** `src/discovery/advertiser.rs`
 
@@ -887,7 +887,7 @@ impl Default for ServiceAdvertiser {
 
 ### 47.5 Advertisement Tests
 
-- [ ] **47.5.1** Unit tests for TXT record generation
+- [x] **47.5.1** Unit tests for TXT record generation
 
 **File:** `src/receiver/ap2/advertisement.rs` (test module)
 
@@ -963,7 +963,7 @@ mod tests {
 
 ### 47.6 Advertisement Integration Tests
 
-- [ ] **47.6.1** Test service discovery roundtrip
+- [x] **47.6.1** Test service discovery roundtrip
 
 **File:** `tests/receiver/advertisement_tests.rs`
 
@@ -1073,16 +1073,16 @@ async fn test_stop_removes_service() {
 
 ## Acceptance Criteria
 
-- [ ] TXT record contains all required fields (deviceid, features, flags, pk, pi)
-- [ ] Feature flags correctly encode multi-room, audio formats, and authentication
-- [ ] Status flags correctly indicate password requirement
-- [ ] Public key is Ed25519 and base64 encoded
-- [ ] Pairing identity is deterministic UUID from device ID
-- [ ] Service can be started and stopped without errors
-- [ ] Advertised service is discoverable by standard mDNS clients
-- [ ] Name updates propagate correctly
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] TXT record contains all required fields (deviceid, features, flags, pk, pi)
+- [x] Feature flags correctly encode multi-room, audio formats, and authentication
+- [x] Status flags correctly indicate password requirement
+- [x] Public key is Ed25519 and base64 encoded
+- [x] Pairing identity is deterministic UUID from device ID
+- [x] Service can be started and stopped without errors
+- [x] Advertised service is discoverable by standard mDNS clients
+- [x] Name updates propagate correctly
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 

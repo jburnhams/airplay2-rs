@@ -4,3 +4,5 @@ mod network_tests;
 mod protocol_tests;
 #[path = "receiver/reference_tests.rs"]
 mod reference_tests;
+#[path = "receiver/advertisement_tests.rs"]
+mod advertisement_tests;
