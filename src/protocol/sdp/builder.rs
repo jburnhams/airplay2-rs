@@ -1,5 +1,4 @@
 use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
-use std::collections::HashMap;
 
 /// Builder for SDP session descriptions
 pub struct SdpBuilder {
@@ -76,7 +75,7 @@ impl SdpBuilder {
     pub fn attribute(mut self, name: &str, value: Option<&str>) -> Self {
         self.sdp
             .attributes
-            .insert(name.to_string(), value.map(String::from));
+            .push((name.to_string(), value.map(String::from)));
         self
     }
 
@@ -93,7 +92,7 @@ impl SdpBuilder {
             port,
             protocol: protocol.to_string(),
             formats: formats.iter().map(ToString::to_string).collect(),
-            attributes: HashMap::new(),
+            attributes: Vec::new(),
         });
 
         self
@@ -105,7 +104,7 @@ impl SdpBuilder {
         if let Some(ref mut media) = self.current_media {
             media
                 .attributes
-                .insert(name.to_string(), value.map(String::from));
+                .push((name.to_string(), value.map(String::from)));
         }
         self
     }

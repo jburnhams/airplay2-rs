@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -14,6 +15,7 @@ pub struct PythonReceiver {
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
+    log_buffer: Arc<Mutex<Vec<String>>>,
 }
 
 impl PythonReceiver {
@@ -137,6 +139,7 @@ impl PythonReceiver {
 
         let mut reader = BufReader::new(stdout).lines();
         let mut stderr_reader = BufReader::new(stderr).lines();
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
         let mut stderr_lines = Vec::new();
         #[allow(unused_assignments)]
         let mut found_serving = false;
@@ -170,6 +173,9 @@ impl PythonReceiver {
                     match line {
                         Ok(Some(line)) => {
                             tracing::debug!("Receiver stdout: {}", line.trim());
+                            if let Ok(mut logs) = log_buffer.lock() {
+                                logs.push(line.clone());
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
@@ -188,6 +194,9 @@ impl PythonReceiver {
                      match line {
                         Ok(Some(line)) => {
                             tracing::warn!("Receiver stderr: {}", line.trim());
+                            if let Ok(mut logs) = log_buffer.lock() {
+                                logs.push(line.clone());
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
                                 found_serving = true;
@@ -214,20 +223,32 @@ impl PythonReceiver {
             return Err("Failed to find 'serving on' message from receiver".into());
         }
 
+        let log_buffer_clone = log_buffer.clone();
+
         // Spawn a background task to keep reading output to prevent deadlocks/SIGPIPE
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     line = reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::debug!("Receiver stdout: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::debug!("Receiver stdout: {}", line.trim());
+                                if let Ok(mut logs) = log_buffer_clone.lock() {
+                                    logs.push(line);
+                                }
+                            }
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
                     }
                     line = stderr_reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::warn!("Receiver stderr: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::warn!("Receiver stderr: {}", line.trim());
+                                if let Ok(mut logs) = log_buffer_clone.lock() {
+                                    logs.push(line);
+                                }
+                            }
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
@@ -241,6 +262,7 @@ impl PythonReceiver {
             _temp_dir: temp_dir,
             output_dir: temp_path,
             interface,
+            log_buffer,
         })
     }
 
@@ -298,6 +320,13 @@ impl PythonReceiver {
             "integration-test-{}.log",
             chrono::Utc::now().timestamp()
         ));
+
+        let logs = if let Ok(logs) = self.log_buffer.lock() {
+            logs.join("\n")
+        } else {
+            String::new()
+        };
+
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
@@ -306,6 +335,7 @@ impl PythonReceiver {
             audio_data,
             rtp_data,
             log_path,
+            logs,
         })
     }
 
@@ -337,6 +367,7 @@ pub struct ReceiverOutput {
     pub rtp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
+    pub logs: String,
 }
 
 impl ReceiverOutput {

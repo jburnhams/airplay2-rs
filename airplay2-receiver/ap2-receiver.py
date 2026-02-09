@@ -7,6 +7,7 @@ from threading import current_thread
 import sys
 
 import pprint
+import traceback
 
 import http.server
 import socketserver
