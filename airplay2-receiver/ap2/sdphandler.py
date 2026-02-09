@@ -124,7 +124,7 @@ class SDPHandler():
                             try:
                                 self.audio_config = bytes.fromhex(config_hex)
                             except ValueError:
-                                pass
+                                print(f"[SDPHandler] Warning: Invalid hex value for config: {config_hex}")
 
                     if is_hbr:
                         self.audio_format = self.SDPAudioFormat.AAC
