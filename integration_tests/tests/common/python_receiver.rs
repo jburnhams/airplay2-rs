@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -9,6 +10,7 @@ use tokio::time::sleep;
 /// Python receiver wrapper for testing
 pub struct PythonReceiver {
     process: Option<Child>,
+    _temp_dir: TempDir,
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
@@ -22,25 +24,62 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut output_dir = std::env::current_dir()?;
-        // Handle running from integration-tests crate directory by checking parent
-        // Check for the script specifically, as the directory might exist from test artifacts
-        if !output_dir.join("airplay2-receiver/ap2-receiver.py").exists() {
-            if let Some(parent) = output_dir.parent() {
-                if parent.join("airplay2-receiver/ap2-receiver.py").exists() {
-                    output_dir = parent.to_path_buf();
+        // Locate source directory
+        let mut source_dir = std::env::current_dir()?;
+        if !source_dir.join("airplay2-receiver/ap2-receiver.py").exists() {
+            if let Some(parent) = source_dir.parent() {
+                if parent
+                    .join("airplay2-receiver/ap2-receiver.py")
+                    .exists()
+                {
+                    source_dir = parent.to_path_buf();
                 }
             }
         }
-        let output_dir = output_dir.join("airplay2-receiver");
+        let source_dir = source_dir.join("airplay2-receiver");
 
-        if !output_dir.exists() {
+        if !source_dir.exists() {
             return Err(format!(
                 "Could not find 'airplay2-receiver' directory. Checked {:?} and parent.",
                 std::env::current_dir()?
             )
             .into());
         }
+
+        // Create temp dir and copy receiver code
+        let temp_dir = TempDir::new()?;
+        let temp_path = temp_dir.path().to_path_buf();
+
+        tracing::info!("Setting up test environment in {:?}", temp_path);
+
+        // Copy ap2-receiver.py
+        fs::copy(
+            source_dir.join("ap2-receiver.py"),
+            temp_path.join("ap2-receiver.py"),
+        )?;
+
+        // Recursive copy of ap2/ directory using cp command (available on unix/ci)
+        #[cfg(unix)]
+        {
+            let status = std::process::Command::new("cp")
+                .arg("-r")
+                .arg(source_dir.join("ap2"))
+                .arg(&temp_path)
+                .status()?;
+            if !status.success() {
+                return Err("Failed to copy ap2 directory".into());
+            }
+        }
+        #[cfg(windows)]
+        {
+            // Windows implementation if needed, for now assume CI is linux/macos
+            // or use a crate for recursive copy if windows support is required later
+            return Err("Windows copy not implemented".into());
+        }
+
+        // Create pairings directory
+        let pairings_dir = temp_path.join("pairings");
+        fs::create_dir_all(&pairings_dir)?;
 
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
@@ -51,29 +90,8 @@ impl PythonReceiver {
             }
         });
 
-        // Clean up any previous test outputs
-        let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
-        let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
-
-        // Clean up pairings for fresh state (added for persistent pairing test)
-        let pairings_dir = output_dir.join("pairings");
-        if pairings_dir.exists() {
-            fs::remove_dir_all(&pairings_dir)?;
-        }
-        fs::create_dir_all(&pairings_dir)?;
-
-        // Restore .gitignore to keep repo clean
-        fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
-
         tracing::info!("Starting Python receiver on interface: {}", interface);
-        tracing::debug!("Current dir: {:?}", std::env::current_dir());
-        tracing::debug!("Output dir: {:?}", output_dir);
-        tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        // Use "python" instead of "python3" to ensure we use the active environment
-        // (e.g. from venv or setup-python in CI).
-        // On Windows, "python" is standard. On Linux/macOS, "python" usually links to the active version.
-        // We also check for PYTHON_BIN env var to allow explicit override from CI.
         let python_bin = std::env::var("PYTHON_BIN").unwrap_or_else(|_| "python".to_string());
         let mut command = Command::new(python_bin);
         command
@@ -91,18 +109,21 @@ impl PythonReceiver {
         unsafe {
             command.pre_exec(|| {
                 // Create a new process group for the child
-                let _ = nix::unistd::setpgid(nix::unistd::Pid::from_raw(0), nix::unistd::Pid::from_raw(0));
+                let _ = nix::unistd::setpgid(
+                    nix::unistd::Pid::from_raw(0),
+                    nix::unistd::Pid::from_raw(0),
+                );
                 Ok(())
             });
         }
 
         let mut process = command
-            .current_dir(&output_dir)
+            .current_dir(&temp_path)
             .env("AIRPLAY_FILE_SINK", "1")
             .env("AIRPLAY_SAVE_RTP", "1")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(false) // We handle cleanup manually to kill the process group
+            .kill_on_drop(false)
             .spawn()
             .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
@@ -217,7 +238,8 @@ impl PythonReceiver {
 
         Ok(Self {
             process: Some(process),
-            output_dir,
+            _temp_dir: temp_dir,
+            output_dir: temp_path,
             interface,
         })
     }

@@ -704,9 +704,8 @@ impl ConnectionManager {
             }
             AudioCodec::Pcm => {
                 // PCM/L16 negotiation (uncompressed audio)
-                builder = builder
-                    .media_attribute("rtpmap", Some("96 L16/44100/2"))
-                    .media_attribute("fmtp", Some("96 352 0 16 40 10 14 2 255 0 0 44100"));
+                // No fmtp parameters needed for L16
+                builder = builder.media_attribute("rtpmap", Some("96 L16/44100/2"));
             }
             AudioCodec::Aac => {
                 // AAC negotiation (96 mpeg4-generic)

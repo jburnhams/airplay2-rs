@@ -4,6 +4,7 @@ import multiprocessing
 import random
 import tempfile  # noqa
 from threading import current_thread
+import sys
 
 import pprint
 
@@ -425,10 +426,11 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         # Enable Feature bit 12: Ft12FPSAPv2p5_AES_GCM: this uses only RSA
         # Enabling Feat bit 25 and iTunes4win attempts AES - cannot yet decrypt.
         self.logger.info(f'{self.command}: {self.path}')
-        self.logger.debug(self.headers)
+        # self.logger.debug(self.headers) # May cause crash if headers contain binary
 
         try:
-            if self.headers["Content-Type"] == 'application/sdp':
+            ct = self.headers.get("Content-Type")
+            if ct == 'application/sdp':
                 content_len = int(self.headers["Content-Length"])
                 if content_len > 0:
                     sdp_body = self.rfile.read(content_len).decode('utf-8')
@@ -469,6 +471,9 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                             self.send_header("CSeq", self.headers["CSeq"])
                             self.end_headers()
                     self.sdp = sdp
+            else:
+                self.logger.warning(f"Unsupported Content-Type: {ct}")
+                self.send_error(415, "Unsupported Media Type")
         except Exception:
             self.logger.error(f"Exception in do_ANNOUNCE: {traceback.format_exc()}")
             self.send_error(500)

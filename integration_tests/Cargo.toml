@@ -12,3 +12,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 nix = { version = "0.29", features = ["signal", "process"] }
 chrono = "0.4"
 bytes = "1.11"
+tempfile = "3.10"
