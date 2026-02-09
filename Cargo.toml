@@ -110,7 +110,3 @@ coreaudio-rs = { version = "0.14", optional = true }
 [workspace]
 members = ["integration_tests"]
 default-members = ["."]
-
-[[test]]
-name = "aac_streaming"
-path = "integration_tests/tests/aac_streaming.rs"

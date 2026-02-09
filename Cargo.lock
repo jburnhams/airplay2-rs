@@ -1234,6 +1234,7 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "airplay2",
+ "bytes",
  "chrono",
  "nix",
  "tokio",
