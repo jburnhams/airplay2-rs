@@ -51,7 +51,10 @@ impl PythonReceiver {
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        // Use "python" instead of "python3" to ensure we use the active environment
+        // (e.g. from venv or setup-python in CI).
+        // On Windows, "python" is standard. On Linux/macOS, "python" usually links to the active version.
+        let mut command = Command::new("python");
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
@@ -69,7 +72,7 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
         // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
