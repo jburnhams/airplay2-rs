@@ -746,13 +746,17 @@ impl ServiceAdvertiser {
     ///
     /// Returns error if mDNS unregistration fails.
     pub async fn unregister_all(&self) -> Result<(), AdvertiserError> {
-        let services = self.registered_services.lock().await;
-        for fullname in services.keys() {
-            let _ = self.daemon.unregister(fullname);
-        }
-        drop(services);
+        // Collect all services and clear the map while holding the lock
+        let services = {
+            let mut guard = self.registered_services.lock().await;
+            std::mem::take(&mut *guard)
+        };
 
-        self.registered_services.lock().await.clear();
+        // Iterate and unregister without holding the lock
+        for (fullname, _) in services {
+            self.daemon.unregister(&fullname)?;
+        }
+
         Ok(())
     }
 
