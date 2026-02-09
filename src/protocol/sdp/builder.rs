@@ -28,11 +28,17 @@ impl SdpBuilder {
 
     /// Set origin
     #[must_use]
-    pub fn origin(mut self, username: &str, session_id: &str, addr: &str) -> Self {
+    pub fn origin(
+        mut self,
+        username: &str,
+        session_id: &str,
+        session_version: &str,
+        addr: &str,
+    ) -> Self {
         self.sdp.origin = Some(SdpOrigin {
             username: username.to_string(),
             session_id: session_id.to_string(),
-            session_version: "1".to_string(),
+            session_version: session_version.to_string(),
             net_type: "IN".to_string(),
             addr_type: if addr.contains(':') { "IP6" } else { "IP4" }.to_string(),
             unicast_address: addr.to_string(),
@@ -197,7 +203,7 @@ pub fn create_raop_announce_sdp(
     aesiv: &str,
 ) -> String {
     SdpBuilder::new()
-        .origin("iTunes", session_id, client_ip)
+        .origin("iTunes", session_id, "1", client_ip)
         .session_name("iTunes")
         .connection(server_ip)
         .timing(0, 0)
