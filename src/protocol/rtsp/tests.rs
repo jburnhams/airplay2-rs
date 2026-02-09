@@ -6,5 +6,6 @@ mod headers;
 mod request;
 mod response;
 mod server_codec;
+mod server_codec_extra;
 mod session;
 mod transport;

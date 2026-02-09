@@ -3,6 +3,7 @@ mod control;
 mod extra_packet;
 mod packet;
 mod packet_buffer;
+mod packet_extra;
 mod raop;
 mod timing;
 mod wrapping;
