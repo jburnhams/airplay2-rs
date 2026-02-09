@@ -11,3 +11,4 @@ async fn test_scan_with_timeout() {
     let result = scan(Duration::from_millis(100)).await;
     assert!(result.is_ok());
 }
+mod advertiser_extra;

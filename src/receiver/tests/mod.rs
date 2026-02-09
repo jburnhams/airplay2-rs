@@ -11,5 +11,6 @@ mod timing;
 mod artwork_handler;
 mod metadata_handler;
 mod progress_handler;
+mod rtsp_handler_extra;
 mod set_parameter_handler;
 mod volume_handler;
