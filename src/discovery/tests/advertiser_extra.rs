@@ -23,7 +23,7 @@ fn test_txt_record_list_formatting() {
     let records = txt.build_map();
 
     assert_eq!(records.get("cn"), Some(&"0,1,2,3".to_string()));
-    assert_eq!(records.get("et"), Some(&"".to_string()));
+    assert_eq!(records.get("et"), Some(&String::new()));
     assert_eq!(records.get("md"), Some(&"1".to_string()));
 }
 
@@ -62,7 +62,7 @@ fn test_txt_record_all_keys_present() {
     ];
 
     for key in expected_keys {
-        assert!(records.contains_key(key), "Missing key: {}", key);
+        assert!(records.contains_key(key), "Missing key: {key}");
     }
 }
 
