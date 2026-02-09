@@ -54,7 +54,9 @@ impl PythonReceiver {
         // Use "python" instead of "python3" to ensure we use the active environment
         // (e.g. from venv or setup-python in CI).
         // On Windows, "python" is standard. On Linux/macOS, "python" usually links to the active version.
-        let mut command = Command::new("python");
+        // We also check for PYTHON_BIN env var to allow explicit override from CI.
+        let python_bin = std::env::var("PYTHON_BIN").unwrap_or_else(|_| "python".to_string());
+        let mut command = Command::new(python_bin);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
