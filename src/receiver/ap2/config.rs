@@ -1,5 +1,6 @@
 //! Configuration for `AirPlay` 2 Receiver
 
+use super::features::{FeatureFlag, FeatureFlags, StatusFlags};
 use crate::types::RaopCodec as AudioFormat;
 
 /// Configuration for an `AirPlay` 2 receiver instance
@@ -110,47 +111,30 @@ impl Ap2Config {
     /// Calculate feature flags based on configuration
     #[must_use]
     pub fn feature_flags(&self) -> u64 {
-        let mut flags: u64 = 0;
+        let mut flags = if self.multi_room_enabled {
+            FeatureFlags::multi_room_receiver()
+        } else {
+            FeatureFlags::audio_receiver()
+        };
 
-        // Core features (always enabled)
-        flags |= 1 << 0; // Video supported (even if we only do audio)
-        flags |= 1 << 1; // Photo supported
-        flags |= 1 << 7; // Audio
-        flags |= 1 << 9; // Audio redundant (FEC)
-        flags |= 1 << 14; // MFi soft auth
-        flags |= 1 << 17; // Supports pairing
-        flags |= 1 << 18; // Supports PIN pairing
-        flags |= 1 << 27; // Supports unified media control
+        // Add compatibility flags
+        flags.set(FeatureFlag::Video);
+        flags.set(FeatureFlag::Photo);
+        flags.set(FeatureFlag::UnifiedMediaControl);
 
-        // Optional features
-        if self.multi_room_enabled {
-            flags |= 1 << 40; // Buffered audio
-            flags |= 1 << 41; // PTP clock
-            flags |= 1 << 46; // HomeKit pairing
-        }
-
-        if self.password.is_some() {
-            flags |= 1 << 15; // Password required
-        }
-
-        flags
+        flags.raw()
     }
 
     /// Get status flags for TXT record
     #[must_use]
     pub fn status_flags(&self) -> u32 {
-        let mut flags: u32 = 0;
+        let flags = if self.password.is_some() {
+            StatusFlags::with_password()
+        } else {
+            StatusFlags::healthy()
+        };
 
-        // Bit 2: Problem detected (0 = no problem)
-        // Bit 3: Supports PIN (1 = yes)
-        flags |= 1 << 3;
-
-        // Bit 4: Supports password
-        if self.password.is_some() {
-            flags |= 1 << 4;
-        }
-
-        flags
+        flags.raw()
     }
 }
 

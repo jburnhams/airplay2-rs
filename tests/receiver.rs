@@ -1,3 +1,5 @@
+#[path = "receiver/advertisement_tests.rs"]
+mod advertisement_tests;
 #[path = "receiver/network_tests.rs"]
 mod network_tests;
 #[path = "receiver/protocol_tests.rs"]

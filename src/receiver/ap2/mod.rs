@@ -4,7 +4,9 @@
 //! It builds on shared infrastructure and reuses protocol primitives
 //! from the client implementation.
 
+pub mod advertisement;
 pub mod config;
+pub mod features;
 pub mod session_state;
 // pub mod receiver;
 // pub mod pairing_server;
@@ -22,7 +24,9 @@ pub mod session_state;
 mod tests;
 
 // Re-exports
+pub use advertisement::{Ap2ServiceAdvertiser, Ap2TxtRecord};
 pub use config::Ap2Config;
+pub use features::{FeatureFlag, FeatureFlags, StatusFlag, StatusFlags};
 pub use session_state::Ap2SessionState;
 // pub use receiver::AirPlay2Receiver;
 // pub use pairing_server::PairingServer;
