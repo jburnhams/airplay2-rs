@@ -767,9 +767,3 @@ impl ServiceAdvertiser {
         )
     }
 }
-
-impl Default for ServiceAdvertiser {
-    fn default() -> Self {
-        Self::new().expect("Failed to create service advertiser")
-    }
-}
