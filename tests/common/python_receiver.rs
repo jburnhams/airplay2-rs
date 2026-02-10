@@ -61,7 +61,8 @@ impl PythonReceiver {
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        // Use "python" instead of "python3" to ensure we use the environment configured by setup-python actions
+        let mut command = Command::new("python");
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
@@ -81,7 +82,7 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
         // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
@@ -133,7 +134,8 @@ impl PythonReceiver {
                             }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
-                                if let Some(p) = line.trim().split(':').last() {
+                                // Fix: clippy::double_ended_iterator_last - use next_back()
+                                if let Some(p) = line.trim().split(':').next_back() {
                                     if let Ok(p_num) = p.parse::<u16>() {
                                         port = p_num;
                                     }
@@ -159,7 +161,8 @@ impl PythonReceiver {
                             }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
-                                if let Some(p) = line.trim().split(':').last() {
+                                // Fix: clippy::double_ended_iterator_last - use next_back()
+                                if let Some(p) = line.trim().split(':').next_back() {
                                     if let Ok(p_num) = p.parse::<u16>() {
                                         port = p_num;
                                     }

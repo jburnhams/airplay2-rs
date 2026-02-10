@@ -100,7 +100,6 @@ jobs:
 
       - name: Run integration tests
         run: |
-          cd integration_tests
           cargo test --release -- --test-threads=1 --nocapture
         env:
           RUST_LOG: info
