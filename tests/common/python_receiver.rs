@@ -62,7 +62,9 @@ impl PythonReceiver {
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
         // Use "python" instead of "python3" to ensure we use the environment configured by setup-python actions
-        let mut command = Command::new("python");
+        let python_cmd =
+            std::env::var("PYTHON_EXECUTABLE").unwrap_or_else(|_| "python".to_string());
+        let mut command = Command::new(python_cmd);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
