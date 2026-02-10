@@ -48,7 +48,24 @@ AIRPLAY_FILE_SINK=1 python airplay2-receiver/ap2-receiver.py --netiface en0
 cargo run --example play_alac
 ```
 
-### AAC & AAC-ELD
+### AAC (Advanced Audio Codec)
+**Status**: ✅ VERIFIED
+
+**Evidence**:
+1. **Unit Tests**: Encoder logic verified with `audio::tests::aac_encoder`
+2. **End-to-End Test**:
+   - Streamed AAC audio using `tests/aac_streaming.rs` integration test
+   - Python receiver confirmed "Matched AAC" in logs
+   - Audio data received and RTP packets verified
+3. **SDP Negotiation**: Correctly advertises `mpeg4-generic` with `mode=AAC-hbr` and RFC 3640 headers
+4. **Encoder Integration**: Uses `fdk-aac` crate successfully
+
+**Test Command**:
+```bash
+cargo test --test aac_streaming
+```
+
+### AAC-ELD
 **Status**: ❌ NOT VERIFIED - Not implemented
 
 ## Service Discovery (mDNS/Bonjour)
@@ -177,8 +194,8 @@ cargo run --example play_alac
 
 ## Test Suite Summary
 
-**Total Unit/Integration Tests**: 446 passing, 1 ignored
-- Streaming tests: 9/9 pass
+**Total Unit/Integration Tests**: 447 passing, 1 ignored
+- Streaming tests: 10/10 pass (PCM, ALAC, AAC verified)
 - RTP tests: 44/44 pass
 - SRP tests: 2/3 pass (1 ignored due to custom M1)
 - SDP tests: Include ALAC and PCM parsing
@@ -189,7 +206,7 @@ cargo run --example play_alac
 ## Known Gaps
 
 ### Not Verified
-1. **AAC/AAC-ELD codecs**: Not implemented
+1. **AAC-ELD codec**: Not implemented
 2. **Persistent pairing**: Implementation exists but not tested (timeout before reconnect)
 3. **PTP timing**: Sockets created but accuracy not verified
 4. **Pause/Resume**: Commands exist but not tested in cycle
@@ -198,14 +215,14 @@ cargo run --example play_alac
 7. **Packet loss handling**: RTCP/retransmit not fully tested
 
 ### Test Gaps
-1. No automated integration tests (all manual with Python receiver)
+1. **Persistent pairing**: Timeout test incomplete
 2. No performance benchmarks for encryption overhead
 3. No multi-device streaming tests
 4. No network condition simulation (jitter, packet loss)
 
 ## Recommendations
 
-1. **Add Integration Test Suite**: Automate Python receiver tests
+1. **Complete AAC-ELD Support**: Required for low-latency audio
 2. **Create SRP Test Vectors**: Document expected M1/M2 values for AirPlay variant
 3. **Performance Testing**: Benchmark encryption and codec encoding overhead
 4. **Stability Testing**: Run 1+ hour streaming sessions
@@ -213,6 +230,6 @@ cargo run --example play_alac
 
 ---
 
-**Last Updated**: 2026-01-31
-**Verified By**: End-to-end testing with Python airplay2-receiver
-**Test Environment**: macOS, Python receiver with PyAV 16.1.0
+**Last Updated**: 2026-02-10
+**Verified By**: End-to-end testing with Python airplay2-receiver (Automated via `cargo test`)
+**Test Environment**: Linux, Python 3.12, PyAV 16.1.0
