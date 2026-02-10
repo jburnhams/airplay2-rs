@@ -66,6 +66,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r airplay2-receiver/requirements.txt
           echo "PYTHON_EXECUTABLE=$(python -c 'import sys; print(sys.executable)')" >> $GITHUB_ENV
+
+          # Debugging
+          echo "Python executable: $(python -c 'import sys; print(sys.executable)')"
+          echo "Pip packages:"
+          python -m pip list
+          echo "Import check:"
+          python -c "import hexdump; print('hexdump imported successfully')"
+          python -c "import netifaces; print('netifaces imported successfully')"
         shell: bash
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -104,6 +112,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r airplay2-receiver/requirements.txt
           echo "PYTHON_EXECUTABLE=$(python -c 'import sys; print(sys.executable)')" >> $GITHUB_ENV
+
+          # Debugging
+          echo "Python executable: $(python -c 'import sys; print(sys.executable)')"
+          echo "Pip packages:"
+          python -m pip list
+          python -c "import hexdump; print('hexdump imported successfully')"
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: taiki-e/install-action@cargo-llvm-cov
