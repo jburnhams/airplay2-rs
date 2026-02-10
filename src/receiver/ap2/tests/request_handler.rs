@@ -56,12 +56,14 @@ fn test_pair_setup_allowed_unauthenticated() {
     let request = make_request(Method::Post, "/pair-setup");
 
     // Use a handler that returns OK
-    let mut handlers = Ap2Handlers::default();
-    handlers.pair_setup = |_, cseq, _| Ap2HandleResult {
-        response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
-        new_state: None,
-        event: None,
-        error: None,
+    let handlers = Ap2Handlers {
+        pair_setup: |_, cseq, _| Ap2HandleResult {
+            response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
+            new_state: None,
+            event: None,
+            error: None,
+        },
+        ..Ap2Handlers::default()
     };
 
     let context = make_context();
