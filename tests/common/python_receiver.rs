@@ -1,7 +1,9 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -9,9 +11,12 @@ use tokio::time::sleep;
 /// Python receiver wrapper for testing
 pub struct PythonReceiver {
     process: Child,
+    _temp_dir: TempDir,
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
+    log_buffer: Arc<Mutex<Vec<String>>>,
+    pub port: u16,
 }
 
 impl PythonReceiver {
@@ -22,7 +27,13 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
-        let output_dir = std::env::current_dir()?.join("airplay2-receiver");
+        let source_dir = std::env::current_dir()?.join("airplay2-receiver");
+        let temp_dir = TempDir::new()?;
+        let output_dir = temp_dir.path().to_path_buf();
+
+        tracing::info!("Copying receiver from {:?} to {:?}", source_dir, output_dir);
+        copy_dir_all(&source_dir, &output_dir)?;
+
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
             if cfg!(target_os = "macos") {
@@ -32,30 +43,34 @@ impl PythonReceiver {
             }
         });
 
-        // Clean up any previous test outputs
+        // Clean up any previous test outputs (in temp dir they shouldn't exist, but good practice if reused)
         let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
         let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
 
-        // Clean up pairings for fresh state (added for persistent pairing test)
+        // Clean up pairings for fresh state
         let pairings_dir = output_dir.join("pairings");
         if pairings_dir.exists() {
             fs::remove_dir_all(&pairings_dir)?;
         }
         fs::create_dir_all(&pairings_dir)?;
 
-        // Restore .gitignore to keep repo clean
+        // Restore .gitignore to keep repo clean (not needed in temp dir but keeps logic similar)
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
         tracing::info!("Starting Python receiver on interface: {}", interface);
-        tracing::debug!("Current dir: {:?}", std::env::current_dir());
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        // Use "python" instead of "python3" to ensure we use the environment configured by setup-python actions
+        let python_cmd =
+            std::env::var("PYTHON_EXECUTABLE").unwrap_or_else(|_| "python".to_string());
+        let mut command = Command::new(python_cmd);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("--port")
+            .arg("0");
 
         for arg in args {
             command.arg(arg);
@@ -69,11 +84,15 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
         // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
         let stderr = process.stderr.take().ok_or("Failed to capture stderr")?;
+
+        // Buffer for capturing logs
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let log_buffer_clone = log_buffer.clone();
 
         // Wait for receiver to start by reading output
         let start = std::time::Instant::now();
@@ -84,12 +103,10 @@ impl PythonReceiver {
         let mut stderr_lines = Vec::new();
         #[allow(unused_assignments)]
         let mut found_serving = false;
+        let mut port = 7000;
 
         loop {
             if start.elapsed() > timeout {
-                // process.kill() is async in tokio, but we are returning error which drops process.
-                // Since we set kill_on_drop(true), it should be fine.
-                // But explicitly killing is good.
                 let _ = process.kill().await;
                 let stderr_output: String = stderr_lines.join("\n");
                 return Err(format!(
@@ -114,8 +131,17 @@ impl PythonReceiver {
                     match line {
                         Ok(Some(line)) => {
                             tracing::debug!("Receiver stdout: {}", line.trim());
+                            if let Ok(mut buffer) = log_buffer_clone.lock() {
+                                buffer.push(format!("STDOUT: {}", line));
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
+                                // Fix: clippy::double_ended_iterator_last - use next_back()
+                                if let Some(p) = line.trim().split(':').next_back() {
+                                    if let Ok(p_num) = p.parse::<u16>() {
+                                        port = p_num;
+                                    }
+                                }
                                 found_serving = true;
                                 break;
                             }
@@ -132,8 +158,17 @@ impl PythonReceiver {
                      match line {
                         Ok(Some(line)) => {
                             tracing::warn!("Receiver stderr: {}", line.trim());
+                            if let Ok(mut buffer) = log_buffer_clone.lock() {
+                                buffer.push(format!("STDERR: {}", line));
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
+                                // Fix: clippy::double_ended_iterator_last - use next_back()
+                                if let Some(p) = line.trim().split(':').next_back() {
+                                    if let Ok(p_num) = p.parse::<u16>() {
+                                        port = p_num;
+                                    }
+                                }
                                 found_serving = true;
                                 break;
                             }
@@ -164,14 +199,24 @@ impl PythonReceiver {
                 tokio::select! {
                     line = reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::debug!("Receiver stdout: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::debug!("Receiver stdout: {}", line.trim());
+                                if let Ok(mut buffer) = log_buffer_clone.lock() {
+                                    buffer.push(format!("STDOUT: {}", line));
+                                }
+                            },
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
                     }
                     line = stderr_reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::warn!("Receiver stderr: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::warn!("Receiver stderr: {}", line.trim());
+                                if let Ok(mut buffer) = log_buffer_clone.lock() {
+                                    buffer.push(format!("STDERR: {}", line));
+                                }
+                            },
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
@@ -182,8 +227,11 @@ impl PythonReceiver {
 
         Ok(Self {
             process,
+            _temp_dir: temp_dir,
             output_dir,
             interface,
+            log_buffer,
+            port,
         })
     }
 
@@ -227,10 +275,19 @@ impl PythonReceiver {
         // Save logs for debugging
         let log_path = PathBuf::from("target").join(format!(
             "integration-test-{}.log",
-            chrono::Utc::now().timestamp()
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) // Use nanos for more uniqueness
         ));
+
+        // Write captured logs to file
+        if let Ok(buffer) = self.log_buffer.lock() {
+            fs::create_dir_all("target")?;
+            fs::write(&log_path, buffer.join("\n"))?;
+        }
+
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
+        } else {
+            tracing::warn!("No audio data found at {}", audio_path.display());
         }
 
         Ok(ReceiverOutput {
@@ -249,7 +306,7 @@ impl PythonReceiver {
             name: "Integration-Test-Receiver".to_string(),
             model: Some("AirPlay2-Receiver".to_string()),
             addresses: vec!["127.0.0.1".parse().unwrap()],
-            port: 7000,
+            port: self.port,
             capabilities: airplay2::DeviceCapabilities {
                 airplay2: true,
                 supports_transient_pairing: true,
@@ -262,11 +319,33 @@ impl PythonReceiver {
     }
 }
 
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let file_name = entry.file_name();
+
+        // Skip __pycache__ and hidden files
+        if file_name.to_string_lossy().starts_with("__pycache__")
+            || file_name.to_string_lossy().starts_with(".")
+        {
+            continue;
+        }
+
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(file_name))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(file_name))?;
+        }
+    }
+    Ok(())
+}
+
 /// Output from the Python receiver
 pub struct ReceiverOutput {
     pub audio_data: Option<Vec<u8>>,
     pub rtp_data: Option<Vec<u8>>,
-    #[allow(dead_code)]
     pub log_path: PathBuf,
 }
 

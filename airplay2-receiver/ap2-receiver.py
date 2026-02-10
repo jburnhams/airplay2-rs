@@ -65,6 +65,7 @@ Set to 300 to trigger ??
 Set to 200 to trigger ANNOUNCE (APv1)
 """
 SERVER_VERSION = "366.0"
+PORT = 7000
 HTTP_CT_BPLIST = "application/x-apple-binary-plist"
 HTTP_CT_OCTET = "application/octet-stream"
 HTTP_CT_PARAM = "text/parameters"
@@ -117,6 +118,7 @@ def get_hex_bitmask(in_features):
 
 def update_status_flags(flag=None, on=False, push=True):
     global MDNS_OBJ
+    global PORT
     """ Use this to check for and send out updated status flags
     if flag is None, skip changing the flags (e.g. updates already queued)
     if on is true, add the flag in, otherwise remove it.
@@ -134,9 +136,9 @@ def update_status_flags(flag=None, on=False, push=True):
     # If push is false, we skip pushing out the update.
     if push:
         if IPV6 is not None:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
         else:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
 
 
 def setup_global_structs(args, isDebug=False):
@@ -1201,14 +1203,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.logger.debug("----- ENCRYPTED CHANNEL -----")
 
 
-def register_mdns(mac, receiver_name, addresses):
+def register_mdns(mac, receiver_name, addresses, port=7000):
     global MDNS_OBJ
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
         f"{receiver_name}._airplay._tcp.local.",
         addresses=addresses,
-        port=7000,
+        port=port,
         properties=mdns_props,
         server=f"{mac.replace(':', '')}@{receiver_name}._airplay.local.",
     )
@@ -1350,6 +1352,7 @@ if __name__ == "__main__":
         help="Bitwise XOR toggle individual Airplay feature bits from the default. Use 0 for help.")
     parser.add_argument("--list-interfaces", help="Prints available network interfaces and exits.", action='store_true')
     parser.add_argument("--debug", help="Prints extra debug message e.g. HTTP headers.", action='store_true')
+    parser.add_argument("-p", "--port", help="Port number", type=int, default=7000)
 
     args = parser.parse_args()
 
@@ -1469,24 +1472,37 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    if IPV6 is not None:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
-    else:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
-
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
-        PORT = 7000
+        # Use provided port, or 0 for random ephemeral port
+        server_port = args.port
+
         if IPV6 and not IPV4:
-            with AP2Server((IPV6, PORT), AP2Handler) as httpd:
+            with AP2Server((IPV6, server_port), AP2Handler) as httpd:
                 IPADDR_BIN = IP6ADDR_BIN
                 IPADDR = IPV6
+                PORT = httpd.server_address[1] # Update global PORT with actual port
+
+                # Register mDNS after we know the port
+                if IPV6 is not None:
+                    MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
+                else:
+                    MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
+
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
-            with AP2Server((IPV4, PORT), AP2Handler) as httpd:
+            with AP2Server((IPV4, server_port), AP2Handler) as httpd:
                 IPADDR_BIN = IP4ADDR_BIN
                 IPADDR = IPV4
+                PORT = httpd.server_address[1] # Update global PORT with actual port
+
+                # Register mDNS after we know the port
+                if IPV6 is not None:
+                    MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
+                else:
+                    MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
+
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
 
