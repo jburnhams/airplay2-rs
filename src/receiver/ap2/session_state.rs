@@ -117,6 +117,18 @@ impl Ap2SessionState {
     /// Returns `StateError::InvalidTransition` if the transition is not allowed.
     #[allow(clippy::match_same_arms)]
     pub fn transition_to(&self, new_state: Ap2SessionState) -> Result<Ap2SessionState, StateError> {
+        // Error state can be reached from anywhere
+        if matches!(new_state, Self::Error { .. }) {
+            return Ok(new_state);
+        }
+
+        // Teardown can be reached from most states, except initial ones
+        if matches!(new_state, Self::Teardown)
+            && !matches!(self, Self::Connected | Self::Error { .. })
+        {
+            return Ok(new_state);
+        }
+
         let valid = match (self, &new_state) {
             // From Connected
             (Self::Connected, Self::InfoExchanged) => true,
@@ -142,25 +154,15 @@ impl Ap2SessionState {
 
             // From SetupPhase1
             (Self::SetupPhase1, Self::SetupPhase2) => true,
-            (Self::SetupPhase1, Self::Teardown) => true,
 
             // From SetupPhase2
             (Self::SetupPhase2, Self::Streaming) => true,
-            (Self::SetupPhase2, Self::Teardown) => true,
 
             // From Streaming
             (Self::Streaming, Self::Paused) => true,
-            (Self::Streaming, Self::Teardown) => true,
 
             // From Paused
             (Self::Paused, Self::Streaming) => true,
-            (Self::Paused, Self::Teardown) => true,
-
-            // Error can be reached from anywhere
-            (_, Self::Error { .. }) => true,
-
-            // Teardown can be reached from most states
-            (_, Self::Teardown) if !matches!(self, Self::Connected | Self::Error { .. }) => true,
 
             _ => false,
         };
