@@ -5,8 +5,12 @@
 //! from the client implementation.
 
 pub mod advertisement;
+pub mod body_handler;
 pub mod config;
 pub mod features;
+pub mod request_handler;
+pub mod request_router;
+pub mod response_builder;
 pub mod session_state;
 // pub mod receiver;
 // pub mod pairing_server;
