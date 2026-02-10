@@ -6,6 +6,7 @@ mod rtsp_handler;
 mod sequence_tracker;
 mod server;
 mod session;
+mod session_manager;
 mod timing;
 
 mod artwork_handler;
