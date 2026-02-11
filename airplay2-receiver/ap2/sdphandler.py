@@ -88,11 +88,23 @@ class SDPHandler():
                     self.audio_desc = 'ALAC'
                 elif self.audio_format == self.SDPAudioFormat.AAC:
                     self.audio_desc = 'AAC_LC'
+                    if 'config=' in self.audio_fmtp:
+                        start = self.audio_fmtp.find('config=') + len('config=')
+                        end = self.audio_fmtp.find(';', start)
+                        if end == -1:
+                            end = len(self.audio_fmtp)
+                        config_hex = self.audio_fmtp[start:end].strip()
+                        try:
+                            extradata = bytes.fromhex(config_hex)
+                            self.params = AudioSetup(sr=44100, ss=16, cc=2, codec_tag='mp4a')
+                            self.params.extradata = extradata
+                        except ValueError:
+                            pass
                 elif self.audio_format == self.SDPAudioFormat.PCM:
                     self.audio_desc = 'PCM'
                 elif self.audio_format == self.SDPAudioFormat.OPUS:
                     self.audio_desc = 'OPUS'
-                if 'mode=' in self.audio_fmtp:
+                if 'mode=' in self.audio_fmtp and 'mode=AAC-hbr' not in self.audio_fmtp:
                     self.audio_format = self.SDPAudioFormat.AAC_ELD
                     for x in self.afp:
                         if 'constantDuration=' in x:
