@@ -262,7 +262,7 @@ fn handle_options(cseq: u32) -> Ap2HandleResult {
 }
 
 /// Handler function type
-pub type HandlerFn = fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult;
+pub type HandlerFn = Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>;
 
 /// Collection of request handlers
 pub struct Ap2Handlers {
@@ -299,20 +299,20 @@ pub struct Ap2Handlers {
 impl Default for Ap2Handlers {
     fn default() -> Self {
         Self {
-            info: stub_handler,
-            pair_setup: stub_handler,
-            pair_verify: stub_handler,
-            auth_setup: stub_handler,
-            setup: stub_handler,
-            record: stub_handler,
-            pause: stub_handler,
-            flush: stub_handler,
-            teardown: stub_handler,
-            get_parameter: stub_handler,
-            set_parameter: stub_handler,
-            command: stub_handler,
-            feedback: stub_handler,
-            audio_mode: stub_handler,
+            info: Box::new(stub_handler),
+            pair_setup: Box::new(stub_handler),
+            pair_verify: Box::new(stub_handler),
+            auth_setup: Box::new(stub_handler),
+            setup: Box::new(stub_handler),
+            record: Box::new(stub_handler),
+            pause: Box::new(stub_handler),
+            flush: Box::new(stub_handler),
+            teardown: Box::new(stub_handler),
+            get_parameter: Box::new(stub_handler),
+            set_parameter: Box::new(stub_handler),
+            command: Box::new(stub_handler),
+            feedback: Box::new(stub_handler),
+            audio_mode: Box::new(stub_handler),
         }
     }
 }

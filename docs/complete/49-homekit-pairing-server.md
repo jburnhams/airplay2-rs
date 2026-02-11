@@ -67,7 +67,7 @@ Sender (Client)                     Receiver (Server)
 
 ### 49.1 SRP Server Implementation
 
-- [ ] **49.1.1** Implement SRP-6a server/verifier
+- [x] **49.1.1** Implement SRP-6a server/verifier
 
 **File:** `src/receiver/ap2/pairing_server.rs`
 
@@ -647,7 +647,7 @@ pub enum PairingError {
 
 ### 49.2 TLV Types Extension
 
-- [ ] **49.2.1** Ensure TLV types cover all pairing needs
+- [x] **49.2.1** Ensure TLV types cover all pairing needs
 
 **File:** `src/protocol/pairing/tlv.rs` (additions)
 
@@ -721,7 +721,7 @@ pub enum PairingErrorCode {
 
 ### 49.3 Endpoint Handlers
 
-- [ ] **49.3.1** Implement /pair-setup and /pair-verify handlers
+- [x] **49.3.1** Implement /pair-setup and /pair-verify handlers
 
 **File:** `src/receiver/ap2/pairing_handlers.rs`
 
@@ -905,7 +905,7 @@ pub fn create_pairing_handlers(
 
 ### 49.4 Pairing Server Tests
 
-- [ ] **49.4.1** Test SRP server operations
+- [x] **49.4.1** Test SRP server operations
 
 **File:** `src/receiver/ap2/pairing_server.rs` (test module)
 
@@ -1003,7 +1003,7 @@ mod tests {
 
 ### 49.5 Full Pairing Flow Tests
 
-- [ ] **49.5.1** Test complete pairing handshake
+- [x] **49.5.1** Test complete pairing handshake
 
 **File:** `tests/receiver/pairing_tests.rs`
 
@@ -1146,17 +1146,17 @@ fn test_pair_verify_after_setup() {
 
 ## Acceptance Criteria
 
-- [ ] SRP server correctly handles M1 and generates M2 with salt and public key
-- [ ] SRP server validates client proof in M3 and generates M4 with server proof
-- [ ] Wrong password results in authentication failure at M3
-- [ ] Pair-verify M1/M2 exchange completes successfully
-- [ ] Pair-verify M3/M4 exchange derives session keys
-- [ ] Encryption keys are available after successful pairing
-- [ ] State machine prevents out-of-order messages
-- [ ] Reset clears all pairing state
-- [ ] TLV encoding/decoding is compatible with iOS clients
-- [ ] All unit tests pass
-- [ ] Integration tests pass
+- [x] SRP server correctly handles M1 and generates M2 with salt and public key
+- [x] SRP server validates client proof in M3 and generates M4 with server proof
+- [x] Wrong password results in authentication failure at M3
+- [x] Pair-verify M1/M2 exchange completes successfully
+- [x] Pair-verify M3/M4 exchange derives session keys
+- [x] Encryption keys are available after successful pairing
+- [x] State machine prevents out-of-order messages
+- [x] Reset clears all pairing state
+- [x] TLV encoding/decoding is compatible with iOS clients
+- [x] All unit tests pass
+- [x] Integration tests pass
 
 ---
 

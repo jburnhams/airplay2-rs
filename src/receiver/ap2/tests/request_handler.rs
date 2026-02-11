@@ -57,12 +57,12 @@ fn test_pair_setup_allowed_unauthenticated() {
 
     // Use a handler that returns OK
     let handlers = Ap2Handlers {
-        pair_setup: |_, cseq, _| Ap2HandleResult {
+        pair_setup: Box::new(|_, cseq, _| Ap2HandleResult {
             response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
             new_state: None,
             event: None,
             error: None,
-        },
+        }),
         ..Ap2Handlers::default()
     };
 
