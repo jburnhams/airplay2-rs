@@ -81,9 +81,7 @@ fn test_ap2_handshake_simulation() {
             let next_state = match ctx.state {
                 Ap2SessionState::PairingSetup { step: 4 }
                 | Ap2SessionState::Connected
-                | Ap2SessionState::InfoExchanged => {
-                    Ap2SessionState::PairingVerify { step: 1 }
-                }
+                | Ap2SessionState::InfoExchanged => Ap2SessionState::PairingVerify { step: 1 },
                 Ap2SessionState::PairingVerify { step: 2 } => {
                     Ap2SessionState::PairingVerify { step: 3 }
                 }
@@ -190,7 +188,9 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = state.transition_to(s).expect("Invalid verify M1 transition");
+        state = state
+            .transition_to(s)
+            .expect("Invalid verify M1 transition");
     }
     assert_eq!(state, Ap2SessionState::PairingVerify { step: 1 });
 
@@ -209,7 +209,9 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = state.transition_to(s).expect("Invalid verify M3 transition");
+        state = state
+            .transition_to(s)
+            .expect("Invalid verify M3 transition");
     }
     assert_eq!(state, Ap2SessionState::PairingVerify { step: 3 });
 
