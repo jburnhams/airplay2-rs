@@ -77,3 +77,63 @@ fn test_unknown_endpoint() {
         _ => panic!("Expected unknown endpoint"),
     }
 }
+
+#[test]
+fn test_classify_all_post_endpoints() {
+    let endpoints = vec![
+        ("/pair-setup", Ap2Endpoint::PairSetup),
+        ("/pair-verify", Ap2Endpoint::PairVerify),
+        ("/fp-setup", Ap2Endpoint::FairPlaySetup),
+        ("/command", Ap2Endpoint::Command),
+        ("/feedback", Ap2Endpoint::Feedback),
+        ("/audioMode", Ap2Endpoint::AudioMode),
+        ("/auth-setup", Ap2Endpoint::AuthSetup),
+    ];
+
+    for (uri, expected) in endpoints {
+        let request = RtspRequest {
+            method: Method::Post,
+            uri: uri.to_string(),
+            headers: Headers::new(),
+            body: vec![],
+        };
+        assert_eq!(
+            Ap2RequestType::classify(&request),
+            Ap2RequestType::Endpoint(expected),
+            "Failed to classify {}",
+            uri
+        );
+    }
+}
+
+#[test]
+fn test_classify_full_url_endpoints() {
+    let request = RtspRequest {
+        method: Method::Post,
+        uri: "rtsp://192.168.1.100:7000/feedback".to_string(),
+        headers: Headers::new(),
+        body: vec![],
+    };
+
+    assert_eq!(
+        Ap2RequestType::classify(&request),
+        Ap2RequestType::Endpoint(Ap2Endpoint::Feedback)
+    );
+}
+
+#[test]
+fn test_classify_root_path() {
+    let request = RtspRequest {
+        method: Method::Post,
+        uri: "rtsp://192.168.1.100:7000/".to_string(),
+        headers: Headers::new(),
+        body: vec![],
+    };
+
+    match Ap2RequestType::classify(&request) {
+        Ap2RequestType::Endpoint(Ap2Endpoint::Unknown(path)) => {
+            assert_eq!(path, "/");
+        }
+        _ => panic!("Expected unknown endpoint /"),
+    }
+}
