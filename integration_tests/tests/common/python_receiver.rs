@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -12,6 +13,7 @@ pub struct PythonReceiver {
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
+    log_buffer: Arc<Mutex<Vec<String>>>,
 }
 
 impl PythonReceiver {
@@ -76,7 +78,7 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
         // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
@@ -91,6 +93,8 @@ impl PythonReceiver {
         let mut stderr_lines = Vec::new();
         #[allow(unused_assignments)]
         let mut found_serving = false;
+
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
 
         loop {
             if start.elapsed() > timeout {
@@ -121,6 +125,7 @@ impl PythonReceiver {
                     match line {
                         Ok(Some(line)) => {
                             tracing::debug!("Receiver stdout: {}", line.trim());
+                            log_buffer.lock().unwrap().push(format!("STDOUT: {}", line));
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
@@ -139,6 +144,7 @@ impl PythonReceiver {
                      match line {
                         Ok(Some(line)) => {
                             tracing::warn!("Receiver stderr: {}", line.trim());
+                            log_buffer.lock().unwrap().push(format!("STDERR: {}", line));
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
                                 found_serving = true;
@@ -165,20 +171,28 @@ impl PythonReceiver {
             return Err("Failed to find 'serving on' message from receiver".into());
         }
 
+        let log_buffer_clone = log_buffer.clone();
+
         // Spawn a background task to keep reading output to prevent deadlocks/SIGPIPE
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     line = reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::debug!("Receiver stdout: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::debug!("Receiver stdout: {}", line.trim());
+                                log_buffer_clone.lock().unwrap().push(format!("STDOUT: {}", line));
+                            },
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
                     }
                     line = stderr_reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::warn!("Receiver stderr: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::warn!("Receiver stderr: {}", line.trim());
+                                log_buffer_clone.lock().unwrap().push(format!("STDERR: {}", line));
+                            },
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
@@ -191,6 +205,7 @@ impl PythonReceiver {
             process,
             output_dir,
             interface,
+            log_buffer,
         })
     }
 
@@ -224,6 +239,25 @@ impl PythonReceiver {
         let _ = self.process.kill().await;
         let _ = self.process.wait().await;
 
+        // Save logs for debugging
+        let log_path = PathBuf::from("target").join(format!(
+            "integration-test-{}.log",
+            chrono::Utc::now().timestamp()
+        ));
+
+        if let Ok(guard) = self.log_buffer.lock() {
+            let logs = guard.join("\n");
+            // Ensure target directory exists (it should, but for safety)
+            if let Some(parent) = log_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            if let Err(e) = fs::write(&log_path, logs) {
+                tracing::warn!("Failed to write receiver logs to {:?}: {}", log_path, e);
+            } else {
+                tracing::info!("Receiver logs written to {:?}", log_path);
+            }
+        }
+
         // Read output files
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
         let rtp_path = self.output_dir.join("rtp_packets.bin");
@@ -231,11 +265,6 @@ impl PythonReceiver {
         let audio_data = fs::read(&audio_path).ok();
         let rtp_data = fs::read(&rtp_path).ok();
 
-        // Save logs for debugging
-        let log_path = PathBuf::from("target").join(format!(
-            "integration-test-{}.log",
-            chrono::Utc::now().timestamp()
-        ));
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
