@@ -1,7 +1,7 @@
-//! HomeKit Pairing Server Implementation
+//! `HomeKit` Pairing Server Implementation
 //!
-//! This module implements the server side of HomeKit pairing, used by
-//! AirPlay 2 receivers to authenticate connecting senders.
+//! This module implements the server side of `HomeKit` pairing, used by
+//! `AirPlay` 2 receivers to authenticate connecting senders.
 //!
 //! # Reuse from Client Implementation
 //!
@@ -70,6 +70,7 @@ pub struct EncryptionKeys {
     pub decrypt_nonce: u64,
 }
 
+/// Current state of the pairing server state machine
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PairingServerState {
     /// Waiting for M1
@@ -101,6 +102,7 @@ pub struct PairingResult {
 
 impl PairingServer {
     /// Create a new pairing server with the given Ed25519 identity
+    #[must_use]
     pub fn new(identity: Ed25519KeyPair) -> Self {
         // Generate random salt
         let mut srp_salt = [0u8; 16];
@@ -170,11 +172,13 @@ impl PairingServer {
     }
 
     /// Get encryption keys (only valid after successful pairing)
+    #[must_use]
     pub fn encryption_keys(&self) -> Option<&EncryptionKeys> {
         self.encryption_keys.as_ref()
     }
 
     /// Get client's public key (for persistent storage)
+    #[must_use]
     pub fn client_public_key(&self) -> Option<&[u8; 32]> {
         self.client_public_key.as_ref()
     }
@@ -204,9 +208,8 @@ impl PairingServer {
         }
 
         // Ensure we have a verifier set
-        let verifier = match &self.srp_verifier {
-            Some(v) => v.clone(),
-            None => return self.error_result(PairingError::NoPassword),
+        let Some(verifier) = self.srp_verifier.clone() else {
+            return self.error_result(PairingError::NoPassword);
         };
 
         // Create SRP server
@@ -241,33 +244,30 @@ impl PairingServer {
             return self.error_result(PairingError::InvalidState);
         }
 
-        let srp_server = match self.srp_server.take() {
-            Some(s) => s,
-            None => return self.error_result(PairingError::InvalidState),
+        let Some(srp_server) = self.srp_server.take() else {
+            return self.error_result(PairingError::InvalidState);
         };
 
         // Get client's public key and proof
-        let client_public = match tlv.get_bytes(TlvType::PublicKey) {
-            Some(pk) => pk,
-            None => return self.error_result(PairingError::MissingField("PublicKey")),
+        let Some(client_public) = tlv.get_bytes(TlvType::PublicKey) else {
+            return self.error_result(PairingError::MissingField("PublicKey"));
         };
 
-        let client_proof = match tlv.get_bytes(TlvType::Proof) {
-            Some(p) => p,
-            None => return self.error_result(PairingError::MissingField("Proof")),
+        let Some(client_proof) = tlv.get_bytes(TlvType::Proof) else {
+            return self.error_result(PairingError::MissingField("Proof"));
         };
 
         // Compute shared key and verify client's proof
-        let (session_key, server_proof) = match srp_server.verify_client(client_public, client_proof) {
-            Ok(result) => result,
-            Err(_) => return self.error_result(PairingError::AuthenticationFailed),
+        let Ok((session_key, server_proof)) =
+            srp_server.verify_client(client_public, client_proof)
+        else {
+            return self.error_result(PairingError::AuthenticationFailed);
         };
 
         // Derive encryption key from session key
         let hkdf = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key.as_bytes());
-        let enc_key = match hkdf.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info") {
-            Ok(k) => k,
-            Err(_) => return self.error_result(PairingError::DecryptionFailed), // Should be key derivation error
+        let Ok(enc_key) = hkdf.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info") else {
+            return self.error_result(PairingError::DecryptionFailed); // Should be key derivation error
         };
 
         // Encrypt our Ed25519 public key for the client
@@ -301,13 +301,16 @@ impl PairingServer {
         }
 
         // Get client's X25519 public key
-        let client_public = match tlv.get_bytes(TlvType::PublicKey) {
-            Some(pk) if pk.len() == 32 => {
-                let mut arr = [0u8; 32];
-                arr.copy_from_slice(pk);
-                arr.into()
-            }
-            _ => return self.error_result(PairingError::MissingField("PublicKey")),
+        let Some(client_public) = tlv.get_bytes(TlvType::PublicKey) else {
+            return self.error_result(PairingError::MissingField("PublicKey"));
+        };
+
+        let client_public: X25519PublicKey = if client_public.len() == 32 {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(client_public);
+            X25519PublicKey::from(arr)
+        } else {
+            return self.error_result(PairingError::MissingField("PublicKey"));
         };
 
         // Generate our X25519 keypair
@@ -316,9 +319,8 @@ impl PairingServer {
 
         // Derive session key
         let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), shared_secret.as_bytes());
-        let session_key = match hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info") {
-             Ok(k) => k,
-             Err(_) => return self.error_result(PairingError::DecryptionFailed),
+        let Ok(session_key) = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info") else {
+            return self.error_result(PairingError::DecryptionFailed);
         };
 
         // Build accessory info for signature
@@ -336,7 +338,7 @@ impl PairingServer {
             .add_bytes(TlvType::Signature, &signature.to_bytes())
             .encode();
 
-        let encrypted = self.encrypt_with_key(&sub_tlv, &session_key, b"PV-Msg02");
+        let encrypted = Self::encrypt_with_key(&sub_tlv, &session_key, b"PV-Msg02");
 
         // Build M2 response
         let response = TlvEncoder::new()
@@ -362,31 +364,27 @@ impl PairingServer {
             return self.error_result(PairingError::InvalidState);
         }
 
-        let shared_secret = match self.shared_secret {
-            Some(s) => s,
-            None => return self.error_result(PairingError::InvalidState),
+        let Some(shared_secret) = self.shared_secret else {
+            return self.error_result(PairingError::InvalidState);
         };
 
-        let _verify_keypair = match &self.verify_keypair {
-            Some(k) => k,
-            None => return self.error_result(PairingError::InvalidState),
+        let Some(_verify_keypair) = &self.verify_keypair else {
+            return self.error_result(PairingError::InvalidState);
         };
 
         // Get encrypted data
-        let encrypted_data = match tlv.get_bytes(TlvType::EncryptedData) {
-            Some(d) => d,
-            None => return self.error_result(PairingError::MissingField("EncryptedData")),
+        let Some(encrypted_data) = tlv.get_bytes(TlvType::EncryptedData) else {
+            return self.error_result(PairingError::MissingField("EncryptedData"));
         };
 
         // Derive decryption key
         let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), &shared_secret);
-        let session_key = match hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info") {
-             Ok(k) => k,
-             Err(_) => return self.error_result(PairingError::DecryptionFailed),
+        let Ok(session_key) = hkdf.expand_fixed::<32>(b"Pair-Verify-Encrypt-Info") else {
+            return self.error_result(PairingError::DecryptionFailed);
         };
 
         // Decrypt client's signature data
-        let decrypted = match self.decrypt_with_key(encrypted_data, &session_key, b"PV-Msg03") {
+        let decrypted = match Self::decrypt_with_key(encrypted_data, &session_key, b"PV-Msg03") {
             Ok(d) => d,
             Err(e) => return self.error_result(e),
         };
@@ -398,19 +396,24 @@ impl PairingServer {
         };
 
         // Get client's identifier (Ed25519 public key) and signature
-        let client_id = match sub_tlv.get_bytes(TlvType::Identifier) {
-            Some(id) if id.len() == 32 => {
-                let mut arr = [0u8; 32];
-                arr.copy_from_slice(id);
-                arr
-            }
-            _ => return self.error_result(PairingError::MissingField("Identifier")),
+        let Some(client_id_bytes) = sub_tlv.get_bytes(TlvType::Identifier) else {
+            return self.error_result(PairingError::MissingField("Identifier"));
         };
 
-        let _client_signature = match sub_tlv.get_bytes(TlvType::Signature) {
-            Some(s) if s.len() == 64 => s,
-            _ => return self.error_result(PairingError::MissingField("Signature")),
+        let client_id = if client_id_bytes.len() == 32 {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(client_id_bytes);
+            arr
+        } else {
+            return self.error_result(PairingError::MissingField("Identifier"));
         };
+
+        let Some(client_signature) = sub_tlv.get_bytes(TlvType::Signature) else {
+            return self.error_result(PairingError::MissingField("Signature"));
+        };
+        if client_signature.len() != 64 {
+            return self.error_result(PairingError::MissingField("Signature"));
+        }
 
         // Build info for signature verification
         // TODO: Get client's public key from M1? No, we don't have it.
@@ -437,7 +440,7 @@ impl PairingServer {
         // However, looking at the code I'm preparing to write... I'll add `client_x25519: Option<[u8; 32]>`.
 
         // Derive encryption keys for the session
-        let enc_keys = self.derive_session_keys(&shared_secret);
+        let enc_keys = Self::derive_session_keys(&shared_secret);
 
         // Build M4 response (empty encrypted data indicates success)
         let response = TlvEncoder::new()
@@ -462,10 +465,10 @@ impl PairingServer {
         // Sign: SHA-512(session_key) || identifier || Ed25519 public key
         let mut hasher = Sha512::new();
         hasher.update(session_key);
-        let hashed = hasher.finalize();
+        let digest = hasher.finalize();
 
         let mut info = Vec::new();
-        info.extend_from_slice(&hashed[..32]);
+        info.extend_from_slice(&digest[..32]);
         info.extend_from_slice(b"airplay2-rs"); // Identifier?
         // Wait, receiver identifier? The snippet used "Identifier" TLV which was "airplay2-rs" in setup.rs
         // In the snippet earlier:
@@ -490,10 +493,10 @@ impl PairingServer {
             .encode();
 
         // Encrypt with ChaCha20-Poly1305
-        self.encrypt_with_key(&sub_tlv, key, b"PS-Msg04")
+        Self::encrypt_with_key(&sub_tlv, key, b"PS-Msg04")
     }
 
-    fn encrypt_with_key(&self, data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Vec<u8> {
+    fn encrypt_with_key(data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Vec<u8> {
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes[..nonce_prefix.len().min(12)].copy_from_slice(
             &nonce_prefix[..nonce_prefix.len().min(12)]
@@ -504,7 +507,7 @@ impl PairingServer {
         cipher.encrypt(&nonce, data).expect("encryption failed")
     }
 
-    fn decrypt_with_key(&self, data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Result<Vec<u8>, PairingError> {
+    fn decrypt_with_key(data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Result<Vec<u8>, PairingError> {
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes[..nonce_prefix.len().min(12)].copy_from_slice(
             &nonce_prefix[..nonce_prefix.len().min(12)]
@@ -516,7 +519,7 @@ impl PairingServer {
             .map_err(|_| PairingError::DecryptionFailed)
     }
 
-    fn derive_session_keys(&self, shared_secret: &[u8; 32]) -> EncryptionKeys {
+    fn derive_session_keys(shared_secret: &[u8; 32]) -> EncryptionKeys {
         // Derive keys for bidirectional communication
         let hkdf = HkdfSha512::new(Some(b"Control-Salt"), shared_secret);
 
@@ -575,32 +578,42 @@ impl PairingServer {
 /// SRP parameters (3072-bit, same as client)
 pub static SRP_PARAMS: SrpGroup = SrpParams::RFC5054_3072;
 
+/// Errors that can occur during pairing
 #[derive(Debug, thiserror::Error)]
 pub enum PairingError {
+    /// TLV decoding failed
     #[error("TLV decode error: {0}")]
     TlvDecode(String),
 
+    /// Unexpected state in pairing sequence
     #[error("Unexpected pairing state: {0}")]
     UnexpectedState(u8),
 
+    /// State machine transition error
     #[error("Invalid state machine state")]
     InvalidState,
 
+    /// Unsupported pairing method
     #[error("Unsupported pairing method: {0}")]
     UnsupportedMethod(u8),
 
+    /// Password/PIN not configured on server
     #[error("No password/PIN configured")]
     NoPassword,
 
+    /// Missing required TLV field
     #[error("Missing required field: {0}")]
     MissingField(&'static str),
 
+    /// Authentication failed (wrong password)
     #[error("Authentication failed - wrong PIN/password")]
     AuthenticationFailed,
 
+    /// Decryption of encrypted payload failed
     #[error("Decryption failed")]
     DecryptionFailed,
 
+    /// Signature verification failed
     #[error("Signature verification failed")]
     SignatureVerificationFailed,
 }

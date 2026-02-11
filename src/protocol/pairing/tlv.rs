@@ -128,19 +128,19 @@ impl TlvEncoder {
         self.add(tlv_type, &[value])
     }
 
-    /// Add a single byte value (alias for add_byte)
+    /// Add a single byte value (alias for `add_byte`)
     #[must_use]
     pub fn add_u8(self, tlv_type: TlvType, value: u8) -> Self {
         self.add_byte(tlv_type, value)
     }
 
-    /// Add bytes (alias for add)
+    /// Add bytes (alias for `add`)
     #[must_use]
     pub fn add_bytes(self, tlv_type: TlvType, value: &[u8]) -> Self {
         self.add(tlv_type, value)
     }
 
-    /// Build the encoded TLV data (alias for build)
+    /// Build the encoded TLV data (alias for `build`)
     #[must_use]
     pub fn encode(self) -> Vec<u8> {
         self.build()

@@ -1,6 +1,6 @@
 //! HTTP endpoint handlers for pairing
 //!
-//! These handlers integrate the PairingServer with the RTSP request framework.
+//! These handlers integrate the `PairingServer` with the RTSP request framework.
 
 use crate::protocol::rtsp::{RtspRequest, StatusCode};
 use super::pairing_server::{PairingServer, PairingResult, PairingServerState};
@@ -15,6 +15,8 @@ pub struct PairingHandler {
 }
 
 impl PairingHandler {
+    /// Create a new pairing handler
+    #[must_use]
     pub fn new(server: PairingServer) -> Self {
         Self {
             server: Arc::new(Mutex::new(server)),
@@ -22,6 +24,11 @@ impl PairingHandler {
     }
 
     /// Handle POST /pair-setup
+    ///
+    /// # Panics
+    ///
+    /// Panics if the server mutex cannot be acquired.
+    #[must_use]
     pub fn handle_pair_setup(
         &self,
         request: &RtspRequest,
@@ -47,6 +54,11 @@ impl PairingHandler {
     }
 
     /// Handle POST /pair-verify
+    ///
+    /// # Panics
+    ///
+    /// Panics if the server mutex cannot be acquired.
+    #[must_use]
     pub fn handle_pair_verify(
         &self,
         request: &RtspRequest,
@@ -96,12 +108,13 @@ impl PairingHandler {
             PairingServerState::Error => {
                 Some(Ap2SessionState::Error {
                     code: 470,
-                    message: result.error.as_ref()
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "Pairing error".to_string()),
+                    message: result.error.as_ref().map_or_else(
+                        || "Pairing error".to_string(),
+                        std::string::ToString::to_string,
+                    ),
                 })
             }
-            _ => None,
+            PairingServerState::Idle => None,
         };
 
         let event = if emit_complete_event && result.complete {
@@ -153,22 +166,34 @@ impl PairingHandler {
     }
 
     /// Get encryption keys (only valid after successful pairing)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the server mutex cannot be acquired.
+    #[must_use]
     pub fn encryption_keys(&self) -> Option<super::pairing_server::EncryptionKeys> {
         self.server.lock().unwrap().encryption_keys().cloned()
     }
 
     /// Reset for new pairing attempt
+    ///
+    /// # Panics
+    ///
+    /// Panics if the server mutex cannot be acquired.
     pub fn reset(&self) {
         self.server.lock().unwrap().reset();
     }
 }
 
+type BoxedHandler = Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>;
+
 /// Create pairing handlers for the request handler framework
+#[must_use]
 pub fn create_pairing_handlers(
     handler: Arc<PairingHandler>,
 ) -> (
-    Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>,
-    Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>,
+    BoxedHandler,
+    BoxedHandler,
 ) {
     let setup_handler = handler.clone();
     let verify_handler = handler;
