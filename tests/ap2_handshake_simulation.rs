@@ -59,15 +59,14 @@ fn test_ap2_handshake_simulation() {
                 .with_state(Ap2SessionState::InfoExchanged)
         },
         pair_setup: |_, cseq, ctx| {
-            // Simulate 2-request pairing flow (M1->M2, M3->M4)
+            // Return Step 1 (M1 received) or Step 3 (M3 received)
+            // Test loop will simulate 1->2 (M2 sent) and 3->4 (M4 sent)
             let next_state = match ctx.state {
                 Ap2SessionState::InfoExchanged | Ap2SessionState::Connected => {
-                    // M1 received -> M2 sent (Step 2)
-                    Ap2SessionState::PairingSetup { step: 2 }
+                    Ap2SessionState::PairingSetup { step: 1 }
                 }
                 Ap2SessionState::PairingSetup { step: 2 } => {
-                    // M3 received -> M4 sent (Step 4)
-                    Ap2SessionState::PairingSetup { step: 4 }
+                    Ap2SessionState::PairingSetup { step: 3 }
                 }
                 _ => ctx.state.clone(),
             };
@@ -78,17 +77,15 @@ fn test_ap2_handshake_simulation() {
                 .with_state(next_state)
         },
         pair_verify: |_, cseq, ctx| {
-            // Simulate 2-request verify flow (M1->M2, M3->M4)
+            // Return Step 1 (M1 received) or Step 3 (M3 received)
             let next_state = match ctx.state {
                 Ap2SessionState::PairingSetup { step: 4 }
                 | Ap2SessionState::Connected
                 | Ap2SessionState::InfoExchanged => {
-                    // M1 received -> M2 sent (Step 2)
-                    Ap2SessionState::PairingVerify { step: 2 }
+                    Ap2SessionState::PairingVerify { step: 1 }
                 }
                 Ap2SessionState::PairingVerify { step: 2 } => {
-                    // M3 received -> M4 sent (Paired)
-                    Ap2SessionState::Paired
+                    Ap2SessionState::PairingVerify { step: 3 }
                 }
                 _ => ctx.state.clone(),
             };
@@ -139,7 +136,7 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid info transition");
     }
     assert_eq!(state, Ap2SessionState::InfoExchanged);
 
@@ -154,9 +151,14 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid setup M1 transition");
     }
-    assert_eq!(state, Ap2SessionState::PairingSetup { step: 2 });
+    assert_eq!(state, Ap2SessionState::PairingSetup { step: 1 });
+
+    // Simulate sending M2 (Step 1 -> Step 2)
+    state = state
+        .transition_to(Ap2SessionState::PairingSetup { step: 2 })
+        .expect("Invalid setup 1->2 transition");
 
     // Request 2 (M3)
     let req = make_request(Method::Post, "/pair-setup");
@@ -168,9 +170,14 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid setup M3 transition");
     }
-    assert_eq!(state, Ap2SessionState::PairingSetup { step: 4 });
+    assert_eq!(state, Ap2SessionState::PairingSetup { step: 3 });
+
+    // Simulate sending M4 (Step 3 -> Step 4)
+    state = state
+        .transition_to(Ap2SessionState::PairingSetup { step: 4 })
+        .expect("Invalid setup 3->4 transition");
 
     // 3. Pair Verify (2 requests)
     // Request 1 (M1)
@@ -183,9 +190,14 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid verify M1 transition");
     }
-    assert_eq!(state, Ap2SessionState::PairingVerify { step: 2 });
+    assert_eq!(state, Ap2SessionState::PairingVerify { step: 1 });
+
+    // Simulate sending M2 (Step 1 -> Step 2)
+    state = state
+        .transition_to(Ap2SessionState::PairingVerify { step: 2 })
+        .expect("Invalid verify 1->2 transition");
 
     // Request 2 (M3)
     let req = make_request(Method::Post, "/pair-verify");
@@ -197,8 +209,20 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid verify M3 transition");
     }
+    assert_eq!(state, Ap2SessionState::PairingVerify { step: 3 });
+
+    // Simulate sending M4 (Step 3 -> Step 4)
+    state = state
+        .transition_to(Ap2SessionState::PairingVerify { step: 4 })
+        .expect("Invalid verify 3->4 transition");
+
+    // Transition to Paired
+    state = state
+        .transition_to(Ap2SessionState::Paired)
+        .expect("Invalid verify 4->Paired transition");
+
     assert_eq!(state, Ap2SessionState::Paired);
 
     // 4. SETUP (Phase 1)
@@ -211,7 +235,7 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid Setup 1 transition");
     }
     assert_eq!(state, Ap2SessionState::SetupPhase1);
 
@@ -225,7 +249,7 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid Setup 2 transition");
     }
     assert_eq!(state, Ap2SessionState::SetupPhase2);
 
@@ -239,7 +263,7 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid Record transition");
     }
     assert_eq!(state, Ap2SessionState::Streaming);
 
@@ -253,7 +277,7 @@ fn test_ap2_handshake_simulation() {
     };
     let res = handle_ap2_request(&req, &ctx, &handlers);
     if let Some(s) = res.new_state {
-        state = s;
+        state = state.transition_to(s).expect("Invalid Teardown transition");
     }
     assert_eq!(state, Ap2SessionState::Teardown);
 }
