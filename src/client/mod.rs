@@ -145,8 +145,8 @@ impl AirPlayClient {
     /// # Errors
     ///
     /// Returns error if mDNS discovery fails.
-    pub async fn discover(&self) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-        discover().await
+    pub fn discover(&self) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+        discover()
     }
 
     // === Connection ===
