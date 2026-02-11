@@ -22,7 +22,16 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
-        let output_dir = std::env::current_dir()?.join("airplay2-receiver");
+        let mut output_dir = std::env::current_dir()?.join("airplay2-receiver");
+        if !output_dir.exists() {
+            // Fallback: check parent directory if running from subdirectory
+             if let Some(parent) = std::env::current_dir()?.parent() {
+                 let parent_dir = parent.join("airplay2-receiver");
+                 if parent_dir.exists() {
+                     output_dir = parent_dir;
+                 }
+             }
+        }
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
             if cfg!(target_os = "macos") {
