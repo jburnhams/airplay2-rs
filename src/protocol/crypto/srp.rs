@@ -265,11 +265,11 @@ impl SrpServer {
         password: &[u8],
         salt: &[u8],
         group: &SrpGroup,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, CryptoError> {
         // This is costly to re-parse params every time, but necessary if SrpParams isn't cached
         // For optimization, one should reuse parsed params.
         // We'll parse here.
-        let params = group.to_params().expect("Invalid SRP params");
+        let params = group.to_params()?;
 
         // x = H(salt, H(username, ":", password))
         let x = {
@@ -295,12 +295,12 @@ impl SrpServer {
             padded[384 - verifier.len()..].copy_from_slice(&verifier);
             verifier = padded;
         }
-        verifier
+        Ok(verifier)
     }
 
     /// Create new SRP server instance
-    pub fn new(verifier: &[u8], group: &SrpGroup) -> Self {
-        let params = group.to_params().expect("Invalid SRP params");
+    pub fn new(verifier: &[u8], group: &SrpGroup) -> Result<Self, CryptoError> {
+        let params = group.to_params()?;
         let v = BigUint::from_bytes_be(verifier);
 
         // Generate random b
@@ -321,14 +321,14 @@ impl SrpServer {
             public_key = padded;
         }
 
-        Self {
+        Ok(Self {
             params,
             b,
             v,
             public_key,
             username: None, // Can be set if we want to verify M1 with username
             salt: None,
-        }
+        })
     }
 
     /// Set context (username, salt) for M1 verification
@@ -471,12 +471,8 @@ impl SrpServer {
         // M2 = H(A, M1, K)
         let server_proof = {
             let mut hasher = Sha512::new();
-            // Pad A
-            let mut a_padded = vec![0u8; 384];
-            let a_bytes = a_pub.to_bytes_be();
-            a_padded[384 - a_bytes.len()..].copy_from_slice(&a_bytes);
-            hasher.update(&a_padded);
-
+            // Use minimal bytes for A (as expected by client logic in SrpVerifier)
+            hasher.update(a_pub.to_bytes_be());
             hasher.update(client_proof);
             hasher.update(&k_session);
             hasher.finalize().to_vec()

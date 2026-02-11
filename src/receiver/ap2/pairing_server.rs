@@ -126,8 +126,16 @@ impl PairingServer {
     /// configured password.
     pub fn set_password(&mut self, password: &str) {
         let username = b"Pair-Setup";
-        let verifier =
-            SrpServer::compute_verifier(username, password.as_bytes(), &self.srp_salt, &SRP_PARAMS);
+        let verifier = SrpServer::compute_verifier(
+            username,
+            password.as_bytes(),
+            &self.srp_salt,
+            &SRP_PARAMS,
+        )
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to compute SRP verifier: {}", e);
+            vec![]
+        });
         self.srp_verifier = Some(verifier);
     }
 
@@ -206,7 +214,10 @@ impl PairingServer {
         };
 
         // Create SRP server
-        let mut srp_server = SrpServer::new(&verifier, &SRP_PARAMS);
+        let mut srp_server = match SrpServer::new(&verifier, &SRP_PARAMS) {
+            Ok(server) => server,
+            Err(_) => return self.error_result(PairingError::InvalidState),
+        };
         srp_server.set_context(b"Pair-Setup", &self.srp_salt);
 
         let server_public = srp_server.public_key();
