@@ -1,5 +1,5 @@
-use crate::protocol::crypto::SrpClient;
 use crate::protocol::crypto::Ed25519KeyPair;
+use crate::protocol::crypto::SrpClient;
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use crate::receiver::ap2::pairing_server::{PairingServer, PairingServerState};
 
@@ -37,9 +37,7 @@ fn test_state_machine_enforcement() {
     let mut server = create_test_server();
 
     // Try M3 before M1 - should fail
-    let m3 = TlvEncoder::new()
-        .add_u8(TlvType::State, 3)
-        .encode();
+    let m3 = TlvEncoder::new().add_u8(TlvType::State, 3).encode();
 
     let result = server.process_pair_setup(&m3);
     assert!(result.error.is_some());

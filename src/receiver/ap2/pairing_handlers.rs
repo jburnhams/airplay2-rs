@@ -2,11 +2,11 @@
 //!
 //! These handlers integrate the `PairingServer` with the RTSP request framework.
 
-use crate::protocol::rtsp::{RtspRequest, StatusCode};
-use super::pairing_server::{PairingServer, PairingResult, PairingServerState};
-use super::request_handler::{Ap2HandleResult, Ap2Event, Ap2RequestContext};
+use super::pairing_server::{PairingResult, PairingServer, PairingServerState};
+use super::request_handler::{Ap2Event, Ap2HandleResult, Ap2RequestContext};
 use super::response_builder::Ap2ResponseBuilder;
 use super::session_state::Ap2SessionState;
+use crate::protocol::rtsp::{RtspRequest, StatusCode};
 use std::sync::{Arc, Mutex};
 
 /// Handler state for pairing operations
@@ -29,11 +29,7 @@ impl PairingHandler {
     ///
     /// Panics if the server mutex cannot be acquired.
     #[must_use]
-    pub fn handle_pair_setup(
-        &self,
-        request: &RtspRequest,
-        cseq: u32,
-    ) -> Ap2HandleResult {
+    pub fn handle_pair_setup(&self, request: &RtspRequest, cseq: u32) -> Ap2HandleResult {
         let mut server = self.server.lock().unwrap();
 
         // Parse request body (raw TLV, not bplist)
@@ -59,11 +55,7 @@ impl PairingHandler {
     ///
     /// Panics if the server mutex cannot be acquired.
     #[must_use]
-    pub fn handle_pair_verify(
-        &self,
-        request: &RtspRequest,
-        cseq: u32,
-    ) -> Ap2HandleResult {
+    pub fn handle_pair_verify(&self, request: &RtspRequest, cseq: u32) -> Ap2HandleResult {
         let mut server = self.server.lock().unwrap();
 
         if request.body.is_empty() {
@@ -91,39 +83,32 @@ impl PairingHandler {
         cseq: u32,
         emit_complete_event: bool,
     ) -> Ap2HandleResult {
-
         let new_state = match result.new_state {
-            PairingServerState::WaitingForM3 => {
-                Some(Ap2SessionState::PairingSetup { step: 2 })
-            }
+            PairingServerState::WaitingForM3 => Some(Ap2SessionState::PairingSetup { step: 2 }),
             PairingServerState::PairSetupComplete => {
                 Some(Ap2SessionState::PairingSetup { step: 4 })
             }
             PairingServerState::VerifyWaitingForM3 => {
                 Some(Ap2SessionState::PairingVerify { step: 2 })
             }
-            PairingServerState::Complete => {
-                Some(Ap2SessionState::Paired)
-            }
-            PairingServerState::Error => {
-                Some(Ap2SessionState::Error {
-                    code: 470,
-                    message: result.error.as_ref().map_or_else(
-                        || "Pairing error".to_string(),
-                        std::string::ToString::to_string,
-                    ),
-                })
-            }
+            PairingServerState::Complete => Some(Ap2SessionState::Paired),
+            PairingServerState::Error => Some(Ap2SessionState::Error {
+                code: 470,
+                message: result.error.as_ref().map_or_else(
+                    || "Pairing error".to_string(),
+                    std::string::ToString::to_string,
+                ),
+            }),
             PairingServerState::Idle => None,
         };
 
         let event = if emit_complete_event && result.complete {
             let server = self.server.lock().unwrap();
-            server.encryption_keys().map(|keys| {
-                Ap2Event::PairingComplete {
+            server
+                .encryption_keys()
+                .map(|keys| Ap2Event::PairingComplete {
                     session_key: keys.encrypt_key.to_vec(),
-                }
-            })
+                })
         } else {
             None
         };
@@ -146,7 +131,7 @@ impl PairingHandler {
         // Or check `StatusCode` definition.
 
         let response = if result.error.is_some() {
-             Ap2ResponseBuilder::error(StatusCode(470))
+            Ap2ResponseBuilder::error(StatusCode(470))
                 .cseq(cseq)
                 .binary_body(result.response)
                 .encode()
@@ -185,26 +170,26 @@ impl PairingHandler {
     }
 }
 
-type BoxedHandler = Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>;
+type BoxedHandler =
+    Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>;
 
 /// Create pairing handlers for the request handler framework
 #[must_use]
-pub fn create_pairing_handlers(
-    handler: Arc<PairingHandler>,
-) -> (
-    BoxedHandler,
-    BoxedHandler,
-) {
+pub fn create_pairing_handlers(handler: Arc<PairingHandler>) -> (BoxedHandler, BoxedHandler) {
     let setup_handler = handler.clone();
     let verify_handler = handler;
 
-    let pair_setup = Box::new(move |req: &RtspRequest, cseq: u32, _ctx: &Ap2RequestContext| {
-        setup_handler.handle_pair_setup(req, cseq)
-    });
+    let pair_setup = Box::new(
+        move |req: &RtspRequest, cseq: u32, _ctx: &Ap2RequestContext| {
+            setup_handler.handle_pair_setup(req, cseq)
+        },
+    );
 
-    let pair_verify = Box::new(move |req: &RtspRequest, cseq: u32, _ctx: &Ap2RequestContext| {
-        verify_handler.handle_pair_verify(req, cseq)
-    });
+    let pair_verify = Box::new(
+        move |req: &RtspRequest, cseq: u32, _ctx: &Ap2RequestContext| {
+            verify_handler.handle_pair_verify(req, cseq)
+        },
+    );
 
     (pair_setup, pair_verify)
 }

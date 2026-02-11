@@ -434,7 +434,10 @@ impl SrpServer {
 
         // So I'll make `new` take salt and username.
 
-        let salt = self.salt.as_deref().ok_or_else(|| CryptoError::SrpError("Salt not set".to_string()))?;
+        let salt = self
+            .salt
+            .as_deref()
+            .ok_or_else(|| CryptoError::SrpError("Salt not set".to_string()))?;
 
         // M1 calc
         let expected_m1 = {
@@ -460,7 +463,7 @@ impl SrpServer {
         };
 
         if expected_m1 != client_proof {
-             return Err(CryptoError::SrpError(
+            return Err(CryptoError::SrpError(
                 "Client proof verification failed".to_string(),
             ));
         }

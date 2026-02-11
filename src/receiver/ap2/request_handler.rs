@@ -262,7 +262,8 @@ fn handle_options(cseq: u32) -> Ap2HandleResult {
 }
 
 /// Handler function type
-pub type HandlerFn = Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>;
+pub type HandlerFn =
+    Box<dyn Fn(&RtspRequest, u32, &Ap2RequestContext) -> Ap2HandleResult + Send + Sync>;
 
 /// Collection of request handlers
 pub struct Ap2Handlers {

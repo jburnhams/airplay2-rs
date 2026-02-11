@@ -13,16 +13,13 @@
 //! - ChaCha20-Poly1305 encryption
 //! - HKDF key derivation
 
-use crate::protocol::pairing::tlv::{TlvEncoder, TlvDecoder, TlvType};
 use crate::protocol::crypto::{
-    SrpParams, SrpServer, SrpGroup,
-    Ed25519KeyPair,
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpGroup, SrpParams, SrpServer,
     X25519KeyPair, X25519PublicKey,
-    ChaCha20Poly1305Cipher, Nonce,
-    HkdfSha512,
 };
+use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use rand::RngCore;
-use sha2::{Sha512, Digest};
+use sha2::{Digest, Sha512};
 
 /// Pairing server state machine
 pub struct PairingServer {
@@ -129,12 +126,8 @@ impl PairingServer {
     /// configured password.
     pub fn set_password(&mut self, password: &str) {
         let username = b"Pair-Setup";
-        let verifier = SrpServer::compute_verifier(
-            username,
-            password.as_bytes(),
-            &self.srp_salt,
-            &SRP_PARAMS,
-        );
+        let verifier =
+            SrpServer::compute_verifier(username, password.as_bytes(), &self.srp_salt, &SRP_PARAMS);
         self.srp_verifier = Some(verifier);
     }
 
@@ -213,10 +206,7 @@ impl PairingServer {
         };
 
         // Create SRP server
-        let mut srp_server = SrpServer::new(
-            &verifier,
-            &SRP_PARAMS,
-        );
+        let mut srp_server = SrpServer::new(&verifier, &SRP_PARAMS);
         srp_server.set_context(b"Pair-Setup", &self.srp_salt);
 
         let server_public = srp_server.public_key();
@@ -258,8 +248,7 @@ impl PairingServer {
         };
 
         // Compute shared key and verify client's proof
-        let Ok((session_key, server_proof)) =
-            srp_server.verify_client(client_public, client_proof)
+        let Ok((session_key, server_proof)) = srp_server.verify_client(client_public, client_proof)
         else {
             return self.error_result(PairingError::AuthenticationFailed);
         };
@@ -281,14 +270,19 @@ impl PairingServer {
             .add_bytes(TlvType::EncryptedData, &encrypted_data)
             .encode();
 
-        self.srp_session_key = Some(session_key.as_bytes().try_into().expect("session key length"));
+        self.srp_session_key = Some(
+            session_key
+                .as_bytes()
+                .try_into()
+                .expect("session key length"),
+        );
         self.state = PairingServerState::PairSetupComplete;
 
         PairingResult {
             response,
             new_state: self.state,
             error: None,
-            complete: false,  // Still need pair-verify
+            complete: false, // Still need pair-verify
         }
     }
 
@@ -443,9 +437,7 @@ impl PairingServer {
         let enc_keys = Self::derive_session_keys(&shared_secret);
 
         // Build M4 response (empty encrypted data indicates success)
-        let response = TlvEncoder::new()
-            .add_u8(TlvType::State, 4)
-            .encode();
+        let response = TlvEncoder::new().add_u8(TlvType::State, 4).encode();
 
         self.client_public_key = Some(client_id);
         self.encryption_keys = Some(enc_keys);
@@ -498,24 +490,28 @@ impl PairingServer {
 
     fn encrypt_with_key(data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Vec<u8> {
         let mut nonce_bytes = [0u8; 12];
-        nonce_bytes[..nonce_prefix.len().min(12)].copy_from_slice(
-            &nonce_prefix[..nonce_prefix.len().min(12)]
-        );
+        nonce_bytes[..nonce_prefix.len().min(12)]
+            .copy_from_slice(&nonce_prefix[..nonce_prefix.len().min(12)]);
         let nonce = Nonce::from_bytes(&nonce_bytes).expect("Nonce length");
 
         let cipher = ChaCha20Poly1305Cipher::new(key).expect("Cipher creation");
         cipher.encrypt(&nonce, data).expect("encryption failed")
     }
 
-    fn decrypt_with_key(data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Result<Vec<u8>, PairingError> {
+    fn decrypt_with_key(
+        data: &[u8],
+        key: &[u8],
+        nonce_prefix: &[u8],
+    ) -> Result<Vec<u8>, PairingError> {
         let mut nonce_bytes = [0u8; 12];
-        nonce_bytes[..nonce_prefix.len().min(12)].copy_from_slice(
-            &nonce_prefix[..nonce_prefix.len().min(12)]
-        );
+        nonce_bytes[..nonce_prefix.len().min(12)]
+            .copy_from_slice(&nonce_prefix[..nonce_prefix.len().min(12)]);
         let nonce = Nonce::from_bytes(&nonce_bytes).expect("Nonce length");
 
-        let cipher = ChaCha20Poly1305Cipher::new(key).map_err(|_| PairingError::DecryptionFailed)?;
-        cipher.decrypt(&nonce, data)
+        let cipher =
+            ChaCha20Poly1305Cipher::new(key).map_err(|_| PairingError::DecryptionFailed)?;
+        cipher
+            .decrypt(&nonce, data)
             .map_err(|_| PairingError::DecryptionFailed)
     }
 
@@ -538,8 +534,12 @@ impl PairingServer {
         // encrypt_key = Control-Read-Encryption-Key (Server writes with this, so Controller can read)
         // decrypt_key = Control-Write-Encryption-Key (Server reads with this, which Controller wrote)
 
-        let encrypt_key = hkdf.expand_fixed::<32>(b"Control-Read-Encryption-Key").expect("HKDF");
-        let decrypt_key = hkdf.expand_fixed::<32>(b"Control-Write-Encryption-Key").expect("HKDF");
+        let encrypt_key = hkdf
+            .expand_fixed::<32>(b"Control-Read-Encryption-Key")
+            .expect("HKDF");
+        let decrypt_key = hkdf
+            .expand_fixed::<32>(b"Control-Write-Encryption-Key")
+            .expect("HKDF");
 
         EncryptionKeys {
             encrypt_key,
@@ -556,7 +556,7 @@ impl PairingServer {
         let error_code = match &error {
             PairingError::AuthenticationFailed => 2,
             PairingError::InvalidState => 6,
-            _ => 1,  // Unknown error
+            _ => 1, // Unknown error
         };
 
         let response = TlvEncoder::new()
