@@ -1237,9 +1237,11 @@ dependencies = [
  "bytes",
  "chrono",
  "nix",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]

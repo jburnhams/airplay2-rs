@@ -115,6 +115,7 @@ jobs:
           name: integration-test-logs-${{ matrix.os }}
           path: |
             target/integration-test-*.log
+            integration_tests/target/integration-test-*.log
             airplay2-receiver/received_audio*.raw
             airplay2-receiver/rtp_packets.bin
           retention-days: 7
