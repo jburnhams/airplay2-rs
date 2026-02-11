@@ -59,6 +59,12 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install Python dependencies
+        run: pip install -r airplay2-receiver/requirements.txt
       - run: cargo test --all-features
 
   doc:
@@ -85,6 +91,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install Python dependencies
+        run: pip install -r airplay2-receiver/requirements.txt
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: cargo llvm-cov --all-features --lcov --output-path lcov.info
       - uses: codecov/codecov-action@v4
