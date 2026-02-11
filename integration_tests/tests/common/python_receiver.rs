@@ -60,7 +60,14 @@ impl PythonReceiver {
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        let python_exe = std::env::var("PYTHON_EXECUTABLE").unwrap_or_else(|_| {
+            if cfg!(windows) {
+                "python".to_string()
+            } else {
+                "python3".to_string()
+            }
+        });
+        let mut command = Command::new(&python_exe);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")

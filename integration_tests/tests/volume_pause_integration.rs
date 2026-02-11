@@ -30,11 +30,29 @@ impl PythonReceiver {
 
         println!("Starting Python receiver on interface: {}", interface);
 
-        let mut process = Command::new("python3")
+        let mut actual_output_dir = output_dir;
+        if !actual_output_dir.exists() {
+             if let Some(parent) = std::env::current_dir()?.parent() {
+                 let parent_dir = parent.join("airplay2-receiver");
+                 if parent_dir.exists() {
+                     actual_output_dir = parent_dir;
+                 }
+             }
+        }
+
+        let python_exe = std::env::var("PYTHON_EXECUTABLE").unwrap_or_else(|_| {
+            if cfg!(windows) {
+                "python".to_string()
+            } else {
+                "python3".to_string()
+            }
+        });
+
+        let mut process = Command::new(python_exe)
             .arg("ap2-receiver.py")
             .arg("--netiface")
             .arg(&interface)
-            .current_dir(&output_dir)
+            .current_dir(&actual_output_dir)
             .env("AIRPLAY_FILE_SINK", "1")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
