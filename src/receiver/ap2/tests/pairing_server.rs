@@ -1,5 +1,7 @@
-use crate::protocol::crypto::Ed25519KeyPair;
-use crate::protocol::crypto::SrpClient;
+use crate::protocol::crypto::{
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpClient, X25519KeyPair,
+    X25519PublicKey,
+};
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use crate::receiver::ap2::pairing_server::{PairingServer, PairingServerState};
 
@@ -105,4 +107,76 @@ fn test_complete_pair_setup() {
 
     assert!(m4_result.error.is_none());
     assert_eq!(m4_result.new_state, PairingServerState::PairSetupComplete);
+}
+
+#[test]
+fn test_pair_verify() {
+    // 1. Setup Server
+    let server_identity = Ed25519KeyPair::generate();
+    let mut server = PairingServer::new(server_identity);
+
+    // 2. Client Setup
+    let client_x25519 = X25519KeyPair::generate();
+    let client_identity = Ed25519KeyPair::generate();
+
+    // 3. Client sends M1
+    let m1 = TlvEncoder::new()
+        .add_u8(TlvType::State, 1)
+        .add_bytes(TlvType::PublicKey, client_x25519.public_key().as_bytes())
+        .encode();
+
+    // 4. Server processes M1
+    let result_m1 = server.process_pair_verify(&m1);
+    assert!(result_m1.error.is_none());
+    assert_eq!(result_m1.new_state, PairingServerState::VerifyWaitingForM3);
+
+    // 5. Parse M2
+    let m2_tlv = TlvDecoder::decode(&result_m1.response).unwrap();
+    let server_x25519_bytes = m2_tlv.get_bytes(TlvType::PublicKey).unwrap();
+    let _encrypted_m2 = m2_tlv.get_bytes(TlvType::EncryptedData).unwrap();
+
+    let server_x25519 = X25519PublicKey::from_bytes(server_x25519_bytes).unwrap();
+
+    // 6. Client derives shared secret and session key
+    let shared_secret = client_x25519.diffie_hellman(&server_x25519);
+    let hkdf = HkdfSha512::new(Some(b"Pair-Verify-Encrypt-Salt"), shared_secret.as_bytes());
+    let session_key = hkdf
+        .expand_fixed::<32>(b"Pair-Verify-Encrypt-Info")
+        .unwrap();
+
+    // 7. Client prepares M3 (Encrypted Signature)
+    // Accessory Info: ClientX25519 || ClientEd25519 || ServerX25519
+    let mut info = Vec::new();
+    info.extend_from_slice(client_x25519.public_key().as_bytes());
+    info.extend_from_slice(client_identity.public_key().as_bytes());
+    info.extend_from_slice(server_x25519.as_bytes());
+
+    let signature = client_identity.sign(&info);
+
+    let sub_tlv = TlvEncoder::new()
+        .add_bytes(TlvType::Identifier, client_identity.public_key().as_bytes())
+        .add_bytes(TlvType::Signature, &signature.to_bytes())
+        .encode();
+
+    // Encrypt M3
+    let mut nonce_bytes = [0u8; 12];
+    nonce_bytes[..8].copy_from_slice(b"PV-Msg03");
+    let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
+    let cipher = ChaCha20Poly1305Cipher::new(&session_key).unwrap();
+    let encrypted_m3 = cipher.encrypt(&nonce, &sub_tlv).unwrap();
+
+    let m3 = TlvEncoder::new()
+        .add_u8(TlvType::State, 3)
+        .add_bytes(TlvType::EncryptedData, &encrypted_m3)
+        .encode();
+
+    // 9. Server processes M3
+    let result_m3 = server.process_pair_verify(&m3);
+
+    if let Some(e) = &result_m3.error {
+        println!("Error: {e:?}");
+    }
+    assert!(result_m3.error.is_none());
+    assert_eq!(result_m3.new_state, PairingServerState::Complete);
+    assert!(result_m3.complete);
 }

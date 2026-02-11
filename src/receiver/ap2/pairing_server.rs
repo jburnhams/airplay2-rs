@@ -14,8 +14,8 @@
 //! - HKDF key derivation
 
 use crate::protocol::crypto::{
-    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpGroup, SrpParams, SrpServer,
-    X25519KeyPair, X25519PublicKey,
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, HkdfSha512, Nonce,
+    SrpGroup, SrpParams, SrpServer, X25519KeyPair, X25519PublicKey,
 };
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use rand::RngCore;
@@ -52,6 +52,9 @@ pub struct PairingServer {
 
     /// Client's Ed25519 public key (after successful pairing)
     client_public_key: Option<[u8; 32]>,
+
+    /// Client's X25519 public key (received in Pair-Verify M1)
+    client_x25519_public: Option<[u8; 32]>,
 }
 
 /// Encryption keys derived after pairing
@@ -116,6 +119,7 @@ impl PairingServer {
             shared_secret: None,
             encryption_keys: None,
             client_public_key: None,
+            client_x25519_public: None,
         }
     }
 
@@ -126,16 +130,12 @@ impl PairingServer {
     /// configured password.
     pub fn set_password(&mut self, password: &str) {
         let username = b"Pair-Setup";
-        let verifier = SrpServer::compute_verifier(
-            username,
-            password.as_bytes(),
-            &self.srp_salt,
-            &SRP_PARAMS,
-        )
-        .unwrap_or_else(|e| {
-            tracing::error!("Failed to compute SRP verifier: {}", e);
-            vec![]
-        });
+        let verifier =
+            SrpServer::compute_verifier(username, password.as_bytes(), &self.srp_salt, &SRP_PARAMS)
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to compute SRP verifier: {}", e);
+                    vec![]
+                });
         self.srp_verifier = Some(verifier);
     }
 
@@ -193,6 +193,7 @@ impl PairingServer {
         self.shared_secret = None;
         self.encryption_keys = None;
         self.client_public_key = None;
+        self.client_x25519_public = None;
     }
 
     // === Internal handlers ===
@@ -214,9 +215,8 @@ impl PairingServer {
         };
 
         // Create SRP server
-        let mut srp_server = match SrpServer::new(&verifier, &SRP_PARAMS) {
-            Ok(server) => server,
-            Err(_) => return self.error_result(PairingError::InvalidState),
+        let Ok(mut srp_server) = SrpServer::new(&verifier, &SRP_PARAMS) else {
+            return self.error_result(PairingError::InvalidState);
         };
         srp_server.set_context(b"Pair-Setup", &self.srp_salt);
 
@@ -272,7 +272,10 @@ impl PairingServer {
 
         // Encrypt our Ed25519 public key for the client
         let accessory_info = self.build_accessory_info(session_key.as_bytes());
-        let encrypted_data = self.encrypt_accessory_data(&accessory_info, &enc_key);
+        let encrypted_data = match self.encrypt_accessory_data(&accessory_info, &enc_key) {
+            Ok(d) => d,
+            Err(e) => return self.error_result(e),
+        };
 
         // Build M4 response
         let response = TlvEncoder::new()
@@ -313,6 +316,7 @@ impl PairingServer {
         let client_public: X25519PublicKey = if client_public.len() == 32 {
             let mut arr = [0u8; 32];
             arr.copy_from_slice(client_public);
+            self.client_x25519_public = Some(arr);
             X25519PublicKey::from(arr)
         } else {
             return self.error_result(PairingError::MissingField("PublicKey"));
@@ -343,7 +347,10 @@ impl PairingServer {
             .add_bytes(TlvType::Signature, &signature.to_bytes())
             .encode();
 
-        let encrypted = Self::encrypt_with_key(&sub_tlv, &session_key, b"PV-Msg02");
+        let encrypted = match Self::encrypt_with_key(&sub_tlv, &session_key, b"PV-Msg02") {
+            Ok(d) => d,
+            Err(e) => return self.error_result(e),
+        };
 
         // Build M2 response
         let response = TlvEncoder::new()
@@ -420,32 +427,36 @@ impl PairingServer {
             return self.error_result(PairingError::MissingField("Signature"));
         }
 
-        // Build info for signature verification
-        // TODO: Get client's public key from M1? No, we don't have it.
-        // Wait, M1 had client's X25519 public key.
-        // But for signature verification, we need client's Ed25519 public key (which is the Identifier).
-        // And we need the original accessory info: ClientX25519 || ClientEd25519 || ServerX25519
-        // Wait, the order is: ClientX25519 || ClientID || ServerX25519 ?
-        // Spec says:
-        // Input to signature: Client's Curve25519 Public Key, Client's Ed25519 Public Key, Server's Curve25519 Public Key.
-        // We have ClientX25519 from M1 (but we didn't save it!).
-        // We need to save Client's X25519 public key from M1.
+        // Verify client signature
+        // Input: ClientX25519 || ClientEd25519 || ServerX25519
+        let Some(client_x25519) = self.client_x25519_public else {
+            return self.error_result(PairingError::InvalidState);
+        };
 
-        // I should have saved client's X25519 public key in handle_pair_verify_m1.
-        // But `shared_secret` is derived from it.
-        // But to verify signature, we need the public key itself.
-        // So I must save it in `handle_pair_verify_m1`.
+        let server_x25519 = self.verify_keypair.as_ref().unwrap().public_key();
 
-        // Let's assume for now we skip verification or I fix `PairingServer` struct to store it.
-        // I will add `client_x25519: Option<[u8; 32]>` to `PairingServer`.
-        // But I can't modify the struct definition easily now that I've written it...
-        // Wait, I haven't written it yet! I am writing it now.
-        // So I will add `client_x25519` to `PairingServer`.
+        let mut accessory_info = Vec::new();
+        accessory_info.extend_from_slice(&client_x25519);
+        accessory_info.extend_from_slice(&client_id);
+        accessory_info.extend_from_slice(server_x25519.as_bytes());
 
-        // However, looking at the code I'm preparing to write... I'll add `client_x25519: Option<[u8; 32]>`.
+        let Ok(client_ed25519) = Ed25519PublicKey::from_bytes(&client_id) else {
+            return self.error_result(PairingError::AuthenticationFailed);
+        };
+
+        let Ok(signature) = Ed25519Signature::from_bytes(client_signature) else {
+            return self.error_result(PairingError::SignatureVerificationFailed);
+        };
+
+        if client_ed25519.verify(&accessory_info, &signature).is_err() {
+            return self.error_result(PairingError::SignatureVerificationFailed);
+        }
 
         // Derive encryption keys for the session
-        let enc_keys = Self::derive_session_keys(&shared_secret);
+        let enc_keys = match Self::derive_session_keys(&shared_secret) {
+            Ok(k) => k,
+            Err(e) => return self.error_result(e),
+        };
 
         // Build M4 response (empty encrypted data indicates success)
         let response = TlvEncoder::new().add_u8(TlvType::State, 4).encode();
@@ -485,7 +496,7 @@ impl PairingServer {
         info
     }
 
-    fn encrypt_accessory_data(&self, info: &[u8], key: &[u8]) -> Vec<u8> {
+    fn encrypt_accessory_data(&self, info: &[u8], key: &[u8]) -> Result<Vec<u8>, PairingError> {
         // Sign the info
         let signature = self.identity.sign(info);
 
@@ -499,14 +510,21 @@ impl PairingServer {
         Self::encrypt_with_key(&sub_tlv, key, b"PS-Msg04")
     }
 
-    fn encrypt_with_key(data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Vec<u8> {
+    fn encrypt_with_key(
+        data: &[u8],
+        key: &[u8],
+        nonce_prefix: &[u8],
+    ) -> Result<Vec<u8>, PairingError> {
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes[..nonce_prefix.len().min(12)]
             .copy_from_slice(&nonce_prefix[..nonce_prefix.len().min(12)]);
-        let nonce = Nonce::from_bytes(&nonce_bytes).expect("Nonce length");
+        let nonce = Nonce::from_bytes(&nonce_bytes).map_err(|_| PairingError::EncryptionFailed)?;
 
-        let cipher = ChaCha20Poly1305Cipher::new(key).expect("Cipher creation");
-        cipher.encrypt(&nonce, data).expect("encryption failed")
+        let cipher =
+            ChaCha20Poly1305Cipher::new(key).map_err(|_| PairingError::EncryptionFailed)?;
+        cipher
+            .encrypt(&nonce, data)
+            .map_err(|_| PairingError::EncryptionFailed)
     }
 
     fn decrypt_with_key(
@@ -526,7 +544,7 @@ impl PairingServer {
             .map_err(|_| PairingError::DecryptionFailed)
     }
 
-    fn derive_session_keys(shared_secret: &[u8; 32]) -> EncryptionKeys {
+    fn derive_session_keys(shared_secret: &[u8; 32]) -> Result<EncryptionKeys, PairingError> {
         // Derive keys for bidirectional communication
         let hkdf = HkdfSha512::new(Some(b"Control-Salt"), shared_secret);
 
@@ -547,17 +565,17 @@ impl PairingServer {
 
         let encrypt_key = hkdf
             .expand_fixed::<32>(b"Control-Read-Encryption-Key")
-            .expect("HKDF");
+            .map_err(|_| PairingError::DecryptionFailed)?;
         let decrypt_key = hkdf
             .expand_fixed::<32>(b"Control-Write-Encryption-Key")
-            .expect("HKDF");
+            .map_err(|_| PairingError::DecryptionFailed)?;
 
-        EncryptionKeys {
+        Ok(EncryptionKeys {
             encrypt_key,
             decrypt_key,
             encrypt_nonce: 0,
             decrypt_nonce: 0,
-        }
+        })
     }
 
     fn error_result(&mut self, error: PairingError) -> PairingResult {
@@ -619,6 +637,10 @@ pub enum PairingError {
     /// Authentication failed (wrong password)
     #[error("Authentication failed - wrong PIN/password")]
     AuthenticationFailed,
+
+    /// Encryption of payload failed
+    #[error("Encryption failed")]
+    EncryptionFailed,
 
     /// Decryption of encrypted payload failed
     #[error("Decryption failed")]
