@@ -577,9 +577,6 @@ class Audio:
 
     def process(self, rtp):
         data = self.decrypt(rtp)
-        if self.audio_format == AirplayAudFmt.AAC_LC_44100_2.value:
-            # Strip 4 bytes of AU Headers (RFC 3640) for AAC-hbr
-            data = data[4:]
         if isinstance(rtp, RTP_REALTIME) and rtp.hasredundancy:
             # rtp.payloads tuple: type, ts_offset (samples ago), length
             # Set data to start at last block (add all lengths), skip redundancy for now.
