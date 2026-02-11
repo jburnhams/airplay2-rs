@@ -34,7 +34,7 @@ pub use raop::RAOP_SERVICE_TYPE;
 /// use futures::StreamExt;
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
-/// let mut devices = discover().await?;
+/// let mut devices = discover()?;
 ///
 /// while let Some(event) = devices.next().await {
 ///     match event {
@@ -54,9 +54,8 @@ pub use raop::RAOP_SERVICE_TYPE;
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-#[allow(clippy::unused_async)]
-pub async fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-    discover_with_config(AirPlayConfig::default()).await
+pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+    discover_with_config(AirPlayConfig::default())
 }
 
 /// Discover devices with custom configuration
@@ -64,8 +63,8 @@ pub async fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayErr
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-#[allow(clippy::unused_async)]
-pub async fn discover_with_config(
+#[allow(clippy::needless_pass_by_value)] // Value is needed to avoid lifetime issues with impl Stream
+pub fn discover_with_config(
     config: AirPlayConfig,
 ) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
     let browser = DeviceBrowser::new(&config);
@@ -77,8 +76,7 @@ pub async fn discover_with_config(
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-#[allow(clippy::unused_async)]
-pub async fn discover_with_options(
+pub fn discover_with_options(
     options: DiscoveryOptions,
 ) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
     let browser = DeviceBrowser::with_options(options);

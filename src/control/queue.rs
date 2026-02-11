@@ -201,6 +201,7 @@ impl PlaybackQueue {
     }
 
     /// Move to next track
+    // Method name `next` is standard for playback control, but does not implement `Iterator`.
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&QueueItem> {
         let next_index = if let Some(ref order) = self.shuffle_order {
