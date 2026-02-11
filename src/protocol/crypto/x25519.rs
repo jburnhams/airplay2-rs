@@ -79,6 +79,14 @@ impl X25519PublicKey {
     }
 }
 
+impl From<[u8; 32]> for X25519PublicKey {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self {
+            inner: PublicKey::from(bytes),
+        }
+    }
+}
+
 /// X25519 shared secret from DH exchange
 pub struct X25519SharedSecret {
     bytes: [u8; 32],
