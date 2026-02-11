@@ -103,20 +103,26 @@ fn test_error_state_handling() {
     assert!(state.transition_to(error_state.clone()).is_ok());
 
     // Error -> Teardown is INVALID because of the guard
-    assert!(error_state
-        .transition_to(Ap2SessionState::Teardown)
-        .is_err());
+    assert!(
+        error_state
+            .transition_to(Ap2SessionState::Teardown)
+            .is_err()
+    );
 }
 
 #[test]
 fn test_teardown_constraints() {
     // Connected -> Teardown is NOT valid (connection just closes)
-    assert!(Ap2SessionState::Connected
-        .transition_to(Ap2SessionState::Teardown)
-        .is_err());
+    assert!(
+        Ap2SessionState::Connected
+            .transition_to(Ap2SessionState::Teardown)
+            .is_err()
+    );
 
     // Paired -> Teardown IS valid
-    assert!(Ap2SessionState::Paired
-        .transition_to(Ap2SessionState::Teardown)
-        .is_ok());
+    assert!(
+        Ap2SessionState::Paired
+            .transition_to(Ap2SessionState::Teardown)
+            .is_ok()
+    );
 }

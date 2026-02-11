@@ -100,8 +100,7 @@ fn test_classify_all_post_endpoints() {
         assert_eq!(
             Ap2RequestType::classify(&request),
             Ap2RequestType::Endpoint(expected),
-            "Failed to classify {}",
-            uri
+            "Failed to classify {uri}",
         );
     }
 }
