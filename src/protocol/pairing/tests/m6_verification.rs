@@ -1,10 +1,9 @@
-use crate::protocol::pairing::setup::PairSetup;
-use crate::protocol::pairing::PairingStepResult;
-use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use crate::protocol::crypto::{
-    Ed25519KeyPair, SrpServer, SrpParams,
-    HkdfSha512, ChaCha20Poly1305Cipher, Nonce,
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpParams, SrpServer,
 };
+use crate::protocol::pairing::PairingStepResult;
+use crate::protocol::pairing::setup::PairSetup;
+use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 
 fn setup_to_m5() -> (PairSetup, Vec<u8>) {
     let mut setup = PairSetup::new();
@@ -19,7 +18,12 @@ fn setup_to_m5() -> (PairSetup, Vec<u8>) {
 
     // Mock Server
     let salt = b"salt1234salt1234";
-    let verifier = SrpServer::compute_verifier(b"Pair-Setup", pin.as_bytes(), salt, &SrpParams::RFC5054_3072);
+    let verifier = SrpServer::compute_verifier(
+        b"Pair-Setup",
+        pin.as_bytes(),
+        salt,
+        &SrpParams::RFC5054_3072,
+    );
     let server = SrpServer::new(&verifier, &SrpParams::RFC5054_3072);
 
     // M2
@@ -31,9 +35,8 @@ fn setup_to_m5() -> (PairSetup, Vec<u8>) {
 
     // Process M2 -> M3
     let res = setup.process_m2(&m2).expect("M2 processing failed");
-    let m3 = match res {
-        PairingStepResult::SendData(data) => data,
-        _ => panic!("Expected SendData for M3"),
+    let PairingStepResult::SendData(m3) = res else {
+        panic!("Expected SendData for M3")
     };
 
     let tlv_m3 = TlvDecoder::decode(&m3).unwrap();
@@ -41,7 +44,9 @@ fn setup_to_m5() -> (PairSetup, Vec<u8>) {
     let client_proof = tlv_m3.get_required(TlvType::Proof).unwrap();
 
     // Verify M3 -> M4
-    let (session_key, server_proof) = server.verify_client(b"Pair-Setup", salt, client_pk, client_proof).expect("Server verify failed");
+    let (session_key, server_proof) = server
+        .verify_client(b"Pair-Setup", salt, client_pk, client_proof)
+        .expect("Server verify failed");
 
     let m4 = TlvEncoder::new()
         .add_state(4)
@@ -53,7 +58,7 @@ fn setup_to_m5() -> (PairSetup, Vec<u8>) {
     match res {
         PairingStepResult::SendData(_) => (),
         _ => panic!("Expected SendData for M5"),
-    };
+    }
 
     (setup, session_key.as_bytes().to_vec())
 }
@@ -64,14 +69,18 @@ fn test_m6_verification_valid() {
 
     // Prepare M6
     let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
-    let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info").unwrap();
+    let encrypt_key = hkdf_enc
+        .expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")
+        .unwrap();
     let cipher = ChaCha20Poly1305Cipher::new(&encrypt_key).unwrap();
 
     let server_ltpk = Ed25519KeyPair::generate();
     let identifier = b"AccessoryID";
 
     let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), &session_key);
-    let accessory_key = hkdf_sign.expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info").unwrap();
+    let accessory_key = hkdf_sign
+        .expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info")
+        .unwrap();
 
     let mut sign_data = Vec::new();
     sign_data.extend_from_slice(&accessory_key);
@@ -109,14 +118,18 @@ fn test_m6_verification_invalid() {
 
     // Prepare M6 with invalid signature
     let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
-    let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info").unwrap();
+    let encrypt_key = hkdf_enc
+        .expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")
+        .unwrap();
     let cipher = ChaCha20Poly1305Cipher::new(&encrypt_key).unwrap();
 
     let server_ltpk = Ed25519KeyPair::generate();
     let identifier = b"AccessoryID";
 
     let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), &session_key);
-    let accessory_key = hkdf_sign.expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info").unwrap();
+    let accessory_key = hkdf_sign
+        .expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info")
+        .unwrap();
 
     let mut sign_data = Vec::new();
     sign_data.extend_from_slice(&accessory_key);
