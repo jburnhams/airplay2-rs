@@ -1,8 +1,8 @@
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpParams, SrpServer,
 };
-use crate::protocol::pairing::PairingStepResult;
 use crate::protocol::pairing::setup::PairSetup;
+use crate::protocol::pairing::PairingStepResult;
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 
 fn setup_to_m5() -> (PairSetup, Vec<u8>) {
@@ -63,12 +63,8 @@ fn setup_to_m5() -> (PairSetup, Vec<u8>) {
     (setup, session_key.as_bytes().to_vec())
 }
 
-#[test]
-fn test_m6_verification_valid() {
-    let (mut setup, session_key) = setup_to_m5();
-
-    // Prepare M6
-    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
+fn prepare_m6(session_key: &[u8], corrupt_signature: bool) -> Vec<u8> {
+    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key);
     let encrypt_key = hkdf_enc
         .expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")
         .unwrap();
@@ -77,7 +73,7 @@ fn test_m6_verification_valid() {
     let server_ltpk = Ed25519KeyPair::generate();
     let identifier = b"AccessoryID";
 
-    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), &session_key);
+    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
     let accessory_key = hkdf_sign
         .expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info")
         .unwrap();
@@ -88,11 +84,16 @@ fn test_m6_verification_valid() {
     sign_data.extend_from_slice(server_ltpk.public_key().as_bytes());
 
     let signature = server_ltpk.sign(&sign_data);
+    let mut signature_bytes = signature.to_bytes();
+
+    if corrupt_signature {
+        signature_bytes[0] ^= 0xFF; // Corrupt it
+    }
 
     let inner_tlv = TlvEncoder::new()
         .add(TlvType::Identifier, identifier)
         .add(TlvType::PublicKey, server_ltpk.public_key().as_bytes())
-        .add(TlvType::Signature, &signature.to_bytes())
+        .add(TlvType::Signature, &signature_bytes)
         .build();
 
     let mut nonce_bytes = [0u8; 12];
@@ -100,10 +101,16 @@ fn test_m6_verification_valid() {
     let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
     let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
 
-    let m6 = TlvEncoder::new()
+    TlvEncoder::new()
         .add_state(6)
         .add(TlvType::EncryptedData, &encrypted)
-        .build();
+        .build()
+}
+
+#[test]
+fn test_m6_verification_valid() {
+    let (mut setup, session_key) = setup_to_m5();
+    let m6 = prepare_m6(&session_key, false);
 
     let res = setup.process_m6(&m6).expect("M6 processing failed");
     match res {
@@ -115,46 +122,7 @@ fn test_m6_verification_valid() {
 #[test]
 fn test_m6_verification_invalid() {
     let (mut setup, session_key) = setup_to_m5();
-
-    // Prepare M6 with invalid signature
-    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
-    let encrypt_key = hkdf_enc
-        .expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")
-        .unwrap();
-    let cipher = ChaCha20Poly1305Cipher::new(&encrypt_key).unwrap();
-
-    let server_ltpk = Ed25519KeyPair::generate();
-    let identifier = b"AccessoryID";
-
-    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), &session_key);
-    let accessory_key = hkdf_sign
-        .expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info")
-        .unwrap();
-
-    let mut sign_data = Vec::new();
-    sign_data.extend_from_slice(&accessory_key);
-    sign_data.extend_from_slice(identifier);
-    sign_data.extend_from_slice(server_ltpk.public_key().as_bytes());
-
-    let signature = server_ltpk.sign(&sign_data);
-    let mut bad_sig = signature.to_bytes();
-    bad_sig[0] ^= 0xFF; // Corrupt it
-
-    let inner_tlv = TlvEncoder::new()
-        .add(TlvType::Identifier, identifier)
-        .add(TlvType::PublicKey, server_ltpk.public_key().as_bytes())
-        .add(TlvType::Signature, &bad_sig)
-        .build();
-
-    let mut nonce_bytes = [0u8; 12];
-    nonce_bytes[4..].copy_from_slice(b"PS-Msg06");
-    let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
-    let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
-
-    let m6 = TlvEncoder::new()
-        .add_state(6)
-        .add(TlvType::EncryptedData, &encrypted)
-        .build();
+    let m6 = prepare_m6(&session_key, true);
 
     let res = setup.process_m6(&m6);
     assert!(res.is_err(), "Should have failed verification");
