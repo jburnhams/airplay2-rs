@@ -1,8 +1,8 @@
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpParams, SrpServer,
 };
-use crate::protocol::pairing::setup::PairSetup;
 use crate::protocol::pairing::PairingStepResult;
+use crate::protocol::pairing::setup::PairSetup;
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 
 fn setup_to_m5() -> (PairSetup, Vec<u8>) {
