@@ -4,8 +4,6 @@
 use std::sync::Once;
 use tracing_subscriber::{EnvFilter, fmt};
 
-pub mod python_receiver;
-
 static INIT: Once = Once::new();
 
 /// Initialize test logging (call once per test module)
