@@ -8,7 +8,7 @@ use super::{
     tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods},
 };
 use crate::protocol::crypto::{
-    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpClient, SrpVerifier,
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpClient, SrpParams, SrpVerifier,
 };
 
 /// Pair-Setup session for PIN-based pairing
@@ -134,7 +134,7 @@ impl PairSetup {
         ))?;
 
         // Create SRP client and process challenge
-        let srp_client = SrpClient::new()?;
+        let srp_client = SrpClient::new(&SrpParams::RFC5054_3072)?;
         let client_public = srp_client.public_key().to_vec();
 
         tracing::debug!("SRP Salt: {:02X?}", salt);
