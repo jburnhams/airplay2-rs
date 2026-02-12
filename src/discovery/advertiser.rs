@@ -399,7 +399,9 @@ impl RaopAdvertiser {
     pub fn new(config: AdvertiserConfig) -> Result<Self, AdvertiserError> {
         let daemon = ServiceDaemon::new()?;
 
-        let mac = config.mac_override.map_or_else(get_device_mac, Ok)?;
+        let mac = config.mac_override.ok_or_else(|| {
+            AdvertiserError::MacRetrievalFailed("MAC address must be provided in config".to_string())
+        })?;
 
         Ok(Self {
             config,
