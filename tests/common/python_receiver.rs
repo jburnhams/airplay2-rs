@@ -89,7 +89,7 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
         let stderr = process.stderr.take().ok_or("Failed to capture stderr")?;
