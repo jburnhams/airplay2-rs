@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 mod common;
-use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioCodec};
+use airplay2::{audio::AudioCodec, AirPlayClient, AirPlayConfig};
 use common::python_receiver::{PythonReceiver, TestSineSource};
 
 #[tokio::test]

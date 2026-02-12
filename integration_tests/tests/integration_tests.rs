@@ -123,18 +123,42 @@ async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start Python receiver
     let receiver = PythonReceiver::start().await?;
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(3)).await;
+
+    let device = receiver.device_config();
+
+    // Test 0: Sanity check with default client (implicit PIN logic)
+    tracing::info!("Test 0: Connecting with default client (sanity check)...");
+    let client_default = airplay2::AirPlayClient::default_client();
+    client_default.connect(&device).await?;
+    client_default.disconnect().await?;
+    tracing::info!("✅ Default client connected successfully");
+
+    sleep(Duration::from_millis(500)).await;
 
     // Test 1: Connect with CORRECT PIN (3939)
     tracing::info!("Test 1: Connecting with correct PIN (3939)...");
-    let device = receiver.device_config();
     let config = airplay2::AirPlayConfig::builder().pin("3939").build();
 
     let client = airplay2::AirPlayClient::new(config);
-    client.connect(&device).await?;
-    assert!(client.is_connected().await);
-    tracing::info!("✅ Connected successfully with correct PIN");
-    client.disconnect().await?;
+    match client.connect(&device).await {
+        Ok(_) => {
+            assert!(client.is_connected().await);
+            tracing::info!("✅ Connected successfully with correct PIN");
+            client.disconnect().await?;
+        }
+        Err(e) => {
+            tracing::error!("Failed to connect with correct PIN: {:?}", e);
+            // Dump logs for debugging
+            let output = receiver.stop().await?;
+            if let Ok(logs) = std::fs::read_to_string(&output.log_path) {
+                println!("Receiver Logs:\n{}", logs);
+            }
+            return Err(e.into());
+        }
+    }
+
+    sleep(Duration::from_millis(500)).await;
 
     // Test 2: Connect with WRONG PIN (0000)
     tracing::info!("Test 2: Connecting with wrong PIN (0000)...");

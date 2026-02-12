@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
@@ -9,9 +11,12 @@ use tokio::time::sleep;
 /// Python receiver wrapper for testing
 pub struct PythonReceiver {
     process: Child,
+    _temp_dir: TempDir,
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
+    port: u16,
+    logs: Arc<Mutex<Vec<String>>>,
 }
 
 impl PythonReceiver {
@@ -22,7 +27,37 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
-        let output_dir = std::env::current_dir()?.join("airplay2-receiver");
+        let temp_dir = TempDir::new()?;
+        let output_dir = temp_dir.path().to_path_buf();
+
+        // Find the airplay2-receiver directory
+        let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
+        if !source_dir.exists() {
+            // Try parent directory (if running from integration_tests subcrate)
+            if let Some(parent) = std::env::current_dir()?.parent() {
+                let parent_dir = parent.join("airplay2-receiver");
+                if parent_dir.exists() {
+                    source_dir = parent_dir;
+                } else {
+                    // Try one more level up
+                    if let Some(grandparent) = parent.parent() {
+                        let grandparent_dir = grandparent.join("airplay2-receiver");
+                        if grandparent_dir.exists() {
+                            source_dir = grandparent_dir;
+                        }
+                    }
+                }
+            }
+        }
+
+        if !source_dir.exists() {
+            return Err(format!(
+                "Could not find airplay2-receiver directory. Checked: {}",
+                source_dir.display()
+            )
+            .into());
+        }
+
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
             if cfg!(target_os = "macos") {
@@ -32,18 +67,26 @@ impl PythonReceiver {
             }
         });
 
-        // Clean up any previous test outputs
+        // Copy receiver files to temp dir to avoid conflicts
+        let status = Command::new("cp")
+            .arg("-r")
+            .arg(format!("{}/.", source_dir.display()))
+            .arg(&output_dir)
+            .status()
+            .await?;
+
+        if !status.success() {
+            return Err("Failed to copy receiver files to temp dir".into());
+        }
+
         let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
         let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
 
-        // Clean up pairings for fresh state (added for persistent pairing test)
         let pairings_dir = output_dir.join("pairings");
         if pairings_dir.exists() {
             fs::remove_dir_all(&pairings_dir)?;
         }
         fs::create_dir_all(&pairings_dir)?;
-
-        // Restore .gitignore to keep repo clean
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
         tracing::info!("Starting Python receiver on interface: {}", interface);
@@ -51,11 +94,17 @@ impl PythonReceiver {
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        // Use python explicitly as setup-python v5 creates 'python' not 'python3' on Windows/some envs
+        // Or respect environment variable if set
+        let python_bin =
+            std::env::var("PYTHON_EXECUTABLE").unwrap_or_else(|_| "python".to_string());
+        let mut command = Command::new(python_bin);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("-p")
+            .arg("0");
 
         for arg in args {
             command.arg(arg);
@@ -69,27 +118,25 @@ impl PythonReceiver {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
-        // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
         let stderr = process.stderr.take().ok_or("Failed to capture stderr")?;
 
-        // Wait for receiver to start by reading output
         let start = std::time::Instant::now();
         let timeout = Duration::from_secs(10);
 
         let mut reader = BufReader::new(stdout).lines();
         let mut stderr_reader = BufReader::new(stderr).lines();
         let mut stderr_lines = Vec::new();
+        let logs = Arc::new(Mutex::new(Vec::new()));
+
         #[allow(unused_assignments)]
         let mut found_serving = false;
+        let mut port = 0;
 
         loop {
             if start.elapsed() > timeout {
-                // process.kill() is async in tokio, but we are returning error which drops process.
-                // Since we set kill_on_drop(true), it should be fine.
-                // But explicitly killing is good.
                 let _ = process.kill().await;
                 let stderr_output: String = stderr_lines.join("\n");
                 return Err(format!(
@@ -99,7 +146,6 @@ impl PythonReceiver {
                 .into());
             }
 
-            // Check if process is still running
             if let Ok(Some(status)) = process.try_wait() {
                 let stderr_output: String = stderr_lines.join("\n");
                 return Err(format!(
@@ -113,43 +159,50 @@ impl PythonReceiver {
                 line = reader.next_line() => {
                     match line {
                         Ok(Some(line)) => {
-                            tracing::debug!("Receiver stdout: {}", line.trim());
+                            let line = line.trim();
+                            tracing::debug!("Receiver stdout: {}", line);
+                            logs.lock().unwrap().push(line.to_string());
+
                             if line.contains("serving on") {
-                                tracing::info!("✓ Python receiver started: {}", line.trim());
+                                tracing::info!("✓ Python receiver started: {}", line);
+                                // Parse port from "serving on IP:PORT"
+                                if let Some(port_str) = line.split(':').next_back() {
+                                    if let Ok(p) = port_str.trim().parse::<u16>() {
+                                        port = p;
+                                    }
+                                }
                                 found_serving = true;
                                 break;
                             }
                         }
-                        Ok(None) => {
-                            // EOF
-                        }
-                        Err(e) => {
-                            tracing::warn!("Error reading stdout: {}", e);
-                        }
+                        Ok(None) => {}
+                        Err(e) => tracing::warn!("Error reading stdout: {}", e),
                     }
                 }
                 line = stderr_reader.next_line() => {
                      match line {
                         Ok(Some(line)) => {
-                            tracing::warn!("Receiver stderr: {}", line.trim());
+                            let line = line.trim();
+                            tracing::warn!("Receiver stderr: {}", line);
+                            logs.lock().unwrap().push(line.to_string());
+
                             if line.contains("serving on") {
-                                tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
+                                tracing::info!("✓ Python receiver started (detected in stderr): {}", line);
+                                if let Some(port_str) = line.split(':').next_back() {
+                                    if let Ok(p) = port_str.trim().parse::<u16>() {
+                                        port = p;
+                                    }
+                                }
                                 found_serving = true;
                                 break;
                             }
-                            stderr_lines.push(line);
+                            stderr_lines.push(line.to_string());
                         }
-                        Ok(None) => {
-                            // EOF
-                        }
-                        Err(e) => {
-                            tracing::warn!("Error reading stderr: {}", e);
-                        }
+                        Ok(None) => {}
+                        Err(e) => tracing::warn!("Error reading stderr: {}", e),
                     }
                 }
-                _ = sleep(Duration::from_millis(100)) => {
-                    // Continue loop to check timeout/status
-                }
+                _ = sleep(Duration::from_millis(100)) => {}
             }
         }
 
@@ -158,21 +211,35 @@ impl PythonReceiver {
             return Err("Failed to find 'serving on' message from receiver".into());
         }
 
-        // Spawn a background task to keep reading output to prevent deadlocks/SIGPIPE
+        if port == 0 {
+            tracing::warn!("Failed to parse port from 'serving on' message, defaulting to 7000");
+            port = 7000;
+        }
+
+        let logs_clone = logs.clone();
+        // Spawn a background task to keep reading output
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     line = reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::debug!("Receiver stdout: {}", line.trim()),
-                            Ok(None) => break, // EOF
+                            Ok(Some(line)) => {
+                                let line = line.trim();
+                                tracing::debug!("Receiver stdout: {}", line);
+                                logs_clone.lock().unwrap().push(line.to_string());
+                            }
+                            Ok(None) => break,
                             Err(_) => break,
                         }
                     }
                     line = stderr_reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::warn!("Receiver stderr: {}", line.trim()),
-                            Ok(None) => break, // EOF
+                            Ok(Some(line)) => {
+                                let line = line.trim();
+                                tracing::warn!("Receiver stderr: {}", line);
+                                logs_clone.lock().unwrap().push(line.to_string());
+                            }
+                            Ok(None) => break,
                             Err(_) => break,
                         }
                     }
@@ -182,19 +249,42 @@ impl PythonReceiver {
 
         Ok(Self {
             process,
+            _temp_dir: temp_dir,
             output_dir,
             interface,
+            port,
+            logs,
         })
+    }
+
+    /// Wait for a specific log pattern to appear
+    pub async fn wait_for_log(&self, pattern: &str, timeout: Duration) -> Result<(), String> {
+        let start = Instant::now();
+        loop {
+            if start.elapsed() > timeout {
+                return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
+            }
+
+            {
+                let logs = self.logs.lock().unwrap();
+                if logs.iter().any(|l| l.contains(pattern)) {
+                    return Ok(());
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
     }
 
     /// Stop the receiver and read output
     pub async fn stop(mut self) -> Result<ReceiverOutput, Box<dyn std::error::Error>> {
         tracing::info!("Stopping Python receiver");
 
-        // Send SIGTERM to allow graceful shutdown
+        // Clear logs so Drop doesn't print them again unless we panic later in stop
+        self.logs.lock().unwrap().clear();
+
         #[cfg(unix)]
         {
-            use nix::sys::signal::{Signal, kill};
+            use nix::sys::signal::{kill, Signal};
             use nix::unistd::Pid;
             if let Some(id) = self.process.id() {
                 let pid = Pid::from_raw(id as i32);
@@ -207,24 +297,20 @@ impl PythonReceiver {
             let _ = self.process.kill().await;
         }
 
-        // Wait for process to exit
         let _ = tokio::time::timeout(Duration::from_secs(5), async {
             let _ = self.process.wait().await;
         })
         .await;
 
-        // Force kill if still running
         let _ = self.process.kill().await;
         let _ = self.process.wait().await;
 
-        // Read output files
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
         let rtp_path = self.output_dir.join("rtp_packets.bin");
 
         let audio_data = fs::read(&audio_path).ok();
         let rtp_data = fs::read(&rtp_path).ok();
 
-        // Save logs for debugging
         let log_path = PathBuf::from("target").join(format!(
             "integration-test-{}.log",
             chrono::Utc::now().timestamp()
@@ -249,7 +335,7 @@ impl PythonReceiver {
             name: "Integration-Test-Receiver".to_string(),
             model: Some("AirPlay2-Receiver".to_string()),
             addresses: vec!["127.0.0.1".parse().unwrap()],
-            port: 7000,
+            port: self.port,
             capabilities: airplay2::DeviceCapabilities {
                 airplay2: true,
                 supports_transient_pairing: true,
@@ -268,6 +354,21 @@ pub struct ReceiverOutput {
     pub rtp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
+}
+
+impl Drop for PythonReceiver {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let logs = self.logs.lock().unwrap();
+            if !logs.is_empty() {
+                println!("\n=== Python Receiver Logs (Post-Mortem) ===");
+                for line in logs.iter() {
+                    println!("{}", line);
+                }
+                println!("==========================================\n");
+            }
+        }
+    }
 }
 
 impl ReceiverOutput {

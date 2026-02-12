@@ -1285,11 +1285,12 @@ class AP2Server(socketserver.ThreadingTCPServer):
 
     # Override
     def server_close(self):
-        if self.logger:
+        if hasattr(self, 'logger') and self.logger:
             self.logger.debug('Removing AP2Server object.')
         self.hap = None
         self.hap_socket = None
-        self.streams.clear()
+        if hasattr(self, 'streams'):
+            self.streams.clear()
         self.logger = None
         self.shutdown()
 
@@ -1328,6 +1329,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-fm", "--fakemac", help="Generate and use a random MAC for ethernet address.", action='store_true')
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
+    parser.add_argument("-p", "--port", help="Port to bind to (default: 7000)", type=int, default=7000)
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
     parser.add_argument("-npm", "--no-ptp-master", help="Stops this receiver from being announced as the PTP Master",
@@ -1476,15 +1478,17 @@ if __name__ == "__main__":
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
-        PORT = 7000
+        PORT = args.port
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
+                PORT = httpd.server_address[1]
                 IPADDR_BIN = IP6ADDR_BIN
                 IPADDR = IPV6
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
             with AP2Server((IPV4, PORT), AP2Handler) as httpd:
+                PORT = httpd.server_address[1]
                 IPADDR_BIN = IP4ADDR_BIN
                 IPADDR = IPV4
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")

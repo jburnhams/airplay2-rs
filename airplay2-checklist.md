@@ -1,5 +1,22 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 4):**
+- **Integration Test Reorganization**:
+  - Moved integration tests to a dedicated `integration_tests` workspace member to separate them from unit tests.
+  - Configured `Cargo.toml` workspace members to exclude `integration_tests` from default `cargo test` runs.
+  - Fixed dependencies in `integration_tests/Cargo.toml` (added `bytes`, `tempfile`, etc.).
+- **AAC Streaming Verification**:
+  - Verified `tests/aac_streaming.rs` passes end-to-end with the Python receiver.
+  - Confirmed AAC codec implementation and SDP negotiation work correctly.
+- **Test Harness Enhancements**:
+  - Updated `PythonReceiver` to use `tempfile` for isolated test environments, allowing parallel execution.
+  - Implemented dynamic port allocation (`-p 0`) for the Python receiver to avoid port conflicts.
+  - Added robust path resolution for finding the `airplay2-receiver` directory from within the subcrate.
+  - Patched `airplay2-receiver/ap2-receiver.py` to support the `--port` argument.
+- **CI/CD Improvements**:
+  - Updated CI workflows to install necessary system dependencies (`libav*-dev`, `portaudio`, `ffmpeg`) and Python packages.
+  - Ensured `PYTHON_EXECUTABLE` is correctly set and used in tests.
+
 **Work Done (Session 3):**
 - **AAC Codec Implementation**:
   - Added `fdk-aac` dependency (v0.8.0).
@@ -7,7 +24,9 @@
   - Verified encoder logic with unit test `audio::tests::aac_encoder`.
   - Updated `PcmStreamer` to support switching to AAC codec and adding RFC 3640 AU headers.
   - Updated `ConnectionManager` to generate correct AAC SDP (`rtpmap:96 mpeg4-generic...`).
-  - Added `tests/aac_streaming.rs` integration test (currently marked `#[ignore]` as `python-ap2` receiver rejects AAC ANNOUNCE, likely due to strict feature flag checks or SDP parsing issues).
+  - Added `tests/aac_streaming.rs` integration test and verified it passes with Python receiver.
+  - Improved `PythonReceiver` test harness to support dynamic ports and parallel execution by isolating test environments.
+  - Patched `airplay2-receiver` to support dynamic port binding (`--port`).
 
 **Work Done (Session 2):**
 - Debugged and fixed `tests/common/python_receiver.rs` to use `python3` and improved logging, enabling integration tests to run successfully.
@@ -36,8 +55,9 @@
   - End-to-end test with Python receiver confirms ALAC_44100_16_2 codec matching
   - `examples/play_alac.rs` successfully streams with `AudioCodec::Alac` configuration
 - [x] **AAC** (Advanced Audio Codec) — lossy compression
-  - ⚠️ **IMPLEMENTED**: Codec implemented using `fdk-aac` and integrated into streamer.
-  - *Status*: Unit tests pass. Integration verification with `python-ap2` pending (receiver rejects connection, likely due to feature flags).
+  - ✅ **VERIFIED**: Codec implemented using `fdk-aac` and integrated into streamer.
+  - End-to-end integration test `tests/aac_streaming.rs` passes with Python receiver (using dynamic ports).
+  - Validated SDP negotiation (`rtpmap:96 mpeg4-generic...`) and audio streaming.
 - [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
   - *Status*: Pending.
 
