@@ -22,7 +22,9 @@ pub use aac_encoder::AacEncoder;
 pub use buffer::AudioRingBuffer;
 pub use clock::{AudioClock, TimingSync};
 pub use concealment::{Concealer, ConcealmentStrategy};
-pub use convert::{convert_channels, convert_samples, from_f32, resample_linear, to_f32};
+pub use convert::{
+    convert_channels, convert_channels_into, convert_samples, from_f32, resample_linear, to_f32,
+};
 pub use format::{
     AacProfile, AudioCodec, AudioFormat, ChannelConfig, CodecParams, SampleFormat, SampleRate,
 };

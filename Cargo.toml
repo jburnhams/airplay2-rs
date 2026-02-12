@@ -108,5 +108,9 @@ harness = false
 name = "resampler_benchmarks"
 harness = false
 
+[[bench]]
+name = "convert_benchmarks"
+harness = false
+
 [target.'cfg(target_os = "macos")'.dependencies]
 coreaudio-rs = { version = "0.14", optional = true }

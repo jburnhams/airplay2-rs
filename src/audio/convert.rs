@@ -119,7 +119,33 @@ pub fn convert_channels_into(
 ) {
     let in_ch = usize::from(input_channels.channels());
     let out_ch = usize::from(output_channels.channels());
+    let frames = input.len() / in_ch;
 
+    let mut output = Vec::with_capacity(frames * out_ch);
+    convert_channels_into(input, input_channels, output_channels, &mut output);
+    output
+}
+
+/// Convert channel configuration into an existing buffer
+///
+/// This function reuses the provided output buffer, clearing it before writing new data.
+/// It avoids allocating a new vector if the caller provides a buffer with sufficient capacity.
+pub fn convert_channels_into(
+    input: &[f32],
+    input_channels: ChannelConfig,
+    output_channels: ChannelConfig,
+    output: &mut Vec<f32>,
+) {
+    let in_ch = usize::from(input_channels.channels());
+    let out_ch = usize::from(output_channels.channels());
+
+    // If input is empty, clear output and return
+    if input.is_empty() {
+        output.clear();
+        return;
+    }
+
+    // If channel config is the same, just copy input to output
     if in_ch == out_ch {
         output.clear();
         output.extend_from_slice(input);
@@ -129,10 +155,11 @@ pub fn convert_channels_into(
     let frames = input.len() / in_ch;
     let output_len = frames * out_ch;
 
+    output.clear();
     if output.len() != output_len {
         output.resize(output_len, 0.0);
     }
-
+    
     for frame in 0..frames {
         let in_start = frame * in_ch;
         let out_start = frame * out_ch;
@@ -140,8 +167,9 @@ pub fn convert_channels_into(
         match (input_channels, output_channels) {
             (ChannelConfig::Mono, ChannelConfig::Stereo) => {
                 // Mono to stereo: duplicate
-                output[out_start] = input[in_start];
-                output[out_start + 1] = input[in_start];
+                let sample = input[in_start];
+                output[out_start] = sample;
+                output[out_start + 1] = sample;
             }
             (ChannelConfig::Stereo, ChannelConfig::Mono) => {
                 // Stereo to mono: average
@@ -149,6 +177,7 @@ pub fn convert_channels_into(
             }
             _ => {
                 // Generic: copy what we can, zero the rest
+                // We've already zeroed the buffer on resize/initialization
                 let count = out_ch.min(in_ch);
                 output[out_start..out_start + count]
                     .copy_from_slice(&input[in_start..in_start + count]);

@@ -43,10 +43,9 @@ pub fn process_set_parameter(request: &RtspRequest) -> Vec<ParameterUpdate> {
         }
     } else if content_type.contains("application/x-dmap-tagged") {
         // DMAP metadata
-        if let Ok(metadata) = parse_dmap_metadata(body) {
-            updates.push(ParameterUpdate::Metadata(metadata));
-        } else {
-            /* TODO: log metadata parsing error */
+        match parse_dmap_metadata(body) {
+            Ok(metadata) => updates.push(ParameterUpdate::Metadata(metadata)),
+            Err(e) => tracing::warn!("Failed to parse DMAP metadata: {e}"),
         }
     } else if content_type.contains("image/") {
         // Artwork

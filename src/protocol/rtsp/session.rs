@@ -301,7 +301,6 @@ impl RtspSession {
 
     /// Check if a method is valid in current state
     #[must_use]
-    #[allow(clippy::match_same_arms)]
     pub fn can_send(&self, method: Method) -> bool {
         matches!(
             (self.state, method),

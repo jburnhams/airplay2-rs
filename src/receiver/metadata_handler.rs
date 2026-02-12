@@ -27,7 +27,7 @@ pub struct TrackMetadata {
 }
 
 /// DMAP tag codes for metadata
-mod dmap_tags {
+pub(crate) mod dmap_tags {
     pub const ITEM_NAME: &[u8] = b"minm"; // Title
     pub const ITEM_ARTIST: &[u8] = b"asar"; // Artist
     pub const ITEM_ALBUM: &[u8] = b"asal"; // Album
@@ -60,12 +60,16 @@ pub fn parse_dmap_metadata(data: &[u8]) -> Result<TrackMetadata, MetadataError> 
 
         offset += 8;
 
-        if offset + length > data.len() {
+        let end_offset = offset
+            .checked_add(length)
+            .ok_or(MetadataError::InvalidFormat)?;
+
+        if end_offset > data.len() {
             return Err(MetadataError::IncompleteData);
         }
 
-        let value = &data[offset..offset + length];
-        offset += length;
+        let value = &data[offset..end_offset];
+        offset = end_offset;
 
         // Parse based on tag
         match tag {
