@@ -275,6 +275,9 @@ impl PythonReceiver {
     pub async fn stop(mut self) -> Result<ReceiverOutput, Box<dyn std::error::Error>> {
         tracing::info!("Stopping Python receiver");
 
+        // Clear logs so Drop doesn't print them again unless we panic later in stop
+        self.logs.lock().unwrap().clear();
+
         #[cfg(unix)]
         {
             use nix::sys::signal::{Signal, kill};
@@ -347,6 +350,21 @@ pub struct ReceiverOutput {
     pub rtp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
+}
+
+impl Drop for PythonReceiver {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let logs = self.logs.lock().unwrap();
+            if !logs.is_empty() {
+                println!("\n=== Python Receiver Logs (Post-Mortem) ===");
+                for line in logs.iter() {
+                    println!("{}", line);
+                }
+                println!("==========================================\n");
+            }
+        }
+    }
 }
 
 impl ReceiverOutput {

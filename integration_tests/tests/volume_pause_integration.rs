@@ -4,20 +4,25 @@
 
 mod common;
 
-use airplay2::AirPlayClient;
+use airplay2::{AirPlayClient, AirPlayConfig};
 use common::python_receiver::{PythonReceiver, TestSineSource};
 use std::time::Duration;
 use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
+    common::init_logging();
     // 1. Start Receiver
     let receiver = PythonReceiver::start().await?;
     let device = receiver.device_config();
 
     // 2. Connect
     println!("Connecting...");
-    let client = AirPlayClient::default_client();
+    // Use configured client with PIN 3939 (default for receiver)
+    let config = AirPlayConfig::builder()
+        .pin("3939")
+        .build();
+    let client = AirPlayClient::new(config);
     client.connect(&device).await?;
 
     // 3. Set Volume (Initial)
