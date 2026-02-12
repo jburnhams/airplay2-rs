@@ -325,12 +325,27 @@ impl PairSetup {
 
         // Parse device info TLV
         let device_tlv = TlvDecoder::decode(&decrypted)?;
-        let device_ltpk = device_tlv.get_required(TlvType::PublicKey)?.to_vec();
+        let device_id = device_tlv.get_required(TlvType::Identifier)?;
+        let device_ltpk = device_tlv.get_required(TlvType::PublicKey)?;
+        let signature_bytes = device_tlv.get_required(TlvType::Signature)?;
 
-        // TODO: Verify device signature
-        // The spec in docs/07 says "TODO: Verify device signature" so I will leave it as TODO or just comment.
+        // Verify device signature
+        let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
+        let accessory_x = hkdf_sign.expand(b"Pair-Setup-Accessory-Sign-Info", 32)?;
 
-        self.device_ltpk = Some(device_ltpk);
+        let mut accessory_info = Vec::new();
+        accessory_info.extend_from_slice(&accessory_x);
+        accessory_info.extend_from_slice(device_id);
+        accessory_info.extend_from_slice(device_ltpk);
+
+        let public_key = crate::protocol::crypto::Ed25519PublicKey::from_bytes(device_ltpk)?;
+        let signature = crate::protocol::crypto::Ed25519Signature::from_bytes(signature_bytes)?;
+
+        public_key
+            .verify(&accessory_info, &signature)
+            .map_err(PairingError::CryptoError)?;
+
+        self.device_ltpk = Some(device_ltpk.to_vec());
         self.state = PairingState::Complete;
 
         // Derive final session keys
