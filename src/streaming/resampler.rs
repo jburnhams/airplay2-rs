@@ -182,12 +182,11 @@ impl<S: AudioSource> ResamplingSource<S> {
         output_bytes.clear();
         output_bytes.reserve(output_bytes_needed);
 
-        for &sample in source_buffer {
+        output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
             let clamped = sample.clamp(-1.0, 1.0);
             let value = (clamped * f32::from(i16::MAX)) as i16;
-            let bytes = value.to_le_bytes();
-            output_bytes.extend_from_slice(&bytes);
-        }
+            value.to_le_bytes()
+        }));
 
         self.output_bytes_buffer = output_bytes;
         self.output_offset = 0;
