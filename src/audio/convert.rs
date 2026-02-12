@@ -105,15 +105,33 @@ pub fn convert_channels(
     input_channels: ChannelConfig,
     output_channels: ChannelConfig,
 ) -> Vec<f32> {
+    let mut output = Vec::new();
+    convert_channels_into(input, input_channels, output_channels, &mut output);
+    output
+}
+
+/// Convert channel configuration into an existing buffer
+pub fn convert_channels_into(
+    input: &[f32],
+    input_channels: ChannelConfig,
+    output_channels: ChannelConfig,
+    output: &mut Vec<f32>,
+) {
     let in_ch = usize::from(input_channels.channels());
     let out_ch = usize::from(output_channels.channels());
 
     if in_ch == out_ch {
-        return input.to_vec();
+        output.clear();
+        output.extend_from_slice(input);
+        return;
     }
 
     let frames = input.len() / in_ch;
-    let mut output = vec![0.0f32; frames * out_ch];
+    let output_len = frames * out_ch;
+
+    if output.len() != output_len {
+        output.resize(output_len, 0.0);
+    }
 
     for frame in 0..frames {
         let in_start = frame * in_ch;
@@ -137,8 +155,6 @@ pub fn convert_channels(
             }
         }
     }
-
-    output
 }
 
 /// Simple sample rate conversion (linear interpolation)

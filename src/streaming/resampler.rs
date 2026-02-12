@@ -1,6 +1,6 @@
 //! Audio resampling source using `rubato`
 
-use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels};
+use crate::audio::{AudioFormat, SampleFormat, convert::{convert_channels, convert_channels_into}};
 use crate::streaming::source::AudioSource;
 use rubato::{FftFixedIn, Resampler};
 use std::io;
@@ -16,6 +16,8 @@ pub struct ResamplingSource<S: AudioSource> {
     output_buffer: Vec<Vec<f32>>,
     input_bytes_buffer: Vec<u8>,
     output_bytes_buffer: Vec<u8>,
+    interleaved_buffer: Vec<f32>,
+    resampled_interleaved_buffer: Vec<f32>,
     output_offset: usize,
     eof: bool,
 }
@@ -68,6 +70,8 @@ impl<S: AudioSource> ResamplingSource<S> {
             output_buffer,
             input_bytes_buffer: vec![0u8; input_bytes_needed],
             output_bytes_buffer: Vec::new(),
+            interleaved_buffer: Vec::new(),
+            resampled_interleaved_buffer: Vec::new(),
             output_offset: 0,
             eof: false,
         })
@@ -141,23 +145,26 @@ impl<S: AudioSource> ResamplingSource<S> {
         let input_channels_count = self.input_format.channels.channels() as usize;
 
         // 1. Interleave resampled data (in input_channels config)
-        let mut interleaved_f32 = Vec::with_capacity(output_frames * input_channels_count);
+        self.interleaved_buffer.clear();
+        self.interleaved_buffer
+            .reserve(output_frames * input_channels_count);
         for i in 0..output_frames {
             for ch in 0..input_channels_count {
-                interleaved_f32.push(self.output_buffer[ch][i]);
+                self.interleaved_buffer.push(self.output_buffer[ch][i]);
             }
         }
 
         // 2. Convert channels if needed
-        #[allow(clippy::if_not_else)]
         let final_f32 = if self.input_format.channels != self.output_format.channels {
-            convert_channels(
-                &interleaved_f32,
+            convert_channels_into(
+                &self.interleaved_buffer,
                 self.input_format.channels,
                 self.output_format.channels,
-            )
+                &mut self.resampled_interleaved_buffer,
+            );
+            &self.resampled_interleaved_buffer
         } else {
-            interleaved_f32
+            &self.interleaved_buffer
         };
 
         // 3. Convert to bytes
@@ -166,7 +173,7 @@ impl<S: AudioSource> ResamplingSource<S> {
         self.output_bytes_buffer.clear();
         self.output_bytes_buffer.reserve(output_bytes_needed);
 
-        for sample in final_f32 {
+        for &sample in final_f32 {
             let clamped = sample.clamp(-1.0, 1.0);
             let value = (clamped * f32::from(i16::MAX)) as i16;
             let bytes = value.to_le_bytes();
