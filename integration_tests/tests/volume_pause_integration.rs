@@ -19,9 +19,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Connect
     println!("Connecting...");
     // Use configured client with PIN 3939 (default for receiver)
-    let config = AirPlayConfig::builder()
-        .pin("3939")
-        .build();
+    let config = AirPlayConfig::builder().pin("3939").build();
     let client = AirPlayClient::new(config);
     client.connect(&device).await?;
 

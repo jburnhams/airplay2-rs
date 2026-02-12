@@ -7,8 +7,8 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 mod common;
-use airplay2::AirPlayClient;
 use airplay2::protocol::pairing::storage::FileStorage;
+use airplay2::AirPlayClient;
 use common::python_receiver::PythonReceiver;
 
 #[tokio::test]

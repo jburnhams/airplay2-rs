@@ -40,7 +40,7 @@ impl PythonReceiver {
                     source_dir = parent_dir;
                 } else {
                     // Try one more level up
-                     if let Some(grandparent) = parent.parent() {
+                    if let Some(grandparent) = parent.parent() {
                         let grandparent_dir = grandparent.join("airplay2-receiver");
                         if grandparent_dir.exists() {
                             source_dir = grandparent_dir;
@@ -51,7 +51,11 @@ impl PythonReceiver {
         }
 
         if !source_dir.exists() {
-             return Err(format!("Could not find airplay2-receiver directory. Checked: {}", source_dir.display()).into());
+            return Err(format!(
+                "Could not find airplay2-receiver directory. Checked: {}",
+                source_dir.display()
+            )
+            .into());
         }
 
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
@@ -280,7 +284,7 @@ impl PythonReceiver {
 
         #[cfg(unix)]
         {
-            use nix::sys::signal::{Signal, kill};
+            use nix::sys::signal::{kill, Signal};
             use nix::unistd::Pid;
             if let Some(id) = self.process.id() {
                 let pid = Pid::from_raw(id as i32);

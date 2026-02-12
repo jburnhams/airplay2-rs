@@ -1,8 +1,8 @@
-use airplay2::PlayerBuilder;
 use airplay2::testing::{
     create_test_device,
     mock_server::{MockServer, MockServerConfig},
 };
+use airplay2::PlayerBuilder;
 use std::time::Duration;
 
 // Note: This test is currently ignored because the mock server doesn't fully implement
