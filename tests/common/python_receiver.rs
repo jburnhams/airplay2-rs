@@ -2,10 +2,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
-use tempfile::TempDir;
 
 /// Python receiver wrapper for testing
 pub struct PythonReceiver {
@@ -65,7 +65,11 @@ impl PythonReceiver {
         tracing::debug!("Output dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        // Use python explicitly as setup-python v5 creates 'python' not 'python3' on Windows/some envs
+        // Or respect environment variable if set
+        let python_bin =
+            std::env::var("PYTHON_EXECUTABLE").unwrap_or_else(|_| "python".to_string());
+        let mut command = Command::new(python_bin);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
@@ -128,7 +132,7 @@ impl PythonReceiver {
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 // Parse port from "serving on IP:PORT"
-                                if let Some(port_str) = line.split(':').last() {
+                                if let Some(port_str) = line.split(':').next_back() {
                                     if let Ok(p) = port_str.trim().parse::<u16>() {
                                         port = p;
                                     }
@@ -147,7 +151,7 @@ impl PythonReceiver {
                             tracing::warn!("Receiver stderr: {}", line.trim());
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
-                                if let Some(port_str) = line.split(':').last() {
+                                if let Some(port_str) = line.split(':').next_back() {
                                     if let Ok(p) = port_str.trim().parse::<u16>() {
                                         port = p;
                                     }
@@ -171,8 +175,8 @@ impl PythonReceiver {
         }
 
         if port == 0 {
-             tracing::warn!("Failed to parse port from 'serving on' message, defaulting to 7000");
-             port = 7000;
+            tracing::warn!("Failed to parse port from 'serving on' message, defaulting to 7000");
+            port = 7000;
         }
 
         // Spawn a background task to keep reading output

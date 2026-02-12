@@ -81,8 +81,8 @@ jobs:
           cd airplay2-receiver
           IFACE=${{ runner.os == 'macOS' && 'lo0' || 'lo' }}
           echo "Testing receiver startup on interface: $IFACE"
-          # Start receiver in background
-          AIRPLAY_FILE_SINK=1 python ap2-receiver.py --netiface $IFACE &
+          # Start receiver in background on a non-standard port to avoid conflicts
+          AIRPLAY_FILE_SINK=1 python ap2-receiver.py --netiface $IFACE -p 7001 &
           RECEIVER_PID=$!
           echo "Receiver started with PID: $RECEIVER_PID"
           # Wait for it to start (max 10 seconds)
@@ -100,8 +100,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          cd integration_tests
-          cargo test --release -- --test-threads=1 --nocapture
+          cargo test --release --test integration_tests --test aac_streaming -- --test-threads=1 --nocapture
         env:
           RUST_LOG: info
           # Loopback interface (lo0 for macOS, lo for Linux)
