@@ -21,7 +21,9 @@ fn test_process_volume() {
 #[test]
 fn test_process_invalid_metadata() {
     let mut request = RtspRequest::new(Method::SetParameter, "rtsp://localhost");
-    request.headers.insert("Content-Type", "application/x-dmap-tagged");
+    request
+        .headers
+        .insert("Content-Type", "application/x-dmap-tagged");
     request.body = b"invalid_dmap_data".to_vec();
 
     let updates = process_set_parameter(&request);
