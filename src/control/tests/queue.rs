@@ -27,7 +27,7 @@ fn test_navigation() {
     queue.set_current(0);
     assert_eq!(queue.current().unwrap().track.title, "Track 1");
 
-    queue.next();
+    queue.advance();
     assert_eq!(queue.current().unwrap().track.title, "Track 2");
 
     queue.previous();
@@ -88,7 +88,7 @@ fn test_insert_with_shuffle() {
         count += 1;
     }
 
-    while queue.next().is_some() {
+    while queue.advance().is_some() {
         count += 1;
     }
 
@@ -117,7 +117,7 @@ fn test_move_track_with_shuffle() {
         titles.insert(c.track.title.clone());
     }
 
-    while let Some(item) = queue.next() {
+    while let Some(item) = queue.advance() {
         titles.insert(item.track.title.clone());
     }
 

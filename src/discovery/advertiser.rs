@@ -555,8 +555,7 @@ impl AsyncRaopAdvertiser {
     /// # Errors
     ///
     /// Returns error if advertiser creation fails (e.g. mDNS init or MAC retrieval).
-    #[allow(clippy::needless_pass_by_value)]
-    pub async fn start(config: AdvertiserConfig) -> Result<Self, AdvertiserError> {
+    pub async fn start(mut config: AdvertiserConfig) -> Result<Self, AdvertiserError> {
         let (command_tx, mut command_rx) = mpsc::channel(16);
 
         let mac = if let Some(mac) = config.mac_override {
@@ -572,11 +571,10 @@ impl AsyncRaopAdvertiser {
         // let status_clone = status.clone();
 
         // Spawn blocking task for mdns-sd
-        let mut config_clone = config.clone();
-        config_clone.mac_override = Some(mac);
+        config.mac_override = Some(mac);
 
         tokio::task::spawn_blocking(move || {
-            let mut advertiser = match RaopAdvertiser::new(config_clone) {
+            let mut advertiser = match RaopAdvertiser::new(config) {
                 Ok(a) => a,
                 Err(e) => {
                     tracing::error!("Failed to create advertiser: {}", e);
