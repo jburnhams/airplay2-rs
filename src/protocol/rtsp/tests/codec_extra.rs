@@ -16,7 +16,7 @@ fn test_decode_header_too_large() {
 fn test_decode_body_too_large() {
     let mut codec = RtspCodec::new().with_max_size(200);
     let body = "a".repeat(200);
-    let data = format!("RTSP/1.0 200 OK\r\nContent-Length: 200\r\n\r\n{}", body);
+    let data = format!("RTSP/1.0 200 OK\r\nContent-Length: 200\r\n\r\n{body}");
 
     // Header ~40 bytes + Body 200 bytes > 200 bytes
     let result = codec.feed(data.as_bytes());
