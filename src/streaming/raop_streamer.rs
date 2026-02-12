@@ -1,12 +1,10 @@
 //! RAOP audio streaming coordinator
 
+use crate::protocol::crypto::Aes128Ctr;
 use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
-use aes::Aes128;
-use aes::cipher::KeyInit;
-use aes::cipher::generic_array::GenericArray;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::time::{Duration, Instant};
 
@@ -42,10 +40,8 @@ pub struct RaopStreamer {
     sequence: u16,
     /// Current RTP timestamp
     timestamp: u32,
-    /// Session encryption keys
-    keys: RaopSessionKeys,
-    /// Pre-computed block cipher for key reuse
-    aes_cipher: Aes128,
+    /// AES-CTR stream cipher
+    cipher: Aes128Ctr,
     /// Packet buffer for retransmission
     buffer: PacketBuffer,
     /// Encode buffer to avoid repeated allocations
@@ -70,15 +66,17 @@ impl RaopStreamer {
     /// Create new streamer
     #[must_use]
     pub fn new(keys: RaopSessionKeys, config: RaopStreamConfig) -> Self {
-        let key_generic = GenericArray::from_slice(keys.aes_key());
-        let aes_cipher = Aes128::new(key_generic);
+        // Initialize AES-CTR cipher with session keys
+        // We use expect() here because keys are guaranteed to be correct length
+        // by RaopSessionKeys::generate() or parsing logic
+        let cipher = Aes128Ctr::new(keys.aes_key(), keys.aes_iv())
+            .expect("Invalid session keys length");
 
         Self {
             config,
             sequence: 0,
             timestamp: 0,
-            keys,
-            aes_cipher,
+            cipher,
             buffer: PacketBuffer::new(PacketBuffer::DEFAULT_SIZE),
             encode_buffer: BytesMut::with_capacity(4096),
             timing: TimingSync::new(),
@@ -103,10 +101,6 @@ impl RaopStreamer {
     /// Encode audio frame to RTP packet
     ///
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
-    ///
-    /// # Panics
-    ///
-    /// Panics if the internal AES cipher state is invalid (should not happen with correctly generated keys).
     pub fn encode_frame(&mut self, audio_data: &[u8]) -> Bytes {
         let packet_size = RaopAudioPacket::HEADER_SIZE + audio_data.len();
         self.encode_buffer.reserve(packet_size);
@@ -134,11 +128,13 @@ impl RaopStreamer {
         let payload_start = len - audio_data.len();
 
         {
-            use crate::protocol::crypto::Aes128Ctr;
             let data = &mut self.encode_buffer[payload_start..];
-            let mut cipher = Aes128Ctr::new_with_cipher(&self.aes_cipher, self.keys.aes_iv())
-                .expect("invalid AES keys");
-            cipher.apply_keystream(data);
+
+            // Seek to the correct keystream offset based on RTP timestamp
+            // AirPlay 2 uses 16-bit stereo PCM (4 bytes/sample) for timing
+            let offset = u64::from(self.timestamp) * 4;
+            self.cipher.seek(offset);
+            self.cipher.apply_keystream(data);
         }
 
         // Extract the packet as Bytes
