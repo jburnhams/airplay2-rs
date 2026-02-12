@@ -339,7 +339,10 @@ impl PcmStreamer {
 
                             let size =
                                 encoder.encode(&input_format, &packet_data, &mut encoding_buffer);
-                            Cow::Borrowed(&encoding_buffer[..size])
+                            // Safety: clamp size to buffer length to prevent panic if encoder returns a size
+                            // larger than the buffer (which would have been safe with the original .truncate(size))
+                            let safe_size = size.min(encoding_buffer.len());
+                            Cow::Borrowed(&encoding_buffer[..safe_size])
                         } else {
                             Cow::Borrowed(&packet_data)
                         }
