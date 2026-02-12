@@ -9,7 +9,7 @@ fn test_streaming_integration() {
     let keys = RaopSessionKeys::generate().expect("Failed to generate keys");
     let config = RaopStreamConfig::default();
 
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
 
     // Encode some frames
     let frame = vec![0u8; 352 * 4];

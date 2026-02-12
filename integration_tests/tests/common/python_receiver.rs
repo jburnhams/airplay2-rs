@@ -34,6 +34,7 @@ impl PythonReceiver {
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
         // Locate source directory
         let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
+        #[allow(clippy::collapsible_if)]
         if !source_dir.exists() {
             if let Some(parent) = std::env::current_dir()?.parent() {
                 let parent_dir = parent.join("airplay2-receiver");
@@ -158,7 +159,8 @@ impl PythonReceiver {
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
-                                if let Some(port_str) = line.split(':').last() {
+                                #[allow(clippy::collapsible_if)]
+                                if let Some(port_str) = line.split(':').next_back() {
                                     if let Ok(p) = port_str.trim().parse::<u16>() {
                                         actual_port = p;
                                         tracing::info!("Detected receiver port: {}", actual_port);
@@ -179,9 +181,13 @@ impl PythonReceiver {
                                 logs.push(format!("STDERR: {}", line));
                             }
                             if line.contains("serving on") {
-                                tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
+                                tracing::info!(
+                                    "✓ Python receiver started (detected in stderr): {}",
+                                    line.trim()
+                                );
                                 found_serving = true;
-                                if let Some(port_str) = line.split(':').last() {
+                                #[allow(clippy::collapsible_if)]
+                                if let Some(port_str) = line.split(':').next_back() {
                                     if let Ok(p) = port_str.trim().parse::<u16>() {
                                         actual_port = p;
                                         tracing::info!("Detected receiver port: {}", actual_port);
@@ -260,9 +266,7 @@ impl PythonReceiver {
                 continue;
             }
 
-            let relative_path = path
-                .strip_prefix(src)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let relative_path = path.strip_prefix(src).map_err(std::io::Error::other)?;
             let target_path = dst.join(relative_path);
 
             if entry.file_type().is_dir() {
@@ -285,6 +289,7 @@ impl PythonReceiver {
                 return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
             }
 
+            #[allow(clippy::collapsible_if)]
             if let Ok(guard) = self.log_buffer.lock() {
                 if guard.iter().any(|line| line.contains(pattern)) {
                     return Ok(());
@@ -315,8 +320,13 @@ impl PythonReceiver {
         // But workspace target dir is usually shared.
         // If running `cargo test -p integration_tests`, it might put artifacts in `target`.
         // Let's try to find the `target` directory.
-        if !target_dir.join("target").exists() && target_dir.parent().map(|p| p.join("target").exists()).unwrap_or(false) {
-             target_dir = target_dir.parent().unwrap().to_path_buf();
+        if !target_dir.join("target").exists()
+            && target_dir
+                .parent()
+                .map(|p| p.join("target").exists())
+                .unwrap_or(false)
+        {
+            target_dir = target_dir.parent().unwrap().to_path_buf();
         }
 
         let log_dir = target_dir.join("target");
@@ -332,7 +342,11 @@ impl PythonReceiver {
 
         if let Ok(logs) = self.log_buffer.lock() {
             if let Err(e) = fs::write(&log_path, logs.join("\n")) {
-                tracing::warn!("Failed to write integration test logs to {:?}: {}", log_path, e);
+                tracing::warn!(
+                    "Failed to write integration test logs to {:?}: {}",
+                    log_path,
+                    e
+                );
             } else {
                 tracing::info!("Wrote integration test logs to: {:?}", log_path);
             }
@@ -386,8 +400,13 @@ impl PythonReceiver {
             Ok(pb) => pb,
             Err(_) => PathBuf::from("."),
         };
-        if !target_dir.join("target").exists() && target_dir.parent().map(|p| p.join("target").exists()).unwrap_or(false) {
-             target_dir = target_dir.parent().unwrap().to_path_buf();
+        if !target_dir.join("target").exists()
+            && target_dir
+                .parent()
+                .map(|p| p.join("target").exists())
+                .unwrap_or(false)
+        {
+            target_dir = target_dir.parent().unwrap().to_path_buf();
         }
         let log_path = target_dir.join("target").join(format!(
             "integration-test-{}.log",
