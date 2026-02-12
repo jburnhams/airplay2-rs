@@ -28,6 +28,7 @@ PAIRING_FILE = "pairings.txt"
 LTSK_FILE = "ltsk.txt"
 DEV_PROPS = "device_properties.txt"
 ACCESSORY_SECRET = "accessory-secret"
+MAX_PEERS = 16
 
 
 class MFiUnhandledException(Exception):
@@ -648,7 +649,7 @@ class Hap:
             """
             # TODO: 4a. Check for free space :)
 
-            if len(self.pairings.list_pairings()) >= 16:
+            if len(self.pairings.list_pairings()) >= MAX_PEERS:
                 self.logger.debug("Max peers reached")
                 return [
                     Tlv8.Tag.STATE,
