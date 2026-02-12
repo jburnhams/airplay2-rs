@@ -1,9 +1,6 @@
 //! Audio resampling source using `rubato`
 
-use crate::audio::{
-    AudioFormat, SampleFormat,
-    convert::convert_channels_into,
-};
+use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels_into};
 use crate::streaming::source::AudioSource;
 use rubato::{FftFixedIn, Resampler};
 use std::io;
