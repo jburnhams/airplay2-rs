@@ -241,7 +241,7 @@ impl PlaybackQueue {
     }
 
     /// Move to next track
-    pub fn next(&mut self) -> Option<&QueueItem> {
+    pub fn advance(&mut self) -> Option<&QueueItem> {
         let next_index = if let Some(ref order) = self.shuffle_order {
             // Shuffle mode
             if self.shuffle_position + 1 < order.len() {
@@ -414,7 +414,7 @@ mod tests {
         queue.set_current(0);
         assert_eq!(queue.current().unwrap().track.title.as_deref(), Some("Track 1"));
 
-        queue.next();
+        queue.advance();
         assert_eq!(queue.current().unwrap().track.title.as_deref(), Some("Track 2"));
 
         queue.previous();

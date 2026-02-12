@@ -132,6 +132,12 @@ fn test_service_name_special_characters() {
 }
 
 #[test]
+fn test_new_requires_mac() {
+    let config = AdvertiserConfig::default();
+    assert!(RaopAdvertiser::new(config).is_err());
+}
+
+#[test]
 fn test_advertiser_config_default() {
     let config = AdvertiserConfig::default();
     assert_eq!(config.name, "AirPlay Receiver");
