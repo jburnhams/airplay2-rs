@@ -1,4 +1,5 @@
 mod codec;
+mod codec_extra;
 mod compliance;
 mod extra_codec;
 mod header_parsing;

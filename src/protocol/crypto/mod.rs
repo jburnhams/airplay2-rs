@@ -14,8 +14,6 @@ mod error;
 mod hkdf;
 #[cfg(feature = "raop")]
 mod rsa;
-#[cfg(all(test, feature = "raop"))]
-mod rsa_tests;
 mod srp;
 #[cfg(test)]
 mod tests;
