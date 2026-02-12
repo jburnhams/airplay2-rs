@@ -3,16 +3,13 @@
 //! This module implements the server side of `HomeKit` pairing, used by
 //! `AirPlay` 2 receivers to authenticate connecting senders.
 
-use crate::protocol::pairing::tlv::{TlvEncoder, TlvDecoder, TlvType};
 use crate::protocol::crypto::{
-    SrpParams, SrpServer,
-    Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature,
-    X25519KeyPair, X25519PublicKey,
-    ChaCha20Poly1305Cipher, Nonce,
-    derive_key,
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, Nonce, SrpParams,
+    SrpServer, X25519KeyPair, X25519PublicKey, derive_key,
 };
+use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use rand::RngCore;
-use sha2::{Sha512, Digest};
+use sha2::{Digest, Sha512};
 use thiserror::Error;
 
 /// Pairing server state machine
@@ -203,13 +200,13 @@ impl PairingServer {
 
         // Verify method is pair-setup (0)
         let Some(method_bytes) = tlv.get(TlvType::Method) else {
-             // If method missing, default to 0? Or error?
-             // Assuming default 0 as per previous code logic:
-             // let method = ... .unwrap_or(0);
-             // But strict check is better.
-             // Actually, `tlv.get(TlvType::Method).and_then(|m| m.first()).copied().unwrap_or(0)`
-             // If I use let else, I need to handle None.
-             return self.error_result(PairingError::UnsupportedMethod(0)); // Should probably be 0
+            // If method missing, default to 0? Or error?
+            // Assuming default 0 as per previous code logic:
+            // let method = ... .unwrap_or(0);
+            // But strict check is better.
+            // Actually, `tlv.get(TlvType::Method).and_then(|m| m.first()).copied().unwrap_or(0)`
+            // If I use let else, I need to handle None.
+            return self.error_result(PairingError::UnsupportedMethod(0)); // Should probably be 0
         };
         let method = method_bytes.first().copied().unwrap_or(0);
 
@@ -224,10 +221,7 @@ impl PairingServer {
         let verifier = verifier.clone();
 
         // Create SRP server
-        let srp_server = SrpServer::new(
-            &verifier,
-            &SrpParams::RFC5054_3072,
-        );
+        let srp_server = SrpServer::new(&verifier, &SrpParams::RFC5054_3072);
 
         let server_public = srp_server.public_key();
 
@@ -268,12 +262,9 @@ impl PairingServer {
         };
 
         // Compute shared key and verify client's proof
-        let Ok((session_key, server_proof)) = srp_server.verify_client(
-            b"Pair-Setup",
-            &self.srp_salt,
-            client_public,
-            client_proof,
-        ) else {
+        let Ok((session_key, server_proof)) =
+            srp_server.verify_client(b"Pair-Setup", &self.srp_salt, client_public, client_proof)
+        else {
             return self.error_result(PairingError::AuthenticationFailed);
         };
 
@@ -289,7 +280,8 @@ impl PairingServer {
 
         // Encrypt our Ed25519 public key for the client
         let accessory_info = self.build_accessory_info(session_key.as_bytes());
-        let encrypted_data = Self::encrypt_accessory_data(&self.identity, &accessory_info, &enc_key);
+        let encrypted_data =
+            Self::encrypt_accessory_data(&self.identity, &accessory_info, &enc_key);
 
         // Build M4 response
         let response = TlvEncoder::new()
@@ -300,7 +292,8 @@ impl PairingServer {
 
         let mut session_key_bytes = [0u8; 64];
         if session_key.as_bytes().len() <= 64 {
-             session_key_bytes[..session_key.as_bytes().len()].copy_from_slice(session_key.as_bytes());
+            session_key_bytes[..session_key.as_bytes().len()]
+                .copy_from_slice(session_key.as_bytes());
         }
 
         self.srp_session_key = Some(session_key_bytes);
@@ -310,7 +303,7 @@ impl PairingServer {
             response,
             new_state: self.state,
             error: None,
-            complete: false,  // Still need pair-verify
+            complete: false, // Still need pair-verify
         }
     }
 
@@ -320,7 +313,7 @@ impl PairingServer {
         if self.state != PairingServerState::PairSetupComplete
             && self.state != PairingServerState::Idle
         {
-             self.reset(); // Clear previous session attempts
+            self.reset(); // Clear previous session attempts
         }
 
         // Get client's X25519 public key
@@ -329,13 +322,13 @@ impl PairingServer {
         };
 
         if client_public_bytes.len() != 32 {
-             return self.error_result(PairingError::MissingField("PublicKey"));
+            return self.error_result(PairingError::MissingField("PublicKey"));
         }
 
         let mut arr = [0u8; 32];
         arr.copy_from_slice(client_public_bytes);
         let Ok(client_public) = X25519PublicKey::from_bytes(&arr) else {
-             return self.error_result(PairingError::InvalidState);
+            return self.error_result(PairingError::InvalidState);
         };
 
         self.client_curve_public = Some(arr);
@@ -415,13 +408,16 @@ impl PairingServer {
         };
 
         // Decrypt client's signature data
-        let Ok(decrypted) = Self::decrypt_with_key(encrypted_data, &session_key, b"PV-Msg03") else {
-             return self.error_result(PairingError::DecryptionFailed);
+        let Ok(decrypted) = Self::decrypt_with_key(encrypted_data, &session_key, b"PV-Msg03")
+        else {
+            return self.error_result(PairingError::DecryptionFailed);
         };
 
         // Parse sub-TLV
         let Ok(sub_tlv) = TlvDecoder::decode(&decrypted) else {
-             return self.error_result(PairingError::TlvDecode("Failed to decode sub-TLV".to_string()));
+            return self.error_result(PairingError::TlvDecode(
+                "Failed to decode sub-TLV".to_string(),
+            ));
         };
 
         // Get client's identifier (Ed25519 public key) and signature
@@ -430,7 +426,7 @@ impl PairingServer {
         };
 
         if client_id.len() != 32 {
-             return self.error_result(PairingError::MissingField("Identifier"));
+            return self.error_result(PairingError::MissingField("Identifier"));
         }
         let mut client_id_arr = [0u8; 32];
         client_id_arr.copy_from_slice(client_id);
@@ -450,31 +446,29 @@ impl PairingServer {
         verify_info.extend_from_slice(&client_id_arr);
 
         let Some(verify_keypair) = &self.verify_keypair else {
-             return self.error_result(PairingError::InvalidState);
+            return self.error_result(PairingError::InvalidState);
         };
         verify_info.extend_from_slice(verify_keypair.public_key().as_bytes());
 
         // Client ID is Ed25519 public key
         // Verify signature using Ed25519
         let Ok(client_identity) = Ed25519PublicKey::from_bytes(&client_id_arr) else {
-             return self.error_result(PairingError::AuthenticationFailed);
+            return self.error_result(PairingError::AuthenticationFailed);
         };
 
         let Ok(signature) = Ed25519Signature::from_bytes(client_signature) else {
-             return self.error_result(PairingError::SignatureVerificationFailed);
+            return self.error_result(PairingError::SignatureVerificationFailed);
         };
 
         if client_identity.verify(&verify_info, &signature).is_err() {
-             return self.error_result(PairingError::SignatureVerificationFailed);
+            return self.error_result(PairingError::SignatureVerificationFailed);
         }
 
         // Derive encryption keys for the session
         let enc_keys = Self::derive_session_keys(&shared_secret);
 
         // Build M4 response (empty encrypted data indicates success)
-        let response = TlvEncoder::new()
-            .add_state(4)
-            .build();
+        let response = TlvEncoder::new().add_state(4).build();
 
         self.client_public_key = Some(client_id_arr);
         self.encryption_keys = Some(enc_keys);
@@ -526,16 +520,21 @@ impl PairingServer {
         cipher.encrypt(&nonce, data).expect("encryption failed")
     }
 
-    fn decrypt_with_key(data: &[u8], key: &[u8], nonce_prefix: &[u8]) -> Result<Vec<u8>, PairingError> {
+    fn decrypt_with_key(
+        data: &[u8],
+        key: &[u8],
+        nonce_prefix: &[u8],
+    ) -> Result<Vec<u8>, PairingError> {
         let mut nonce_bytes = [0u8; 12];
         let len = nonce_prefix.len().min(12);
         nonce_bytes[..len].copy_from_slice(&nonce_prefix[..len]);
         let nonce = Nonce::from_bytes(&nonce_bytes).expect("nonce creation");
 
-        let cipher = ChaCha20Poly1305Cipher::new(key)
-            .map_err(|_| PairingError::DecryptionFailed)?;
+        let cipher =
+            ChaCha20Poly1305Cipher::new(key).map_err(|_| PairingError::DecryptionFailed)?;
 
-        cipher.decrypt(&nonce, data)
+        cipher
+            .decrypt(&nonce, data)
             .map_err(|_| PairingError::DecryptionFailed)
     }
 
@@ -546,14 +545,16 @@ impl PairingServer {
             shared_secret,
             b"Control-Write-Encryption-Key",
             32,
-        ).expect("key derivation");
+        )
+        .expect("key derivation");
 
         let decrypt_key = derive_key(
             Some(b"Control-Salt"),
             shared_secret,
             b"Control-Read-Encryption-Key",
             32,
-        ).expect("key derivation");
+        )
+        .expect("key derivation");
 
         EncryptionKeys {
             encrypt_key: encrypt_key.try_into().expect("key length"),
@@ -570,11 +571,14 @@ impl PairingServer {
         let error_code = match &error {
             PairingError::AuthenticationFailed => 2,
             PairingError::InvalidState => 6,
-            _ => 1,  // Unknown error
+            _ => 1, // Unknown error
         };
 
         let response = TlvEncoder::new()
-            .add_state(0)
+            .add_state(0) // Error state usually means sending back failure
+            // Note: Apple spec uses state 0 for errors? Or just error code?
+            // Usually it's same state or error TLV.
+            // Docs say: add_u8(TlvType::State, 0)
             .add_byte(TlvType::Error, error_code)
             .build();
 
@@ -671,9 +675,7 @@ mod tests {
         let mut server = create_test_server();
 
         // Try M3 before M1 - should fail
-        let m3 = TlvEncoder::new()
-            .add_state(3)
-            .build();
+        let m3 = TlvEncoder::new().add_state(3).build();
 
         let result = server.process_pair_setup(&m3);
         assert!(result.error.is_some());
