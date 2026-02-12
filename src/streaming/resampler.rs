@@ -16,6 +16,8 @@ pub struct ResamplingSource<S: AudioSource> {
     output_buffer: Vec<Vec<f32>>,
     input_bytes_buffer: Vec<u8>,
     output_bytes_buffer: Vec<u8>,
+    interleaved_buffer: Vec<f32>,
+    resampled_interleaved_buffer: Vec<f32>,
     output_offset: usize,
     eof: bool,
     intermediate_buffer: Vec<f32>,
@@ -70,6 +72,8 @@ impl<S: AudioSource> ResamplingSource<S> {
             output_buffer,
             input_bytes_buffer: vec![0u8; input_bytes_needed],
             output_bytes_buffer: Vec::new(),
+            interleaved_buffer: Vec::new(),
+            resampled_interleaved_buffer: Vec::new(),
             output_offset: 0,
             eof: false,
             intermediate_buffer: Vec::new(),
@@ -145,12 +149,12 @@ impl<S: AudioSource> ResamplingSource<S> {
         let input_channels_count = self.input_format.channels.channels() as usize;
 
         // 1. Interleave resampled data (in input_channels config)
-        self.intermediate_buffer.clear();
-        self.intermediate_buffer
+        self.interleaved_buffer.clear();
+        self.interleaved_buffer
             .reserve(output_frames * input_channels_count);
         for i in 0..output_frames {
             for ch in 0..input_channels_count {
-                self.intermediate_buffer.push(self.output_buffer[ch][i]);
+                self.interleaved_buffer.push(self.output_buffer[ch][i]);
             }
         }
 

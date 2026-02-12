@@ -105,6 +105,18 @@ pub fn convert_channels(
     input_channels: ChannelConfig,
     output_channels: ChannelConfig,
 ) -> Vec<f32> {
+    let mut output = Vec::new();
+    convert_channels_into(input, input_channels, output_channels, &mut output);
+    output
+}
+
+/// Convert channel configuration into an existing buffer
+pub fn convert_channels_into(
+    input: &[f32],
+    input_channels: ChannelConfig,
+    output_channels: ChannelConfig,
+    output: &mut Vec<f32>,
+) {
     let in_ch = usize::from(input_channels.channels());
     let out_ch = usize::from(output_channels.channels());
     let frames = input.len() / in_ch;
@@ -141,13 +153,13 @@ pub fn convert_channels_into(
     }
 
     let frames = input.len() / in_ch;
-    let needed_len = frames * out_ch;
+    let output_len = frames * out_ch;
 
-    // Resize buffer (reusing capacity if possible)
-    // We clear first to ensure all elements are zero-initialized
     output.clear();
-    output.resize(needed_len, 0.0);
-
+    if output.len() != output_len {
+        output.resize(output_len, 0.0);
+    }
+    
     for frame in 0..frames {
         let in_start = frame * in_ch;
         let out_start = frame * out_ch;
@@ -169,6 +181,9 @@ pub fn convert_channels_into(
                 let count = out_ch.min(in_ch);
                 output[out_start..out_start + count]
                     .copy_from_slice(&input[in_start..in_start + count]);
+                if out_ch > in_ch {
+                    output[out_start + count..out_start + out_ch].fill(0.0);
+                }
             }
         }
     }
