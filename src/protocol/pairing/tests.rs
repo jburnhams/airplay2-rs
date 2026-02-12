@@ -17,6 +17,170 @@ fn test_tlv_encode_simple() {
 }
 
 #[test]
+fn test_pair_setup_m6_verification() {
+    use crate::protocol::crypto::{
+        ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpVerifier,
+    };
+    use crate::protocol::pairing::setup::PairSetup;
+
+    let mut client = PairSetup::new();
+    let pin = "1234";
+    client.set_pin(pin);
+
+    // 1. Client Start (M1)
+    let _m1 = client.start().unwrap();
+
+    // 2. Device Response (M2) simulation
+    let username = "Pair-Setup";
+    let salt = b"salt-bytes";
+
+    // We need a real SRP verifier to generate valid proofs
+    let srp_verifier_obj = SrpVerifier::new(username.as_bytes(), pin.as_bytes(), salt).unwrap();
+    let server_public = srp_verifier_obj.public_key();
+
+    let m2 = TlvEncoder::new()
+        .add_state(2)
+        .add(TlvType::Salt, salt)
+        .add(TlvType::PublicKey, server_public)
+        .build();
+
+    // 3. Client Process M2 -> M3
+    let m3 = match client.process_m2(&m2).unwrap() {
+        PairingStepResult::SendData(data) => data,
+        _ => panic!("Expected SendData for M3"),
+    };
+
+    let tlv_m3 = TlvDecoder::decode(&m3).unwrap();
+    let client_public = tlv_m3.get_required(TlvType::PublicKey).unwrap();
+    let client_proof = tlv_m3.get_required(TlvType::Proof).unwrap();
+
+    // 4. Device Process M3 -> M4
+    let session_key_obj = srp_verifier_obj
+        .verify_client(client_public, client_proof)
+        .unwrap();
+    let session_key = session_key_obj.as_bytes();
+
+    let m4 = TlvEncoder::new()
+        .add_state(4)
+        .add(TlvType::Proof, srp_verifier_obj.server_proof())
+        .build();
+
+    // 5. Client Process M4 -> M5
+    let _m5 = match client.process_m4(&m4).unwrap() {
+        PairingStepResult::SendData(data) => data,
+        _ => panic!("Expected SendData for M5"),
+    };
+
+    // 6. Device Process M5 and send M6
+    // (We skip M5 verification on device side for brevity as we are testing M6 verification on client)
+
+    // Device derives encryption key for M6
+    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key);
+    let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info").unwrap();
+
+    // Device signs: HKDF(...) || identifier || public_key
+    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
+    let accessory_x = hkdf_sign.expand(b"Pair-Setup-Accessory-Sign-Info", 32).unwrap();
+
+    let device_signing = Ed25519KeyPair::generate();
+    let device_id = b"device-id";
+
+    let mut sign_data = Vec::new();
+    sign_data.extend_from_slice(&accessory_x);
+    sign_data.extend_from_slice(device_id);
+    sign_data.extend_from_slice(device_signing.public_key().as_bytes());
+
+    let signature = device_signing.sign(&sign_data);
+
+    let inner_tlv = TlvEncoder::new()
+        .add(TlvType::Identifier, device_id)
+        .add(TlvType::PublicKey, device_signing.public_key().as_bytes())
+        .add(TlvType::Signature, &signature.to_bytes())
+        .build();
+
+    let cipher = ChaCha20Poly1305Cipher::new(&encrypt_key).unwrap();
+    let mut nonce_bytes = [0u8; 12];
+    nonce_bytes[4..].copy_from_slice(b"PS-Msg06");
+    let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
+
+    let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
+
+    let m6 = TlvEncoder::new()
+        .add_state(6)
+        .add(TlvType::EncryptedData, &encrypted)
+        .build();
+
+    // 7. Client Process M6
+    match client.process_m6(&m6) {
+        Ok(PairingStepResult::Complete(_)) => {
+            assert_eq!(client.device_public_key().unwrap(), device_signing.public_key().as_bytes());
+        }
+        Err(e) => panic!("M6 verification failed: {:?}", e),
+        _ => panic!("Expected Complete for M6"),
+    }
+}
+
+#[test]
+fn test_pair_setup_m6_invalid_signature() {
+    use crate::protocol::crypto::{
+        ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpVerifier,
+    };
+    use crate::protocol::pairing::setup::PairSetup;
+
+    let mut client = PairSetup::new();
+    let pin = "1234";
+    client.set_pin(pin);
+
+    // 1-5. Go to state where client expects M6
+    let _m1 = client.start().unwrap();
+    let salt = b"salt-bytes";
+    let srp_verifier_obj = SrpVerifier::new(b"Pair-Setup", pin.as_bytes(), salt).unwrap();
+    let m2 = TlvEncoder::new().add_state(2).add(TlvType::Salt, salt).add(TlvType::PublicKey, srp_verifier_obj.public_key()).build();
+    let m3 = match client.process_m2(&m2).unwrap() { PairingStepResult::SendData(d) => d, _ => panic!() };
+    let tlv_m3 = TlvDecoder::decode(&m3).unwrap();
+    let session_key_obj = srp_verifier_obj.verify_client(tlv_m3.get_required(TlvType::PublicKey).unwrap(), tlv_m3.get_required(TlvType::Proof).unwrap()).unwrap();
+    let session_key = session_key_obj.as_bytes();
+    let m4 = TlvEncoder::new().add_state(4).add(TlvType::Proof, srp_verifier_obj.server_proof()).build();
+    let _m5 = client.process_m4(&m4).unwrap();
+
+    // 6. Device sends M6 with INVALID signature
+    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key);
+    let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info").unwrap();
+
+    let device_signing = Ed25519KeyPair::generate();
+    let bad_key = Ed25519KeyPair::generate(); // Wrong key for signing
+    let device_id = b"device-id";
+
+    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
+    let accessory_x = hkdf_sign.expand(b"Pair-Setup-Accessory-Sign-Info", 32).unwrap();
+
+    let mut sign_data = Vec::new();
+    sign_data.extend_from_slice(&accessory_x);
+    sign_data.extend_from_slice(device_id);
+    sign_data.extend_from_slice(device_signing.public_key().as_bytes());
+
+    let signature = bad_key.sign(&sign_data); // Sign with wrong key
+
+    let inner_tlv = TlvEncoder::new()
+        .add(TlvType::Identifier, device_id)
+        .add(TlvType::PublicKey, device_signing.public_key().as_bytes())
+        .add(TlvType::Signature, &signature.to_bytes())
+        .build();
+
+    let cipher = ChaCha20Poly1305Cipher::new(&encrypt_key).unwrap();
+    let mut nonce_bytes = [0u8; 12];
+    nonce_bytes[4..].copy_from_slice(b"PS-Msg06");
+    let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
+    let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
+
+    let m6 = TlvEncoder::new().add_state(6).add(TlvType::EncryptedData, &encrypted).build();
+
+    // 7. Client Process M6 should FAIL
+    let result = client.process_m6(&m6);
+    assert!(matches!(result, Err(PairingError::CryptoError(_))));
+}
+
+#[test]
 fn test_tlv_decode_simple() {
     let data = vec![0x06, 0x01, 0x01, 0x00, 0x01, 0x00];
     let decoder = TlvDecoder::decode(&data).unwrap();
