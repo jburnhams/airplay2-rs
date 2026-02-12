@@ -223,7 +223,7 @@ def get_volume():
     elif subsys == "Linux":
         try:
             line_pct = subprocess.check_output(["amixer", "get", "Master"]).splitlines()[-1]
-            m = re.search(b"\[([0-9]+)%\]", line_pct)
+            m = re.search(b"\\[([0-9]+)%\\]", line_pct)
             if m:
                 pct = int(m.group(1))
                 if pct < 45:
