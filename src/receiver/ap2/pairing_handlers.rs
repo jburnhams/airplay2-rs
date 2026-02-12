@@ -2,7 +2,7 @@
 //!
 //! These handlers integrate the `PairingServer` with the RTSP request framework.
 
-use super::pairing_server::{EncryptionKeys, PairingResult, PairingServerState, PairingServer};
+use super::pairing_server::{EncryptionKeys, PairingResult, PairingServer, PairingServerState};
 use super::request_handler::{Ap2Event, Ap2HandleResult, Ap2RequestContext, HandlerFn};
 use super::response_builder::Ap2ResponseBuilder;
 use super::session_state::Ap2SessionState;
@@ -85,7 +85,9 @@ impl PairingHandler {
     ) -> Ap2HandleResult {
         let new_state = match result.new_state {
             PairingServerState::WaitingForM3 => Some(Ap2SessionState::PairingSetup { step: 2 }),
-            PairingServerState::PairSetupComplete => Some(Ap2SessionState::PairingSetup { step: 4 }),
+            PairingServerState::PairSetupComplete => {
+                Some(Ap2SessionState::PairingSetup { step: 4 })
+            }
             PairingServerState::VerifyWaitingForM3 => {
                 Some(Ap2SessionState::PairingVerify { step: 2 })
             }
@@ -156,7 +158,6 @@ impl PairingHandler {
 }
 
 /// Create pairing handlers for the request handler framework
-#[must_use]
 pub fn create_pairing_handlers(handler: Arc<PairingHandler>) -> (HandlerFn, HandlerFn) {
     let setup_handler = handler.clone();
     let verify_handler = handler;
