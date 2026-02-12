@@ -20,6 +20,14 @@ mod implementation {
         Stop,
     }
 
+    struct StreamContext {
+        device: cpal::Device,
+        config: cpal::StreamConfig,
+        sample_format: SampleFormat,
+        callback: Arc<Mutex<Option<AudioCallback>>>,
+        volume: Arc<Mutex<f32>>,
+    }
+
     /// CPAL-based audio output implementation
     pub struct CpalOutput {
         host: cpal::Host,
@@ -51,27 +59,15 @@ mod implementation {
             })
         }
 
-        #[allow(clippy::too_many_arguments)]
         fn spawn_stream_thread(
-            device: cpal::Device,
-            config: cpal::StreamConfig,
-            sample_format: SampleFormat,
-            callback_ref: Arc<Mutex<Option<AudioCallback>>>,
-            volume_ref: Arc<Mutex<f32>>,
+            ctx: StreamContext,
             rx: mpsc::Receiver<StreamCommand>,
             status_tx: mpsc::Sender<Result<(), AudioOutputError>>,
         ) {
             thread::spawn(move || {
                 let err_fn = |err| tracing::error!("CPAL stream error: {}", err);
 
-                let stream_result = Self::build_stream(
-                    &device,
-                    &config,
-                    sample_format,
-                    callback_ref,
-                    volume_ref,
-                    err_fn,
-                );
+                let stream_result = Self::build_stream(ctx, err_fn);
 
                 match stream_result {
                     Ok(stream) => {
@@ -96,21 +92,25 @@ mod implementation {
         }
 
         fn build_stream<E>(
-            device: &cpal::Device,
-            config: &cpal::StreamConfig,
-            sample_format: SampleFormat,
-            callback_ref: Arc<Mutex<Option<AudioCallback>>>,
-            volume_ref: Arc<Mutex<f32>>,
+            ctx: StreamContext,
             err_fn: E,
         ) -> Result<Box<dyn StreamTrait>, AudioOutputError>
         where
             E: Fn(cpal::StreamError) + Send + 'static + Copy,
         {
+            let StreamContext {
+                device,
+                config,
+                sample_format,
+                callback,
+                volume,
+            } = ctx;
+
             match sample_format {
                 SampleFormat::I16 => {
                     let stream = device
                         .build_output_stream(
-                            config,
+                            &config,
                             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                                 let bytes: &mut [u8] = unsafe {
                                     std::slice::from_raw_parts_mut(
@@ -119,13 +119,13 @@ mod implementation {
                                     )
                                 };
 
-                                let mut cb = callback_ref.lock().unwrap();
+                                let mut cb = callback.lock().unwrap();
                                 if let Some(ref mut callback) = *cb {
                                     callback(bytes);
                                 }
 
                                 // Apply volume
-                                let vol = *volume_ref.lock().unwrap();
+                                let vol = *volume.lock().unwrap();
                                 for sample in data.iter_mut() {
                                     #[allow(clippy::cast_possible_truncation)]
                                     {
@@ -142,7 +142,7 @@ mod implementation {
                 SampleFormat::F32 => {
                     let stream = device
                         .build_output_stream(
-                            config,
+                            &config,
                             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                                 let bytes: &mut [u8] = unsafe {
                                     std::slice::from_raw_parts_mut(
@@ -151,13 +151,13 @@ mod implementation {
                                     )
                                 };
 
-                                let mut cb = callback_ref.lock().unwrap();
+                                let mut cb = callback.lock().unwrap();
                                 if let Some(ref mut callback) = *cb {
                                     callback(bytes);
                                 }
 
                                 // Apply volume
-                                let vol = *volume_ref.lock().unwrap();
+                                let vol = *volume.lock().unwrap();
                                 for sample in data.iter_mut() {
                                     *sample *= vol;
                                 }
@@ -318,16 +318,16 @@ mod implementation {
 
             let (status_tx, status_rx) = mpsc::channel();
 
-            // Spawn thread
-            Self::spawn_stream_thread(
+            let ctx = StreamContext {
                 device,
                 config,
                 sample_format,
-                callback_ref,
-                volume_ref,
-                rx,
-                status_tx,
-            );
+                callback: callback_ref,
+                volume: volume_ref,
+            };
+
+            // Spawn thread
+            Self::spawn_stream_thread(ctx, rx, status_tx);
 
             // Wait for initialization
             status_rx

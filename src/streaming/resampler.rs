@@ -1,6 +1,6 @@
 //! Audio resampling source using `rubato`
 
-use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels};
+use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels_into};
 use crate::streaming::source::AudioSource;
 use rubato::{FftFixedIn, Resampler};
 use std::io;
@@ -18,6 +18,8 @@ pub struct ResamplingSource<S: AudioSource> {
     output_bytes_buffer: Vec<u8>,
     output_offset: usize,
     eof: bool,
+    intermediate_buffer: Vec<f32>,
+    final_buffer: Vec<f32>,
 }
 
 impl<S: AudioSource> ResamplingSource<S> {
@@ -70,6 +72,8 @@ impl<S: AudioSource> ResamplingSource<S> {
             output_bytes_buffer: Vec::new(),
             output_offset: 0,
             eof: false,
+            intermediate_buffer: Vec::new(),
+            final_buffer: Vec::new(),
         })
     }
 
@@ -141,38 +145,47 @@ impl<S: AudioSource> ResamplingSource<S> {
         let input_channels_count = self.input_format.channels.channels() as usize;
 
         // 1. Interleave resampled data (in input_channels config)
-        let mut interleaved_f32 = Vec::with_capacity(output_frames * input_channels_count);
+        self.intermediate_buffer.clear();
+        self.intermediate_buffer
+            .reserve(output_frames * input_channels_count);
         for i in 0..output_frames {
             for ch in 0..input_channels_count {
-                interleaved_f32.push(self.output_buffer[ch][i]);
+                self.intermediate_buffer.push(self.output_buffer[ch][i]);
             }
         }
 
         // 2. Convert channels if needed
-        #[allow(clippy::if_not_else)]
-        let final_f32 = if self.input_format.channels != self.output_format.channels {
-            convert_channels(
-                &interleaved_f32,
+        let need_conversion = self.input_format.channels != self.output_format.channels;
+        if need_conversion {
+            convert_channels_into(
+                &self.intermediate_buffer,
                 self.input_format.channels,
                 self.output_format.channels,
-            )
+                &mut self.final_buffer,
+            );
+        }
+
+        let source_buffer = if need_conversion {
+            &self.final_buffer
         } else {
-            interleaved_f32
+            &self.intermediate_buffer
         };
 
         // 3. Convert to bytes
-        let output_bytes_needed = final_f32.len() * 2; // I16 = 2 bytes
+        let output_bytes_needed = source_buffer.len() * 2; // I16 = 2 bytes
 
-        self.output_bytes_buffer.clear();
-        self.output_bytes_buffer.reserve(output_bytes_needed);
+        // Use mem::take to avoid borrow checker issues with self
+        let mut output_bytes = std::mem::take(&mut self.output_bytes_buffer);
+        output_bytes.clear();
+        output_bytes.reserve(output_bytes_needed);
 
-        for sample in final_f32 {
+        output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
             let clamped = sample.clamp(-1.0, 1.0);
             let value = (clamped * f32::from(i16::MAX)) as i16;
-            let bytes = value.to_le_bytes();
-            self.output_bytes_buffer.extend_from_slice(&bytes);
-        }
+            value.to_le_bytes()
+        }));
 
+        self.output_bytes_buffer = output_bytes;
         self.output_offset = 0;
         Ok(true)
     }

@@ -6,7 +6,7 @@ fn raop_encoding_benchmark(c: &mut Criterion) {
     // 1. Setup
     let keys = RaopSessionKeys::generate().expect("Failed to generate session keys");
     let config = RaopStreamConfig::default();
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
 
     // Typical ALAC frame payload (352 samples stereo 16-bit is 1408 bytes)
     let payload_size = 1408;

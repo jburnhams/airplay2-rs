@@ -115,6 +115,7 @@ impl Ap2SessionState {
     /// # Errors
     ///
     /// Returns `StateError::InvalidTransition` if the transition is not allowed.
+    // Explicit match arms are kept for readability of the state transition table
     #[allow(clippy::match_same_arms)]
     pub fn transition_to(&self, new_state: Ap2SessionState) -> Result<Ap2SessionState, StateError> {
         // Error state can be reached from anywhere

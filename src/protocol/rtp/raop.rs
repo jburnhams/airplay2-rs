@@ -2,6 +2,7 @@
 
 use super::packet::RtpDecodeError;
 use super::timing::NtpTimestamp;
+use bytes::BufMut;
 
 /// RAOP RTP payload types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,14 +209,20 @@ impl RaopAudioPacket {
     }
 
     /// Write RTP header directly to buffer
-    pub fn write_header(buf: &mut Vec<u8>, marker: bool, sequence: u16, timestamp: u32, ssrc: u32) {
+    pub fn write_header<B: BufMut>(
+        buf: &mut B,
+        marker: bool,
+        sequence: u16,
+        timestamp: u32,
+        ssrc: u32,
+    ) {
         // RTP header
-        buf.push(0x80); // V=2, P=0, X=0, CC=0
-        buf.push(0x60 | if marker { 0x80 } else { 0x00 }); // PT=0x60, M bit
+        buf.put_u8(0x80); // V=2, P=0, X=0, CC=0
+        buf.put_u8(0x60 | if marker { 0x80 } else { 0x00 }); // PT=0x60, M bit
 
-        buf.extend_from_slice(&sequence.to_be_bytes());
-        buf.extend_from_slice(&timestamp.to_be_bytes());
-        buf.extend_from_slice(&ssrc.to_be_bytes());
+        buf.put_slice(&sequence.to_be_bytes());
+        buf.put_slice(&timestamp.to_be_bytes());
+        buf.put_slice(&ssrc.to_be_bytes());
     }
 
     /// Encode to bytes

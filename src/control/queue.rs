@@ -201,8 +201,7 @@ impl PlaybackQueue {
     }
 
     /// Move to next track
-    #[allow(clippy::should_implement_trait)]
-    pub fn next(&mut self) -> Option<&QueueItem> {
+    pub fn advance(&mut self) -> Option<&QueueItem> {
         let next_index = if let Some(ref order) = self.shuffle_order {
             // Shuffle mode
             if self.shuffle_position + 1 < order.len() {

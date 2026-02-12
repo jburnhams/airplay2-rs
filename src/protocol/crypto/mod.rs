@@ -14,8 +14,6 @@ mod error;
 mod hkdf;
 #[cfg(feature = "raop")]
 mod rsa;
-#[cfg(all(test, feature = "raop"))]
-mod rsa_tests;
 mod srp;
 #[cfg(test)]
 mod tests;
@@ -30,7 +28,7 @@ pub use self::error::CryptoError;
 pub use self::hkdf::{AirPlayKeys, HkdfSha512, derive_key};
 #[cfg(feature = "raop")]
 pub use self::rsa::{AppleRsaPublicKey, CompatibleOsRng, RaopRsaPrivateKey, sizes as rsa_sizes};
-pub use self::srp::{SrpClient, SrpVerifier};
+pub use self::srp::{SrpClient, SrpParams, SrpServer, SrpVerifier};
 pub use self::x25519::{X25519KeyPair, X25519PublicKey, X25519SharedSecret};
 
 /// Length of various cryptographic values

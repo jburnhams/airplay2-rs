@@ -65,3 +65,32 @@ fn test_request_builder_defaults() {
     assert!(request.headers.is_empty());
     assert!(request.body.is_empty());
 }
+
+#[test]
+fn test_post_request_encode() {
+    let request = RtspRequest::builder(Method::Post, "/pair-setup")
+        .cseq(10)
+        .content_type("application/x-apple-binary-plist")
+        .body(vec![0x00, 0x01, 0x02])
+        .build();
+
+    let encoded = request.encode();
+    let encoded_str = String::from_utf8_lossy(&encoded);
+
+    assert!(encoded_str.starts_with("POST /pair-setup RTSP/1.0\r\n"));
+    assert!(encoded_str.contains("Content-Type: application/x-apple-binary-plist"));
+}
+
+#[test]
+fn test_get_request_encode() {
+    let request = RtspRequest::builder(Method::Get, "/info")
+        .cseq(1)
+        .header("X-Apple-Device-ID", "00:11:22:33:44:55")
+        .build();
+
+    let encoded = request.encode();
+    let encoded_str = String::from_utf8_lossy(&encoded);
+
+    assert!(encoded_str.starts_with("GET /info RTSP/1.0\r\n"));
+    assert!(encoded_str.contains("X-Apple-Device-ID: 00:11:22:33:44:55"));
+}

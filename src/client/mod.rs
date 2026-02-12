@@ -145,8 +145,8 @@ impl AirPlayClient {
     /// # Errors
     ///
     /// Returns error if mDNS discovery fails.
-    pub async fn discover(&self) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-        discover().await
+    pub fn discover(&self) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+        discover()
     }
 
     // === Connection ===
@@ -283,7 +283,7 @@ impl AirPlayClient {
         // Update queue
         let track = {
             let mut queue = self.queue.write().await;
-            queue.next().map(|item| item.track.clone())
+            queue.advance().map(|item| item.track.clone())
         };
 
         self.state.set_track(track).await;

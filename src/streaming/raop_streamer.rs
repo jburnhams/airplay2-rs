@@ -1,13 +1,11 @@
 //! RAOP audio streaming coordinator
 
+use crate::protocol::crypto::Aes128Ctr;
 use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
-use aes::Aes128;
-use aes::cipher::KeyInit;
-use aes::cipher::generic_array::GenericArray;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use std::time::{Duration, Instant};
 
 /// RAOP streaming configuration
@@ -42,12 +40,12 @@ pub struct RaopStreamer {
     sequence: u16,
     /// Current RTP timestamp
     timestamp: u32,
-    /// Session encryption keys
-    keys: RaopSessionKeys,
-    /// Pre-computed block cipher for key reuse
-    aes_cipher: Aes128,
+    /// AES-CTR stream cipher
+    cipher: Aes128Ctr,
     /// Packet buffer for retransmission
     buffer: PacketBuffer,
+    /// Encode buffer to avoid repeated allocations
+    encode_buffer: BytesMut,
     /// Timing synchronization
     timing: TimingSync,
     /// Is first packet after start/flush
@@ -66,18 +64,25 @@ impl RaopStreamer {
     const SYNC_INTERVAL: Duration = Duration::from_millis(1000);
 
     /// Create new streamer
+    ///
+    /// # Panics
+    ///
+    /// Panics if the session keys have invalid length (must be 16 bytes for key and IV).
     #[must_use]
-    pub fn new(keys: RaopSessionKeys, config: RaopStreamConfig) -> Self {
-        let key_generic = GenericArray::from_slice(keys.aes_key());
-        let aes_cipher = Aes128::new(key_generic);
+    pub fn new(keys: &RaopSessionKeys, config: RaopStreamConfig) -> Self {
+        // Initialize AES-CTR cipher with session keys
+        // We use expect() here because keys are guaranteed to be correct length
+        // by RaopSessionKeys::generate() or parsing logic
+        let cipher =
+            Aes128Ctr::new(keys.aes_key(), keys.aes_iv()).expect("Invalid session keys length");
 
         Self {
             config,
             sequence: 0,
             timestamp: 0,
-            keys,
-            aes_cipher,
+            cipher,
             buffer: PacketBuffer::new(PacketBuffer::DEFAULT_SIZE),
+            encode_buffer: BytesMut::with_capacity(4096),
             timing: TimingSync::new(),
             is_first_packet: true,
             last_sync: Instant::now(),
@@ -101,12 +106,12 @@ impl RaopStreamer {
     ///
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
     pub fn encode_frame(&mut self, audio_data: &[u8]) -> Bytes {
-        // Pre-allocate buffer with exact size
-        let mut encoded = Vec::with_capacity(RaopAudioPacket::HEADER_SIZE + audio_data.len());
+        let packet_size = RaopAudioPacket::HEADER_SIZE + audio_data.len();
+        self.encode_buffer.reserve(packet_size);
 
         // Write header directly
         RaopAudioPacket::write_header(
-            &mut encoded,
+            &mut self.encode_buffer,
             self.is_first_packet,
             self.sequence,
             self.timestamp,
@@ -118,14 +123,27 @@ impl RaopStreamer {
         }
 
         // Append audio data
-        encoded.extend_from_slice(audio_data);
+        self.encode_buffer.put_slice(audio_data);
 
         // Encrypt payload in place
         // The payload starts after HEADER_SIZE
-        self.encrypt_audio_in_place(&mut encoded[RaopAudioPacket::HEADER_SIZE..]);
+        // Access the just-written part of the buffer
+        let len = self.encode_buffer.len();
+        let payload_start = len - audio_data.len();
 
-        // Convert to Bytes for efficient cloning
-        let encoded_bytes = Bytes::from(encoded);
+        {
+            let data = &mut self.encode_buffer[payload_start..];
+
+            // Seek to the correct keystream offset based on RTP timestamp
+            // AirPlay 2 uses 16-bit stereo PCM (4 bytes/sample) for timing
+            let offset = u64::from(self.timestamp) * 4;
+            self.cipher.seek(offset);
+            self.cipher.apply_keystream(data);
+        }
+
+        // Extract the packet as Bytes
+        // split() returns a new BytesMut containing [0, len), leaving self empty but with capacity
+        let encoded_bytes = self.encode_buffer.split().freeze();
 
         // Buffer for retransmission
         if self.config.enable_retransmit {
@@ -141,16 +159,6 @@ impl RaopStreamer {
         self.timestamp = self.timestamp.wrapping_add(self.config.samples_per_packet);
 
         encoded_bytes
-    }
-
-    fn encrypt_audio_in_place(&self, data: &mut [u8]) {
-        use crate::protocol::crypto::Aes128Ctr;
-
-        let mut cipher = Aes128Ctr::new_with_cipher(&self.aes_cipher, self.keys.aes_iv())
-            .expect("invalid AES keys");
-
-        // AES-CTR encryption in place
-        cipher.apply_keystream(data);
     }
 
     /// Handle retransmit request

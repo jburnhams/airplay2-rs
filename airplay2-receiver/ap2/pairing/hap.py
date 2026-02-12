@@ -28,6 +28,7 @@ PAIRING_FILE = "pairings.txt"
 LTSK_FILE = "ltsk.txt"
 DEV_PROPS = "device_properties.txt"
 ACCESSORY_SECRET = "accessory-secret"
+MAX_PEERS = 16
 
 
 class MFiUnhandledException(Exception):
@@ -260,7 +261,7 @@ class Pairings(CRUD_Store):
     def list_pairings(self):
         # skip our own ID when we list_pairings. HomeKit devices don't like it.
         # list_pairings should not be used for LTSK stuff, however.
-        return [k.encode() for k in self.store.keys() if k != self._id]
+        return [k.encode() for k in self.store.keys() if k != self._id.decode()]
 
     def delete_pairing(self, _id: bytes):
         return self.delete_entry(_id)
@@ -647,6 +648,15 @@ class Hap:
                 kTLVType_Error kTLVError_Unknown
             """
             # TODO: 4a. Check for free space :)
+
+            if len(self.pairings.list_pairings()) >= MAX_PEERS:
+                self.logger.debug("Max peers reached")
+                return [
+                    Tlv8.Tag.STATE,
+                    PairingState.M2,
+                    Tlv8.Tag.ERROR,
+                    PairingErrors.MAXPEERS,
+                ]
 
             # No pairing exists, write new pairing
             try:

@@ -222,7 +222,7 @@ impl AirPlayClient {
         // Update queue
         let track = {
             let mut queue = self.queue.write().await;
-            queue.next().map(|item| item.track.clone())
+            queue.advance().map(|item| item.track.clone())
         };
 
         self.state.set_track(track).await;
