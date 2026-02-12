@@ -695,7 +695,7 @@ impl ServiceAdvertiser {
         port: u16,
         txt_records: &[(String, String)],
     ) -> Result<String, AdvertiserError> {
-        let hostname = Self::get_hostname();
+        let hostname = Self::get_hostname().await;
 
         let service_info = ServiceInfo::new(
             service_type,
@@ -760,10 +760,15 @@ impl ServiceAdvertiser {
         Ok(())
     }
 
-    fn get_hostname() -> String {
-        hostname::get().map_or_else(
-            |_| "airplay-receiver.local.".to_string(),
-            |s| format!("{}.local.", s.to_string_lossy()),
-        )
+    async fn get_hostname() -> String {
+        tokio::task::spawn_blocking(hostname::get)
+            .await
+            .map(|res| {
+                res.map_or_else(
+                    |_| "airplay-receiver.local.".to_string(),
+                    |s| format!("{}.local.", s.to_string_lossy()),
+                )
+            })
+            .unwrap_or_else(|_| "airplay-receiver.local.".to_string())
     }
 }
