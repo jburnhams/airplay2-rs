@@ -51,8 +51,9 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
         client.connect(&device).await?;
         assert!(client.is_connected().await, "Client A should be connected");
 
-        // Wait a bit to ensure keys are saved
-        sleep(Duration::from_millis(500)).await;
+        // Wait a bit to ensure keys are saved and receiver flushes pairing to disk.
+        // Python receiver might take some time to write the file.
+        sleep(Duration::from_secs(2)).await;
 
         client.disconnect().await?;
     }
