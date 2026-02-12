@@ -266,9 +266,7 @@ impl PythonReceiver {
                 continue;
             }
 
-            let relative_path = path
-                .strip_prefix(src)
-                .map_err(std::io::Error::other)?;
+            let relative_path = path.strip_prefix(src).map_err(std::io::Error::other)?;
             let target_path = dst.join(relative_path);
 
             if entry.file_type().is_dir() {
