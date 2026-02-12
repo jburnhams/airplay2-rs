@@ -158,6 +158,7 @@ impl PairingHandler {
 }
 
 /// Create pairing handlers for the request handler framework
+#[must_use]
 pub fn create_pairing_handlers(handler: Arc<PairingHandler>) -> (HandlerFn, HandlerFn) {
     let setup_handler = handler.clone();
     let verify_handler = handler;
