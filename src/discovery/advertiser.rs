@@ -400,7 +400,9 @@ impl RaopAdvertiser {
         let daemon = ServiceDaemon::new()?;
 
         let mac = config.mac_override.ok_or_else(|| {
-            AdvertiserError::MacRetrievalFailed("MAC address must be provided in config".to_string())
+            AdvertiserError::MacRetrievalFailed(
+                "MAC address must be provided in config".to_string(),
+            )
         })?;
 
         Ok(Self {
