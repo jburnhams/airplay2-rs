@@ -2,8 +2,7 @@ use crate::protocol::plist::{PlistValue, decode};
 
 #[test]
 fn test_fixture_simple_dict() {
-    let data =
-        std::fs::read("tests/fixtures/simple_dict.bplist").expect("Fixture not found");
+    let data = std::fs::read("tests/fixtures/simple_dict.bplist").expect("Fixture not found");
     let decoded = decode(&data).unwrap();
     let d = decoded.as_dict().unwrap();
     assert_eq!(d.get("key").and_then(PlistValue::as_str), Some("value"));
@@ -13,8 +12,7 @@ fn test_fixture_simple_dict() {
 
 #[test]
 fn test_fixture_nested_dict() {
-    let data =
-        std::fs::read("tests/fixtures/nested_dict.bplist").expect("Fixture not found");
+    let data = std::fs::read("tests/fixtures/nested_dict.bplist").expect("Fixture not found");
     let decoded = decode(&data).unwrap();
     let d = decoded.as_dict().unwrap();
     let parent = d.get("parent").unwrap().as_dict().unwrap();
