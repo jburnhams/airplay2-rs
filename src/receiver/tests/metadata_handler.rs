@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::receiver::metadata_handler::{dmap_tags, parse_dmap_metadata, MetadataError};
+    use crate::receiver::metadata_handler::{MetadataError, dmap_tags, parse_dmap_metadata};
 
     #[test]
     fn test_parse_valid_metadata() {
