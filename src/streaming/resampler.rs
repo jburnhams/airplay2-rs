@@ -1,6 +1,6 @@
 //! Audio resampling source using `rubato`
 
-use crate::audio::{AudioFormat, SampleFormat, convert::{convert_channels, convert_channels_into}};
+use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels_into};
 use crate::streaming::source::AudioSource;
 use rubato::{FftFixedIn, Resampler};
 use std::io;
@@ -155,7 +155,9 @@ impl<S: AudioSource> ResamplingSource<S> {
         }
 
         // 2. Convert channels if needed
-        let final_f32 = if self.input_format.channels != self.output_format.channels {
+        let final_f32 = if self.input_format.channels == self.output_format.channels {
+            &self.interleaved_buffer
+        } else {
             convert_channels_into(
                 &self.interleaved_buffer,
                 self.input_format.channels,
@@ -163,8 +165,6 @@ impl<S: AudioSource> ResamplingSource<S> {
                 &mut self.resampled_interleaved_buffer,
             );
             &self.resampled_interleaved_buffer
-        } else {
-            &self.interleaved_buffer
         };
 
         // 3. Convert to bytes

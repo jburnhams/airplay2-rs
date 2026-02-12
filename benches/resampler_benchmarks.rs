@@ -1,6 +1,6 @@
-use airplay2::audio::{AudioFormat, SampleFormat, ChannelConfig};
-use airplay2::streaming::source::SilenceSource;
+use airplay2::audio::{AudioFormat, ChannelConfig, SampleFormat};
 use airplay2::streaming::resampler::ResamplingSource;
+use airplay2::streaming::source::SilenceSource;
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::io::Read;
 
