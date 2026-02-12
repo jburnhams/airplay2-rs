@@ -57,12 +57,12 @@ fn test_pair_setup_allowed_unauthenticated() {
 
     // Use a handler that returns OK
     let handlers = Ap2Handlers {
-        pair_setup: |_, cseq, _| Ap2HandleResult {
+        pair_setup: Box::new(|_, cseq, _| Ap2HandleResult {
             response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
             new_state: None,
             event: None,
             error: None,
-        },
+        }),
         ..Ap2Handlers::default()
     };
 
@@ -123,12 +123,12 @@ fn test_info_endpoint_routing() {
 
     // Override info handler
     let handlers = Ap2Handlers {
-        info: |_, cseq, _| Ap2HandleResult {
+        info: Box::new(|_, cseq, _| Ap2HandleResult {
             response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
             new_state: None,
             event: None,
             error: None,
-        },
+        }),
         ..Ap2Handlers::default()
     };
 
@@ -174,12 +174,12 @@ fn test_teardown_in_streaming_state() {
 
     // Streaming allows TEARDOWN
     let handlers = Ap2Handlers {
-        teardown: |_, cseq, _| Ap2HandleResult {
+        teardown: Box::new(|_, cseq, _| Ap2HandleResult {
             response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
             new_state: Some(Ap2SessionState::Teardown),
             event: None,
             error: None,
-        },
+        }),
         ..Ap2Handlers::default()
     };
 
@@ -203,7 +203,7 @@ fn test_get_parameter_in_setup_phase() {
 
     // SetupPhase1 allows GET_PARAMETER
     let handlers = Ap2Handlers {
-        get_parameter: |_, cseq, _| Ap2HandleResult {
+        get_parameter: Box::new(|_, cseq, _| Ap2HandleResult {
             response: Ap2ResponseBuilder::ok()
                 .cseq(cseq)
                 .text_body("volume: -15.0")
@@ -211,7 +211,7 @@ fn test_get_parameter_in_setup_phase() {
             new_state: None,
             event: None,
             error: None,
-        },
+        }),
         ..Ap2Handlers::default()
     };
 

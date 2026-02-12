@@ -48,7 +48,7 @@ fn test_ap2_handshake_simulation() {
 
     // Mock handlers
     let handlers = Ap2Handlers {
-        info: |_, cseq, _| {
+        info: Box::new(|_, cseq, _| {
             Ap2ResponseBuilder::ok()
                 .cseq(cseq)
                 .bplist_body(&airplay2::protocol::plist::PlistValue::Dictionary(
@@ -57,8 +57,8 @@ fn test_ap2_handshake_simulation() {
                 .unwrap()
                 .into_result()
                 .with_state(Ap2SessionState::InfoExchanged)
-        },
-        pair_setup: |_, cseq, ctx| {
+        }),
+        pair_setup: Box::new(|_, cseq, ctx| {
             // Return Step 1 (M1 received) or Step 3 (M3 received)
             // Test loop will simulate 1->2 (M2 sent) and 3->4 (M4 sent)
             let next_state = match ctx.state {
@@ -75,8 +75,8 @@ fn test_ap2_handshake_simulation() {
                 .cseq(cseq)
                 .into_result()
                 .with_state(next_state)
-        },
-        pair_verify: |_, cseq, ctx| {
+        }),
+        pair_verify: Box::new(|_, cseq, ctx| {
             // Return Step 1 (M1 received) or Step 3 (M3 received)
             let next_state = match ctx.state {
                 Ap2SessionState::PairingSetup { step: 4 }
@@ -91,8 +91,8 @@ fn test_ap2_handshake_simulation() {
                 .cseq(cseq)
                 .into_result()
                 .with_state(next_state)
-        },
-        setup: |_, cseq, ctx| {
+        }),
+        setup: Box::new(|_, cseq, ctx| {
             let next_state = match ctx.state {
                 Ap2SessionState::Paired => Ap2SessionState::SetupPhase1,
                 Ap2SessionState::SetupPhase1 => Ap2SessionState::SetupPhase2,
@@ -102,8 +102,8 @@ fn test_ap2_handshake_simulation() {
                 .cseq(cseq)
                 .into_result()
                 .with_state(next_state)
-        },
-        record: |_, cseq, ctx| {
+        }),
+        record: Box::new(|_, cseq, ctx| {
             let next_state = match ctx.state {
                 Ap2SessionState::SetupPhase2 | Ap2SessionState::Streaming => {
                     Ap2SessionState::Streaming
@@ -114,13 +114,13 @@ fn test_ap2_handshake_simulation() {
                 .cseq(cseq)
                 .into_result()
                 .with_state(next_state)
-        },
-        teardown: |_, cseq, _| {
+        }),
+        teardown: Box::new(|_, cseq, _| {
             Ap2ResponseBuilder::ok()
                 .cseq(cseq)
                 .into_result()
                 .with_state(Ap2SessionState::Teardown)
-        },
+        }),
         ..Ap2Handlers::default()
     };
 

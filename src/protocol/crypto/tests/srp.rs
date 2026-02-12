@@ -3,7 +3,7 @@ use rand::RngCore;
 
 #[test]
 fn test_srp_client_creation() {
-    let client = SrpClient::new().unwrap();
+    let client = SrpClient::new(b"user", b"pass", &SrpParams::RFC5054_3072).unwrap();
     assert!(!client.public_key().is_empty());
 }
 
@@ -15,8 +15,9 @@ fn test_srp_client_creation() {
 #[ignore]
 fn test_srp_handshake() {
     // 1. Client setup
-    let client = SrpClient::new().unwrap();
     let username = b"Pair-Setup";
+    let password = b"1234";
+    let client = SrpClient::new(username, password, &SrpParams::RFC5054_3072).unwrap();
     let password = b"1234";
     let client_a = client.public_key();
 
@@ -64,8 +65,9 @@ fn test_srp_handshake() {
 
 #[test]
 fn test_srp_invalid_password_fails() {
-    let client = SrpClient::new().unwrap();
     let username = b"Pair-Setup";
+    let password = b"correct";
+    let client = SrpClient::new(username, password, &SrpParams::RFC5054_3072).unwrap();
     let password = b"correct";
     let salt = b"salt";
 
