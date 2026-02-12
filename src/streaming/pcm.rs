@@ -244,6 +244,9 @@ impl PcmStreamer {
         // Reusable buffer for samples to avoid allocations
         let mut samples_buffer = Vec::with_capacity(bytes_per_packet / 2);
 
+        // Reusable buffer for encoding output to avoid allocations
+        let mut encoding_buffer = vec![0u8; 4096];
+
         loop {
             // Wait for next tick
             interval.tick().await;
@@ -329,11 +332,14 @@ impl PcmStreamer {
                                 self.format.channels.channels() as u32,
                             );
 
-                            let mut out_buffer = vec![0u8; 4096];
+                            // Ensure encoding buffer has enough capacity
+                            if encoding_buffer.len() < 4096 {
+                                encoding_buffer.resize(4096, 0);
+                            }
 
-                            let size = encoder.encode(&input_format, &packet_data, &mut out_buffer);
-                            out_buffer.truncate(size);
-                            Cow::Owned(out_buffer)
+                            let size =
+                                encoder.encode(&input_format, &packet_data, &mut encoding_buffer);
+                            Cow::Borrowed(&encoding_buffer[..size])
                         } else {
                             Cow::Borrowed(&packet_data)
                         }
