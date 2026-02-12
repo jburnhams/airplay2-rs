@@ -2,6 +2,12 @@ from enum import Enum
 from ap2.connections.audio import AudioSetup
 
 
+class AACAudioSetup:
+    def __init__(self, config):
+        self.extradata = config
+    def get_extra_data(self):
+        return self.extradata
+
 class SDPHandler():
     # systemcrash 2021
     class SDPAudioFormat(Enum):
@@ -25,6 +31,7 @@ class SDPHandler():
         self.has_audio = False
         self.has_video = False
         self.audio_format = self.SDPAudioFormat.UNSUPPORTED
+        self.audio_config = None
         self.minlatency = 0
         self.maxlatency = 0
         self.spf = 0
@@ -63,7 +70,12 @@ class SDPHandler():
                     self.audio_format_bd = ''.join(filter(str.isdigit, self.audio_format_bd))
             elif 'a=fmtp:' in k and self.payload_type in k:
                 self.audio_fmtp = k.split(':')[1]
-                self.afp = self.audio_fmtp.split(' ')  # audio format params
+                # Handle both space and semicolon separators
+                if ';' in self.audio_fmtp:
+                    self.afp = [p.strip() for p in self.audio_fmtp.split(';')]
+                else:
+                    self.afp = self.audio_fmtp.split(' ')  # audio format params
+
                 if self.audio_format == self.SDPAudioFormat.ALAC:
                     self.spf = self.afp[1]  # samples per frame
                     # a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100
@@ -93,6 +105,8 @@ class SDPHandler():
                 elif self.audio_format == self.SDPAudioFormat.OPUS:
                     self.audio_desc = 'OPUS'
                 if 'mode=' in self.audio_fmtp:
+                    # Default assumption: ELD, unless it's AAC-hbr
+                    is_hbr = False
                     self.audio_format = self.SDPAudioFormat.AAC_ELD
                     for x in self.afp:
                         if 'constantDuration=' in x:
@@ -102,7 +116,24 @@ class SDPHandler():
                         elif 'mode=' in x:
                             start = x.find('mode=') + len('mode=')
                             self.aac_mode = x[start:].rstrip(';')
-                    self.audio_desc = 'AAC_ELD'
+                            if self.aac_mode == 'AAC-hbr':
+                                is_hbr = True
+                        elif 'config=' in x:
+                            start = x.find('config=') + len('config=')
+                            config_hex = x[start:].rstrip(';')
+                            try:
+                                self.audio_config = bytes.fromhex(config_hex)
+                            except ValueError:
+                                pass
+
+                    if is_hbr:
+                        self.audio_format = self.SDPAudioFormat.AAC
+                        self.audio_desc = 'AAC_LC'
+                        self.spf = 1024
+                        if self.audio_config:
+                            self.params = AACAudioSetup(self.audio_config)
+                    else:
+                        self.audio_desc = 'AAC_ELD'
                 for f in AirplayAudFmt:
                     if(self.audio_desc in f.name
                         and (self.audio_format_bd in f.name or self.audio_format == self.SDPAudioFormat.AAC)

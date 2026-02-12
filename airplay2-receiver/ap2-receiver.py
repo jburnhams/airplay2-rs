@@ -4,8 +4,10 @@ import multiprocessing
 import random
 import tempfile  # noqa
 from threading import current_thread
+import sys
 
 import pprint
+import traceback
 
 import http.server
 import socketserver
@@ -54,6 +56,9 @@ MDNS_OBJ = None
 HK_ACL_LEVEL = 0
 # HomeKit assigned password (numeric PIN) to access
 HK_PW = None
+
+# Global flag to disable mDNS
+NO_MDNS = False
 
 """
 # SERVER_VERSION; presence/absence, and value dictates client behaviours
@@ -133,10 +138,11 @@ def update_status_flags(flag=None, on=False, push=True):
     setup_global_structs(args, isDebug=DEBUG)
     # If push is false, we skip pushing out the update.
     if push:
-        if IPV6 is not None:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
-        else:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+        if not NO_MDNS:
+            if IPV6 is not None:
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+            else:
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
 
 
 def setup_global_structs(args, isDebug=False):
@@ -421,49 +427,57 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         # Enable Feature bit 12: Ft12FPSAPv2p5_AES_GCM: this uses only RSA
         # Enabling Feat bit 25 and iTunes4win attempts AES - cannot yet decrypt.
         self.logger.info(f'{self.command}: {self.path}')
-        self.logger.debug(self.headers)
+        # self.logger.debug(self.headers) # May cause crash if headers contain binary
 
-        if self.headers["Content-Type"] == 'application/sdp':
-            content_len = int(self.headers["Content-Length"])
-            if content_len > 0:
-                sdp_body = self.rfile.read(content_len).decode('utf-8')
-                self.logger.debug(sdp_body)
-                sdp = SDPHandler(sdp_body)
-                if hasattr(sdp, 'params'):
-                    self.aud_params = sdp.params
-                else:
-                    self.aud_params = None
-                if sdp.has_mfi:
-                    self.logger.warning("MFi not possible on this hardware.")
-                    self.send_response(404)
-                    self.hap = None
-                else:
-                    if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
-                       and int((FEATURES & FeatureFlags.getFeature19ALAC(FeatureFlags))) == 0):
-                        self.logger.warning("This receiver not configured for ALAC (set flag 19).")
-                        self.send_response(404)
-                        self.hap = None
-                    elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
-                          and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
-                        self.logger.warning("This receiver not configured for AAC (set flag 20).")
-                        self.send_response(404)
-                        self.hap = None
-                    elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
-                          and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
-                        self.logger.warning("This receiver not configured for AAC (set flag 20/21).")
+        try:
+            ct = self.headers.get("Content-Type")
+            if ct == 'application/sdp':
+                content_len = int(self.headers["Content-Length"])
+                if content_len > 0:
+                    sdp_body = self.rfile.read(content_len).decode('utf-8')
+                    self.logger.debug(sdp_body)
+                    sdp = SDPHandler(sdp_body)
+                    if hasattr(sdp, 'params'):
+                        self.aud_params = sdp.params
+                    else:
+                        self.aud_params = None
+                    if sdp.has_mfi:
+                        self.logger.warning("MFi not possible on this hardware.")
                         self.send_response(404)
                         self.hap = None
                     else:
-                        if sdp.has_fp and self.fairplay_keymsg:
-                            self.logger.debug('Got FP AES Key from SDP')
-                            self.aeskeyobj = FairPlayAES(fpaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv, keymsg=self.fairplay_keymsg)
-                        elif sdp.has_rsa:
-                            self.aeskeyobj = FairPlayAES(rsaaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv)
-                        self.send_response(200)
-                        self.send_header("Server", self.version_string())
-                        self.send_header("CSeq", self.headers["CSeq"])
-                        self.end_headers()
-                self.sdp = sdp
+                        if(sdp.audio_format is SDPHandler.SDPAudioFormat.ALAC
+                           and int((FEATURES & FeatureFlags.getFeature19ALAC(FeatureFlags))) == 0):
+                            self.logger.warning("This receiver not configured for ALAC (set flag 19).")
+                            self.send_response(404)
+                            self.hap = None
+                        elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC
+                              and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
+                            self.logger.warning("This receiver not configured for AAC (set flag 20).")
+                            self.send_response(404)
+                            self.hap = None
+                        elif (sdp.audio_format is SDPHandler.SDPAudioFormat.AAC_ELD
+                              and int((FEATURES & FeatureFlags.getFeature20AAC(FeatureFlags))) == 0):
+                            self.logger.warning("This receiver not configured for AAC (set flag 20/21).")
+                            self.send_response(404)
+                            self.hap = None
+                        else:
+                            if sdp.has_fp and self.fairplay_keymsg:
+                                self.logger.debug('Got FP AES Key from SDP')
+                                self.aeskeyobj = FairPlayAES(fpaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv, keymsg=self.fairplay_keymsg)
+                            elif sdp.has_rsa:
+                                self.aeskeyobj = FairPlayAES(rsaaeskeyb64=sdp.aeskey, aesivb64=sdp.aesiv)
+                            self.send_response(200)
+                            self.send_header("Server", self.version_string())
+                            self.send_header("CSeq", self.headers["CSeq"])
+                            self.end_headers()
+                    self.sdp = sdp
+            else:
+                self.logger.warning(f"Unsupported Content-Type: {ct}")
+                self.send_error(415, "Unsupported Media Type")
+        except Exception:
+            self.logger.error(f"Exception in do_ANNOUNCE: {traceback.format_exc()}")
+            self.send_error(500)
 
     def do_FLUSHBUFFERED(self):
         self.logger.info(f'{self.command}: {self.path}')
@@ -1330,6 +1344,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-nv", "--no-volume-management", help="Disable volume management", action='store_true')
+    parser.add_argument("-nm", "--no-mdns", help="Disable mDNS/Zeroconf registration", action='store_true')
     parser.add_argument("-npm", "--no-ptp-master", help="Stops this receiver from being announced as the PTP Master",
                         action='store_true')
     mutexgroup.add_argument("-f", "--features", help="Features: a hex representation of Airplay features. Note: mutex with -ft(xxx)")
@@ -1378,6 +1393,7 @@ if __name__ == "__main__":
 
     DISABLE_VM = args.no_volume_management
     DISABLE_PTP_MASTER = args.no_ptp_master
+    NO_MDNS = args.no_mdns
     DEV_PROPS = DeviceProperties(PI, DEBUG)
     DEV_NAME = args.mdns
     if(parser.get_default('mdns') != DEV_NAME):
@@ -1469,10 +1485,13 @@ if __name__ == "__main__":
     SCR_LOG.info(f"IPv6: {IPV6}")
     SCR_LOG.info("")
 
-    if IPV6 is not None:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+    if not args.no_mdns:
+        if IPV6 is not None:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+        else:
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
     else:
-        MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+        SCR_LOG.info("mDNS disabled by user")
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
@@ -1496,5 +1515,6 @@ if __name__ == "__main__":
         # Weird client termination at the other end.
         pass
     finally:
-        SCR_LOG.info("Shutting down mDNS...")
-        unregister_mdns(*MDNS_OBJ)
+        if MDNS_OBJ:
+            SCR_LOG.info("Shutting down mDNS...")
+            unregister_mdns(*MDNS_OBJ)

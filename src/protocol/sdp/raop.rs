@@ -118,15 +118,13 @@ pub fn parse_encryption(
     media: &MediaDescription,
 ) -> Result<Option<EncryptionParams>, SdpParseError> {
     // Explicit type to help inference
-    let encrypted_key: &String = match media.attributes.get("rsaaeskey") {
-        Some(Some(key)) => key,
-        Some(None) | None => return Ok(None),
+    let encrypted_key: &str = match media.get_attribute("rsaaeskey") {
+        Some(key) => key,
+        None => return Ok(None),
     };
 
     let iv_str = media
-        .attributes
-        .get("aesiv")
-        .and_then(|v: &Option<String>| v.as_deref())
+        .get_attribute("aesiv")
         .ok_or(SdpParseError::MissingField("aesiv"))?;
 
     // Decode base64
@@ -157,7 +155,7 @@ pub fn parse_encryption(
 /// Detect codec from rtpmap attribute
 #[must_use]
 pub fn detect_codec(media: &MediaDescription) -> Option<AudioCodec> {
-    let rtpmap = media.attributes.get("rtpmap")?.as_deref()?;
+    let rtpmap = media.get_attribute("rtpmap")?;
 
     if rtpmap.contains("AppleLossless") {
         Some(AudioCodec::Alac)
@@ -192,9 +190,7 @@ pub fn extract_stream_parameters(
     let (sample_rate, bits_per_sample, channels, frames_per_packet) = match codec {
         AudioCodec::Alac => {
             let fmtp = media
-                .attributes
-                .get("fmtp")
-                .and_then(|v: &Option<String>| v.as_deref())
+                .get_attribute("fmtp")
                 .ok_or(SdpParseError::MissingField("fmtp"))?;
             let alac = AlacParameters::parse(fmtp)?;
             (
@@ -227,10 +223,8 @@ pub fn extract_stream_parameters(
 
     // Parse min-latency if present
     let min_latency = media
-        .attributes
-        .get("min-latency")
-        .and_then(|v: &Option<String>| v.as_ref())
-        .and_then(|s: &String| s.parse().ok());
+        .get_attribute("min-latency")
+        .and_then(|s: &str| s.parse().ok());
 
     Ok(StreamParameters {
         codec,

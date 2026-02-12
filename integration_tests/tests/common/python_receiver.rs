@@ -1,17 +1,21 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
 
 /// Python receiver wrapper for testing
 pub struct PythonReceiver {
-    process: Child,
+    process: Option<Child>,
+    _temp_dir: TempDir,
     output_dir: PathBuf,
     #[allow(dead_code)]
     interface: String,
+    log_buffer: Arc<Mutex<Vec<String>>>,
 }
 
 impl PythonReceiver {
@@ -22,7 +26,63 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
-        let output_dir = std::env::current_dir()?.join("airplay2-receiver");
+        // Locate source directory
+        let mut source_dir = std::env::current_dir()?;
+        if !source_dir.join("airplay2-receiver/ap2-receiver.py").exists() {
+            if let Some(parent) = source_dir.parent() {
+                if parent
+                    .join("airplay2-receiver/ap2-receiver.py")
+                    .exists()
+                {
+                    source_dir = parent.to_path_buf();
+                }
+            }
+        }
+        let source_dir = source_dir.join("airplay2-receiver");
+
+        if !source_dir.exists() {
+            return Err(format!(
+                "Could not find 'airplay2-receiver' directory. Checked {:?} and parent.",
+                std::env::current_dir()?
+            )
+            .into());
+        }
+
+        // Create temp dir and copy receiver code
+        let temp_dir = TempDir::new()?;
+        let temp_path = temp_dir.path().to_path_buf();
+
+        tracing::info!("Setting up test environment in {:?}", temp_path);
+
+        // Copy ap2-receiver.py
+        fs::copy(
+            source_dir.join("ap2-receiver.py"),
+            temp_path.join("ap2-receiver.py"),
+        )?;
+
+        // Recursive copy of ap2/ directory using cp command (available on unix/ci)
+        #[cfg(unix)]
+        {
+            let status = std::process::Command::new("cp")
+                .arg("-r")
+                .arg(source_dir.join("ap2"))
+                .arg(&temp_path)
+                .status()?;
+            if !status.success() {
+                return Err("Failed to copy ap2 directory".into());
+            }
+        }
+        #[cfg(windows)]
+        {
+            // Windows implementation if needed, for now assume CI is linux/macos
+            // or use a crate for recursive copy if windows support is required later
+            return Err("Windows copy not implemented".into());
+        }
+
+        // Create pairings directory
+        let pairings_dir = temp_path.join("pairings");
+        fs::create_dir_all(&pairings_dir)?;
+
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
             if cfg!(target_os = "macos") {
@@ -32,44 +92,42 @@ impl PythonReceiver {
             }
         });
 
-        // Clean up any previous test outputs
-        let _ = fs::remove_file(output_dir.join("received_audio_44100_2ch.raw"));
-        let _ = fs::remove_file(output_dir.join("rtp_packets.bin"));
-
-        // Clean up pairings for fresh state (added for persistent pairing test)
-        let pairings_dir = output_dir.join("pairings");
-        if pairings_dir.exists() {
-            fs::remove_dir_all(&pairings_dir)?;
-        }
-        fs::create_dir_all(&pairings_dir)?;
-
-        // Restore .gitignore to keep repo clean
-        fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
-
         tracing::info!("Starting Python receiver on interface: {}", interface);
-        tracing::debug!("Current dir: {:?}", std::env::current_dir());
-        tracing::debug!("Output dir: {:?}", output_dir);
-        tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
 
-        let mut command = Command::new("python3");
+        let python_bin = std::env::var("PYTHON_BIN").unwrap_or_else(|_| "python".to_string());
+        let mut command = Command::new(python_bin);
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("--no-mdns")
+            .arg("-nv");
 
         for arg in args {
             command.arg(arg);
         }
 
+        #[cfg(unix)]
+        unsafe {
+            command.pre_exec(|| {
+                // Create a new process group for the child
+                let _ = nix::unistd::setpgid(
+                    nix::unistd::Pid::from_raw(0),
+                    nix::unistd::Pid::from_raw(0),
+                );
+                Ok(())
+            });
+        }
+
         let mut process = command
-            .current_dir(&output_dir)
+            .current_dir(&temp_path)
             .env("AIRPLAY_FILE_SINK", "1")
             .env("AIRPLAY_SAVE_RTP", "1")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
+            .kill_on_drop(false)
             .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+            .map_err(|e| format!("Failed to spawn python process: {}", e))?;
 
         // Capture stdout for monitoring
         let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
@@ -81,6 +139,7 @@ impl PythonReceiver {
 
         let mut reader = BufReader::new(stdout).lines();
         let mut stderr_reader = BufReader::new(stderr).lines();
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
         let mut stderr_lines = Vec::new();
         #[allow(unused_assignments)]
         let mut found_serving = false;
@@ -114,6 +173,9 @@ impl PythonReceiver {
                     match line {
                         Ok(Some(line)) => {
                             tracing::debug!("Receiver stdout: {}", line.trim());
+                            if let Ok(mut logs) = log_buffer.lock() {
+                                logs.push(line.clone());
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
@@ -132,6 +194,9 @@ impl PythonReceiver {
                      match line {
                         Ok(Some(line)) => {
                             tracing::warn!("Receiver stderr: {}", line.trim());
+                            if let Ok(mut logs) = log_buffer.lock() {
+                                logs.push(line.clone());
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
                                 found_serving = true;
@@ -158,20 +223,32 @@ impl PythonReceiver {
             return Err("Failed to find 'serving on' message from receiver".into());
         }
 
+        let log_buffer_clone = log_buffer.clone();
+
         // Spawn a background task to keep reading output to prevent deadlocks/SIGPIPE
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     line = reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::debug!("Receiver stdout: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::debug!("Receiver stdout: {}", line.trim());
+                                if let Ok(mut logs) = log_buffer_clone.lock() {
+                                    logs.push(line);
+                                }
+                            }
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
                     }
                     line = stderr_reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::warn!("Receiver stderr: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                tracing::warn!("Receiver stderr: {}", line.trim());
+                                if let Ok(mut logs) = log_buffer_clone.lock() {
+                                    logs.push(line);
+                                }
+                            }
                             Ok(None) => break, // EOF
                             Err(_) => break,
                         }
@@ -181,9 +258,11 @@ impl PythonReceiver {
         });
 
         Ok(Self {
-            process,
-            output_dir,
+            process: Some(process),
+            _temp_dir: temp_dir,
+            output_dir: temp_path,
             interface,
+            log_buffer,
         })
     }
 
@@ -191,31 +270,43 @@ impl PythonReceiver {
     pub async fn stop(mut self) -> Result<ReceiverOutput, Box<dyn std::error::Error>> {
         tracing::info!("Stopping Python receiver");
 
+        let mut process = self.process.take().ok_or("Process already stopped")?;
+
         // Send SIGTERM to allow graceful shutdown
         #[cfg(unix)]
         {
             use nix::sys::signal::{Signal, kill};
             use nix::unistd::Pid;
-            if let Some(id) = self.process.id() {
-                let pid = Pid::from_raw(id as i32);
-                let _ = kill(pid, Signal::SIGTERM);
+            if let Some(id) = process.id() {
+                // Kill the entire process group
+                let pgid = Pid::from_raw(-(id as i32));
+                let _ = kill(pgid, Signal::SIGTERM);
             }
         }
 
         #[cfg(windows)]
         {
-            let _ = self.process.kill().await;
+            let _ = process.kill().await;
         }
 
         // Wait for process to exit
         let _ = tokio::time::timeout(Duration::from_secs(5), async {
-            let _ = self.process.wait().await;
+            let _ = process.wait().await;
         })
         .await;
 
         // Force kill if still running
-        let _ = self.process.kill().await;
-        let _ = self.process.wait().await;
+        #[cfg(unix)]
+        {
+            use nix::sys::signal::{Signal, kill};
+            use nix::unistd::Pid;
+            if let Some(id) = process.id() {
+                let pgid = Pid::from_raw(-(id as i32));
+                let _ = kill(pgid, Signal::SIGKILL);
+            }
+        }
+        let _ = process.kill().await;
+        let _ = process.wait().await;
 
         // Read output files
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
@@ -229,6 +320,13 @@ impl PythonReceiver {
             "integration-test-{}.log",
             chrono::Utc::now().timestamp()
         ));
+
+        let logs = if let Ok(logs) = self.log_buffer.lock() {
+            logs.join("\n")
+        } else {
+            String::new()
+        };
+
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
@@ -237,6 +335,7 @@ impl PythonReceiver {
             audio_data,
             rtp_data,
             log_path,
+            logs,
         })
     }
 
@@ -268,6 +367,7 @@ pub struct ReceiverOutput {
     pub rtp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
+    pub logs: String,
 }
 
 impl ReceiverOutput {
@@ -472,6 +572,30 @@ impl ReceiverOutput {
             estimated_frequency,
             zero_crossings,
         })
+    }
+}
+
+impl Drop for PythonReceiver {
+    fn drop(&mut self) {
+        if let Some(process) = self.process.take() {
+            // Best effort cleanup if stop() wasn't called
+            #[cfg(unix)]
+            {
+                use nix::sys::signal::{Signal, kill};
+                use nix::unistd::Pid;
+                if let Some(id) = process.id() {
+                    let pgid = Pid::from_raw(-(id as i32));
+                    let _ = kill(pgid, Signal::SIGKILL);
+                }
+            }
+            #[cfg(windows)]
+            {
+                // On Windows we can't easily kill process tree without job objects
+                // But tokio's Child handles dropping usually... wait we set kill_on_drop(false)
+                // So we are leaking on Windows if we panic.
+                // But we are focusing on Unix/CI for now.
+            }
+        }
     }
 }
 

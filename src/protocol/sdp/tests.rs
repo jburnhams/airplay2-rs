@@ -59,7 +59,7 @@ fn test_parse_origin() {
 #[test]
 fn test_builder() {
     let sdp_str = SdpBuilder::new()
-        .origin("user", "123", "127.0.0.1")
+        .origin("user", "123", "1", "127.0.0.1")
         .session_name("test session")
         .media("audio", 0, "RTP/AVP", &["96"])
         .media_attribute("rtpmap", Some("96 AppleLossless"))

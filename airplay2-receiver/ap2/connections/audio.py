@@ -7,8 +7,16 @@ import time
 import os
 
 import av
+# Configuration flags
+SAVE_RAW_RTP = os.environ.get("AIRPLAY_SAVE_RTP", "0") == "1"
+SKIP_DECODE = os.environ.get("AIRPLAY_SKIP_DECODE", "0") == "1"
+USE_FILE_SINK = os.environ.get("AIRPLAY_FILE_SINK", "0") == "1"
+
 try:
-    import pyaudio
+    if not USE_FILE_SINK:
+        import pyaudio
+    else:
+        pyaudio = None
 except ImportError:
     pyaudio = None
 from Crypto.Cipher import ChaCha20_Poly1305
@@ -21,10 +29,6 @@ from functools import reduce
 
 from ..utils import get_file_logger, get_screen_logger, get_free_socket
 from .audio_file_sink import get_audio_backend
-
-# Configuration flags
-SAVE_RAW_RTP = os.environ.get("AIRPLAY_SAVE_RTP", "0") == "1"
-SKIP_DECODE = os.environ.get("AIRPLAY_SKIP_DECODE", "0") == "1"
 
 
 class RTP:
@@ -581,6 +585,16 @@ class Audio:
             # rtp.payloads tuple: type, ts_offset (samples ago), length
             # Set data to start at last block (add all lengths), skip redundancy for now.
             data = data[reduce(add, [row[-1] for row in rtp.block_list]):]
+
+        # RFC 3640 AU Header stripping for AAC-LC
+        if 'AAC' in self.af and 'ELD' not in self.af and len(data) > 4:
+            # Check for AU-headers-length field (first 2 bytes)
+            # 16 bits = 0x0010 (16 bits of headers follow)
+            au_headers_length_bits = int.from_bytes(data[0:2], byteorder='big')
+            if au_headers_length_bits == 16:
+                # Strip 4 bytes (2 bytes length + 2 bytes header)
+                data = data[4:]
+
         packet = av.packet.Packet(data)
         if(len(data) > 0):
             try:

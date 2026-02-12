@@ -1,5 +1,4 @@
 use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
-use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -79,9 +78,9 @@ impl SdpParser {
                 'a' => {
                     let (name, value) = Self::parse_attribute(value);
                     if let Some(ref mut media) = current_media {
-                        media.attributes.insert(name, value);
+                        media.attributes.push((name, value));
                     } else {
-                        sdp.attributes.insert(name, value);
+                        sdp.attributes.push((name, value));
                     }
                 }
                 _ => {
@@ -138,7 +137,7 @@ impl SdpParser {
             port: parts[1].parse().unwrap_or(0),
             protocol: parts[2].to_string(),
             formats: parts[3..].iter().map(ToString::to_string).collect(),
-            attributes: HashMap::new(),
+            attributes: Vec::new(),
         })
     }
 

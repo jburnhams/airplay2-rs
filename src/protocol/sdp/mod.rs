@@ -14,8 +14,6 @@ mod tests;
 pub use builder::{SdpBuilder, create_raop_announce_sdp};
 pub use parser::{SdpParseError, SdpParser};
 
-use std::collections::HashMap;
-
 /// SDP session description
 #[derive(Debug, Clone, Default)]
 pub struct SessionDescription {
@@ -32,7 +30,7 @@ pub struct SessionDescription {
     /// Media descriptions (m=)
     pub media: Vec<MediaDescription>,
     /// Session-level attributes (a=)
-    pub attributes: HashMap<String, Option<String>>,
+    pub attributes: Vec<(String, Option<String>)>,
 }
 
 /// SDP origin field (o=)
@@ -75,14 +73,17 @@ pub struct MediaDescription {
     /// Format list (payload types)
     pub formats: Vec<String>,
     /// Media-level attributes
-    pub attributes: HashMap<String, Option<String>>,
+    pub attributes: Vec<(String, Option<String>)>,
 }
 
 impl SessionDescription {
     /// Get a session-level attribute
     #[must_use]
     pub fn get_attribute(&self, name: &str) -> Option<&str> {
-        self.attributes.get(name)?.as_deref()
+        self.attributes
+            .iter()
+            .find(|(k, _)| k == name)
+            .and_then(|(_, v)| v.as_deref())
     }
 
     /// Get the audio media description
@@ -95,9 +96,7 @@ impl SessionDescription {
     #[must_use]
     pub fn rsaaeskey(&self) -> Option<&str> {
         self.audio_media()?
-            .attributes
-            .get("rsaaeskey")?
-            .as_deref()
+            .get_attribute("rsaaeskey")
             .or_else(|| self.get_attribute("rsaaeskey"))
     }
 
@@ -105,22 +104,20 @@ impl SessionDescription {
     #[must_use]
     pub fn aesiv(&self) -> Option<&str> {
         self.audio_media()?
-            .attributes
-            .get("aesiv")?
-            .as_deref()
+            .get_attribute("aesiv")
             .or_else(|| self.get_attribute("aesiv"))
     }
 
     /// Get the fmtp attribute (format parameters)
     #[must_use]
     pub fn fmtp(&self) -> Option<&str> {
-        self.audio_media()?.attributes.get("fmtp")?.as_deref()
+        self.audio_media()?.get_attribute("fmtp")
     }
 
     /// Get the rtpmap attribute
     #[must_use]
     pub fn rtpmap(&self) -> Option<&str> {
-        self.audio_media()?.attributes.get("rtpmap")?.as_deref()
+        self.audio_media()?.get_attribute("rtpmap")
     }
 }
 
@@ -128,6 +125,9 @@ impl MediaDescription {
     /// Get a media-level attribute
     #[must_use]
     pub fn get_attribute(&self, name: &str) -> Option<&str> {
-        self.attributes.get(name)?.as_deref()
+        self.attributes
+            .iter()
+            .find(|(k, _)| k == name)
+            .and_then(|(_, v)| v.as_deref())
     }
 }

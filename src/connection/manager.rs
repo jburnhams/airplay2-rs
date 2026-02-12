@@ -10,6 +10,7 @@ use crate::protocol::pairing::{
     TransientPairing,
 };
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
+use crate::protocol::sdp::SdpBuilder;
 use crate::types::{AirPlayConfig, AirPlayDevice};
 
 use std::fmt::Write;
@@ -685,20 +686,37 @@ impl ConnectionManager {
         tracing::debug!("Performing ANNOUNCE...");
         // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
         // Build SDP based on configured codec
-        let sdp = match self.config.audio_codec {
+
+        let mut builder = SdpBuilder::new()
+            .origin("-", "0", "0", "0.0.0.0")
+            .session_name("airplay2-rs")
+            .connection("0.0.0.0")
+            .timing(0, 0)
+            .media("audio", 0, "RTP/AVP", &["96"]);
+
+        match self.config.audio_codec {
             AudioCodec::Alac => {
                 // ALAC negotiation (96 AppleLossless)
                 // Note: Python receiver expects exactly 'AppleLossless' (no /44100/2)
-                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
+                builder = builder
+                    .media_attribute("rtpmap", Some("96 AppleLossless"))
+                    .media_attribute("fmtp", Some("96 352 0 16 40 10 14 2 255 0 0 44100"));
             }
             AudioCodec::Pcm => {
                 // PCM/L16 negotiation (uncompressed audio)
-                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
+                // No fmtp parameters needed for L16
+                builder = builder.media_attribute("rtpmap", Some("96 L16/44100/2"));
             }
             AudioCodec::Aac => {
                 // AAC negotiation (96 mpeg4-generic)
                 // mode=AAC-hbr implies RFC 3640 (requires AU headers)
-                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024\r\n".to_string()
+                // config=1210 (AAC-LC, 44100Hz, 2ch) is required for out-of-band configuration
+                builder = builder
+                    .media_attribute("rtpmap", Some("96 mpeg4-generic/44100/2"))
+                    .media_attribute(
+                        "fmtp",
+                        Some("96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024;config=1210"),
+                    );
             }
             AudioCodec::Opus => {
                 return Err(AirPlayError::InvalidParameter {
@@ -706,7 +724,9 @@ impl ConnectionManager {
                     message: "Opus codec not yet supported for SDP generation".to_string(),
                 });
             }
-        };
+        }
+
+        let sdp = builder.encode();
 
         let announce_req = {
             let mut session_guard = self.rtsp_session.lock().await;

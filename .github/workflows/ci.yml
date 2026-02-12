@@ -19,7 +19,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y libasound2-dev
       - run: cargo check --all-features
 
   fmt:
@@ -42,7 +44,9 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y libasound2-dev
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
   test:
@@ -58,8 +62,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - run: cargo test --all-features
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y libasound2-dev
+      - run: cargo test --workspace --exclude integration-tests --all-features
 
   doc:
     name: Documentation
@@ -69,7 +75,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y libasound2-dev
       - run: cargo doc --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
@@ -84,9 +92,11 @@ jobs:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y libasound2-dev
       - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+      - run: cargo llvm-cov --workspace --exclude integration-tests --all-features --lcov --output-path lcov.info
       - uses: codecov/codecov-action@v4
         with:
           files: lcov.info
