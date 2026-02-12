@@ -8,7 +8,8 @@ use super::{
     tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods},
 };
 use crate::protocol::crypto::{
-    ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpClient, SrpParams, SrpVerifier,
+    ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, HkdfSha512, Nonce,
+    SrpClient, SrpParams, SrpVerifier,
 };
 
 /// Pair-Setup session for PIN-based pairing
@@ -326,9 +327,28 @@ impl PairSetup {
         // Parse device info TLV
         let device_tlv = TlvDecoder::decode(&decrypted)?;
         let device_ltpk = device_tlv.get_required(TlvType::PublicKey)?.to_vec();
+        let device_identifier = device_tlv.get_required(TlvType::Identifier)?;
+        let device_signature_bytes = device_tlv.get_required(TlvType::Signature)?;
 
-        // TODO: Verify device signature
-        // The spec in docs/07 says "TODO: Verify device signature" so I will leave it as TODO or just comment.
+        // Verify device signature
+        let hkdf = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
+        let accessory_key = hkdf.expand_fixed::<32>(b"Pair-Setup-Accessory-Sign-Info")?;
+
+        let mut signed_data =
+            Vec::with_capacity(accessory_key.len() + device_identifier.len() + device_ltpk.len());
+        signed_data.extend_from_slice(&accessory_key);
+        signed_data.extend_from_slice(device_identifier);
+        signed_data.extend_from_slice(&device_ltpk);
+
+        let public_key = Ed25519PublicKey::from_bytes(&device_ltpk)
+            .map_err(|_| PairingError::InvalidTlv("Invalid public key".to_string()))?;
+
+        let signature = Ed25519Signature::from_bytes(device_signature_bytes)
+            .map_err(|_| PairingError::InvalidTlv("Invalid signature".to_string()))?;
+
+        public_key
+            .verify(&signed_data, &signature)
+            .map_err(|_| PairingError::SignatureVerificationFailed)?;
 
         self.device_ltpk = Some(device_ltpk);
         self.state = PairingState::Complete;
