@@ -103,6 +103,10 @@ impl RaopStreamer {
     /// Encode audio frame to RTP packet
     ///
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal AES cipher state is invalid (should not happen with correctly generated keys).
     pub fn encode_frame(&mut self, audio_data: &[u8]) -> Bytes {
         let packet_size = RaopAudioPacket::HEADER_SIZE + audio_data.len();
         self.encode_buffer.reserve(packet_size);
