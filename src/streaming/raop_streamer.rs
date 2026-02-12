@@ -64,13 +64,17 @@ impl RaopStreamer {
     const SYNC_INTERVAL: Duration = Duration::from_millis(1000);
 
     /// Create new streamer
+    ///
+    /// # Panics
+    ///
+    /// Panics if the session keys have invalid length (must be 16 bytes for key and IV).
     #[must_use]
-    pub fn new(keys: RaopSessionKeys, config: RaopStreamConfig) -> Self {
+    pub fn new(keys: &RaopSessionKeys, config: RaopStreamConfig) -> Self {
         // Initialize AES-CTR cipher with session keys
         // We use expect() here because keys are guaranteed to be correct length
         // by RaopSessionKeys::generate() or parsing logic
-        let cipher = Aes128Ctr::new(keys.aes_key(), keys.aes_iv())
-            .expect("Invalid session keys length");
+        let cipher =
+            Aes128Ctr::new(keys.aes_key(), keys.aes_iv()).expect("Invalid session keys length");
 
         Self {
             config,
