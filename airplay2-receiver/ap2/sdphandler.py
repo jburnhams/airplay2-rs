@@ -88,6 +88,18 @@ class SDPHandler():
                     self.audio_desc = 'ALAC'
                 elif self.audio_format == self.SDPAudioFormat.AAC:
                     self.audio_desc = 'AAC_LC'
+                    if 'config=' in self.audio_fmtp:
+                        start = self.audio_fmtp.find('config=') + len('config=')
+                        end = self.audio_fmtp.find(';', start)
+                        if end == -1:
+                            end = len(self.audio_fmtp)
+                        config_hex = self.audio_fmtp[start:end].strip()
+                        try:
+                            extradata = bytes.fromhex(config_hex)
+                            self.params = AudioSetup(sr=self.audio_format_sr, ss=self.audio_format_bd, cc=self.audio_format_ch, codec_tag='mp4a')
+                            self.params.extradata = extradata
+                        except ValueError as e:
+                            print(f"Warning: Failed to parse AAC config hex: {e}")
                 elif self.audio_format == self.SDPAudioFormat.PCM:
                     self.audio_desc = 'PCM'
                 elif self.audio_format == self.SDPAudioFormat.OPUS:
