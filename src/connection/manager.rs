@@ -359,12 +359,14 @@ impl ConnectionManager {
                         return Ok(());
                     }
                     Err(e) => {
-                        tracing::debug!(
+                        tracing::warn!(
                             "SRP Pairing failed with configured PIN and User='{}': {}",
                             user,
                             e
                         );
-                        // Continue to next username
+                        // If the error suggests connection loss, we might need to reconnect,
+                        // but currently we just try the next username on the same stream.
+                        // Ideally, we should check if stream is alive.
                     }
                 }
             }
