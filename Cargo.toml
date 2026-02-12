@@ -20,6 +20,7 @@ audio-coreaudio = ["dep:coreaudio-rs"]
 audio-cpal = ["dep:cpal"]
 audio-alsa = ["dep:alsa"]
 receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
+decoders = ["dep:symphonia"]
 
 [dependencies]
 cpal = { version = "0.15.3", optional = true, default-features = false }
@@ -75,6 +76,7 @@ alac-encoder = "0.3"      # ALAC encoding
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 fdk-aac = "0.8.0"
+symphonia = { version = "0.5.5", optional = true, features = ["mp3", "aac", "alac", "pcm", "isomp4"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = { version = "0.9", optional = true }

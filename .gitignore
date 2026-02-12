@@ -31,5 +31,6 @@ pair_ap/
 
 *.raw
 *.bin
+debug*.txt
 
 __pycache__
