@@ -15,7 +15,7 @@ fn test_streaming_sequence() {
     let keys = create_test_keys();
     let config = RaopStreamConfig::default();
 
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
 
     // Simulate streaming audio frames
     let frame = vec![0u8; 352 * 4]; // 352 samples * 4 bytes (16-bit stereo)
@@ -44,7 +44,7 @@ fn test_streaming_sequence() {
 fn test_retransmit_buffer() {
     let keys = create_test_keys();
     let config = RaopStreamConfig::default();
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
     let frame = vec![0u8; 352 * 4];
 
     streamer.encode_frame(&frame); // seq 0
@@ -68,7 +68,7 @@ fn test_retransmit_buffer() {
 fn test_sync_packet() {
     let keys = create_test_keys();
     let config = RaopStreamConfig::default();
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
 
     // Initially sync should be sent (or not? logic depends on should_send_sync)
     // should_send_sync checks elapsed time.
@@ -81,7 +81,7 @@ fn test_sync_packet() {
 fn test_sequence_wrapping() {
     let keys = create_test_keys();
     let config = RaopStreamConfig::default();
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
     let frame = vec![0u8; 10]; // Small frame
 
     // Current sequence is 0
@@ -104,7 +104,7 @@ fn test_sequence_wrapping() {
 fn test_timing_packet_generation_interval() {
     let keys = create_test_keys();
     let config = RaopStreamConfig::default();
-    let mut streamer = RaopStreamer::new(keys, config);
+    let mut streamer = RaopStreamer::new(&keys, config);
 
     // Initially false (because initialized with now())
     // Unless test runs extremely slow or system clock jumps.
