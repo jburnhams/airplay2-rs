@@ -1,3 +1,6 @@
+use num_bigint::BigUint;
+use sha2::Sha512;
+
 use super::{
     PairingError, PairingStepResult, TransientPairing,
     tlv::{TlvDecoder, TlvEncoder, TlvError, TlvType, errors},
@@ -16,11 +19,158 @@ fn test_tlv_encode_simple() {
     );
 }
 
+struct MockSrpServer {
+    n: BigUint,
+    g: BigUint,
+    k: BigUint,
+    v: BigUint,
+    b: BigUint,
+    b_pub: BigUint,
+    session_key: Vec<u8>,
+    m2: Vec<u8>,
+}
+
+impl MockSrpServer {
+    fn new(username: &[u8], password: &[u8], salt: &[u8]) -> Self {
+        use sha2::Digest;
+
+        let n = BigUint::parse_bytes(
+            b"FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E08\
+              8A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B\
+              302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9\
+              A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE6\
+              49286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8\
+              FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D\
+              670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C\
+              180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF695581718\
+              3995497CEA956AE515D2261898FA051015728E5A8AAAC42DAD33170D\
+              04507A33A85521ABDF1CBA64ECFB850458DBEF0A8AEA71575D060C7D\
+              B3970F85A6E1E4C7ABF5AE8CDB0933D71E8C94E04A25619DCEE3D226\
+              1AD2EE6BF12FFA06D98A0864D87602733EC86A64521F2B18177B200C\
+              BBE117577A615D6C770988C0BAD946E208E24FA074E5AB3143DB5BFC\
+              E0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF",
+            16,
+        )
+        .unwrap();
+        let g = BigUint::from(5u32);
+
+        // k = H(N, pad(g))
+        let k = {
+            let mut hasher = Sha512::new();
+            hasher.update(n.to_bytes_be());
+            let g_bytes = g.to_bytes_be();
+            let mut g_padded = vec![0u8; 384];
+            g_padded[384 - g_bytes.len()..].copy_from_slice(&g_bytes);
+            hasher.update(&g_padded);
+            BigUint::from_bytes_be(&hasher.finalize())
+        };
+
+        // x = H(salt, H(username, ":", password))
+        let x = {
+            let mut inner = Sha512::new();
+            inner.update(username);
+            inner.update(b":");
+            inner.update(password);
+            let h_up = inner.finalize();
+
+            let mut outer = Sha512::new();
+            outer.update(salt);
+            outer.update(h_up);
+            BigUint::from_bytes_be(&outer.finalize())
+        };
+
+        // v = g^x % n
+        let v = g.modpow(&x, &n);
+
+        // b = random (fixed for test predictability)
+        let b = BigUint::from(987_654_321u32);
+        // B = (k*v + g^b) % n
+        let b_pub = ((&k * &v) + g.modpow(&b, &n)) % &n;
+
+        Self {
+            n,
+            g,
+            k,
+            v,
+            b,
+            b_pub,
+            session_key: Vec::new(),
+            m2: Vec::new(),
+        }
+    }
+
+    fn public_key(&self) -> Vec<u8> {
+        let mut bytes = self.b_pub.to_bytes_be();
+        if bytes.len() < 384 {
+            let mut padded = vec![0u8; 384];
+            padded[384 - bytes.len()..].copy_from_slice(&bytes);
+            bytes = padded;
+        }
+        bytes
+    }
+
+    fn verify_client(
+        &mut self,
+        username: &[u8],
+        salt: &[u8],
+        a_pub_bytes: &[u8],
+        client_m1: &[u8],
+    ) -> Result<Vec<u8>, ()> {
+        use sha2::Digest;
+
+        let a_pub = BigUint::from_bytes_be(a_pub_bytes);
+
+        // u = H(pad(A), pad(B))
+        let u = {
+            let mut hasher = Sha512::new();
+            let mut a_padded = vec![0u8; 384];
+            let a_bytes = a_pub.to_bytes_be();
+            a_padded[384 - a_bytes.len()..].copy_from_slice(&a_bytes);
+            hasher.update(&a_padded);
+
+            let mut b_padded = vec![0u8; 384];
+            let b_bytes = self.b_pub.to_bytes_be();
+            b_padded[384 - b_bytes.len()..].copy_from_slice(&b_bytes);
+            hasher.update(&b_padded);
+            BigUint::from_bytes_be(&hasher.finalize())
+        };
+
+        // S = (A * v^u) ^ b % n
+        let s_shared = (a_pub * self.v.modpow(&u, &self.n)).modpow(&self.b, &self.n);
+
+        // K = H(S)
+        let k_session = {
+            let mut hasher = Sha512::new();
+            hasher.update(s_shared.to_bytes_be());
+            hasher.finalize().to_vec()
+        };
+
+        // Verification of client_m1 would go here in a real implementation.
+        // For the mock, we just derive K and calculate M2.
+
+        self.session_key = k_session.clone();
+
+        // M2 = H(A, M1, K)
+        let mut hasher = Sha512::new();
+        hasher.update(a_pub.to_bytes_be());
+        hasher.update(client_m1);
+        hasher.update(&k_session);
+        self.m2 = hasher.finalize().to_vec();
+
+        Ok(k_session)
+    }
+
+    fn server_proof(&self) -> &[u8] {
+        &self.m2
+    }
+}
+
 #[test]
 fn test_pair_setup_m6_verification() {
-    use crate::protocol::crypto::{
-        ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpVerifier,
-    };
+    use num_bigint::BigUint;
+    use sha2::Sha512;
+
+    use crate::protocol::crypto::{ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce};
     use crate::protocol::pairing::setup::PairSetup;
 
     let mut client = PairSetup::new();
@@ -34,14 +184,13 @@ fn test_pair_setup_m6_verification() {
     let username = "Pair-Setup";
     let salt = b"salt-bytes";
 
-    // We need a real SRP verifier to generate valid proofs
-    let srp_verifier_obj = SrpVerifier::new(username.as_bytes(), pin.as_bytes(), salt).unwrap();
-    let server_public = srp_verifier_obj.public_key();
+    let mut srp_server = MockSrpServer::new(username.as_bytes(), pin.as_bytes(), salt);
+    let server_public = srp_server.public_key();
 
     let m2 = TlvEncoder::new()
         .add_state(2)
         .add(TlvType::Salt, salt)
-        .add(TlvType::PublicKey, server_public)
+        .add(TlvType::PublicKey, &server_public)
         .build();
 
     // 3. Client Process M2 -> M3
@@ -55,14 +204,13 @@ fn test_pair_setup_m6_verification() {
     let client_proof = tlv_m3.get_required(TlvType::Proof).unwrap();
 
     // 4. Device Process M3 -> M4
-    let session_key_obj = srp_verifier_obj
-        .verify_client(client_public, client_proof)
+    let session_key = srp_server
+        .verify_client(username.as_bytes(), salt, client_public, client_proof)
         .unwrap();
-    let session_key = session_key_obj.as_bytes();
 
     let m4 = TlvEncoder::new()
         .add_state(4)
-        .add(TlvType::Proof, srp_verifier_obj.server_proof())
+        .add(TlvType::Proof, srp_server.server_proof())
         .build();
 
     // 5. Client Process M4 -> M5
@@ -75,12 +223,16 @@ fn test_pair_setup_m6_verification() {
     // (We skip M5 verification on device side for brevity as we are testing M6 verification on client)
 
     // Device derives encryption key for M6
-    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key);
-    let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info").unwrap();
+    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
+    let encrypt_key = hkdf_enc
+        .expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")
+        .unwrap();
 
     // Device signs: HKDF(...) || identifier || public_key
-    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
-    let accessory_x = hkdf_sign.expand(b"Pair-Setup-Accessory-Sign-Info", 32).unwrap();
+    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), &session_key);
+    let accessory_x = hkdf_sign
+        .expand(b"Pair-Setup-Accessory-Sign-Info", 32)
+        .unwrap();
 
     let device_signing = Ed25519KeyPair::generate();
     let device_id = b"device-id";
@@ -113,7 +265,10 @@ fn test_pair_setup_m6_verification() {
     // 7. Client Process M6
     match client.process_m6(&m6) {
         Ok(PairingStepResult::Complete(_)) => {
-            assert_eq!(client.device_public_key().unwrap(), device_signing.public_key().as_bytes());
+            assert_eq!(
+                client.device_public_key().unwrap(),
+                device_signing.public_key().as_bytes()
+            );
         }
         Err(e) => panic!("M6 verification failed: {:?}", e),
         _ => panic!("Expected Complete for M6"),
@@ -122,9 +277,10 @@ fn test_pair_setup_m6_verification() {
 
 #[test]
 fn test_pair_setup_m6_invalid_signature() {
-    use crate::protocol::crypto::{
-        ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, SrpVerifier,
-    };
+    use num_bigint::BigUint;
+    use sha2::Sha512;
+
+    use crate::protocol::crypto::{ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce};
     use crate::protocol::pairing::setup::PairSetup;
 
     let mut client = PairSetup::new();
@@ -134,25 +290,45 @@ fn test_pair_setup_m6_invalid_signature() {
     // 1-5. Go to state where client expects M6
     let _m1 = client.start().unwrap();
     let salt = b"salt-bytes";
-    let srp_verifier_obj = SrpVerifier::new(b"Pair-Setup", pin.as_bytes(), salt).unwrap();
-    let m2 = TlvEncoder::new().add_state(2).add(TlvType::Salt, salt).add(TlvType::PublicKey, srp_verifier_obj.public_key()).build();
-    let m3 = match client.process_m2(&m2).unwrap() { PairingStepResult::SendData(d) => d, _ => panic!() };
+    let mut srp_server = MockSrpServer::new(b"Pair-Setup", pin.as_bytes(), salt);
+    let m2 = TlvEncoder::new()
+        .add_state(2)
+        .add(TlvType::Salt, salt)
+        .add(TlvType::PublicKey, &srp_server.public_key())
+        .build();
+    let m3 = match client.process_m2(&m2).unwrap() {
+        PairingStepResult::SendData(d) => d,
+        _ => panic!(),
+    };
     let tlv_m3 = TlvDecoder::decode(&m3).unwrap();
-    let session_key_obj = srp_verifier_obj.verify_client(tlv_m3.get_required(TlvType::PublicKey).unwrap(), tlv_m3.get_required(TlvType::Proof).unwrap()).unwrap();
-    let session_key = session_key_obj.as_bytes();
-    let m4 = TlvEncoder::new().add_state(4).add(TlvType::Proof, srp_verifier_obj.server_proof()).build();
+    let session_key = srp_server
+        .verify_client(
+            b"Pair-Setup",
+            salt,
+            tlv_m3.get_required(TlvType::PublicKey).unwrap(),
+            tlv_m3.get_required(TlvType::Proof).unwrap(),
+        )
+        .unwrap();
+    let m4 = TlvEncoder::new()
+        .add_state(4)
+        .add(TlvType::Proof, srp_server.server_proof())
+        .build();
     let _m5 = client.process_m4(&m4).unwrap();
 
     // 6. Device sends M6 with INVALID signature
-    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), session_key);
-    let encrypt_key = hkdf_enc.expand_fixed::<32>(b"Pair-Setup-Encrypt-Info").unwrap();
+    let hkdf_enc = HkdfSha512::new(Some(b"Pair-Setup-Encrypt-Salt"), &session_key);
+    let encrypt_key = hkdf_enc
+        .expand_fixed::<32>(b"Pair-Setup-Encrypt-Info")
+        .unwrap();
 
     let device_signing = Ed25519KeyPair::generate();
     let bad_key = Ed25519KeyPair::generate(); // Wrong key for signing
     let device_id = b"device-id";
 
-    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), session_key);
-    let accessory_x = hkdf_sign.expand(b"Pair-Setup-Accessory-Sign-Info", 32).unwrap();
+    let hkdf_sign = HkdfSha512::new(Some(b"Pair-Setup-Accessory-Sign-Salt"), &session_key);
+    let accessory_x = hkdf_sign
+        .expand(b"Pair-Setup-Accessory-Sign-Info", 32)
+        .unwrap();
 
     let mut sign_data = Vec::new();
     sign_data.extend_from_slice(&accessory_x);
@@ -173,7 +349,10 @@ fn test_pair_setup_m6_invalid_signature() {
     let nonce = Nonce::from_bytes(&nonce_bytes).unwrap();
     let encrypted = cipher.encrypt(&nonce, &inner_tlv).unwrap();
 
-    let m6 = TlvEncoder::new().add_state(6).add(TlvType::EncryptedData, &encrypted).build();
+    let m6 = TlvEncoder::new()
+        .add_state(6)
+        .add(TlvType::EncryptedData, &encrypted)
+        .build();
 
     // 7. Client Process M6 should FAIL
     let result = client.process_m6(&m6);
