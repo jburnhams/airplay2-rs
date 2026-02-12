@@ -70,20 +70,12 @@ impl Drop for SrpClient {
 }
 
 impl SrpClient {
-    pub fn new(
-        username: &[u8],
-        password: &[u8],
-        params_lazy: &LazyParams,
-    ) -> Result<Self, CryptoError> {
+    pub fn new(params_lazy: &LazyParams) -> Result<Self, CryptoError> {
         let params: SrpParams = (*params_lazy).into();
-        Self::with_params(username, password, params)
+        Self::with_params(params)
     }
 
-    pub fn with_params(
-        _username: &[u8],
-        _password: &[u8],
-        params: SrpParams,
-    ) -> Result<Self, CryptoError> {
+    pub fn with_params(params: SrpParams) -> Result<Self, CryptoError> {
         // k = H(N, pad(g))
         let k = compute_k(&params);
 

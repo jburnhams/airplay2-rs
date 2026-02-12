@@ -24,7 +24,7 @@ fn test_srp_m1_calculation_format() {
 
     let username = b"Pair-Setup";
     let password = b"3939";
-    let client = SrpClient::new(username, password, &SrpParams::RFC5054_3072).unwrap();
+    let client = SrpClient::new(&SrpParams::RFC5054_3072).unwrap();
 
     // Create a mock salt and server public key
     let salt = vec![0x12, 0x34, 0x56, 0x78];
@@ -47,7 +47,7 @@ fn test_srp_m1_calculation_format() {
 /// Test that A (client public key) uses minimal representation in M1
 #[test]
 fn test_client_public_minimal_representation() {
-    let client = SrpClient::new(b"test", b"test", &SrpParams::RFC5054_3072).unwrap();
+    let client = SrpClient::new(&SrpParams::RFC5054_3072).unwrap();
     let client_pub = client.public_key();
 
     // Client public key should be padded to 384 bytes for transmission
@@ -85,8 +85,8 @@ fn test_srp_session_key_consistency() {
     // Create two clients with same parameters
     let username = b"Pair-Setup";
     let password = b"3939";
-    let client1 = SrpClient::new(username, password, &SrpParams::RFC5054_3072).unwrap();
-    let client2 = SrpClient::new(username, password, &SrpParams::RFC5054_3072).unwrap();
+    let client1 = SrpClient::new(&SrpParams::RFC5054_3072).unwrap();
+    let client2 = SrpClient::new(&SrpParams::RFC5054_3072).unwrap();
 
     let salt = vec![0xAB; 16];
     let server_pub = vec![0x02; 384];
@@ -112,7 +112,7 @@ fn test_srp_session_key_consistency() {
 fn test_m1_hash_components() {
     let username = b"test-user";
     let password = b"test-pass";
-    let client = SrpClient::new(username, password, &SrpParams::RFC5054_3072).unwrap();
+    let client = SrpClient::new(&SrpParams::RFC5054_3072).unwrap();
     let salt = vec![0xFF; 16];
     let server_pub = vec![0x03; 384];
 
@@ -126,7 +126,7 @@ fn test_m1_hash_components() {
     assert_eq!(m1.len(), 64);
 
     // M1 should change if any input changes
-    let client2 = SrpClient::new(b"different-user", password, &SrpParams::RFC5054_3072).unwrap();
+    let client2 = SrpClient::new(&SrpParams::RFC5054_3072).unwrap();
     let verifier2 = client2
         .process_challenge(b"different-user", password, &salt, &server_pub)
         .expect("Challenge 2 failed");

@@ -16,8 +16,7 @@ fn test_complete_pair_setup() {
     server.set_password("1234");
 
     // Create client
-    let client = SrpClient::new(b"Pair-Setup", b"1234", &SrpParams::RFC5054_3072)
-        .expect("Failed to create client");
+    let client = SrpClient::new(&SrpParams::RFC5054_3072).expect("Failed to create client");
 
     // M1: Client initiates
     let m1 = TlvEncoder::new()
@@ -75,8 +74,7 @@ fn test_wrong_password_rejected() {
     server.set_password("1234");
 
     // Client with wrong password
-    let client = SrpClient::new(b"Pair-Setup", b"0000", &SrpParams::RFC5054_3072)
-        .expect("Failed to create client");
+    let client = SrpClient::new(&SrpParams::RFC5054_3072).expect("Failed to create client");
 
     // M1
     let m1 = TlvEncoder::new()

@@ -134,11 +134,7 @@ impl PairSetup {
         ))?;
 
         // Create SRP client and process challenge
-        let srp_client = SrpClient::new(
-            self.username.as_bytes(),
-            pin.as_bytes(),
-            &SrpParams::RFC5054_3072,
-        )?;
+        let srp_client = SrpClient::new(&SrpParams::RFC5054_3072)?;
         let client_public = srp_client.public_key().to_vec();
 
         tracing::debug!("SRP Salt: {:02X?}", salt);
