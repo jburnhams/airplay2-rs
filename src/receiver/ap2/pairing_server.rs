@@ -290,13 +290,12 @@ impl PairingServer {
             .add(TlvType::EncryptedData, &encrypted_data)
             .build();
 
-        let mut session_key_bytes = [0u8; 64];
-        if session_key.as_bytes().len() <= 64 {
-            session_key_bytes[..session_key.as_bytes().len()]
-                .copy_from_slice(session_key.as_bytes());
-        }
-
-        self.srp_session_key = Some(session_key_bytes);
+        self.srp_session_key = Some(
+            session_key
+                .as_bytes()
+                .try_into()
+                .expect("session key length mismatch"),
+        );
         self.state = PairingServerState::PairSetupComplete;
 
         PairingResult {
