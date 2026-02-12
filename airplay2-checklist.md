@@ -1,5 +1,22 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 4):**
+- **Integration Test Reorganization**:
+  - Moved integration tests to a dedicated `integration_tests` workspace member to separate them from unit tests.
+  - Configured `Cargo.toml` workspace members to exclude `integration_tests` from default `cargo test` runs.
+  - Fixed dependencies in `integration_tests/Cargo.toml` (added `bytes`, `tempfile`, etc.).
+- **AAC Streaming Verification**:
+  - Verified `tests/aac_streaming.rs` passes end-to-end with the Python receiver.
+  - Confirmed AAC codec implementation and SDP negotiation work correctly.
+- **Test Harness Enhancements**:
+  - Updated `PythonReceiver` to use `tempfile` for isolated test environments, allowing parallel execution.
+  - Implemented dynamic port allocation (`-p 0`) for the Python receiver to avoid port conflicts.
+  - Added robust path resolution for finding the `airplay2-receiver` directory from within the subcrate.
+  - Patched `airplay2-receiver/ap2-receiver.py` to support the `--port` argument.
+- **CI/CD Improvements**:
+  - Updated CI workflows to install necessary system dependencies (`libav*-dev`, `portaudio`, `ffmpeg`) and Python packages.
+  - Ensured `PYTHON_EXECUTABLE` is correctly set and used in tests.
+
 **Work Done (Session 3):**
 - **AAC Codec Implementation**:
   - Added `fdk-aac` dependency (v0.8.0).

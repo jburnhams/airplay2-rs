@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -15,6 +16,7 @@ pub struct PythonReceiver {
     #[allow(dead_code)]
     interface: String,
     port: u16,
+    logs: Arc<Mutex<Vec<String>>>,
 }
 
 impl PythonReceiver {
@@ -27,7 +29,30 @@ impl PythonReceiver {
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
         let temp_dir = TempDir::new()?;
         let output_dir = temp_dir.path().to_path_buf();
-        let source_dir = std::env::current_dir()?.join("airplay2-receiver");
+
+        // Find the airplay2-receiver directory
+        let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
+        if !source_dir.exists() {
+            // Try parent directory (if running from integration_tests subcrate)
+            if let Some(parent) = std::env::current_dir()?.parent() {
+                let parent_dir = parent.join("airplay2-receiver");
+                if parent_dir.exists() {
+                    source_dir = parent_dir;
+                } else {
+                    // Try one more level up
+                     if let Some(grandparent) = parent.parent() {
+                        let grandparent_dir = grandparent.join("airplay2-receiver");
+                        if grandparent_dir.exists() {
+                            source_dir = grandparent_dir;
+                        }
+                    }
+                }
+            }
+        }
+
+        if !source_dir.exists() {
+             return Err(format!("Could not find airplay2-receiver directory. Checked: {}", source_dir.display()).into());
+        }
 
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
             // Use loopback interface for CI
@@ -100,6 +125,8 @@ impl PythonReceiver {
         let mut reader = BufReader::new(stdout).lines();
         let mut stderr_reader = BufReader::new(stderr).lines();
         let mut stderr_lines = Vec::new();
+        let logs = Arc::new(Mutex::new(Vec::new()));
+
         #[allow(unused_assignments)]
         let mut found_serving = false;
         let mut port = 0;
@@ -128,9 +155,12 @@ impl PythonReceiver {
                 line = reader.next_line() => {
                     match line {
                         Ok(Some(line)) => {
-                            tracing::debug!("Receiver stdout: {}", line.trim());
+                            let line = line.trim();
+                            tracing::debug!("Receiver stdout: {}", line);
+                            logs.lock().unwrap().push(line.to_string());
+
                             if line.contains("serving on") {
-                                tracing::info!("✓ Python receiver started: {}", line.trim());
+                                tracing::info!("✓ Python receiver started: {}", line);
                                 // Parse port from "serving on IP:PORT"
                                 if let Some(port_str) = line.split(':').next_back() {
                                     if let Ok(p) = port_str.trim().parse::<u16>() {
@@ -148,9 +178,12 @@ impl PythonReceiver {
                 line = stderr_reader.next_line() => {
                      match line {
                         Ok(Some(line)) => {
-                            tracing::warn!("Receiver stderr: {}", line.trim());
+                            let line = line.trim();
+                            tracing::warn!("Receiver stderr: {}", line);
+                            logs.lock().unwrap().push(line.to_string());
+
                             if line.contains("serving on") {
-                                tracing::info!("✓ Python receiver started (detected in stderr): {}", line.trim());
+                                tracing::info!("✓ Python receiver started (detected in stderr): {}", line);
                                 if let Some(port_str) = line.split(':').next_back() {
                                     if let Ok(p) = port_str.trim().parse::<u16>() {
                                         port = p;
@@ -159,7 +192,7 @@ impl PythonReceiver {
                                 found_serving = true;
                                 break;
                             }
-                            stderr_lines.push(line);
+                            stderr_lines.push(line.to_string());
                         }
                         Ok(None) => {}
                         Err(e) => tracing::warn!("Error reading stderr: {}", e),
@@ -179,20 +212,29 @@ impl PythonReceiver {
             port = 7000;
         }
 
+        let logs_clone = logs.clone();
         // Spawn a background task to keep reading output
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     line = reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::debug!("Receiver stdout: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                let line = line.trim();
+                                tracing::debug!("Receiver stdout: {}", line);
+                                logs_clone.lock().unwrap().push(line.to_string());
+                            }
                             Ok(None) => break,
                             Err(_) => break,
                         }
                     }
                     line = stderr_reader.next_line() => {
                         match line {
-                            Ok(Some(line)) => tracing::warn!("Receiver stderr: {}", line.trim()),
+                            Ok(Some(line)) => {
+                                let line = line.trim();
+                                tracing::warn!("Receiver stderr: {}", line);
+                                logs_clone.lock().unwrap().push(line.to_string());
+                            }
                             Ok(None) => break,
                             Err(_) => break,
                         }
@@ -207,7 +249,26 @@ impl PythonReceiver {
             output_dir,
             interface,
             port,
+            logs,
         })
+    }
+
+    /// Wait for a specific log pattern to appear
+    pub async fn wait_for_log(&self, pattern: &str, timeout: Duration) -> Result<(), String> {
+        let start = Instant::now();
+        loop {
+            if start.elapsed() > timeout {
+                return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
+            }
+
+            {
+                let logs = self.logs.lock().unwrap();
+                if logs.iter().any(|l| l.contains(pattern)) {
+                    return Ok(());
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
     }
 
     /// Stop the receiver and read output

@@ -11,6 +11,10 @@ keywords = ["airplay", "audio", "streaming", "homekit", "multiroom"]
 categories = ["multimedia::audio", "network-programming"]
 readme = "README.md"
 
+[workspace]
+members = ["integration_tests"]
+default-members = ["."]
+
 [features]
 default = ["tokio-runtime", "raop"]
 tokio-runtime = ["tokio", "tokio-util"]
