@@ -1,6 +1,5 @@
 use airplay2::audio::{AudioFormat, ChannelConfig, SampleFormat};
-use airplay2::streaming::resampler::ResamplingSource;
-use airplay2::streaming::source::SilenceSource;
+use airplay2::streaming::{ResamplingSource, SilenceSource};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::io::Read;
 
@@ -22,7 +21,7 @@ fn resampler_benchmark(c: &mut Criterion) {
                 let source = SilenceSource::new(input_format);
                 ResamplingSource::new(source, output_format).unwrap()
             },
-            |mut resampler| {
+            |mut resampler: ResamplingSource<SilenceSource>| {
                 let mut buffer = vec![0u8; 4096];
                 let _ = black_box(resampler.read(&mut buffer).unwrap());
             },
