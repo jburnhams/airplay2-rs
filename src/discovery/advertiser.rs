@@ -763,12 +763,14 @@ impl ServiceAdvertiser {
     async fn get_hostname() -> String {
         tokio::task::spawn_blocking(hostname::get)
             .await
-            .map(|res| {
-                res.map_or_else(
-                    |_| "airplay-receiver.local.".to_string(),
-                    |s| format!("{}.local.", s.to_string_lossy()),
-                )
-            })
-            .unwrap_or_else(|_| "airplay-receiver.local.".to_string())
+            .map_or_else(
+                |_| "airplay-receiver.local.".to_string(),
+                |res| {
+                    res.map_or_else(
+                        |_| "airplay-receiver.local.".to_string(),
+                        |s| format!("{}.local.", s.to_string_lossy()),
+                    )
+                },
+            )
     }
 }
