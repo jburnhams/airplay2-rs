@@ -152,6 +152,9 @@ pub fn convert_channels_into(
                 let count = out_ch.min(in_ch);
                 output[out_start..out_start + count]
                     .copy_from_slice(&input[in_start..in_start + count]);
+                if out_ch > in_ch {
+                    output[out_start + count..out_start + out_ch].fill(0.0);
+                }
             }
         }
     }
