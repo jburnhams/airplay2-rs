@@ -129,6 +129,84 @@ fn test_device_discovered_volume() {
     assert_eq!(device.discovered_volume(), Some(2.0));
 }
 
+// --- PTP / TimingProtocol tests ---
+
+#[test]
+fn test_timing_protocol_default_is_auto() {
+    let tp = TimingProtocol::default();
+    assert_eq!(tp, TimingProtocol::Auto);
+}
+
+#[test]
+fn test_config_default_timing_protocol() {
+    let config = AirPlayConfig::default();
+    assert_eq!(config.timing_protocol, TimingProtocol::Auto);
+}
+
+#[test]
+fn test_config_builder_timing_protocol() {
+    let config = AirPlayConfig::builder()
+        .timing_protocol(TimingProtocol::Ptp)
+        .build();
+    assert_eq!(config.timing_protocol, TimingProtocol::Ptp);
+
+    let config = AirPlayConfig::builder()
+        .timing_protocol(TimingProtocol::Ntp)
+        .build();
+    assert_eq!(config.timing_protocol, TimingProtocol::Ntp);
+}
+
+#[test]
+fn test_device_supports_ptp_from_feature_bit_40() {
+    // Bit 40 set
+    let features = 1u64 << 40;
+    let caps = DeviceCapabilities::from_features(features);
+    assert!(caps.supports_ptp);
+}
+
+#[test]
+fn test_device_supports_ptp_not_set() {
+    let caps = DeviceCapabilities::from_features(0);
+    assert!(!caps.supports_ptp);
+}
+
+#[test]
+fn test_device_supports_ptp_method() {
+    let caps = DeviceCapabilities {
+        supports_ptp: true,
+        ..Default::default()
+    };
+    let device = AirPlayDevice {
+        id: "id".to_string(),
+        name: "name".to_string(),
+        model: None,
+        addresses: vec!["192.168.1.1".parse().unwrap()],
+        port: 7000,
+        capabilities: caps,
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+    };
+    assert!(device.supports_ptp());
+}
+
+#[test]
+fn test_device_ptp_flag_in_all_features() {
+    let caps = DeviceCapabilities::from_features(u64::MAX);
+    assert!(caps.supports_ptp);
+}
+
+#[test]
+fn test_device_supports_ptp_typical_homepod() {
+    // HomePod features: typically has bits 9 (audio), 38 (buffered), 40 (PTP), 48 (AirPlay2)
+    let features = (1u64 << 9) | (1u64 << 38) | (1u64 << 40) | (1u64 << 48);
+    let caps = DeviceCapabilities::from_features(features);
+    assert!(caps.supports_audio);
+    assert!(caps.supports_buffered_audio);
+    assert!(caps.supports_ptp);
+    assert!(caps.airplay2);
+}
+
 // --- state.rs tests ---
 
 #[test]

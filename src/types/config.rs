@@ -1,6 +1,19 @@
 use crate::audio::AudioCodec;
 use std::time::Duration;
 
+/// Timing protocol to use for clock synchronization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimingProtocol {
+    /// NTP-style timing (`AirPlay` 1 / RAOP legacy).
+    Ntp,
+    /// PTP (IEEE 1588) timing for `AirPlay` 2 devices.
+    Ptp,
+    /// Automatically select based on device capabilities.
+    /// Uses PTP if the device supports it, otherwise falls back to NTP.
+    #[default]
+    Auto,
+}
+
 /// Configuration for `AirPlay` client behavior
 #[derive(Debug, Clone)]
 pub struct AirPlayConfig {
@@ -36,6 +49,9 @@ pub struct AirPlayConfig {
 
     /// Bitrate for AAC encoding (bps) (default: `128_000`)
     pub aac_bitrate: u32,
+
+    /// Timing protocol for clock synchronization (default: Auto)
+    pub timing_protocol: TimingProtocol,
 }
 
 impl Default for AirPlayConfig {
@@ -52,6 +68,7 @@ impl Default for AirPlayConfig {
             audio_codec: AudioCodec::Pcm, // Default to uncompressed PCM
             pin: None,
             aac_bitrate: 128_000,
+            timing_protocol: TimingProtocol::default(),
         }
     }
 }
@@ -124,6 +141,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn aac_bitrate(mut self, bitrate: u32) -> Self {
         self.config.aac_bitrate = bitrate;
+        self
+    }
+
+    /// Set timing protocol for clock synchronization
+    #[must_use]
+    pub fn timing_protocol(mut self, protocol: TimingProtocol) -> Self {
+        self.config.timing_protocol = protocol;
         self
     }
 

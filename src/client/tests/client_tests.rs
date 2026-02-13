@@ -1,6 +1,6 @@
 use crate::client::AirPlayClient;
 use crate::state::ClientEvent;
-use crate::types::TrackInfo;
+use crate::types::{AirPlayConfig, TimingProtocol, TrackInfo};
 
 #[tokio::test]
 async fn test_client_creation() {
@@ -98,4 +98,65 @@ async fn test_event_subscription() {
         ClientEvent::QueueUpdated { length } => assert_eq!(length, 1),
         _ => panic!("Expected QueueUpdated event"),
     }
+}
+
+// --- PTP timing config tests ---
+
+#[tokio::test]
+async fn test_client_with_ptp_config() {
+    let config = AirPlayConfig {
+        timing_protocol: TimingProtocol::Ptp,
+        ..Default::default()
+    };
+    let client = AirPlayClient::new(config);
+    // Client should be created successfully with PTP config
+    assert!(!client.is_connected().await);
+}
+
+#[tokio::test]
+async fn test_client_with_auto_timing_config() {
+    let config = AirPlayConfig::builder()
+        .timing_protocol(TimingProtocol::Auto)
+        .build();
+    let client = AirPlayClient::new(config);
+    assert!(!client.is_connected().await);
+}
+
+#[tokio::test]
+async fn test_client_with_ntp_timing_config() {
+    let config = AirPlayConfig::builder()
+        .timing_protocol(TimingProtocol::Ntp)
+        .build();
+    let client = AirPlayClient::new(config);
+    assert!(!client.is_connected().await);
+}
+
+#[tokio::test]
+async fn test_client_connect_fails_without_device_ptp() {
+    // Connecting to a non-existent device should fail regardless of timing protocol
+    let config = AirPlayConfig {
+        timing_protocol: TimingProtocol::Ptp,
+        ..Default::default()
+    };
+    let client = AirPlayClient::new(config);
+
+    let device = crate::types::AirPlayDevice {
+        id: "fake".to_string(),
+        name: "Fake HomePod".to_string(),
+        model: None,
+        addresses: vec!["127.0.0.1".parse().unwrap()],
+        port: 1, // Non-existent service
+        capabilities: crate::types::DeviceCapabilities {
+            supports_ptp: true,
+            airplay2: true,
+            supports_audio: true,
+            ..Default::default()
+        },
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+    };
+
+    let result = client.connect(&device).await;
+    assert!(result.is_err());
 }

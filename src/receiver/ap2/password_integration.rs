@@ -188,7 +188,6 @@ impl AuthenticationHandler {
                 .map(|k| k.encrypt_key.to_vec())
                 .expect("Encryption keys should be available when pairing is complete");
 
-
             Some(Ap2Event::PairingComplete { session_key })
         } else {
             None
