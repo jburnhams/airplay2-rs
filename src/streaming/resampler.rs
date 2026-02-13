@@ -1,87 +1,111 @@
-//! Audio resampling source using `rubato`
+//! Audio resampling source using linear interpolation
 
 use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels_into};
 use crate::streaming::source::AudioSource;
-use rubato::{FftFixedIn, Resampler};
 use std::io;
 
 /// Audio source that performs sample rate conversion
-pub struct ResamplingSource<S: AudioSource> {
-    inner: S,
-    #[allow(dead_code)]
+pub struct ResamplingSource {
+    inner: Box<dyn AudioSource>,
     input_format: AudioFormat,
     output_format: AudioFormat,
-    resampler: FftFixedIn<f32>,
-    input_buffer: Vec<Vec<f32>>,
-    output_buffer: Vec<Vec<f32>>,
+    ratio: f64,             // input_rate / output_rate
+    input_phase: f64,       // Current fractional position in input
+    last_samples: Vec<f32>, // Last sample from previous chunk for each channel
+
+    // Buffers
     input_bytes_buffer: Vec<u8>,
+    input_planar: Vec<Vec<f32>>,
+    output_planar: Vec<Vec<f32>>,
+    intermediate_buffer: Vec<f32>,
+    final_buffer: Vec<f32>,
     output_bytes_buffer: Vec<u8>,
     output_offset: usize,
     eof: bool,
-    intermediate_buffer: Vec<f32>,
-    final_buffer: Vec<f32>,
 }
 
-impl<S: AudioSource> ResamplingSource<S> {
+impl ResamplingSource {
     /// Create a new resampling source
     ///
     /// # Errors
     ///
-    /// Returns an error if the input format is unsupported (e.g. not I16) or if
-    /// the resampler cannot be initialized.
-    pub fn new(source: S, output_format: AudioFormat) -> io::Result<Self> {
+    /// Returns an error if the input format is unsupported.
+    pub fn new<S: AudioSource + 'static>(
+        source: S,
+        output_format: AudioFormat,
+    ) -> io::Result<Self> {
         let input_format = source.format();
 
         // Ensure supported format
-        if input_format.sample_format != SampleFormat::I16 {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "Resampling only supports I16 input for now",
-            ));
+        match input_format.sample_format {
+            SampleFormat::I16 | SampleFormat::I24 => {}
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    format!(
+                        "Resampling supports I16/I24 input (got {:?})",
+                        input_format.sample_format
+                    ),
+                ));
+            }
         }
+
         if output_format.sample_format != SampleFormat::I16 {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "Resampling only supports I16 output for now",
+                format!(
+                    "Resampling only supports I16 output for now (got {:?})",
+                    output_format.sample_format
+                ),
             ));
         }
 
-        // Initialize rubato resampler
-        let input_rate = input_format.sample_rate.as_u32() as usize;
-        let output_rate = output_format.sample_rate.as_u32() as usize;
+        let input_rate = input_format.sample_rate.as_u32() as f64;
+        let output_rate = output_format.sample_rate.as_u32() as f64;
+        let ratio = input_rate / output_rate;
         let channels = input_format.channels.channels() as usize;
-        let chunk_size = 1024; // Reasonable chunk size
 
-        let resampler = FftFixedIn::<f32>::new(input_rate, output_rate, chunk_size, 2, channels)
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        // Chunk size for processing
+        let chunk_size = 1024;
+        let input_bytes_needed = chunk_size * input_format.bytes_per_frame();
 
-        // Pre-allocate buffers
-        let input_buffer = resampler.input_buffer_allocate(true);
-        let output_buffer = resampler.output_buffer_allocate(true);
-        let input_frames_needed = resampler.input_frames_next();
-        let input_bytes_needed = input_frames_needed * input_format.bytes_per_frame();
+        tracing::debug!(
+            "Initializing linear resampler: {} -> {} (ratio {:.4}), channels={}, chunk_size={}",
+            input_rate,
+            output_rate,
+            ratio,
+            channels,
+            chunk_size
+        );
 
         Ok(Self {
-            inner: source,
+            inner: Box::new(source),
             input_format,
             output_format,
-            resampler,
-            input_buffer,
-            output_buffer,
+            ratio,
+            input_phase: 0.0,
+            last_samples: vec![0.0; channels],
             input_bytes_buffer: vec![0u8; input_bytes_needed],
+            input_planar: vec![Vec::with_capacity(chunk_size); channels],
+            output_planar: vec![
+                Vec::with_capacity((chunk_size as f64 / ratio).ceil() as usize + 10);
+                channels
+            ],
+            intermediate_buffer: Vec::new(),
+            final_buffer: Vec::new(),
             output_bytes_buffer: Vec::new(),
             output_offset: 0,
             eof: false,
-            intermediate_buffer: Vec::new(),
-            final_buffer: Vec::new(),
         })
     }
 
     /// Process next chunk of audio
     #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_precision_loss)]
     fn process_next_chunk(&mut self) -> io::Result<bool> {
-        let input_frames_needed = self.resampler.input_frames_next();
-        let bytes_needed = input_frames_needed * self.input_format.bytes_per_frame();
+        let chunk_size = 1024; // Target input chunk size
+        let bytes_per_frame = self.input_format.bytes_per_frame();
+        let bytes_needed = chunk_size * bytes_per_frame;
 
         if self.input_bytes_buffer.len() < bytes_needed {
             self.input_bytes_buffer.resize(bytes_needed, 0);
@@ -100,61 +124,114 @@ impl<S: AudioSource> ResamplingSource<S> {
         }
 
         if total_read == 0 {
+            tracing::debug!("Resampler: Inner source EOF");
             return Ok(false); // EOF
         }
 
-        // Zero-pad if partial read (EOF approached)
-        if total_read < bytes_needed {
-            self.input_bytes_buffer[total_read..].fill(0);
-        }
-
-        // Convert input bytes to planar f32
-        // Assuming I16 input
+        let frames_read = total_read / bytes_per_frame;
         let channels = self.input_format.channels.channels() as usize;
 
+        // Clear input planar buffers
         for ch in 0..channels {
-            self.input_buffer[ch].clear();
-            // Capacity is usually sufficient as we allocated with chunk_size
+            self.input_planar[ch].clear();
         }
 
-        // De-interleave and convert
-        for i in 0..input_frames_needed {
+        // De-interleave and convert to float
+        match self.input_format.sample_format {
+            SampleFormat::I16 => {
+                for i in 0..frames_read {
+                    for ch in 0..channels {
+                        let sample_index = i * channels + ch;
+                        let byte_index = sample_index * 2;
+                        let sample_i16 = i16::from_le_bytes([
+                            self.input_bytes_buffer[byte_index],
+                            self.input_bytes_buffer[byte_index + 1],
+                        ]);
+                        let sample_float = f32::from(sample_i16) / f32::from(i16::MAX);
+                        self.input_planar[ch].push(sample_float);
+                    }
+                }
+            }
+            SampleFormat::I24 => {
+                for i in 0..frames_read {
+                    for ch in 0..channels {
+                        let sample_index = i * channels + ch;
+                        let byte_index = sample_index * 3;
+                        let bytes = [
+                            self.input_bytes_buffer[byte_index],
+                            self.input_bytes_buffer[byte_index + 1],
+                            self.input_bytes_buffer[byte_index + 2],
+                        ];
+                        let sample_i32 = i32::from_le_bytes([0, bytes[0], bytes[1], bytes[2]]) >> 8;
+                        let sample_float = sample_i32 as f32 / 8_388_608.0;
+                        self.input_planar[ch].push(sample_float);
+                    }
+                }
+            }
+            _ => return Err(io::Error::new(io::ErrorKind::Other, "Unsupported format")),
+        }
+
+        // Clear output planar buffers
+        for ch in 0..channels {
+            self.output_planar[ch].clear();
+        }
+
+        // Process while phase < 0 (using last_samples)
+        while self.input_phase < 0.0 {
+            let frac = (self.input_phase - self.input_phase.floor()) as f32; // frac part
+
+            if frames_read == 0 {
+                break;
+            }
+
             for ch in 0..channels {
-                let sample_index = i * channels + ch;
-                let byte_index = sample_index * 2;
+                let s0 = self.last_samples[ch];
+                let s1 = self.input_planar[ch][0];
+                let val = s0 * (1.0 - frac) + s1 * frac;
+                self.output_planar[ch].push(val);
+            }
+            self.input_phase += self.ratio;
+        }
 
-                // Read i16
-                let sample_i16 = i16::from_le_bytes([
-                    self.input_bytes_buffer[byte_index],
-                    self.input_bytes_buffer[byte_index + 1],
-                ]);
+        // Process phase >= 0
+        while (self.input_phase.floor() as usize) + 1 < frames_read {
+            let idx = self.input_phase.floor();
+            let frac = (self.input_phase - idx) as f32;
+            let idx_usize = idx as usize;
 
-                let sample_float = f32::from(sample_i16) / f32::from(i16::MAX);
-                self.input_buffer[ch].push(sample_float);
+            for ch in 0..channels {
+                let s0 = self.input_planar[ch][idx_usize];
+                let s1 = self.input_planar[ch][idx_usize + 1];
+                let val = s0 * (1.0 - frac) + s1 * frac;
+                self.output_planar[ch].push(val);
+            }
+            self.input_phase += self.ratio;
+        }
+
+        // Update last_samples for next chunk
+        if frames_read > 0 {
+            for ch in 0..channels {
+                self.last_samples[ch] = self.input_planar[ch][frames_read - 1];
             }
         }
 
-        // Resample
-        let (_, output_frames) = self
-            .resampler
-            .process_into_buffer(&self.input_buffer, &mut self.output_buffer, None)
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        // Wrap phase
+        self.input_phase -= frames_read as f64;
 
-        // Convert planar f32 back to interleaved bytes
-        // Assuming I16 output
-        let input_channels_count = self.input_format.channels.channels() as usize;
+        // Now convert output to interleaved I16
+        let output_frames = self.output_planar[0].len();
+        let input_channels_count = channels;
 
-        // 1. Interleave resampled data (in input_channels config)
         self.intermediate_buffer.clear();
         self.intermediate_buffer
             .reserve(output_frames * input_channels_count);
         for i in 0..output_frames {
             for ch in 0..input_channels_count {
-                self.intermediate_buffer.push(self.output_buffer[ch][i]);
+                self.intermediate_buffer.push(self.output_planar[ch][i]);
             }
         }
 
-        // 2. Convert channels if needed
+        // Channel conversion (if needed)
         let need_conversion = self.input_format.channels != self.output_format.channels;
         if need_conversion {
             convert_channels_into(
@@ -171,10 +248,8 @@ impl<S: AudioSource> ResamplingSource<S> {
             &self.intermediate_buffer
         };
 
-        // 3. Convert to bytes
-        let output_bytes_needed = source_buffer.len() * 2; // I16 = 2 bytes
-
-        // Use mem::take to avoid borrow checker issues with self
+        // Convert to bytes
+        let output_bytes_needed = source_buffer.len() * 2;
         let mut output_bytes = std::mem::take(&mut self.output_bytes_buffer);
         output_bytes.clear();
         output_bytes.reserve(output_bytes_needed);
@@ -187,11 +262,12 @@ impl<S: AudioSource> ResamplingSource<S> {
 
         self.output_bytes_buffer = output_bytes;
         self.output_offset = 0;
+
         Ok(true)
     }
 }
 
-impl<S: AudioSource> AudioSource for ResamplingSource<S> {
+impl AudioSource for ResamplingSource {
     fn format(&self) -> AudioFormat {
         self.output_format
     }
