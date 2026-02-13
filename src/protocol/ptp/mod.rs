@@ -1,17 +1,17 @@
 //! Precision Time Protocol (PTP, IEEE 1588) implementation.
 //!
-//! Provides sub-millisecond clock synchronization for AirPlay 2
+//! Provides sub-millisecond clock synchronization for `AirPlay` 2
 //! multi-room audio. This module is used by both the client (master)
 //! and receiver (slave) sides.
 //!
 //! ## Standard PTP Ports
 //!
-//! - **319**: Event messages (Sync, Delay_Req) — require timestamping.
-//! - **320**: General messages (Follow_Up, Delay_Resp, Announce).
+//! - **319**: Event messages (Sync, `Delay_Req`) — require timestamping.
+//! - **320**: General messages (`Follow_Up`, `Delay_Resp`, Announce).
 //!
-//! ## AirPlay Compact Format
+//! ## `AirPlay` Compact Format
 //!
-//! AirPlay 2 may use a simplified 24-byte timing packet on the
+//! `AirPlay` 2 may use a simplified 24-byte timing packet on the
 //! negotiated timing port (from SETUP). See [`AirPlayTimingPacket`].
 //!
 //! ## Clock Synchronization Flow
