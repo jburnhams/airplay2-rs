@@ -68,7 +68,6 @@ zeroize = "1.8"
 # bytes = "1.9" # Already defined above
 
 # Audio processing
-rubato = "0.14"           # Audio resampling
 alac-encoder = "0.3"      # ALAC encoding
 
 # Persistent storage (optional)

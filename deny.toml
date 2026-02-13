@@ -16,7 +16,10 @@ allow = [
     "Unlicense",
     "MPL-2.0",
     "Unicode-DFS-2016",
-    "Unicode-3.0"
+    "Unicode-3.0",
+    "MPL-2.0",
+    "Unlicense",
+    "0BSD"
 ]
 confidence-threshold = 0.8
 

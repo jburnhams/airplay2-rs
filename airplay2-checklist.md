@@ -1,5 +1,16 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 5):**
+- **Resampling Implementation**:
+  - ✅ **VERIFIED**: Implemented robust, crash-free linear interpolation resampling in `ResamplingSource`.
+  - Replaced problematic `rubato` usage with custom linear interpolation, fixing memory allocation crashes and output consistency issues.
+  - Verified with `resampling_integration` test (48kHz -> 44.1kHz).
+- **Bit Depth Conversion**:
+  - ✅ **VERIFIED**: Added support for 24-bit input (`SampleFormat::I24`) in `ResamplingSource`.
+  - Added `bit_depth_integration` test verifying 24-bit streaming to 16-bit receiver.
+- **Fixed Compilation Issues**:
+  - Resolved `AudioSource` trait visibility issues by using `Box<dyn AudioSource>`.
+
 **Work Done (Session 4):**
 - **Integration Test Harness Improvements**:
   - Implemented **Isolated Execution**: `PythonReceiver` now copies the receiver to a unique temporary directory for each test, preventing file contention.
@@ -58,9 +69,12 @@
 - [x] **Standard**: 16-bit/44.1 kHz stereo (minimum)
   - *Status*: Verified. This is the format used in `examples/connect_to_receiver.rs`.
 - [ ] **High-resolution**: 24-bit/48 kHz (where device supports)
-- [ ] Sample rate conversion/resampling if needed
-  - *Status*: Pending (using `rubato` in `Cargo.toml` but not fully integrated).
-- [ ] Bit depth conversion if needed
+- [x] Sample rate conversion/resampling if needed
+  - ✅ **VERIFIED**: Implemented robust linear interpolation in `ResamplingSource`.
+  - Verified with `resampling_integration` test.
+- [x] Bit depth conversion if needed
+  - ✅ **VERIFIED**: Implemented I24 -> I16 conversion in `ResamplingSource`.
+  - Verified with `bit_depth_integration` test.
 - [x] Stereo channel configuration (mono support optional)
   - *Status*: Implemented and **verified** with independent L/R frequencies (440Hz/880Hz).
 
@@ -246,7 +260,9 @@
 
 ### Playback Engine
 - [x] Decode audio codec (PCM passthrough)
-- [ ] Resampling if sample rate mismatch
+- [x] Resampling if sample rate mismatch
+  - ✅ **VERIFIED**: Implemented robust linear interpolation in `ResamplingSource`.
+  - Verified with `resampling_integration` test.
 - [x] Volume control (if supported by device)
   - ✅ **VERIFIED**: Volume changes confirmed in receiver logs during playback
   - Correct linear-to-db conversion verified (-144.0 to 0.0 dB range)
