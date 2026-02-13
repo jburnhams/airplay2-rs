@@ -135,6 +135,7 @@ pub(crate) fn parse_mac_string(mac: &str) -> Result<[u8; 6], AdvertiserError> {
     Ok(bytes)
 }
 
+// Intentionally extracting bytes from hash
 #[allow(clippy::cast_possible_truncation)]
 pub(crate) fn generate_stable_mac() -> [u8; 6] {
     // Generate from machine-id or hostname hash for stability across restarts
@@ -218,6 +219,7 @@ impl Default for RaopCapabilities {
 
 /// Status flags for the receiver
 #[derive(Debug, Clone, Copy, Default)]
+// Fields map directly to RAOP status bitmask
 #[allow(clippy::struct_excessive_bools)]
 pub struct ReceiverStatusFlags {
     /// Problem detected (e.g., audio device error)

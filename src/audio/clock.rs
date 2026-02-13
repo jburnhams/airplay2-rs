@@ -36,6 +36,7 @@ impl AudioClock {
     }
 
     /// Get current time position
+    // Precision loss is negligible for audio frame counts within reasonable durations
     #[allow(clippy::cast_precision_loss)]
     pub fn time_position(&self) -> Duration {
         let frames = self.position();
@@ -63,18 +64,21 @@ impl AudioClock {
     }
 
     /// Convert frames to duration
+    // Precision loss is negligible for audio frame counts within reasonable durations
     #[allow(clippy::cast_precision_loss)]
     pub fn frames_to_duration(&self, frames: u64) -> Duration {
         Duration::from_secs_f64(frames as f64 / f64::from(self.sample_rate))
     }
 
     /// Convert duration to frames
+    // Audio duration is always positive and fits within u64 frames
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn duration_to_frames(&self, duration: Duration) -> u64 {
         (duration.as_secs_f64() * f64::from(self.sample_rate)) as u64
     }
 
     /// Convert RTP timestamp to local frame position
+    // `self` is reserved for future implementation (epoch tracking)
     #[allow(clippy::unused_self)]
     pub fn rtp_to_local(&self, rtp_timestamp: u32) -> u64 {
         // RTP timestamps wrap at 32 bits
@@ -84,6 +88,7 @@ impl AudioClock {
     }
 
     /// Calculate drift from reference
+    // Precision loss is acceptable for drift ratio calculation
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
@@ -135,6 +140,7 @@ impl TimingSync {
     }
 
     /// Update sync with timing response
+    // Precision loss is acceptable for quality metrics
     #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     pub fn update_timing(&self, offset_micros: i64, rtt_micros: u64) {
         self.remote_offset.store(offset_micros, Ordering::Release);
