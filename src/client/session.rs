@@ -190,13 +190,14 @@ impl RaopSessionImpl {
         port: u16,
         name: &'static str,
     ) -> Result<UdpSocket, AirPlayError> {
-        let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-            AirPlayError::ConnectionFailed {
-                message: format!("Failed to bind {name} socket: {e}"),
-                source: Some(Box::new(e)),
-                device_name: self.server_addr.clone(),
-            }
-        })?;
+        let socket =
+            UdpSocket::bind("0.0.0.0:0")
+                .await
+                .map_err(|e| AirPlayError::ConnectionFailed {
+                    message: format!("Failed to bind {name} socket: {e}"),
+                    source: Some(Box::new(e)),
+                    device_name: self.server_addr.clone(),
+                })?;
         socket
             .connect((self.server_addr.as_str(), port))
             .await
