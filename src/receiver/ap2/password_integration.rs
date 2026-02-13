@@ -164,7 +164,6 @@ impl AuthenticationHandler {
         }
     }
 
-    #[allow(clippy::unused_self)]
     fn pairing_response_to_handle_result(
         &self,
         response: super::password_auth::PairingResponse,
@@ -181,19 +180,26 @@ impl AuthenticationHandler {
             None
         };
 
+        let event = if response.complete {
+            let session_key = self
+                .password_auth
+                .as_ref()
+                .and_then(|m| m.encryption_keys())
+                .map(|k| k.encrypt_key.to_vec())
+                .unwrap_or_default();
+
+            Some(Ap2Event::PairingComplete { session_key })
+        } else {
+            None
+        };
+
         Ap2HandleResult {
             response: Ap2ResponseBuilder::ok()
                 .cseq(cseq)
                 .binary_body(response.data)
                 .encode(),
             new_state,
-            event: if response.complete {
-                Some(Ap2Event::PairingComplete {
-                    session_key: vec![], // Filled by actual handler
-                })
-            } else {
-                None
-            },
+            event,
             error: response.error,
         }
     }
