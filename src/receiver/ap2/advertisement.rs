@@ -165,13 +165,15 @@ impl Ap2TxtRecord {
             .and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok())
             .unwrap_or(0);
 
+        const PASSWORD_REQUIRED_FLAG: u32 = 1 << 4;
+        const PASSWORD_CONFIGURED_FLAG: u32 = 1 << 5;
+
         if has_password {
-            status_flags |= 1 << 4; // Set password required flag
-            status_flags |= 1 << 5; // Set password configured flag
+            status_flags |= PASSWORD_REQUIRED_FLAG | PASSWORD_CONFIGURED_FLAG;
         } else {
-            status_flags &= !(1 << 4); // Clear password required
-            status_flags &= !(1 << 5); // Clear password configured
+            status_flags &= !(PASSWORD_REQUIRED_FLAG | PASSWORD_CONFIGURED_FLAG);
         }
+
 
         self.set(txt_keys::STATUS_FLAGS, format!("0x{status_flags:X}"));
     }
