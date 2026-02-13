@@ -93,10 +93,7 @@ impl ResamplingSource {
             last_samples: vec![0.0; channels],
             input_bytes_buffer: vec![0u8; input_bytes_needed],
             input_planar: vec![Vec::with_capacity(chunk_size); channels],
-            output_planar: vec![
-                Vec::with_capacity(output_capacity);
-                channels
-            ],
+            output_planar: vec![Vec::with_capacity(output_capacity); channels],
             intermediate_buffer: Vec::new(),
             final_buffer: Vec::new(),
             output_bytes_buffer: Vec::new(),
@@ -182,6 +179,7 @@ impl ResamplingSource {
                             self.input_bytes_buffer[byte_index + 2],
                         ];
                         let sample_i32 = i32::from_le_bytes([0, bytes[0], bytes[1], bytes[2]]) >> 8;
+                        #[allow(clippy::cast_precision_loss)]
                         let sample_float = sample_i32 as f32 / 8_388_608.0;
                         self.input_planar[ch].push(sample_float);
                     }
@@ -287,6 +285,7 @@ impl ResamplingSource {
 
         output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
             let clamped = sample.clamp(-1.0, 1.0);
+            #[allow(clippy::cast_possible_truncation)]
             let value = (clamped * f32::from(i16::MAX)) as i16;
             value.to_le_bytes()
         }));
