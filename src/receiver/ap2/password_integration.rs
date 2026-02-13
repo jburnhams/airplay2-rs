@@ -184,7 +184,7 @@ impl AuthenticationHandler {
             let session_key = self
                 .password_auth
                 .as_ref()
-                .and_then(|m| m.encryption_keys())
+                .and_then(PasswordAuthManager::encryption_keys)
                 .map(|k| k.encrypt_key.to_vec())
                 .unwrap_or_default();
 
