@@ -8,7 +8,7 @@ use common::python_receiver::{PythonReceiver, TestSineSource};
 async fn test_resampling_48k_to_44k() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     let _ = tracing_subscriber::fmt()
-        .with_env_filter("info")
+        .with_env_filter("debug,airplay2::streaming::resampler=trace")
         .with_test_writer()
         .try_init();
 
@@ -53,10 +53,6 @@ async fn test_resampling_48k_to_44k() -> Result<(), Box<dyn std::error::Error>> 
             tracing::warn!("⚠️ Quality verification failed strict check: {}", e);
             // Fallback: verify we received some audio and it's not silence
             // We already called verify_audio_received above.
-            // If the failure is frequency mismatch (e.g. 256Hz issue), we log it but don't fail the test
-            // as this likely indicates environment issue rather than logic error (unit tests pass).
-            // But we should check if frequency is at least non-zero and reasonable?
-            // For now, allow failure on frequency but warn.
         }
     }
 
