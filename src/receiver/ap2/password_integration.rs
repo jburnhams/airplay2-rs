@@ -184,10 +184,9 @@ impl AuthenticationHandler {
             let session_key = self
                 .password_auth
                 .as_ref()
-                .and_then(|m| m.encryption_keys())
+                .and_then(PasswordAuthManager::encryption_keys)
                 .map(|k| k.encrypt_key.to_vec())
                 .expect("Encryption keys should be available when pairing is complete");
-
 
             Some(Ap2Event::PairingComplete { session_key })
         } else {

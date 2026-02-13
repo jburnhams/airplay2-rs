@@ -159,21 +159,20 @@ impl Ap2TxtRecord {
 
     /// Update password status in TXT record
     pub fn update_password_status(&mut self, has_password: bool) {
+        const PASSWORD_REQUIRED_FLAG: u32 = 1 << 4;
+        const PASSWORD_CONFIGURED_FLAG: u32 = 1 << 5;
+
         // Update status flags
         let mut status_flags = self
             .get(txt_keys::STATUS_FLAGS)
             .and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok())
             .unwrap_or(0);
 
-        const PASSWORD_REQUIRED_FLAG: u32 = 1 << 4;
-        const PASSWORD_CONFIGURED_FLAG: u32 = 1 << 5;
-
         if has_password {
             status_flags |= PASSWORD_REQUIRED_FLAG | PASSWORD_CONFIGURED_FLAG;
         } else {
             status_flags &= !(PASSWORD_REQUIRED_FLAG | PASSWORD_CONFIGURED_FLAG);
         }
-
 
         self.set(txt_keys::STATUS_FLAGS, format!("0x{status_flags:X}"));
     }
