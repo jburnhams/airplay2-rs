@@ -60,8 +60,8 @@ impl ResamplingSource {
             ));
         }
 
-        let input_rate = input_format.sample_rate.as_u32() as f64;
-        let output_rate = output_format.sample_rate.as_u32() as f64;
+        let input_rate = f64::from(input_format.sample_rate.as_u32());
+        let output_rate = f64::from(output_format.sample_rate.as_u32());
         let ratio = input_rate / output_rate;
         let channels = input_format.channels.channels() as usize;
 
@@ -78,6 +78,12 @@ impl ResamplingSource {
             chunk_size
         );
 
+        #[allow(clippy::cast_precision_loss)]
+        let chunk_size_f64 = chunk_size as f64;
+        let output_capacity = (chunk_size_f64 / ratio).ceil();
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let output_capacity = output_capacity as usize + 10;
+
         Ok(Self {
             inner: Box::new(source),
             input_format,
@@ -88,7 +94,7 @@ impl ResamplingSource {
             input_bytes_buffer: vec![0u8; input_bytes_needed],
             input_planar: vec![Vec::with_capacity(chunk_size); channels],
             output_planar: vec![
-                Vec::with_capacity((chunk_size as f64 / ratio).ceil() as usize + 10);
+                Vec::with_capacity(output_capacity);
                 channels
             ],
             intermediate_buffer: Vec::new(),
@@ -129,6 +135,20 @@ impl ResamplingSource {
         }
 
         let frames_read = total_read / bytes_per_frame;
+
+        // De-interleave and convert to float
+        self.deinterleave_input(frames_read)?;
+
+        // Perform Linear Interpolation Resampling
+        self.resample_planar(frames_read);
+
+        // Convert output to interleaved I16 bytes
+        self.interleave_and_convert_output();
+
+        Ok(true)
+    }
+
+    fn deinterleave_input(&mut self, frames_read: usize) -> io::Result<()> {
         let channels = self.input_format.channels.channels() as usize;
 
         // Clear input planar buffers
@@ -136,7 +156,6 @@ impl ResamplingSource {
             self.input_planar[ch].clear();
         }
 
-        // De-interleave and convert to float
         match self.input_format.sample_format {
             SampleFormat::I16 => {
                 for i in 0..frames_read {
@@ -168,8 +187,16 @@ impl ResamplingSource {
                     }
                 }
             }
-            _ => return Err(io::Error::new(io::ErrorKind::Other, "Unsupported format")),
+            _ => return Err(io::Error::other("Unsupported format")),
         }
+        Ok(())
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_precision_loss)]
+    fn resample_planar(&mut self, frames_read: usize) {
+        let channels = self.input_format.channels.channels() as usize;
 
         // Clear output planar buffers
         for ch in 0..channels {
@@ -194,6 +221,7 @@ impl ResamplingSource {
         }
 
         // Process phase >= 0
+        // We cast to usize safely here because input_phase is non-negative
         while (self.input_phase.floor() as usize) + 1 < frames_read {
             let idx = self.input_phase.floor();
             let frac = (self.input_phase - idx) as f32;
@@ -217,8 +245,10 @@ impl ResamplingSource {
 
         // Wrap phase
         self.input_phase -= frames_read as f64;
+    }
 
-        // Now convert output to interleaved I16
+    fn interleave_and_convert_output(&mut self) {
+        let channels = self.input_format.channels.channels() as usize;
         let output_frames = self.output_planar[0].len();
         let input_channels_count = channels;
 
@@ -250,6 +280,7 @@ impl ResamplingSource {
 
         // Convert to bytes
         let output_bytes_needed = source_buffer.len() * 2;
+        // Use mem::take to avoid borrow checker issues with self
         let mut output_bytes = std::mem::take(&mut self.output_bytes_buffer);
         output_bytes.clear();
         output_bytes.reserve(output_bytes_needed);
@@ -262,8 +293,6 @@ impl ResamplingSource {
 
         self.output_bytes_buffer = output_bytes;
         self.output_offset = 0;
-
-        Ok(true)
     }
 }
 
