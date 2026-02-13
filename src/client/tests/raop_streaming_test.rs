@@ -7,7 +7,7 @@ use tokio::time::sleep;
 
 async fn create_device_with_server() -> (AirPlayDevice, MockRaopServer) {
     let config = MockRaopConfig {
-        rtsp_port: 0, // Dynamic
+        rtsp_port: 0,  // Dynamic
         audio_port: 0, // Dynamic
         control_port: 0,
         timing_port: 0,
@@ -54,7 +54,10 @@ async fn test_raop_audio_streaming() {
 
     // Send a few packets
     for _ in 0..5 {
-        client.stream_audio(&dummy_audio).await.expect("Failed to stream audio");
+        client
+            .stream_audio(&dummy_audio)
+            .await
+            .expect("Failed to stream audio");
         // Yield to allow async tasks to run
         sleep(Duration::from_millis(20)).await;
     }
@@ -65,7 +68,10 @@ async fn test_raop_audio_streaming() {
     // Check server received packets
     {
         let state = server.state.lock().unwrap();
-        assert!(!state.audio_packets.is_empty(), "Server should have received audio packets");
+        assert!(
+            !state.audio_packets.is_empty(),
+            "Server should have received audio packets"
+        );
         println!("Server received {} packets", state.audio_packets.len());
 
         // Verify packet content (encrypted so we can't easily check payload without decrypting,

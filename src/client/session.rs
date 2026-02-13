@@ -147,6 +147,66 @@ impl RaopSessionImpl {
                 })?;
         }
     }
+
+    async fn setup_audio_streaming(&mut self) -> Result<(), AirPlayError> {
+        // Initialize audio streamer with negotiated ports
+        let transport =
+            self.rtsp_session
+                .transport()
+                .ok_or_else(|| AirPlayError::ConnectionFailed {
+                    message: "RTSP session initialized without transport configuration".to_string(),
+                    source: None,
+                    device_name: self.server_addr.clone(),
+                })?;
+
+        let keys =
+            self.rtsp_session
+                .session_keys()
+                .ok_or_else(|| AirPlayError::ConnectionFailed {
+                    message: "RTSP session initialized without session keys".to_string(),
+                    source: None,
+                    device_name: self.server_addr.clone(),
+                })?;
+
+        let audio_socket = self
+            .setup_udp_socket(transport.server_port, "audio")
+            .await?;
+        let control_socket = self
+            .setup_udp_socket(transport.control_port, "control")
+            .await?;
+
+        let config = crate::streaming::raop_streamer::RaopStreamConfig::default();
+        let streamer = crate::streaming::raop_streamer::RaopStreamer::new(keys, config);
+
+        self.streamer = Some(streamer);
+        self.audio_socket = Some(audio_socket);
+        self.control_socket = Some(control_socket);
+
+        Ok(())
+    }
+
+    async fn setup_udp_socket(
+        &self,
+        port: u16,
+        name: &'static str,
+    ) -> Result<UdpSocket, AirPlayError> {
+        let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
+            AirPlayError::ConnectionFailed {
+                message: format!("Failed to bind {name} socket: {e}"),
+                source: Some(Box::new(e)),
+                device_name: self.server_addr.clone(),
+            }
+        })?;
+        socket
+            .connect((self.server_addr.as_str(), port))
+            .await
+            .map_err(|e| AirPlayError::ConnectionFailed {
+                message: format!("Failed to connect {name} socket: {e}"),
+                source: Some(Box::new(e)),
+                device_name: self.server_addr.clone(),
+            })?;
+        Ok(socket)
+    }
 }
 
 #[async_trait]
@@ -212,64 +272,7 @@ impl AirPlaySession for RaopSessionImpl {
                 status_code: None,
             })?;
 
-        // Initialize audio streamer with negotiated ports
-        let transport =
-            self.rtsp_session
-                .transport()
-                .ok_or_else(|| AirPlayError::ConnectionFailed {
-                    message: "RTSP session initialized without transport configuration".to_string(),
-                    source: None,
-                    device_name: self.server_addr.clone(),
-                })?;
-
-        let keys =
-            self.rtsp_session
-                .session_keys()
-                .ok_or_else(|| AirPlayError::ConnectionFailed {
-                    message: "RTSP session initialized without session keys".to_string(),
-                    source: None,
-                    device_name: self.server_addr.clone(),
-                })?;
-
-        // Helper to setup UDP socket
-        let setup_udp = |port: u16, name: &'static str, host: String| async move {
-            let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-                AirPlayError::ConnectionFailed {
-                    message: format!("Failed to bind {name} socket: {e}"),
-                    source: Some(Box::new(e)),
-                    device_name: host.clone(),
-                }
-            })?;
-            socket
-                .connect((host.as_str(), port))
-                .await
-                .map_err(|e| AirPlayError::ConnectionFailed {
-                    message: format!("Failed to connect {name} socket: {e}"),
-                    source: Some(Box::new(e)),
-                    device_name: host,
-                })?;
-            Ok::<UdpSocket, AirPlayError>(socket)
-        };
-
-        let audio_socket = setup_udp(
-            transport.server_port,
-            "audio",
-            self.server_addr.clone(),
-        )
-        .await?;
-        let control_socket = setup_udp(
-            transport.control_port,
-            "control",
-            self.server_addr.clone(),
-        )
-        .await?;
-
-        let config = crate::streaming::raop_streamer::RaopStreamConfig::default();
-        let streamer = crate::streaming::raop_streamer::RaopStreamer::new(keys, config);
-
-        self.streamer = Some(streamer);
-        self.audio_socket = Some(audio_socket);
-        self.control_socket = Some(control_socket);
+        self.setup_audio_streaming().await?;
 
         self.connected = true;
         Ok(())
