@@ -6,7 +6,7 @@ use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse};
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
 use async_trait::async_trait;
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UdpSocket};
 
 /// Common session operations for both `AirPlay` 1 and 2
 #[async_trait]
@@ -65,6 +65,8 @@ pub struct RaopSessionImpl {
     state: PlaybackState,
     server_addr: String,
     server_port: u16,
+    audio_socket: Option<UdpSocket>,
+    control_socket: Option<UdpSocket>,
 }
 
 impl RaopSessionImpl {
@@ -81,6 +83,8 @@ impl RaopSessionImpl {
             state: PlaybackState::default(),
             server_addr: server_addr.to_string(),
             server_port,
+            audio_socket: None,
+            control_socket: None,
         }
     }
 
@@ -208,7 +212,49 @@ impl AirPlaySession for RaopSessionImpl {
                 status_code: None,
             })?;
 
-        // TODO: Initialize audio streamer with negotiated ports if we were implementing full streaming
+        // Initialize audio streamer with negotiated ports
+        if let Some(transport) = self.rtsp_session.transport() {
+            if let Some(keys) = self.rtsp_session.session_keys() {
+                let audio_socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
+                    AirPlayError::ConnectionFailed {
+                        message: format!("Failed to bind audio socket: {e}"),
+                        source: Some(Box::new(e)),
+                        device_name: self.server_addr.clone(),
+                    }
+                })?;
+                audio_socket
+                    .connect((self.server_addr.as_str(), transport.server_port))
+                    .await
+                    .map_err(|e| AirPlayError::ConnectionFailed {
+                        message: format!("Failed to connect audio socket: {e}"),
+                        source: Some(Box::new(e)),
+                        device_name: self.server_addr.clone(),
+                    })?;
+
+                let control_socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
+                    AirPlayError::ConnectionFailed {
+                        message: format!("Failed to bind control socket: {e}"),
+                        source: Some(Box::new(e)),
+                        device_name: self.server_addr.clone(),
+                    }
+                })?;
+                control_socket
+                    .connect((self.server_addr.as_str(), transport.control_port))
+                    .await
+                    .map_err(|e| AirPlayError::ConnectionFailed {
+                        message: format!("Failed to connect control socket: {e}"),
+                        source: Some(Box::new(e)),
+                        device_name: self.server_addr.clone(),
+                    })?;
+
+                let config = crate::streaming::raop_streamer::RaopStreamConfig::default();
+                let streamer = crate::streaming::raop_streamer::RaopStreamer::new(keys, config);
+
+                self.streamer = Some(streamer);
+                self.audio_socket = Some(audio_socket);
+                self.control_socket = Some(control_socket);
+            }
+        }
 
         self.connected = true;
         Ok(())
@@ -287,11 +333,16 @@ impl AirPlaySession for RaopSessionImpl {
     }
 
     async fn stream_audio(&mut self, data: &[u8]) -> Result<(), AirPlayError> {
-        if let Some(ref mut streamer) = self.streamer {
-            // TODO: adapt RaopStreamer to accept data and return AudioPacket or similar
-            // For now, we assume it's implemented
-            let _packet = streamer.encode_frame(data);
-            // Send packet via UDP
+        if let (Some(streamer), Some(socket)) = (&mut self.streamer, &self.audio_socket) {
+            let packet = streamer.encode_frame(data);
+            socket
+                .send(&packet)
+                .await
+                .map_err(|e| AirPlayError::ConnectionFailed {
+                    message: format!("Failed to send audio packet: {e}"),
+                    source: Some(Box::new(e)),
+                    device_name: self.server_addr.clone(),
+                })?;
         }
         Ok(())
     }
