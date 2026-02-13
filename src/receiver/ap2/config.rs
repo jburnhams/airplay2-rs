@@ -136,6 +136,38 @@ impl Ap2Config {
 
         flags.raw()
     }
+
+    /// Check if password authentication is enabled
+    #[must_use]
+    pub fn has_password(&self) -> bool {
+        self.password.as_ref().is_some_and(|p| !p.is_empty())
+    }
+
+    /// Validate password requirements
+    ///
+    /// # Errors
+    ///
+    /// Returns `PasswordValidationError` if password does not meet requirements.
+    pub fn validate_password(password: &str) -> Result<(), PasswordValidationError> {
+        if password.is_empty() {
+            return Err(PasswordValidationError::Empty);
+        }
+
+        if password.len() < 4 {
+            return Err(PasswordValidationError::TooShort { min: 4 });
+        }
+
+        if password.len() > 64 {
+            return Err(PasswordValidationError::TooLong { max: 64 });
+        }
+
+        // Check for problematic characters
+        if password.contains('\0') {
+            return Err(PasswordValidationError::InvalidCharacter('\0'));
+        }
+
+        Ok(())
+    }
 }
 
 /// Builder for `Ap2Config` with validation
@@ -237,4 +269,30 @@ pub enum ConfigError {
     /// Invalid port number
     #[error("Invalid port: {0}")]
     InvalidPort(String),
+}
+
+/// Password validation error
+#[derive(Debug, thiserror::Error)]
+pub enum PasswordValidationError {
+    /// Password is empty
+    #[error("Password cannot be empty")]
+    Empty,
+
+    /// Password is too short
+    #[error("Password too short (minimum {min} characters)")]
+    TooShort {
+        /// Minimum required length
+        min: usize,
+    },
+
+    /// Password is too long
+    #[error("Password too long (maximum {max} characters)")]
+    TooLong {
+        /// Maximum allowed length
+        max: usize,
+    },
+
+    /// Password contains invalid character
+    #[error("Password contains invalid character: {0:?}")]
+    InvalidCharacter(char),
 }
