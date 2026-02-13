@@ -163,10 +163,11 @@ impl DeviceBrowserStream {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn handle_resolved(
         &mut self,
         service_type: &str,
-        info: &mdns_sd::ServiceInfo,
+        info: &mdns_sd::ResolvedService,
     ) -> Option<DiscoveryEvent> {
         let name = info.get_fullname().to_string();
 
@@ -205,7 +206,18 @@ impl DeviceBrowserStream {
         self.fullname_map.insert(name.clone(), device_id.clone());
 
         // Get resolved addresses
-        let addresses: Vec<std::net::IpAddr> = info.get_addresses().iter().copied().collect();
+        let addresses: Vec<std::net::IpAddr> = info
+            .get_addresses()
+            .iter()
+            .map(|ip| {
+                // Handle ScopedIp from mdns-sd 0.17
+                match ip {
+                    mdns_sd::ScopedIp::V4(scoped) => std::net::IpAddr::V4(*scoped.addr()),
+                    mdns_sd::ScopedIp::V6(scoped) => std::net::IpAddr::V6(*scoped.addr()),
+                    _ => unreachable!("Unknown ScopedIp variant"),
+                }
+            })
+            .collect();
         if addresses.is_empty() {
             return None;
         }

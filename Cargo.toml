@@ -27,8 +27,7 @@ cpal = { version = "0.15.3", optional = true, default-features = false }
 bytes = "1.11.1"
 
 # Async
-# Pinned to 1.38.2 to align socket2 dependency (0.5) with mdns-sd
-tokio = { version = "=1.38.2", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
+tokio = { version = "1.43", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
 async-trait = "0.1"
 futures = "0.3"
@@ -40,7 +39,7 @@ thiserror = "2.0"
 tracing = "0.1"
 
 # Discovery
-mdns-sd = "0.12"
+mdns-sd = "0.17"
 hostname = "0.4"
 
 # Crypto
@@ -81,14 +80,12 @@ symphonia = { version = "0.5.5", optional = true, features = ["mp3", "aac", "ala
 alsa = { version = "0.9", optional = true }
 
 [dev-dependencies]
-tokio = { version = "=1.38.2", features = ["full", "test-util"] }
+tokio = { version = "1.43", features = ["full", "test-util"] }
 tokio-test = "0.4"
-# Pinned to 1.5.0 to align rand dependency (0.8)
-proptest = "=1.5.0"
+proptest = "1.6"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 criterion = { version = "0.5", features = ["async_tokio"] }
-# Pinned to 3.10.1 to align getrandom dependency (0.2)
-tempfile = "=3.10.1"
+tempfile = "3.10.1"
 # Integration test dependencies
 chrono = "0.4"
 nix = { version = "0.29", features = ["signal"] }

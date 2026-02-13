@@ -1,8 +1,5 @@
 //! PCM audio streaming to `AirPlay` devices
 
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::cast_possible_truncation)]
-
 use super::ResamplingSource;
 use super::source::AudioSource;
 use crate::audio::aac_encoder::AacEncoder;
@@ -140,8 +137,17 @@ impl PcmStreamer {
         mut source: S,
     ) -> Result<(), AirPlayError> {
         // Check format compatibility
-        #[allow(clippy::if_not_else)]
-        if source.format() != self.format {
+        if source.format() == self.format {
+            *self.state.write().await = StreamerState::Buffering;
+
+            // Fill buffer initially
+            self.fill_buffer(&mut source)?;
+
+            *self.state.write().await = StreamerState::Streaming;
+
+            // Start streaming loop
+            self.streaming_loop(source).await
+        } else {
             tracing::info!(
                 "Source format ({:?}) differs from output format ({:?}). Enabling resampling.",
                 source.format(),
@@ -163,16 +169,6 @@ impl PcmStreamer {
 
             // Start streaming loop
             self.streaming_loop(resampled).await
-        } else {
-            *self.state.write().await = StreamerState::Buffering;
-
-            // Fill buffer initially
-            self.fill_buffer(&mut source)?;
-
-            *self.state.write().await = StreamerState::Streaming;
-
-            // Start streaming loop
-            self.streaming_loop(source).await
         }
     }
 
@@ -215,6 +211,7 @@ impl PcmStreamer {
     }
 
     /// Main streaming loop
+    // Complexity is necessary for the main streaming logic
     #[allow(clippy::too_many_lines)]
     async fn streaming_loop<S: AudioSource>(&self, mut source: S) -> Result<(), AirPlayError> {
         let bytes_per_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
@@ -328,8 +325,8 @@ impl PcmStreamer {
                             // alac-encoder 0.3.0 expects byte slice of PCM data
                             // and a FormatDescription for that input
                             let input_format = alac_encoder::FormatDescription::pcm::<i16>(
-                                self.format.sample_rate.as_u32() as f64,
-                                self.format.channels.channels() as u32,
+                                f64::from(self.format.sample_rate.as_u32()),
+                                u32::from(self.format.channels.channels()),
                             );
 
                             // Ensure encoding buffer has enough capacity
@@ -367,6 +364,8 @@ impl PcmStreamer {
                                     let mut payload = Vec::with_capacity(4 + encoded.len());
                                     payload.extend_from_slice(&[0x00, 0x10]);
 
+                                    // AAC frames are small enough to fit in u16
+                                    #[allow(clippy::cast_possible_truncation)]
                                     let size = encoded.len() as u16;
                                     let header = (size << 3) & 0xFFF8;
                                     payload.extend_from_slice(&header.to_be_bytes());
@@ -485,10 +484,12 @@ impl PcmStreamer {
 
     /// Set codec to ALAC
     pub async fn use_alac(&self) {
+        // FRAMES_PER_PACKET (352) fits in u32
+        #[allow(clippy::cast_possible_truncation)]
         let format = alac_encoder::FormatDescription::alac(
-            self.format.sample_rate.as_u32() as f64,
+            f64::from(self.format.sample_rate.as_u32()),
             Self::FRAMES_PER_PACKET as u32,
-            self.format.channels.channels() as u32,
+            u32::from(self.format.channels.channels()),
         );
         *self.encoder.lock().await = Some(alac_encoder::AlacEncoder::new(&format));
         *self.encoder_aac.lock().await = None;
