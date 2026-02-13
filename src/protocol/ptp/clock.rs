@@ -31,7 +31,8 @@ pub struct TimingMeasurement {
     pub t4: PtpTimestamp,
     /// Local wall-clock time when this measurement was recorded.
     pub local_time: Instant,
-    /// Calculated offset in nanoseconds: (master - slave).
+    /// Calculated offset in nanoseconds: (slave - master).
+    /// Positive means slave clock is ahead of master.
     pub offset_ns: i128,
     /// Round-trip time.
     pub rtt: Duration,
@@ -41,7 +42,7 @@ impl TimingMeasurement {
     /// Calculate offset from timestamps.
     ///
     /// offset = ((T2 - T1) + (T3 - T4)) / 2
-    /// This gives (slave - master), so we negate for (master - slave).
+    /// This gives (slave - master). Positive means slave is ahead of master.
     #[must_use]
     pub fn calculate(
         t1: PtpTimestamp,
@@ -86,7 +87,8 @@ pub struct PtpClock {
     measurements: VecDeque<TimingMeasurement>,
     /// Maximum number of measurements to keep.
     max_measurements: usize,
-    /// Current offset estimate (master - slave) in nanoseconds.
+    /// Current offset estimate (slave - master) in nanoseconds.
+    /// Positive means slave clock is ahead of master.
     offset_ns: i128,
     /// Current drift rate in parts-per-million.
     drift_ppm: f64,
@@ -200,7 +202,10 @@ impl PtpClock {
         let first = self.measurements.front().unwrap();
         let last = self.measurements.back().unwrap();
 
-        let time_diff_secs = last.local_time.duration_since(first.local_time).as_secs_f64();
+        let time_diff_secs = last
+            .local_time
+            .duration_since(first.local_time)
+            .as_secs_f64();
         if time_diff_secs < 0.1 {
             return; // Need more elapsed time for meaningful drift estimate.
         }

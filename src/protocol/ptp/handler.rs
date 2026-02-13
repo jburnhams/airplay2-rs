@@ -114,7 +114,10 @@ impl PtpSlaveHandler {
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
-    pub async fn run(&mut self, mut shutdown: tokio::sync::watch::Receiver<bool>) -> Result<(), std::io::Error> {
+    pub async fn run(
+        &mut self,
+        mut shutdown: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), std::io::Error> {
         let mut event_buf = vec![0u8; self.config.recv_buf_size];
         let mut general_buf = vec![0u8; self.config.recv_buf_size];
         let mut delay_req_timer = tokio::time::interval(self.config.delay_req_interval);
@@ -159,7 +162,11 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    async fn handle_event_packet(&mut self, data: &[u8], _src: SocketAddr) -> Result<(), std::io::Error> {
+    async fn handle_event_packet(
+        &mut self,
+        data: &[u8],
+        _src: SocketAddr,
+    ) -> Result<(), std::io::Error> {
         let t2 = PtpTimestamp::now();
 
         if self.config.use_airplay_format {
@@ -215,7 +222,11 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) -> Result<(), std::io::Error> {
+    async fn handle_general_packet(
+        &mut self,
+        data: &[u8],
+        _src: SocketAddr,
+    ) -> Result<(), std::io::Error> {
         if self.config.use_airplay_format {
             return Ok(());
         }
@@ -310,7 +321,10 @@ impl PtpMasterHandler {
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
-    pub async fn run(&mut self, mut shutdown: tokio::sync::watch::Receiver<bool>) -> Result<(), std::io::Error> {
+    pub async fn run(
+        &mut self,
+        mut shutdown: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), std::io::Error> {
         let mut buf = vec![0u8; self.config.recv_buf_size];
         let mut sync_timer = tokio::time::interval(self.config.sync_interval);
 
@@ -345,7 +359,7 @@ impl PtpMasterHandler {
         let t1 = PtpTimestamp::now();
         let source = PtpPortIdentity::new(self.config.clock_id, 1);
 
-        for &slave_addr in &self.known_slaves.clone() {
+        for &slave_addr in &self.known_slaves {
             if self.config.use_airplay_format {
                 let pkt = AirPlayTimingPacket {
                     message_type: PtpMessageType::Sync,
@@ -353,9 +367,7 @@ impl PtpMasterHandler {
                     timestamp: t1,
                     clock_id: self.config.clock_id,
                 };
-                self.event_socket
-                    .send_to(&pkt.encode(), slave_addr)
-                    .await?;
+                self.event_socket.send_to(&pkt.encode(), slave_addr).await?;
             } else {
                 // Two-step Sync: send Sync with approximate timestamp,
                 // then Follow-up with precise timestamp.
@@ -369,9 +381,7 @@ impl PtpMasterHandler {
                 let precise_t1 = PtpTimestamp::now();
                 let follow_up = PtpMessage::follow_up(source, self.sync_sequence, precise_t1);
                 if let Some(ref general) = self.general_socket {
-                    general
-                        .send_to(&follow_up.encode(), slave_addr)
-                        .await?;
+                    general.send_to(&follow_up.encode(), slave_addr).await?;
                 } else {
                     self.event_socket
                         .send_to(&follow_up.encode(), slave_addr)
@@ -384,7 +394,11 @@ impl PtpMasterHandler {
         Ok(())
     }
 
-    async fn handle_delay_req(&mut self, data: &[u8], src: SocketAddr) -> Result<(), std::io::Error> {
+    async fn handle_delay_req(
+        &mut self,
+        data: &[u8],
+        src: SocketAddr,
+    ) -> Result<(), std::io::Error> {
         // Remember this slave for future Sync broadcasts.
         self.add_slave(src);
         let t4 = PtpTimestamp::now();

@@ -816,12 +816,8 @@ impl ConnectionManager {
 
         // 7b. Start PTP master handler if using PTP timing
         if use_ptp {
-            self.start_ptp_master(
-                &time_sock,
-                device_ip,
-                server_time_port,
-            )
-            .await;
+            self.start_ptp_master(&time_sock, device_ip, server_time_port)
+                .await;
         }
 
         *self.sockets.lock().await = Some(UdpSockets {
@@ -1364,10 +1360,7 @@ impl ConnectionManager {
         };
 
         // Connect to the device's timing port so send_to knows the destination
-        if let Err(e) = ptp_socket
-            .connect((device_ip, server_timing_port))
-            .await
-        {
+        if let Err(e) = ptp_socket.connect((device_ip, server_timing_port)).await {
             tracing::error!("Failed to connect PTP socket to device: {}", e);
             return;
         }
@@ -1416,7 +1409,11 @@ impl ConnectionManager {
         *self.ptp_shutdown_tx.lock().await = Some(shutdown_tx);
         *self.ptp_active.write().await = true;
 
-        tracing::info!("PTP timing started for device at {}:{}", device_ip, server_timing_port);
+        tracing::info!(
+            "PTP timing started for device at {}:{}",
+            device_ip,
+            server_timing_port
+        );
     }
 
     /// Stop the PTP master handler if running.

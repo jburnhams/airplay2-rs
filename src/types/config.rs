@@ -2,21 +2,16 @@ use crate::audio::AudioCodec;
 use std::time::Duration;
 
 /// Timing protocol to use for clock synchronization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimingProtocol {
-    /// NTP-style timing (AirPlay 1 / RAOP legacy).
+    /// NTP-style timing (`AirPlay` 1 / RAOP legacy).
     Ntp,
-    /// PTP (IEEE 1588) timing for AirPlay 2 devices.
+    /// PTP (IEEE 1588) timing for `AirPlay` 2 devices.
     Ptp,
     /// Automatically select based on device capabilities.
     /// Uses PTP if the device supports it, otherwise falls back to NTP.
+    #[default]
     Auto,
-}
-
-impl Default for TimingProtocol {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Configuration for `AirPlay` client behavior

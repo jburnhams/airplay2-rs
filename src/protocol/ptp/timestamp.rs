@@ -110,9 +110,13 @@ impl PtpTimestamp {
         if data.len() < 10 {
             return None;
         }
-        let seconds = u64::from_be_bytes([0, 0, data[0], data[1], data[2], data[3], data[4], data[5]]);
+        let seconds =
+            u64::from_be_bytes([0, 0, data[0], data[1], data[2], data[3], data[4], data[5]]);
         let nanoseconds = u32::from_be_bytes([data[6], data[7], data[8], data[9]]);
-        Some(Self { seconds, nanoseconds })
+        Some(Self {
+            seconds,
+            nanoseconds,
+        })
     }
 
     /// Encode as AirPlay compact format: 48.16 fixed-point (64-bit).
@@ -121,7 +125,9 @@ impl PtpTimestamp {
     #[must_use]
     pub fn to_airplay_compact(&self) -> u64 {
         let fraction = (self.nanoseconds as u64 * 65536 / Self::NANOS_PER_SEC as u64) as u16;
-        (self.seconds << 16) | fraction as u64
+        // Mask seconds to 48 bits to prevent overflow into the fraction field
+        let seconds_48 = self.seconds & Self::MAX_SECONDS_48BIT;
+        (seconds_48 << 16) | fraction as u64
     }
 
     /// Decode from AirPlay compact format: 48.16 fixed-point (64-bit).
@@ -129,8 +135,8 @@ impl PtpTimestamp {
     pub fn from_airplay_compact(value: u64) -> Self {
         let seconds = value >> 16;
         let fraction = (value & 0xFFFF) as u64;
-        let nanoseconds =
-            ((fraction * Self::NANOS_PER_SEC as u64) / 65536).min(Self::NANOS_PER_SEC as u64 - 1) as u32;
+        let nanoseconds = ((fraction * Self::NANOS_PER_SEC as u64) / 65536)
+            .min(Self::NANOS_PER_SEC as u64 - 1) as u32;
         Self {
             seconds,
             nanoseconds,
