@@ -141,9 +141,9 @@ impl AuthenticationHandler {
 
     #[allow(clippy::unused_self)]
     fn lockout_response(&self, cseq: u32, pw_auth: &PasswordAuthManager) -> Ap2HandleResult {
-        let remaining = pw_auth.lockout_remaining().map_or(300, |d| {
-            u32::try_from(d.as_secs()).unwrap_or(u32::MAX)
-        });
+        let remaining = pw_auth
+            .lockout_remaining()
+            .map_or(300, |d| u32::try_from(d.as_secs()).unwrap_or(u32::MAX));
 
         // Build TLV with retry delay
         let response_tlv = TlvEncoder::new()
