@@ -87,7 +87,9 @@ pub use group::{DeviceGroup, GroupId, GroupManager};
 pub use player::{AirPlayPlayer, PlayerBuilder, quick_connect, quick_connect_to, quick_play};
 pub use state::{ClientEvent, ClientState};
 pub use types::RepeatMode;
-pub use types::{AirPlayConfig, AirPlayDevice, DeviceCapabilities, PlaybackState, TrackInfo};
+pub use types::{
+    AirPlayConfig, AirPlayDevice, DeviceCapabilities, PlaybackState, TimingProtocol, TrackInfo,
+};
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

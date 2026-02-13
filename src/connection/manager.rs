@@ -9,10 +9,14 @@ use crate::protocol::pairing::{
     AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
     TransientPairing,
 };
+use crate::protocol::ptp::{
+    PtpHandlerConfig, PtpMasterHandler, PtpRole, SharedPtpClock, create_shared_clock,
+};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
-use crate::types::{AirPlayConfig, AirPlayDevice};
+use crate::types::{AirPlayConfig, AirPlayDevice, TimingProtocol};
 
 use std::fmt::Write;
+use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 
@@ -44,6 +48,12 @@ pub struct ConnectionManager {
     event_tx: broadcast::Sender<ConnectionEvent>,
     /// Pairing storage
     pairing_storage: Mutex<Option<Box<dyn PairingStorage>>>,
+    /// Shared PTP clock state (available after PTP timing is started)
+    ptp_clock: Mutex<Option<SharedPtpClock>>,
+    /// Shutdown signal sender for PTP handler task
+    ptp_shutdown_tx: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    /// Whether PTP timing is active for the current session
+    ptp_active: RwLock<bool>,
 }
 
 /// UDP sockets for streaming
@@ -80,6 +90,9 @@ impl ConnectionManager {
             stats: RwLock::new(ConnectionStats::default()),
             event_tx,
             pairing_storage: Mutex::new(None),
+            ptp_clock: Mutex::new(None),
+            ptp_shutdown_tx: Mutex::new(None),
+            ptp_active: RwLock::new(false),
         }
     }
 
@@ -662,8 +675,14 @@ impl ConnectionManager {
         // 2. Session Setup (SETUP / with Plist)
         tracing::debug!("Performing Session SETUP...");
         let group_uuid = "D67B1696-8D3A-A6CF-9ACF-03C837DC68FD";
+
+        // Determine timing protocol based on config and device capabilities
+        let use_ptp = self.should_use_ptp().await;
+        let timing_protocol_str = if use_ptp { "PTP" } else { "NTP" };
+        tracing::info!("Using timing protocol: {}", timing_protocol_str);
+
         let setup_plist = DictBuilder::new()
-            .insert("timingProtocol", "NTP")
+            .insert("timingProtocol", timing_protocol_str)
             .insert("groupUUID", group_uuid)
             .insert("macAddress", "AC:07:75:12:4A:1F")
             .insert("isAudioReceiver", false)
@@ -794,6 +813,16 @@ impl ConnectionManager {
         audio_sock.connect((device_ip, server_audio_port)).await?;
         ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
         time_sock.connect((device_ip, server_time_port)).await?;
+
+        // 7b. Start PTP master handler if using PTP timing
+        if use_ptp {
+            self.start_ptp_master(
+                &time_sock,
+                device_ip,
+                server_time_port,
+            )
+            .await;
+        }
 
         *self.sockets.lock().await = Some(UdpSockets {
             audio: audio_sock,
@@ -1243,6 +1272,9 @@ impl ConnectionManager {
             }
         }
 
+        // Stop PTP handler if running
+        self.stop_ptp().await;
+
         // Close connection
         *self.stream.lock().await = None;
         *self.sockets.lock().await = None;
@@ -1287,6 +1319,124 @@ impl ConnectionManager {
     #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<ConnectionEvent> {
         self.event_tx.subscribe()
+    }
+
+    /// Determine if PTP should be used based on config and device capabilities.
+    async fn should_use_ptp(&self) -> bool {
+        match self.config.timing_protocol {
+            TimingProtocol::Ptp => true,
+            TimingProtocol::Ntp => false,
+            TimingProtocol::Auto => {
+                // Use PTP if the device supports it (AirPlay 2 devices)
+                let device_guard = self.device.read().await;
+                device_guard
+                    .as_ref()
+                    .is_some_and(|d| d.supports_ptp() || d.supports_airplay2())
+            }
+        }
+    }
+
+    /// Start the PTP master handler as a background task.
+    ///
+    /// Creates a shared PTP clock, binds a new socket for PTP event messages,
+    /// and spawns the master handler loop that sends periodic `Sync` messages
+    /// to the device and responds to `Delay_Req` messages.
+    async fn start_ptp_master(
+        &self,
+        _timing_socket: &UdpSocket,
+        device_ip: std::net::IpAddr,
+        server_timing_port: u16,
+    ) {
+        // Generate a clock ID from a random u64
+        let clock_id: u64 = rand::random();
+        let clock = create_shared_clock(clock_id, PtpRole::Master);
+
+        // Create a dedicated socket for PTP event messages.
+        // We bind a new socket rather than reusing the timing socket,
+        // because the timing socket will be stored in UdpSockets and
+        // we need the PTP handler to own its socket via Arc.
+        let ptp_socket = match UdpSocket::bind("0.0.0.0:0").await {
+            Ok(sock) => sock,
+            Err(e) => {
+                tracing::error!("Failed to bind PTP event socket: {}", e);
+                return;
+            }
+        };
+
+        // Connect to the device's timing port so send_to knows the destination
+        if let Err(e) = ptp_socket
+            .connect((device_ip, server_timing_port))
+            .await
+        {
+            tracing::error!("Failed to connect PTP socket to device: {}", e);
+            return;
+        }
+
+        // Also connect the original timing socket for receiving
+        // (it's already connected from setup_session)
+
+        let ptp_event_socket = Arc::new(ptp_socket);
+
+        let config = PtpHandlerConfig {
+            clock_id,
+            role: PtpRole::Master,
+            sync_interval: std::time::Duration::from_secs(1),
+            delay_req_interval: std::time::Duration::from_secs(1),
+            recv_buf_size: 256,
+            use_airplay_format: true, // AirPlay uses compact format
+        };
+
+        // Shutdown channel
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+        // Pre-register the device as a known slave
+        let slave_addr = std::net::SocketAddr::new(device_ip, server_timing_port);
+
+        let handler_clock = clock.clone();
+
+        // Spawn the PTP master handler task
+        tokio::spawn(async move {
+            let mut handler = PtpMasterHandler::new(
+                ptp_event_socket,
+                None, // No separate general socket; using AirPlay compact format
+                handler_clock,
+                config,
+            );
+            handler.add_slave(slave_addr);
+
+            tracing::info!("PTP master handler started (clock_id=0x{:016X})", clock_id);
+            if let Err(e) = handler.run(shutdown_rx).await {
+                tracing::error!("PTP master handler error: {}", e);
+            }
+            tracing::info!("PTP master handler stopped");
+        });
+
+        // Store clock and shutdown handle
+        *self.ptp_clock.lock().await = Some(clock);
+        *self.ptp_shutdown_tx.lock().await = Some(shutdown_tx);
+        *self.ptp_active.write().await = true;
+
+        tracing::info!("PTP timing started for device at {}:{}", device_ip, server_timing_port);
+    }
+
+    /// Stop the PTP master handler if running.
+    async fn stop_ptp(&self) {
+        if let Some(tx) = self.ptp_shutdown_tx.lock().await.take() {
+            let _ = tx.send(true);
+            tracing::info!("PTP master handler shutdown signal sent");
+        }
+        *self.ptp_clock.lock().await = None;
+        *self.ptp_active.write().await = false;
+    }
+
+    /// Get the shared PTP clock, if PTP timing is active.
+    pub async fn ptp_clock(&self) -> Option<SharedPtpClock> {
+        self.ptp_clock.lock().await.clone()
+    }
+
+    /// Check if PTP timing is active for the current connection.
+    pub async fn is_ptp_active(&self) -> bool {
+        *self.ptp_active.read().await
     }
 
     fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {

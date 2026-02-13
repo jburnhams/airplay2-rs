@@ -11,7 +11,7 @@ mod track;
 #[cfg(test)]
 mod tests;
 
-pub use config::{AirPlayConfig, AirPlayConfigBuilder};
+pub use config::{AirPlayConfig, AirPlayConfigBuilder, TimingProtocol};
 pub use device::{AirPlayDevice, DeviceCapabilities};
 pub use raop::{RaopCapabilities, RaopCodec, RaopEncryption, RaopMetadataType};
 pub use state::{ConnectionState, PlaybackInfo, PlaybackState, RepeatMode};

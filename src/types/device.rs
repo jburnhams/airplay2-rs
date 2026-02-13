@@ -64,6 +64,9 @@ pub struct DeviceCapabilities {
     /// Supports transient pairing
     pub supports_transient_pairing: bool,
 
+    /// Supports PTP (IEEE 1588) clock synchronization
+    pub supports_ptp: bool,
+
     /// Raw features bitmask
     pub raw_features: u64,
 }
@@ -85,6 +88,12 @@ impl AirPlayDevice {
     #[must_use]
     pub fn supports_grouping(&self) -> bool {
         self.capabilities.supports_grouping
+    }
+
+    /// Check if this device supports PTP timing
+    #[must_use]
+    pub fn supports_ptp(&self) -> bool {
+        self.capabilities.supports_ptp
     }
 
     /// Get device volume if available from discovery
@@ -128,9 +137,11 @@ impl DeviceCapabilities {
             airplay2: (features & (1 << 48)) != 0,
             // Bit 32: Supports unified media control
             supports_grouping: (features & (1 << 32)) != 0,
-            // Add other capability parsing...
+            // Bit 40: Supports PTP clock synchronization
+            supports_ptp: (features & (1 << 40)) != 0,
             raw_features: features,
             ..Default::default()
         }
     }
 }
+
