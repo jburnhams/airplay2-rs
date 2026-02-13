@@ -48,6 +48,9 @@ pub mod txt_keys {
     pub const VOLUME_CONTROL: &str = "vv";
 }
 
+const PASSWORD_REQUIRED_FLAG: u32 = 1 << 4;
+const PASSWORD_CONFIGURED_FLAG: u32 = 1 << 5;
+
 /// Builder for `AirPlay` 2 TXT records
 #[derive(Debug, Clone)]
 pub struct Ap2TxtRecord {
@@ -89,9 +92,21 @@ impl Ap2TxtRecord {
         entries.insert(txt_keys::FEATURES.to_string(), features_str);
 
         // Status flags
+        let mut status_flags = config.status_flags();
+
+        if config.password.is_some() {
+            // Set password required flag if password is set
+            status_flags |= PASSWORD_REQUIRED_FLAG;
+            // Also set password configured flag? (Need to check spec/behavior)
+            // For now, assume this means password is required.
+        } else {
+            // Clear password flags
+            status_flags &= !(PASSWORD_REQUIRED_FLAG | PASSWORD_CONFIGURED_FLAG);
+        }
+
         entries.insert(
             txt_keys::STATUS_FLAGS.to_string(),
-            format!("0x{:X}", config.status_flags()),
+            format!("0x{status_flags:X}"),
         );
 
         // Public key for pairing (Ed25519, base64 encoded)
