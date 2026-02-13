@@ -5,27 +5,42 @@ use crate::protocol::ptp::timestamp::PtpTimestamp;
 
 #[test]
 fn test_message_type_from_nibble_sync() {
-    assert_eq!(PtpMessageType::from_nibble(0x00).unwrap(), PtpMessageType::Sync);
+    assert_eq!(
+        PtpMessageType::from_nibble(0x00).unwrap(),
+        PtpMessageType::Sync
+    );
 }
 
 #[test]
 fn test_message_type_from_nibble_delay_req() {
-    assert_eq!(PtpMessageType::from_nibble(0x01).unwrap(), PtpMessageType::DelayReq);
+    assert_eq!(
+        PtpMessageType::from_nibble(0x01).unwrap(),
+        PtpMessageType::DelayReq
+    );
 }
 
 #[test]
 fn test_message_type_from_nibble_follow_up() {
-    assert_eq!(PtpMessageType::from_nibble(0x08).unwrap(), PtpMessageType::FollowUp);
+    assert_eq!(
+        PtpMessageType::from_nibble(0x08).unwrap(),
+        PtpMessageType::FollowUp
+    );
 }
 
 #[test]
 fn test_message_type_from_nibble_delay_resp() {
-    assert_eq!(PtpMessageType::from_nibble(0x09).unwrap(), PtpMessageType::DelayResp);
+    assert_eq!(
+        PtpMessageType::from_nibble(0x09).unwrap(),
+        PtpMessageType::DelayResp
+    );
 }
 
 #[test]
 fn test_message_type_from_nibble_announce() {
-    assert_eq!(PtpMessageType::from_nibble(0x0B).unwrap(), PtpMessageType::Announce);
+    assert_eq!(
+        PtpMessageType::from_nibble(0x0B).unwrap(),
+        PtpMessageType::Announce
+    );
 }
 
 #[test]
@@ -36,8 +51,14 @@ fn test_message_type_from_nibble_unknown() {
 #[test]
 fn test_message_type_from_nibble_masks_upper_bits() {
     // Upper 4 bits should be ignored.
-    assert_eq!(PtpMessageType::from_nibble(0xF0).unwrap(), PtpMessageType::Sync);
-    assert_eq!(PtpMessageType::from_nibble(0xA1).unwrap(), PtpMessageType::DelayReq);
+    assert_eq!(
+        PtpMessageType::from_nibble(0xF0).unwrap(),
+        PtpMessageType::Sync
+    );
+    assert_eq!(
+        PtpMessageType::from_nibble(0xA1).unwrap(),
+        PtpMessageType::DelayReq
+    );
 }
 
 #[test]
@@ -92,7 +113,10 @@ fn test_port_identity_encode_length() {
 fn test_port_identity_known_bytes() {
     let id = PtpPortIdentity::new(0x0102030405060708, 0x0A0B);
     let buf = id.encode();
-    assert_eq!(buf, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0A, 0x0B]);
+    assert_eq!(
+        buf,
+        [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0A, 0x0B]
+    );
 }
 
 // ===== PtpHeader =====

@@ -39,8 +39,8 @@ mod tests;
 // Re-exports for convenient access.
 pub use clock::{PtpClock, PtpRole, TimingMeasurement};
 pub use handler::{
-    PtpHandlerConfig, PtpMasterHandler, PtpSlaveHandler, SharedPtpClock, create_shared_clock,
-    PTP_EVENT_PORT, PTP_GENERAL_PORT,
+    PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpHandlerConfig, PtpMasterHandler, PtpSlaveHandler,
+    SharedPtpClock, create_shared_clock,
 };
 pub use message::{
     AirPlayTimingPacket, PtpHeader, PtpMessage, PtpMessageBody, PtpMessageType, PtpParseError,

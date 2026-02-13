@@ -277,28 +277,31 @@ impl PtpMessage {
 
         let body = match header.message_type {
             PtpMessageType::Sync => {
-                let ts = PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
-                    needed: PtpHeader::SIZE + Self::TIMESTAMP_BODY_SIZE,
-                    have: data.len(),
-                })?;
+                let ts =
+                    PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
+                        needed: PtpHeader::SIZE + Self::TIMESTAMP_BODY_SIZE,
+                        have: data.len(),
+                    })?;
                 PtpMessageBody::Sync {
                     origin_timestamp: ts,
                 }
             }
             PtpMessageType::FollowUp => {
-                let ts = PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
-                    needed: PtpHeader::SIZE + Self::TIMESTAMP_BODY_SIZE,
-                    have: data.len(),
-                })?;
+                let ts =
+                    PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
+                        needed: PtpHeader::SIZE + Self::TIMESTAMP_BODY_SIZE,
+                        have: data.len(),
+                    })?;
                 PtpMessageBody::FollowUp {
                     precise_origin_timestamp: ts,
                 }
             }
             PtpMessageType::DelayReq => {
-                let ts = PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
-                    needed: PtpHeader::SIZE + Self::TIMESTAMP_BODY_SIZE,
-                    have: data.len(),
-                })?;
+                let ts =
+                    PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
+                        needed: PtpHeader::SIZE + Self::TIMESTAMP_BODY_SIZE,
+                        have: data.len(),
+                    })?;
                 PtpMessageBody::DelayReq {
                     origin_timestamp: ts,
                 }
@@ -310,16 +313,16 @@ impl PtpMessage {
                         have: data.len(),
                     });
                 }
-                let ts = PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
-                    needed: PtpHeader::SIZE + Self::DELAY_RESP_BODY_SIZE,
-                    have: data.len(),
-                })?;
-                let port_id = PtpPortIdentity::decode(&body_data[10..20]).ok_or(
-                    PtpParseError::TooShort {
+                let ts =
+                    PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
                         needed: PtpHeader::SIZE + Self::DELAY_RESP_BODY_SIZE,
                         have: data.len(),
-                    },
-                )?;
+                    })?;
+                let port_id =
+                    PtpPortIdentity::decode(&body_data[10..20]).ok_or(PtpParseError::TooShort {
+                        needed: PtpHeader::SIZE + Self::DELAY_RESP_BODY_SIZE,
+                        have: data.len(),
+                    })?;
                 PtpMessageBody::DelayResp {
                     receive_timestamp: ts,
                     requesting_port_identity: port_id,
@@ -332,10 +335,11 @@ impl PtpMessage {
                         have: data.len(),
                     });
                 }
-                let ts = PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
-                    needed: PtpHeader::SIZE + Self::ANNOUNCE_BODY_SIZE,
-                    have: data.len(),
-                })?;
+                let ts =
+                    PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
+                        needed: PtpHeader::SIZE + Self::ANNOUNCE_BODY_SIZE,
+                        have: data.len(),
+                    })?;
                 let gm_identity = u64::from_be_bytes([
                     body_data[10],
                     body_data[11],
@@ -510,7 +514,9 @@ impl AirPlayTimingPacket {
         }
         let message_type = PtpMessageType::from_nibble(data[0])?;
         let sequence_id = u16::from_be_bytes([data[2], data[3]]);
-        let compact_ts = u64::from_be_bytes([0, 0, data[8], data[9], data[10], data[11], data[12], data[13]]);
+        let compact_ts = u64::from_be_bytes([
+            0, 0, data[8], data[9], data[10], data[11], data[12], data[13],
+        ]);
         let timestamp = PtpTimestamp::from_airplay_compact(compact_ts);
 
         let clock_id = if data.len() >= 22 {

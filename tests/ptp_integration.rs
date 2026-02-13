@@ -10,8 +10,7 @@ use airplay2::protocol::ptp::handler::{
     PtpHandlerConfig, PtpMasterHandler, PtpSlaveHandler, create_shared_clock,
 };
 use airplay2::protocol::ptp::message::{
-    AirPlayTimingPacket, PtpMessage, PtpMessageBody, PtpMessageType, PtpParseError,
-    PtpPortIdentity,
+    AirPlayTimingPacket, PtpMessage, PtpMessageBody, PtpMessageType, PtpParseError, PtpPortIdentity,
 };
 use airplay2::protocol::ptp::timestamp::PtpTimestamp;
 
@@ -36,7 +35,10 @@ async fn test_full_ieee1588_two_step_exchange() {
         let t1 = PtpTimestamp::now();
         let mut sync = PtpMessage::sync(master_source, seq, t1);
         sync.header.flags = 0x0200; // Two-step
-        master_sock.send_to(&sync.encode(), slave_addr).await.unwrap();
+        master_sock
+            .send_to(&sync.encode(), slave_addr)
+            .await
+            .unwrap();
 
         // 2. Slave receives Sync.
         let mut buf = [0u8; 256];
@@ -47,20 +49,28 @@ async fn test_full_ieee1588_two_step_exchange() {
 
         // 3. Master sends Follow-up.
         let follow_up = PtpMessage::follow_up(master_source, seq, t1);
-        master_sock.send_to(&follow_up.encode(), slave_addr).await.unwrap();
+        master_sock
+            .send_to(&follow_up.encode(), slave_addr)
+            .await
+            .unwrap();
 
         let (len, _) = slave_sock.recv_from(&mut buf).await.unwrap();
         let fu = PtpMessage::decode(&buf[..len]).unwrap();
         assert_eq!(fu.header.message_type, PtpMessageType::FollowUp);
         let precise_t1 = match fu.body {
-            PtpMessageBody::FollowUp { precise_origin_timestamp } => precise_origin_timestamp,
+            PtpMessageBody::FollowUp {
+                precise_origin_timestamp,
+            } => precise_origin_timestamp,
             _ => panic!("Expected Follow-up body"),
         };
 
         // 4. Slave sends Delay_Req.
         let t3 = PtpTimestamp::now();
         let delay_req = PtpMessage::delay_req(slave_source, seq, t3);
-        slave_sock.send_to(&delay_req.encode(), master_addr).await.unwrap();
+        slave_sock
+            .send_to(&delay_req.encode(), master_addr)
+            .await
+            .unwrap();
 
         // 5. Master receives Delay_Req.
         let (len, from) = master_sock.recv_from(&mut buf).await.unwrap();
@@ -70,14 +80,19 @@ async fn test_full_ieee1588_two_step_exchange() {
 
         // 6. Master sends Delay_Resp.
         let delay_resp = PtpMessage::delay_resp(master_source, seq, t4, slave_source);
-        master_sock.send_to(&delay_resp.encode(), from).await.unwrap();
+        master_sock
+            .send_to(&delay_resp.encode(), from)
+            .await
+            .unwrap();
 
         // 7. Slave receives Delay_Resp.
         let (len, _) = slave_sock.recv_from(&mut buf).await.unwrap();
         let resp = PtpMessage::decode(&buf[..len]).unwrap();
         assert_eq!(resp.header.message_type, PtpMessageType::DelayResp);
         let recv_t4 = match resp.body {
-            PtpMessageBody::DelayResp { receive_timestamp, .. } => receive_timestamp,
+            PtpMessageBody::DelayResp {
+                receive_timestamp, ..
+            } => receive_timestamp,
             _ => panic!("Expected DelayResp body"),
         };
 
@@ -115,7 +130,10 @@ async fn test_full_airplay_compact_exchange() {
             timestamp: t1,
             clock_id: 0xAAAA,
         };
-        master_sock.send_to(&sync.encode(), slave_addr).await.unwrap();
+        master_sock
+            .send_to(&sync.encode(), slave_addr)
+            .await
+            .unwrap();
 
         // Slave receives Sync.
         let mut buf = [0u8; 256];
@@ -132,7 +150,10 @@ async fn test_full_airplay_compact_exchange() {
             timestamp: t3,
             clock_id: 0xBBBB,
         };
-        slave_sock.send_to(&delay_req.encode(), master_addr).await.unwrap();
+        slave_sock
+            .send_to(&delay_req.encode(), master_addr)
+            .await
+            .unwrap();
 
         // Master receives and sends Delay_Resp.
         let (len, from) = master_sock.recv_from(&mut buf).await.unwrap();
@@ -146,7 +167,10 @@ async fn test_full_airplay_compact_exchange() {
             timestamp: t4,
             clock_id: 0xAAAA,
         };
-        master_sock.send_to(&delay_resp.encode(), from).await.unwrap();
+        master_sock
+            .send_to(&delay_resp.encode(), from)
+            .await
+            .unwrap();
 
         // Slave receives and updates clock.
         let (len, _) = slave_sock.recv_from(&mut buf).await.unwrap();
@@ -245,10 +269,10 @@ fn test_clock_offset_5_second_skew() {
 
     // Slave is exactly 5 seconds ahead of master.
     // Network delay: 1ms each way.
-    let t1 = PtpTimestamp::new(100, 0);              // master send
-    let t2 = PtpTimestamp::new(105, 1_000_000);      // slave recv (5s offset + 1ms delay)
-    let t3 = PtpTimestamp::new(105, 2_000_000);      // slave send (5s offset + 2ms)
-    let t4 = PtpTimestamp::new(100, 3_000_000);      // master recv (3ms from start)
+    let t1 = PtpTimestamp::new(100, 0); // master send
+    let t2 = PtpTimestamp::new(105, 1_000_000); // slave recv (5s offset + 1ms delay)
+    let t3 = PtpTimestamp::new(105, 2_000_000); // slave send (5s offset + 2ms)
+    let t4 = PtpTimestamp::new(100, 3_000_000); // master recv (3ms from start)
 
     clock.process_timing(t1, t2, t3, t4);
 
@@ -308,10 +332,7 @@ fn test_timestamp_airplay_compact_roundtrip_seconds() {
         let ts = PtpTimestamp::new(secs, 0);
         let compact = ts.to_airplay_compact();
         let back = PtpTimestamp::from_airplay_compact(compact);
-        assert_eq!(
-            ts, back,
-            "Integer second roundtrip failed for {secs}"
-        );
+        assert_eq!(ts, back, "Integer second roundtrip failed for {secs}");
     }
 }
 

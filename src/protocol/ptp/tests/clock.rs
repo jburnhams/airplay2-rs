@@ -47,7 +47,7 @@ fn test_measurement_zero_offset_symmetric() {
 #[test]
 fn test_measurement_positive_offset() {
     // Slave clock is 5 seconds ahead of master.
-    let t1 = PtpTimestamp::new(100, 0);       // master send
+    let t1 = PtpTimestamp::new(100, 0); // master send
     let t2 = PtpTimestamp::new(105, 1_000_000); // slave recv (+5s + 1ms delay)
     let t3 = PtpTimestamp::new(105, 2_000_000); // slave send (+5s + 2ms)
     let t4 = PtpTimestamp::new(100, 3_000_000); // master recv (3ms from start)
@@ -67,9 +67,9 @@ fn test_measurement_positive_offset() {
 #[test]
 fn test_measurement_negative_offset() {
     // Slave clock is 2 seconds behind master.
-    let t1 = PtpTimestamp::new(100, 0);       // master send
-    let t2 = PtpTimestamp::new(98, 1_000_000);  // slave recv (-2s + 1ms)
-    let t3 = PtpTimestamp::new(98, 2_000_000);  // slave send (-2s + 2ms)
+    let t1 = PtpTimestamp::new(100, 0); // master send
+    let t2 = PtpTimestamp::new(98, 1_000_000); // slave recv (-2s + 1ms)
+    let t3 = PtpTimestamp::new(98, 2_000_000); // slave send (-2s + 2ms)
     let t4 = PtpTimestamp::new(100, 3_000_000); // master recv (3ms)
 
     let m = TimingMeasurement::calculate(t1, t2, t3, t4, std::time::Instant::now());
@@ -87,7 +87,7 @@ fn test_measurement_negative_offset() {
 #[test]
 fn test_measurement_rtt_calculation() {
     let t1 = PtpTimestamp::new(100, 0);
-    let t2 = PtpTimestamp::new(100, 5_000_000);  // +5ms
+    let t2 = PtpTimestamp::new(100, 5_000_000); // +5ms
     let t3 = PtpTimestamp::new(100, 10_000_000); // +10ms
     let t4 = PtpTimestamp::new(100, 40_000_000); // +40ms
 

@@ -6,8 +6,8 @@ use tokio::net::UdpSocket;
 
 use crate::protocol::ptp::clock::PtpRole;
 use crate::protocol::ptp::handler::{
-    PtpHandlerConfig, PtpMasterHandler, PtpSlaveHandler, create_shared_clock,
-    PTP_EVENT_PORT, PTP_GENERAL_PORT,
+    PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpHandlerConfig, PtpMasterHandler, PtpSlaveHandler,
+    create_shared_clock,
 };
 use crate::protocol::ptp::message::{
     AirPlayTimingPacket, PtpMessage, PtpMessageType, PtpPortIdentity,
@@ -78,7 +78,10 @@ async fn test_master_slave_ieee1588_exchange() {
 
     // 3. Master sends Follow-up with precise T1.
     let follow_up = PtpMessage::follow_up(source, 1, t1);
-    master_socket.send_to(&follow_up.encode(), slave_addr).await.unwrap();
+    master_socket
+        .send_to(&follow_up.encode(), slave_addr)
+        .await
+        .unwrap();
 
     let (len, _) = slave_socket.recv_from(&mut buf).await.unwrap();
     let fu_msg = PtpMessage::decode(&buf[..len]).unwrap();
@@ -88,7 +91,10 @@ async fn test_master_slave_ieee1588_exchange() {
     let t3 = PtpTimestamp::new(1000, 10_000_000);
     let slave_source = PtpPortIdentity::new(0xBBBB, 1);
     let delay_req = PtpMessage::delay_req(slave_source, 1, t3);
-    slave_socket.send_to(&delay_req.encode(), master_addr).await.unwrap();
+    slave_socket
+        .send_to(&delay_req.encode(), master_addr)
+        .await
+        .unwrap();
 
     // 5. Master receives Delay_Req and sends Delay_Resp.
     let (len, from) = master_socket.recv_from(&mut buf).await.unwrap();
@@ -97,7 +103,10 @@ async fn test_master_slave_ieee1588_exchange() {
     assert_eq!(req_msg.header.message_type, PtpMessageType::DelayReq);
 
     let delay_resp = PtpMessage::delay_resp(source, 1, t4, slave_source);
-    master_socket.send_to(&delay_resp.encode(), from).await.unwrap();
+    master_socket
+        .send_to(&delay_resp.encode(), from)
+        .await
+        .unwrap();
 
     // 6. Slave receives Delay_Resp and updates clock.
     let (len, _) = slave_socket.recv_from(&mut buf).await.unwrap();
@@ -140,7 +149,10 @@ async fn test_airplay_format_exchange() {
         timestamp: t1,
         clock_id: 0xAAAA,
     };
-    master_socket.send_to(&sync_pkt.encode(), slave_addr).await.unwrap();
+    master_socket
+        .send_to(&sync_pkt.encode(), slave_addr)
+        .await
+        .unwrap();
 
     // 2. Slave receives.
     let mut buf = [0u8; 256];
@@ -157,7 +169,10 @@ async fn test_airplay_format_exchange() {
         timestamp: t3,
         clock_id: 0xBBBB,
     };
-    slave_socket.send_to(&delay_req_pkt.encode(), master_addr).await.unwrap();
+    slave_socket
+        .send_to(&delay_req_pkt.encode(), master_addr)
+        .await
+        .unwrap();
 
     // 4. Master receives and sends DelayResp.
     let (len, from) = master_socket.recv_from(&mut buf).await.unwrap();
@@ -171,7 +186,10 @@ async fn test_airplay_format_exchange() {
         timestamp: t4,
         clock_id: 0xAAAA,
     };
-    master_socket.send_to(&resp_pkt.encode(), from).await.unwrap();
+    master_socket
+        .send_to(&resp_pkt.encode(), from)
+        .await
+        .unwrap();
 
     // 5. Slave receives DelayResp and updates clock.
     let (len, _) = slave_socket.recv_from(&mut buf).await.unwrap();
@@ -223,11 +241,15 @@ async fn test_master_handler_responds_to_delay_req() {
     let source = PtpPortIdentity::new(0xBBBB, 1);
     let t3 = PtpTimestamp::new(100, 0);
     let req = PtpMessage::delay_req(source, 42, t3);
-    client_sock.send_to(&req.encode(), master_addr).await.unwrap();
+    client_sock
+        .send_to(&req.encode(), master_addr)
+        .await
+        .unwrap();
 
     // Receive the Delay_Resp.
     let mut buf = [0u8; 256];
-    let result = tokio::time::timeout(Duration::from_secs(2), client_sock.recv_from(&mut buf)).await;
+    let result =
+        tokio::time::timeout(Duration::from_secs(2), client_sock.recv_from(&mut buf)).await;
     assert!(result.is_ok(), "Did not receive Delay_Resp in time");
 
     let (len, _) = result.unwrap().unwrap();
@@ -272,11 +294,15 @@ async fn test_master_handler_airplay_format() {
         timestamp: PtpTimestamp::new(200, 0),
         clock_id: 0xBBBB,
     };
-    client_sock.send_to(&req.encode(), master_addr).await.unwrap();
+    client_sock
+        .send_to(&req.encode(), master_addr)
+        .await
+        .unwrap();
 
     // Receive AirPlay Delay_Resp.
     let mut buf = [0u8; 256];
-    let result = tokio::time::timeout(Duration::from_secs(2), client_sock.recv_from(&mut buf)).await;
+    let result =
+        tokio::time::timeout(Duration::from_secs(2), client_sock.recv_from(&mut buf)).await;
     assert!(result.is_ok(), "Did not receive AirPlay Delay_Resp");
 
     let (len, _) = result.unwrap().unwrap();
@@ -317,7 +343,10 @@ async fn test_slave_handler_synchronizes() {
         timestamp: t1,
         clock_id: 0xAAAA,
     };
-    master_sock.send_to(&sync_pkt.encode(), slave_addr).await.unwrap();
+    master_sock
+        .send_to(&sync_pkt.encode(), slave_addr)
+        .await
+        .unwrap();
 
     // 2. Slave receives Sync.
     let mut buf = [0u8; 256];
@@ -334,7 +363,10 @@ async fn test_slave_handler_synchronizes() {
         timestamp: t3,
         clock_id: 0xBBBB,
     };
-    slave_sock.send_to(&delay_req.encode(), master_addr).await.unwrap();
+    slave_sock
+        .send_to(&delay_req.encode(), master_addr)
+        .await
+        .unwrap();
 
     // 4. Master receives Delay_Req and sends Delay_Resp.
     let (len, from) = master_sock.recv_from(&mut buf).await.unwrap();
@@ -348,7 +380,10 @@ async fn test_slave_handler_synchronizes() {
         timestamp: t4,
         clock_id: 0xAAAA,
     };
-    master_sock.send_to(&delay_resp.encode(), from).await.unwrap();
+    master_sock
+        .send_to(&delay_resp.encode(), from)
+        .await
+        .unwrap();
 
     // 5. Slave receives Delay_Resp.
     let (len, _) = slave_sock.recv_from(&mut buf).await.unwrap();

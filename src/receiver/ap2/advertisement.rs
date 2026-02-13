@@ -189,7 +189,6 @@ impl Ap2TxtRecord {
             status_flags &= !(PASSWORD_REQUIRED_FLAG | PASSWORD_CONFIGURED_FLAG);
         }
 
-
         self.set(txt_keys::STATUS_FLAGS, format!("0x{status_flags:X}"));
     }
 
