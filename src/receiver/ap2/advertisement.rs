@@ -157,6 +157,25 @@ impl Ap2TxtRecord {
         self.entries.insert(key.into(), value.into());
     }
 
+    /// Update password status in TXT record
+    pub fn update_password_status(&mut self, has_password: bool) {
+        // Update status flags
+        let mut status_flags = self
+            .get(txt_keys::STATUS_FLAGS)
+            .and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok())
+            .unwrap_or(0);
+
+        if has_password {
+            status_flags |= 1 << 4; // Set password required flag
+            status_flags |= 1 << 5; // Set password configured flag
+        } else {
+            status_flags &= !(1 << 4); // Clear password required
+            status_flags &= !(1 << 5); // Clear password configured
+        }
+
+        self.set(txt_keys::STATUS_FLAGS, format!("0x{status_flags:X}"));
+    }
+
     /// Convert to mdns-sd compatible format
     #[must_use]
     pub fn to_txt_properties(&self) -> Vec<(String, String)> {

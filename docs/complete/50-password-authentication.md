@@ -46,7 +46,7 @@ Sender                              Receiver
 
 ### 50.1 Password Configuration
 
-- [ ] **50.1.1** Extend configuration for password authentication
+- [x] **50.1.1** Extend configuration for password authentication
 
 **File:** `src/receiver/ap2/config.rs` (additions)
 
@@ -100,7 +100,7 @@ pub enum PasswordValidationError {
 
 ### 50.2 Password Authentication Handler
 
-- [ ] **50.2.1** Implement password-based pairing handler
+- [x] **50.2.1** Implement password-based pairing handler
 
 **File:** `src/receiver/ap2/password_auth.rs`
 
@@ -445,7 +445,7 @@ mod tests {
 
 ### 50.3 Status Flag Updates
 
-- [ ] **50.3.1** Ensure mDNS advertisement reflects password status
+- [x] **50.3.1** Ensure mDNS advertisement reflects password status
 
 **File:** `src/receiver/ap2/advertisement.rs` (additions)
 
@@ -475,7 +475,7 @@ impl Ap2TxtRecord {
 
 ### 50.4 Integration with Request Handler
 
-- [ ] **50.4.1** Wire password auth into request handling
+- [x] **50.4.1** Wire password auth into request handling
 
 **File:** `src/receiver/ap2/password_integration.rs`
 
@@ -695,7 +695,7 @@ impl AuthenticationHandler {
 
 ### 50.5 Password Authentication Tests
 
-- [ ] **50.5.1** Test password configuration and validation
+- [x] **50.5.1** Test password configuration and validation
 
 **File:** `tests/receiver/password_auth_tests.rs`
 
@@ -750,16 +750,16 @@ fn test_lockout_disabled_by_default() {
 
 ## Acceptance Criteria
 
-- [ ] Password can be configured and validated
-- [ ] Password authentication uses SRP-6a protocol
-- [ ] mDNS TXT record reflects password requirement
-- [ ] Failed attempts are tracked
-- [ ] Lockout activates after max failed attempts
-- [ ] Lockout duration is enforced
-- [ ] Successful authentication clears lockout
-- [ ] Password change takes effect immediately
-- [ ] Both password and HomeKit auth can coexist
-- [ ] All unit tests pass
+- [x] Password can be configured and validated
+- [x] Password authentication uses SRP-6a protocol
+- [x] mDNS TXT record reflects password requirement
+- [x] Failed attempts are tracked
+- [x] Lockout activates after max failed attempts
+- [x] Lockout duration is enforced
+- [x] Successful authentication clears lockout
+- [x] Password change takes effect immediately
+- [x] Both password and HomeKit auth can coexist
+- [x] All unit tests pass
 
 ---
 

@@ -11,6 +11,7 @@ mod timing;
 
 mod artwork_handler;
 mod metadata_handler;
+mod password_auth_tests;
 mod progress_handler;
 mod rtsp_handler_extra;
 mod set_parameter_handler;
