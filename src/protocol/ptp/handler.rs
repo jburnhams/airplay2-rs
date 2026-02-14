@@ -449,9 +449,10 @@ impl PtpMasterHandler {
         if self.config.use_airplay_format {
             if let Ok(req) = AirPlayTimingPacket::decode(data) {
                 if req.message_type == PtpMessageType::DelayReq {
-                    return self.handle_delay_req(data, src).await;
+                    return self.handle_airplay_delay_req(req, src).await;
                 }
             }
+            return Ok(());
         }
 
         match PtpMessage::decode(data) {
@@ -473,7 +474,7 @@ impl PtpMasterHandler {
                         src,
                         msg.header.sequence_id
                     );
-                    self.handle_delay_req(data, src).await?;
+                    self.handle_ieee_delay_req(msg, src).await?;
                 }
                 _ => {
                     tracing::debug!(
@@ -633,9 +634,36 @@ impl PtpMasterHandler {
         Ok(())
     }
 
-    async fn handle_delay_req(
+    async fn handle_airplay_delay_req(
         &mut self,
-        data: &[u8],
+        req: AirPlayTimingPacket,
+        src: SocketAddr,
+    ) -> Result<(), std::io::Error> {
+        // Remember this slave for future Sync broadcasts.
+        self.add_slave(src);
+        let t4 = PtpTimestamp::now();
+
+        tracing::info!(
+            "PTP: AirPlay format message type={:?}, seq={}",
+            req.message_type,
+            req.sequence_id
+        );
+
+        let resp = AirPlayTimingPacket {
+            message_type: PtpMessageType::DelayResp,
+            sequence_id: req.sequence_id,
+            timestamp: t4,
+            clock_id: self.config.clock_id,
+        };
+        self.event_socket.send_to(&resp.encode(), src).await?;
+        tracing::info!("PTP: Sent AirPlay DelayResp to {}", src);
+
+        Ok(())
+    }
+
+    async fn handle_ieee_delay_req(
+        &mut self,
+        msg: PtpMessage,
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
         // Remember this slave for future Sync broadcasts.
@@ -643,57 +671,25 @@ impl PtpMasterHandler {
         let t4 = PtpTimestamp::now();
         let source = PtpPortIdentity::new(self.config.clock_id, 1);
 
-        if self.config.use_airplay_format {
-            if let Ok(req) = AirPlayTimingPacket::decode(data) {
-                tracing::info!(
-                    "PTP: AirPlay format message type={:?}, seq={}",
-                    req.message_type,
-                    req.sequence_id
-                );
-                if req.message_type == PtpMessageType::DelayReq {
-                    let resp = AirPlayTimingPacket {
-                        message_type: PtpMessageType::DelayResp,
-                        sequence_id: req.sequence_id,
-                        timestamp: t4,
-                        clock_id: self.config.clock_id,
-                    };
-                    self.event_socket.send_to(&resp.encode(), src).await?;
-                    tracing::info!("PTP: Sent AirPlay DelayResp to {}", src);
-                }
-            } else {
-                tracing::warn!(
-                    "PTP: Failed to decode AirPlay format packet ({} bytes)",
-                    data.len()
-                );
-            }
-        } else if let Ok(msg) = PtpMessage::decode(data) {
-            tracing::info!(
-                "PTP: IEEE 1588 message type={:?}, seq={}",
-                msg.body,
-                msg.header.sequence_id
-            );
-            if let PtpMessageBody::DelayReq { .. } = msg.body {
-                let resp = PtpMessage::delay_resp(
-                    source,
-                    msg.header.sequence_id,
-                    t4,
-                    msg.header.source_port_identity,
-                );
-                // Delay_Resp goes on general port if available.
-                if let Some(ref general) = self.general_socket {
-                    general.send_to(&resp.encode(), src).await?;
-                } else {
-                    self.event_socket.send_to(&resp.encode(), src).await?;
-                }
-                tracing::info!("PTP: Sent IEEE 1588 DelayResp to {}", src);
-            }
+        tracing::info!(
+            "PTP: IEEE 1588 message type={:?}, seq={}",
+            msg.body,
+            msg.header.sequence_id
+        );
+
+        let resp = PtpMessage::delay_resp(
+            source,
+            msg.header.sequence_id,
+            t4,
+            msg.header.source_port_identity,
+        );
+        // Delay_Resp goes on general port if available.
+        if let Some(ref general) = self.general_socket {
+            general.send_to(&resp.encode(), src).await?;
         } else {
-            tracing::warn!(
-                "PTP: Failed to decode IEEE 1588 message ({} bytes): {:02X?}",
-                data.len(),
-                &data[..data.len().min(20)]
-            );
+            self.event_socket.send_to(&resp.encode(), src).await?;
         }
+        tracing::info!("PTP: Sent IEEE 1588 DelayResp to {}", src);
 
         Ok(())
     }
