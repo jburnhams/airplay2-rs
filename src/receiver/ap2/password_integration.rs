@@ -76,7 +76,7 @@ impl AuthenticationHandler {
         // Check for lockout
         if let Some(ref pw_auth) = self.password_auth {
             if pw_auth.is_locked_out() {
-                return self.lockout_response(cseq, pw_auth);
+                return Self::lockout_response(cseq, pw_auth);
             }
         }
 
@@ -91,7 +91,7 @@ impl AuthenticationHandler {
                         // Fall through to HomeKit
                     }
                     Err(e) => {
-                        return self.error_response(cseq, &e.to_string());
+                        return Self::error_response(cseq, &e.to_string());
                     }
                 }
             }
@@ -103,7 +103,7 @@ impl AuthenticationHandler {
         }
 
         // No authentication configured
-        self.error_response(cseq, "No authentication method available")
+        Self::error_response(cseq, "No authentication method available")
     }
 
     /// Handle pair-verify request
@@ -125,7 +125,7 @@ impl AuthenticationHandler {
                         // Fall through
                     }
                     Err(e) => {
-                        return self.error_response(cseq, &e.to_string());
+                        return Self::error_response(cseq, &e.to_string());
                     }
                 }
             }
@@ -136,11 +136,10 @@ impl AuthenticationHandler {
             return hk_handler.handle_pair_verify(request, cseq);
         }
 
-        self.error_response(cseq, "No authentication method available")
+        Self::error_response(cseq, "No authentication method available")
     }
 
-    #[allow(clippy::unused_self)]
-    fn lockout_response(&self, cseq: u32, pw_auth: &PasswordAuthManager) -> Ap2HandleResult {
+    fn lockout_response(cseq: u32, pw_auth: &PasswordAuthManager) -> Ap2HandleResult {
         let remaining = pw_auth
             .lockout_remaining()
             .map_or(300, |d| u32::try_from(d.as_secs()).unwrap_or(u32::MAX));
@@ -204,8 +203,7 @@ impl AuthenticationHandler {
         }
     }
 
-    #[allow(clippy::unused_self)]
-    fn error_response(&self, cseq: u32, message: &str) -> Ap2HandleResult {
+    fn error_response(cseq: u32, message: &str) -> Ap2HandleResult {
         Ap2HandleResult {
             response: Ap2ResponseBuilder::error(StatusCode::NOT_IMPLEMENTED)
                 .cseq(cseq)
