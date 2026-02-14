@@ -378,15 +378,22 @@ impl PtpMessage {
                 // [19..27] grandmasterIdentity
                 // [27..29] stepsRemoved
                 // [29] timeSource
-                let (gm_identity, priority1, priority2) = if body_data.len() >= Self::ANNOUNCE_BODY_SIZE {
-                    let gm = u64::from_be_bytes([
-                        body_data[19], body_data[20], body_data[21], body_data[22],
-                        body_data[23], body_data[24], body_data[25], body_data[26],
-                    ]);
-                    (gm, body_data[13], body_data[18])
-                } else {
-                    (0, 128, 128)
-                };
+                let (gm_identity, priority1, priority2) =
+                    if body_data.len() >= Self::ANNOUNCE_BODY_SIZE {
+                        let gm = u64::from_be_bytes([
+                            body_data[19],
+                            body_data[20],
+                            body_data[21],
+                            body_data[22],
+                            body_data[23],
+                            body_data[24],
+                            body_data[25],
+                            body_data[26],
+                        ]);
+                        (gm, body_data[13], body_data[18])
+                    } else {
+                        (0, 128, 128)
+                    };
                 PtpMessageBody::Announce {
                     origin_timestamp: ts,
                     grandmaster_identity: gm_identity,

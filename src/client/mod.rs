@@ -525,11 +525,13 @@ impl AirPlayClient {
         // Try querying playback-info
         // Some devices might prefer "progress"
         let body = "playback-info\r\n";
-        self.connection.send_command(
-            crate::protocol::rtsp::Method::GetParameter,
-            Some(body.as_bytes().to_vec()),
-            Some("text/parameters".to_string())
-        ).await
+        self.connection
+            .send_command(
+                crate::protocol::rtsp::Method::GetParameter,
+                Some(body.as_bytes().to_vec()),
+                Some("text/parameters".to_string()),
+            )
+            .await
     }
 
     /// Stream raw PCM audio from a source

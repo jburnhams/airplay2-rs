@@ -133,13 +133,12 @@ impl RtspSession {
     ) -> RtspRequest {
         // Per airplay2-homepod.md, SETUP requires session ID in URL: rtsp://<host>/<session-id>
         let path = format!("/{}", self.client_session_id);
-        let mut builder = self.request_builder(Method::Setup, &path)
-            .body_plist(plist);
-        
+        let mut builder = self.request_builder(Method::Setup, &path).body_plist(plist);
+
         if let Some(t) = transport {
             builder = builder.header(names::TRANSPORT, t);
         }
-        
+
         builder.build()
     }
 
@@ -164,8 +163,7 @@ impl RtspSession {
     #[must_use]
     pub fn record_request(&mut self) -> RtspRequest {
         let path = format!("/{}", self.client_session_id);
-        self.request_builder(Method::Record, &path)
-            .build()
+        self.request_builder(Method::Record, &path).build()
     }
 
     /// Create PLAY request
@@ -342,7 +340,11 @@ impl RtspSession {
                 )
                 | (
                     _,
-                    Method::Options | Method::Teardown | Method::Get | Method::SetRateAnchorTime | Method::SetPeers
+                    Method::Options
+                        | Method::Teardown
+                        | Method::Get
+                        | Method::SetRateAnchorTime
+                        | Method::SetPeers
                 )
         )
     }

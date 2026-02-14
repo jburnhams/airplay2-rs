@@ -401,7 +401,10 @@ impl PcmStreamer {
             self.send_packet(&rtp_packet_buffer).await?;
             packets_sent += 1;
             if packets_sent == 1 {
-                tracing::info!("First RTP audio packet sent ({} bytes)", rtp_packet_buffer.len());
+                tracing::info!(
+                    "First RTP audio packet sent ({} bytes)",
+                    rtp_packet_buffer.len()
+                );
             }
             if packets_sent % 100 == 0 {
                 tracing::info!("Sent {} RTP packets", packets_sent);
