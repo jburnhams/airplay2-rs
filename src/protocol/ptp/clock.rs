@@ -338,7 +338,7 @@ impl PtpClock {
         rtp_anchor: u32,
         ptp_anchor: PtpTimestamp,
     ) -> PtpTimestamp {
-        let sample_diff = i64::from(rtp_timestamp.wrapping_sub(rtp_anchor));
+        let sample_diff = (rtp_timestamp.wrapping_sub(rtp_anchor) as i32) as i64;
         let nanos_diff = sample_diff * 1_000_000_000 / i64::from(sample_rate);
         let remote_ptp_nanos = ptp_anchor.to_nanos() + i128::from(nanos_diff);
         let remote_ptp = if remote_ptp_nanos >= 0 {
