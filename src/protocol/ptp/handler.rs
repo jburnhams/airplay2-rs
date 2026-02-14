@@ -451,6 +451,12 @@ impl PtpMasterHandler {
                 if req.message_type == PtpMessageType::DelayReq {
                     return self.handle_airplay_delay_req(req, src).await;
                 }
+                tracing::debug!(
+                    "PTP master: Received AirPlay message type {:?} from {} (ignored)",
+                    req.message_type,
+                    src
+                );
+                return Ok(());
             }
             return Ok(());
         }
