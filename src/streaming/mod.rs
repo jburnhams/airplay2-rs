@@ -3,8 +3,11 @@
 mod pcm;
 pub mod raop_streamer;
 mod resampler;
-mod source;
+pub mod source;
 mod url;
+/// File-based audio source (requires `decoders` feature)
+#[cfg(feature = "decoders")]
+pub mod file;
 
 #[cfg(test)]
 mod tests;

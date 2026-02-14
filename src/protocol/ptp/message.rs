@@ -20,6 +20,8 @@ pub enum PtpMessageType {
     DelayResp = 0x09,
     /// Announce (master → slave), clock properties.
     Announce = 0x0B,
+    /// Signaling message.
+    Signaling = 0x0C,
 }
 
 impl PtpMessageType {
@@ -34,6 +36,7 @@ impl PtpMessageType {
             0x08 => Ok(Self::FollowUp),
             0x09 => Ok(Self::DelayResp),
             0x0B => Ok(Self::Announce),
+            0x0C => Ok(Self::Signaling),
             other => Err(PtpParseError::UnknownMessageType(other)),
         }
     }
@@ -42,6 +45,12 @@ impl PtpMessageType {
     #[must_use]
     pub fn is_event(&self) -> bool {
         matches!(self, Self::Sync | Self::DelayReq)
+    }
+
+    /// Whether this message type can be safely ignored.
+    #[must_use]
+    pub fn is_ignorable(&self) -> bool {
+        matches!(self, Self::Signaling)
     }
 
     /// Whether this message type is a general message.
@@ -59,6 +68,7 @@ impl std::fmt::Display for PtpMessageType {
             Self::FollowUp => write!(f, "Follow_Up"),
             Self::DelayResp => write!(f, "Delay_Resp"),
             Self::Announce => write!(f, "Announce"),
+            Self::Signaling => write!(f, "Signaling"),
         }
     }
 }
@@ -149,6 +159,7 @@ impl PtpHeader {
             PtpMessageType::FollowUp => 0x02,
             PtpMessageType::DelayResp => 0x03,
             PtpMessageType::Announce => 0x05,
+            PtpMessageType::Signaling => 0x05,
         };
         Self {
             transport_specific: 0,
@@ -270,6 +281,8 @@ pub enum PtpMessageBody {
         /// Grandmaster clock quality.
         grandmaster_priority2: u8,
     },
+    /// Signaling message (variable length, parsed minimally).
+    Signaling,
 }
 
 impl PtpMessage {
@@ -277,8 +290,11 @@ impl PtpMessage {
     const TIMESTAMP_BODY_SIZE: usize = 10;
     /// Body size for `DelayResp` (10-byte timestamp + 10-byte port identity).
     const DELAY_RESP_BODY_SIZE: usize = 20;
-    /// Body size for `Announce` (10-byte timestamp + 10 bytes of clock properties).
-    const ANNOUNCE_BODY_SIZE: usize = 20;
+    /// Body size for Announce (10-byte timestamp + 20 bytes of clock properties).
+    /// IEEE 1588: originTimestamp(10) + currentUtcOffset(2) + reserved(1) +
+    /// priority1(1) + clockQuality(4) + priority2(1) + gmIdentity(8) +
+    /// stepsRemoved(2) + timeSource(1) = 30.
+    const ANNOUNCE_BODY_SIZE: usize = 30;
 
     /// Parse a complete PTP message from bytes.
     ///
@@ -342,34 +358,44 @@ impl PtpMessage {
                 }
             }
             PtpMessageType::Announce => {
-                if body_data.len() < Self::ANNOUNCE_BODY_SIZE {
+                // Announce can have varying sizes; parse what we have
+                if body_data.len() < 10 {
                     return Err(PtpParseError::TooShort {
-                        needed: PtpHeader::SIZE + Self::ANNOUNCE_BODY_SIZE,
+                        needed: PtpHeader::SIZE + 10,
                         have: data.len(),
                     });
                 }
                 let ts =
                     PtpTimestamp::decode_ieee1588(body_data).ok_or(PtpParseError::TooShort {
-                        needed: PtpHeader::SIZE + Self::ANNOUNCE_BODY_SIZE,
+                        needed: PtpHeader::SIZE + 10,
                         have: data.len(),
                     })?;
-                let gm_identity = u64::from_be_bytes([
-                    body_data[10],
-                    body_data[11],
-                    body_data[12],
-                    body_data[13],
-                    body_data[14],
-                    body_data[15],
-                    body_data[16],
-                    body_data[17],
-                ]);
+                // IEEE 1588 Announce body after timestamp:
+                // [10..12] currentUtcOffset
+                // [12] reserved
+                // [13] grandmasterPriority1
+                // [14..18] grandmasterClockQuality
+                // [18] grandmasterPriority2
+                // [19..27] grandmasterIdentity
+                // [27..29] stepsRemoved
+                // [29] timeSource
+                let (gm_identity, priority1, priority2) = if body_data.len() >= Self::ANNOUNCE_BODY_SIZE {
+                    let gm = u64::from_be_bytes([
+                        body_data[19], body_data[20], body_data[21], body_data[22],
+                        body_data[23], body_data[24], body_data[25], body_data[26],
+                    ]);
+                    (gm, body_data[13], body_data[18])
+                } else {
+                    (0, 128, 128)
+                };
                 PtpMessageBody::Announce {
                     origin_timestamp: ts,
                     grandmaster_identity: gm_identity,
-                    grandmaster_priority1: body_data[18],
-                    grandmaster_priority2: body_data[19],
+                    grandmaster_priority1: priority1,
+                    grandmaster_priority2: priority2,
                 }
             }
+            PtpMessageType::Signaling => PtpMessageBody::Signaling,
         };
 
         Ok(Self { header, body })
@@ -411,12 +437,29 @@ impl PtpMessage {
                 grandmaster_priority2,
             } => {
                 let mut buf = Vec::with_capacity(Self::ANNOUNCE_BODY_SIZE);
+                // originTimestamp (10 bytes)
                 buf.extend_from_slice(&origin_timestamp.encode_ieee1588());
-                buf.extend_from_slice(&grandmaster_identity.to_be_bytes());
+                // currentUtcOffset (2 bytes) - TAI-UTC offset, typically 37
+                buf.extend_from_slice(&37u16.to_be_bytes());
+                // reserved (1 byte)
+                buf.push(0);
+                // grandmasterPriority1 (1 byte)
                 buf.push(*grandmaster_priority1);
+                // grandmasterClockQuality (4 bytes):
+                //   clockClass=248 (default), clockAccuracy=0xFE (unknown),
+                //   offsetScaledLogVariance=0xFFFF (max)
+                buf.extend_from_slice(&[248, 0xFE, 0xFF, 0xFF]);
+                // grandmasterPriority2 (1 byte)
                 buf.push(*grandmaster_priority2);
+                // grandmasterIdentity (8 bytes)
+                buf.extend_from_slice(&grandmaster_identity.to_be_bytes());
+                // stepsRemoved (2 bytes) - 0 = we are the grandmaster
+                buf.extend_from_slice(&0u16.to_be_bytes());
+                // timeSource (1 byte) - 0xA0 = internal oscillator
+                buf.push(0xA0);
                 buf
             }
+            PtpMessageBody::Signaling => Vec::new(),
         }
     }
 

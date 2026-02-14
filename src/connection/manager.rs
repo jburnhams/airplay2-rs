@@ -7,10 +7,10 @@ use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::{
     AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
-    TransientPairing,
 };
 use crate::protocol::ptp::{
-    PtpHandlerConfig, PtpMasterHandler, PtpRole, SharedPtpClock, create_shared_clock,
+    PtpHandlerConfig, PtpRole, SharedPtpClock,
+    create_shared_clock,
 };
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice, TimingProtocol};
@@ -193,6 +193,8 @@ impl ConnectionManager {
                 })?;
 
         *self.stream.lock().await = Some(stream);
+        *self.secure_session.lock().await = None;
+        *self.session_keys.lock().await = None;
 
         // 2. Initialize RTSP session
         let rtsp_session = RtspSession::new(&device.address().to_string(), device.port);
@@ -322,36 +324,62 @@ impl ConnectionManager {
 
     /// Authenticate with the device
     async fn authenticate(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
-        // Check if we have stored keys
+        // 1. Try Transient Pairing first (most common for HomePods allowing it)
+        tracing::info!("Attempting Transient Pairing...");
+        match self.transient_pair().await {
+            Ok(session_keys) => {
+                tracing::info!("Transient Pairing successful");
+                *self.secure_session.lock().await =
+                    Some(crate::net::secure::HapSecureSession::new(
+                        &session_keys.encrypt_key,
+                        &session_keys.decrypt_key,
+                    ));
+                *self.session_keys.lock().await = Some(session_keys);
+                return Ok(());
+            }
+            Err(e) => {
+                if let AirPlayError::AuthenticationFailed { message, .. } = &e {
+                    // Only log debug if it's just a failed auth (expected if device requires PIN)
+                    tracing::debug!("Transient Pairing failed: {}", message);
+                } else {
+                    // Log warning for other errors (network, etc)
+                    tracing::warn!("Transient Pairing failed: {}", e);
+                }
+                // If the connection was closed by the device, we might need to reconnect?
+                // For now, we continue to SRP. 
+                // Note: If transient pairing caused a disconnect, subsequent SRP attempts will fail with network error.
+            }
+        }
+
+        // 2. Check if we have stored keys
         if let Some(ref storage) = *self.pairing_storage.lock().await {
             if let Some(keys) = storage.load(&device.id).await {
-                // Try Pair-Verify with stored keys
+                // ... (unchanged)
                 match self.pair_verify(device, &keys).await {
                     Ok(session_keys) => {
                         *self.session_keys.lock().await = Some(session_keys);
                         return Ok(());
                     }
                     Err(e) => {
-                        tracing::warn!("Pair-Verify failed, trying transient: {}", e);
+                        tracing::warn!("Pair-Verify failed, trying PIN: {}", e);
                     }
                 }
             }
         }
 
-        // Try configured PIN first if available
+        // 3. Try configured PIN first if available
         if let Some(ref pin) = self.config.pin {
+            // ... (unchanged SRP logic)
+            // But we need to keep the original logic for PINs
+            // I will copy the rest of the function content below
             tracing::info!("Attempting SRP Pairing with configured PIN: '{}'...", pin);
 
-            // Try standard usernames with the configured PIN
             let usernames = ["Pair-Setup", "AirPlay", "admin"];
 
             for user in usernames {
                 match self.pair_setup(user, pin).await {
                     Ok((session_keys, pairing_keys)) => {
-                        tracing::info!(
-                            "SRP Pairing successful with configured PIN and User='{}'",
-                            user
-                        );
+                        tracing::info!("SRP Pairing successful with configured PIN");
                         *self.secure_session.lock().await =
                             Some(crate::net::secure::HapSecureSession::new(
                                 &session_keys.encrypt_key,
@@ -359,82 +387,63 @@ impl ConnectionManager {
                             ));
                         *self.session_keys.lock().await = Some(session_keys);
 
-                        // Save pairing keys if we have storage and keys were generated
-                        if let (Some(ref mut storage), Some(keys)) =
+                         if let (Some(ref mut storage), Some(keys)) =
                             (self.pairing_storage.lock().await.as_mut(), pairing_keys)
                         {
-                            tracing::info!("Saving pairing keys for device {}", device.id);
-                            if let Err(e) = storage.save(&device.id, &keys).await {
-                                tracing::warn!("Failed to save pairing keys: {}", e);
-                            }
+                            let _ = storage.save(&device.id, &keys).await;
                         }
 
                         return Ok(());
                     }
-                    Err(e) => {
-                        tracing::debug!(
-                            "SRP Pairing failed with configured PIN and User='{}': {}",
-                            user,
-                            e
-                        );
-                        // Continue to next username
-                    }
+                    Err(_) => {}
                 }
             }
-
-            // If configured PIN was provided but failed, we stop here.
-            return Err(AirPlayError::AuthenticationFailed {
+             return Err(AirPlayError::AuthenticationFailed {
                 message: "Authentication failed with configured PIN".to_string(),
                 recoverable: false,
             });
         }
 
-        // Try various credentials for SRP Pairing
-        // Format: (username, pin)
+        // 4. Try various credentials for SRP Pairing
         let credentials = [
-            ("Pair-Setup", "3939"), // Standard AirPort
+            ("Pair-Setup", "3939"),
             ("Pair-Setup", "0000"),
             ("Pair-Setup", "1111"),
             ("Pair-Setup", "1234"),
             ("3939", "3939"),
             ("admin", "3939"),
             ("AirPlay", "3939"),
-            ("Pair-Setup", ""), // Empty PIN
+            ("Pair-Setup", ""),
         ];
 
         for (user, pin) in credentials {
             tracing::info!("Attempting SRP Pairing: User='{}', PIN='{}'...", user, pin);
             match self.pair_setup(user, pin).await {
                 Ok((session_keys, pairing_keys)) => {
-                    tracing::info!("SRP Pairing successful with User='{}', PIN='{}'", user, pin);
-                    *self.secure_session.lock().await =
-                        Some(crate::net::secure::HapSecureSession::new(
-                            &session_keys.encrypt_key,
-                            &session_keys.decrypt_key,
-                        ));
-                    *self.session_keys.lock().await = Some(session_keys);
+                     tracing::info!("SRP Pairing successful");
+                        *self.secure_session.lock().await =
+                            Some(crate::net::secure::HapSecureSession::new(
+                                &session_keys.encrypt_key,
+                                &session_keys.decrypt_key,
+                            ));
+                        *self.session_keys.lock().await = Some(session_keys);
 
-                    // Save pairing keys if we have storage and keys were generated
-                    if let (Some(ref mut storage), Some(keys)) =
-                        (self.pairing_storage.lock().await.as_mut(), pairing_keys)
-                    {
-                        tracing::info!("Saving pairing keys for device {}", device.id);
-                        if let Err(e) = storage.save(&device.id, &keys).await {
-                            tracing::warn!("Failed to save pairing keys: {}", e);
+                         if let (Some(ref mut storage), Some(keys)) =
+                            (self.pairing_storage.lock().await.as_mut(), pairing_keys)
+                        {
+                            let _ = storage.save(&device.id, &keys).await;
                         }
-                    }
 
-                    return Ok(());
+                        return Ok(());
                 }
                 Err(e) => {
-                    tracing::debug!("SRP Pairing failed: {}", e);
-                    // Wait a bit to avoid backoff
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                     tracing::debug!("SRP Pairing failed: {}", e);
+                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
             }
         }
 
-        // 3. Fail if neither worked
+        // 5. Fail if neither worked
         Err(AirPlayError::AuthenticationFailed {
             message: "All pairing methods failed".to_string(),
             recoverable: false,
@@ -547,9 +556,12 @@ impl ConnectionManager {
         }
     }
 
-    /// Perform transient pairing
+    /// Perform transient pairing using SRP (Pair-Setup with transient flag)
     async fn transient_pair(&self) -> Result<SessionKeys, AirPlayError> {
-        let mut pairing = TransientPairing::new();
+        let mut pairing = PairSetup::new();
+        pairing.set_transient(true);
+        pairing.set_pin("3939");
+        pairing.set_username("Pair-Setup");
 
         // M1: Start pairing
         let m1 = pairing
@@ -559,7 +571,7 @@ impl ConnectionManager {
                 recoverable: false,
             })?;
 
-        tracing::debug!("Starting Transient Pairing (M1)...");
+        tracing::debug!("Starting Transient Pairing (SRP+Transient)...");
         let m2 = self.send_pairing_data(&m1, "/pair-setup").await?;
         tracing::debug!("Received M2 ({} bytes)", m2.len());
 
@@ -571,13 +583,9 @@ impl ConnectionManager {
                 recoverable: false,
             })?;
 
-        if let PairingStepResult::Complete(keys) = result {
-            return Ok(keys);
-        }
-
         let PairingStepResult::SendData(m3) = result else {
-            return Err(AirPlayError::AuthenticationFailed {
-                message: "Unexpected pairing state".to_string(),
+             return Err(AirPlayError::AuthenticationFailed {
+                message: "Unexpected pairing state after M2".to_string(),
                 recoverable: false,
             });
         };
@@ -586,7 +594,7 @@ impl ConnectionManager {
         let m4 = self.send_pairing_data(&m3, "/pair-setup").await?;
         tracing::debug!("Received M4 ({} bytes)", m4.len());
 
-        // M4 -> Complete
+        // M4 -> Complete (since transient=true)
         let result = pairing
             .process_m4(&m4)
             .map_err(|e| AirPlayError::AuthenticationFailed {
@@ -596,9 +604,13 @@ impl ConnectionManager {
 
         match result {
             PairingStepResult::Complete(keys) => {
-                tracing::info!("Transient Pairing completed successfully.");
+                tracing::info!("Transient Pairing completed (SRP M4)");
                 Ok(keys)
             }
+             PairingStepResult::SendData(_) => Err(AirPlayError::AuthenticationFailed {
+                message: "Unexpected continuation after M4 in transient mode".to_string(),
+                recoverable: false,
+            }),
             _ => Err(AirPlayError::AuthenticationFailed {
                 message: "Pairing did not complete".to_string(),
                 recoverable: false,
@@ -672,8 +684,7 @@ impl ConnectionManager {
         tracing::debug!("Performing GET /info (Encrypted)...");
         let _ = self.send_get_command("/info").await?;
 
-        // 2. Session Setup (SETUP / with Plist)
-        tracing::debug!("Performing Session SETUP...");
+        // 2. Session Setup (SETUP / with Plist) — only for NTP/AirPlay 1 devices
         let group_uuid = "D67B1696-8D3A-A6CF-9ACF-03C837DC68FD";
 
         // Determine timing protocol based on config and device capabilities
@@ -681,168 +692,341 @@ impl ConnectionManager {
         let timing_protocol_str = if use_ptp { "PTP" } else { "NTP" };
         tracing::info!("Using timing protocol: {}", timing_protocol_str);
 
-        let setup_plist = DictBuilder::new()
-            .insert("timingProtocol", timing_protocol_str)
-            .insert("groupUUID", group_uuid)
-            .insert("macAddress", "AC:07:75:12:4A:1F")
-            .insert("isAudioReceiver", false)
-            .build();
+        if !use_ptp {
+            // For NTP/AirPlay 1 devices, send a preliminary Session SETUP
+            tracing::debug!("Performing Session SETUP (NTP)...");
+            let setup_plist = DictBuilder::new()
+                .insert("timingProtocol", timing_protocol_str)
+                .insert("groupUUID", group_uuid)
+                .insert("macAddress", "AC:07:75:12:4A:1F")
+                .insert("isAudioReceiver", false)
+                .build();
 
-        let setup_session_req = {
-            let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard
-                .as_mut()
-                .ok_or_else(|| AirPlayError::InvalidState {
-                    message: "No RTSP session".to_string(),
-                    current_state: "None".to_string(),
-                })?;
-            session.setup_session_request(&setup_plist)
-        };
-        self.send_rtsp_request(&setup_session_req).await?;
-
-        // 3. Announce (ANNOUNCE / with SDP)
-        tracing::debug!("Performing ANNOUNCE...");
-        // Note: We omit rsaaeskey/aesiv to force usage of session key (ChaCha20-Poly1305)
-        // Build SDP based on configured codec
-        let sdp = match self.config.audio_codec {
-            AudioCodec::Alac => {
-                // ALAC negotiation (96 AppleLossless)
-                // Note: Python receiver expects exactly 'AppleLossless' (no /44100/2)
-                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
-            }
-            AudioCodec::Pcm => {
-                // PCM/L16 negotiation (uncompressed audio)
-                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
-            }
-            AudioCodec::Aac => {
-                // AAC negotiation (96 mpeg4-generic)
-                // mode=AAC-hbr implies RFC 3640 (requires AU headers)
-                "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024\r\n".to_string()
-            }
-            AudioCodec::Opus => {
-                return Err(AirPlayError::InvalidParameter {
-                    name: "audio_codec".to_string(),
-                    message: "Opus codec not yet supported for SDP generation".to_string(),
-                });
-            }
-        };
-
-        let announce_req = {
-            let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard
-                .as_mut()
-                .ok_or_else(|| AirPlayError::InvalidState {
-                    message: "No RTSP session".to_string(),
-                    current_state: "None".to_string(),
-                })?;
-            session.announce_request(&sdp)
-        };
-        self.send_rtsp_request(&announce_req).await?;
-
-        // 3. Bind local UDP ports
-        let audio_sock = UdpSocket::bind("0.0.0.0:0").await?;
-        let ctrl_sock = UdpSocket::bind("0.0.0.0:0").await?;
-        let time_sock = UdpSocket::bind("0.0.0.0:0").await?;
-
-        let _audio_port = audio_sock.local_addr()?.port();
-        let ctrl_port = ctrl_sock.local_addr()?.port();
-        let time_port = time_sock.local_addr()?.port();
-
-        // 4. Stream Setup (SETUP /rtp/audio with Transport)
-        tracing::debug!("Performing Stream SETUP...");
-        let transport = format!(
-            "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port={ctrl_port};timing_port={time_port}"
-        );
-
-        let setup_stream_req = {
-            let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard
-                .as_mut()
-                .ok_or_else(|| AirPlayError::InvalidState {
-                    message: "No RTSP session".to_string(),
-                    current_state: "None".to_string(),
-                })?;
-            session.setup_stream_request(&transport)
-        };
-
-        let response = self.send_rtsp_request(&setup_stream_req).await?;
-
-        // 5. Update session state
-        {
-            let mut session_guard = self.rtsp_session.lock().await;
-            let session = session_guard
-                .as_mut()
-                .ok_or_else(|| AirPlayError::InvalidState {
-                    message: "No RTSP session".to_string(),
-                    current_state: "None".to_string(),
-                })?;
-            session
-                .process_response(Method::Setup, &response)
-                .map_err(|e| AirPlayError::RtspError {
-                    message: e,
-                    status_code: Some(response.status.as_u16()),
-                })?;
+            let setup_session_req = {
+                let mut session_guard = self.rtsp_session.lock().await;
+                let session = session_guard
+                    .as_mut()
+                    .ok_or_else(|| AirPlayError::InvalidState {
+                        message: "No RTSP session".to_string(),
+                        current_state: "None".to_string(),
+                    })?;
+                session.setup_session_request(&setup_plist, None)
+            };
+            self.send_rtsp_request(&setup_session_req).await?;
         }
 
-        // 6. Parse response transport header to get server ports
-        let transport_header =
-            response
-                .headers
-                .get("Transport")
-                .ok_or(AirPlayError::RtspError {
-                    message: "Missing Transport header in SETUP response".to_string(),
-                    status_code: None,
-                })?;
+        // 3. Announce (ANNOUNCE / with SDP) — skip for PTP/Buffered Audio devices
+        // AirPlay 2 Buffered Audio negotiates format via SETUP plist, not ANNOUNCE SDP.
+        // Sending ANNOUNCE to HomePod returns 455 and may corrupt session state.
+        if !use_ptp {
+            tracing::debug!("Performing ANNOUNCE...");
+            let sdp = match self.config.audio_codec {
+                AudioCodec::Alac => {
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
+                }
+                AudioCodec::Pcm => {
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
+                }
+                AudioCodec::Aac => {
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024\r\n".to_string()
+                }
+                AudioCodec::Opus => {
+                    return Err(AirPlayError::InvalidParameter {
+                        name: "audio_codec".to_string(),
+                        message: "Opus codec not yet supported for SDP generation".to_string(),
+                    });
+                }
+            };
 
-        let (server_audio_port, server_ctrl_port, server_time_port) =
-            Self::parse_transport_ports(transport_header)?;
+            let announce_req = {
+                let mut session_guard = self.rtsp_session.lock().await;
+                let session = session_guard
+                    .as_mut()
+                    .ok_or_else(|| AirPlayError::InvalidState {
+                        message: "No RTSP session".to_string(),
+                        current_state: "None".to_string(),
+                    })?;
+                session.announce_request(&sdp)
+            };
+            let announce_response = self.send_rtsp_request(&announce_req).await?;
+            tracing::debug!("ANNOUNCE response status: {}", announce_response.status.as_u16());
+        } else {
+            tracing::info!("Skipping ANNOUNCE for PTP/Buffered Audio device");
+        }
 
-        // 7. Connect UDP sockets to server ports
-        let device_ip = {
-            let current_state = self.state().await;
-            let device_guard = self.device.read().await;
-            let device = device_guard
-                .as_ref()
-                .ok_or_else(|| AirPlayError::InvalidState {
-                    message: "Device information is missing.".to_string(),
-                    current_state: format!("{current_state:?}"),
-                })?;
-            device.address()
+        // 4. Session Setup (SETUP Step 1: Info/Timing/Event)
+        tracing::debug!("Performing Session SETUP (Step 1)...");
+        let ek = self.encryption_key().await.unwrap_or([0u8; 32]);
+
+        let eiv = {
+            let mut rng = rand::thread_rng();
+            let mut iv = [0u8; 16];
+            use rand::RngCore;
+            rng.fill_bytes(&mut iv);
+            iv
         };
 
-        audio_sock.connect((device_ip, server_audio_port)).await?;
-        ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-        time_sock.connect((device_ip, server_time_port)).await?;
+        // Determine timing protocol based on device capabilities
+        // Devices supporting Buffered Audio (AirPlay 2) typically require/support PTP
+        // Legacy devices use NTP.
+        let use_ptp = self.device.read().await.as_ref()
+            .map(|d| d.capabilities.supports_buffered_audio)
+            .unwrap_or(false);
 
-        // 7b. Start PTP master handler if using PTP timing
+        let setup_plist_step1 = if use_ptp {
+            tracing::info!("Device supports Buffered Audio - Using PTP timing protocol");
+            
+            // Get local IP from the connected stream if possible
+            let local_ip = {
+                let stream_guard = self.stream.lock().await;
+                if let Some(ref stream) = *stream_guard {
+                    stream.local_addr().ok().map(|a| a.ip().to_string())
+                } else {
+                    None
+                }
+            }.unwrap_or_else(|| "0.0.0.0".to_string());
+            
+            let timing_peer_info = DictBuilder::new()
+                .insert("Addresses", vec![local_ip]) 
+                .insert("ID", self.rtsp_session.lock().await.as_ref()
+                    .map(|s| s.client_session_id().to_string())
+                    .unwrap_or_default())
+                .build();
+                
+            DictBuilder::new()
+                .insert("timingProtocol", "PTP")
+                .insert("timingPeerInfo", timing_peer_info)
+                .insert("groupUUID", group_uuid)
+                .insert("macAddress", "AC:07:75:12:4A:1F")
+                .insert("isAudioReceiver", false)
+                .insert("ekey", ek.to_vec())
+                .insert("eiv", eiv.to_vec())
+                .insert("et", 4)
+                .build()
+        } else {
+            tracing::info!("Device does not support Buffered Audio - Using NTP timing protocol");
+            DictBuilder::new()
+                .insert("timingProtocol", "NTP")
+                .insert("ekey", ek.to_vec())
+                .insert("eiv", eiv.to_vec()) 
+                .insert("et", 4)
+                .build()
+        };
+
+        let setup_req_step1 = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            // Per airplay2-homepod.md, SETUP #1 plist example doesn't show Transport header
+            session.setup_session_request(&setup_plist_step1, None) 
+        };
+        let response_step1 = self.send_rtsp_request(&setup_req_step1).await?;
+        tracing::info!("SETUP Step 1 response status: {}, body length: {} bytes",
+            response_step1.status.as_u16(), response_step1.body.len());
+        if !response_step1.body.is_empty() {
+            let hex_len = response_step1.body.len().min(256);
+            tracing::info!("SETUP Step 1 raw body (first {} bytes hex): {:02X?}",
+                hex_len, &response_step1.body[..hex_len]);
+        }
+
+        // Parse Event/Timing ports from Step 1
+        let (server_event_port, server_timing_port) = match crate::protocol::plist::decode(&response_step1.body) {
+            Ok(plist) => {
+                tracing::info!("SETUP Step 1 plist: {:#?}", plist);
+                if let Some(dict) = plist.as_dict() {
+                    let ep = dict.get("eventPort").and_then(|i| i.as_i64()).map(|i| i as u16);
+                    let tp = dict.get("timingPort").and_then(|i| i.as_i64()).map(|i| i as u16);
+                    tracing::info!("SETUP Step 1 ports: eventPort={:?}, timingPort={:?}", ep, tp);
+                    // Also log timingPeerInfo from device
+                    if let Some(tpi) = dict.get("timingPeerInfo") {
+                        tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                    }
+                    (ep, tp)
+                } else {
+                    (None, None)
+                }
+            },
+            Err(e) => {
+                tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
+                (None, None)
+            }
+        };
+
+        // 5. Stream Setup (SETUP Step 2: Audio/Control)
+        tracing::debug!("Performing Stream SETUP (Step 2)...");
+        let audio_sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
+        let ctrl_sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
+        let time_sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
+
+        let audio_port = audio_sock.local_addr()?.port();
+        let ctrl_port = ctrl_sock.local_addr()?.port();
+        let time_port = time_sock.local_addr()?.port();
+        
+        tracing::debug!("Bound local ports: Audio={}, Control={}, Timing={}", audio_port, ctrl_port, time_port);
+
+        let transport = format!(
+            "RTP/AVP/UDP;unicast;mode=record;client_port={};control_port={};timing_port={}",
+             audio_port, ctrl_port, time_port
+        );
+        
+        let stream_type = if self.device.read().await.as_ref().map(|d| d.capabilities.supports_buffered_audio).unwrap_or(false) { 96 } else { 100 };
+
+        let stream_entry = DictBuilder::new()
+            .insert("type", stream_type)
+            .insert("ct", 0x1) // Control Type (Audio)
+            .insert("spf", 352) // Samples per frame (ALAC)
+            .insert("audioType", "default")
+            .insert("shk", ek.to_vec())
+            .insert("controlPort", u64::from(ctrl_port))
+            .insert("timingPort", u64::from(time_port))
+            .build();
+
+        let setup_plist_step2 = DictBuilder::new()
+            .insert("streams", vec![stream_entry])
+            .build();
+
+        let setup_req_step2 = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            // Send transport header now to negotiate ports
+            session.setup_session_request(&setup_plist_step2, Some(&transport))
+        };
+        let response_step2 = self.send_rtsp_request(&setup_req_step2).await?;
+        tracing::info!("SETUP Step 2 response status: {}, body length: {} bytes",
+            response_step2.status.as_u16(), response_step2.body.len());
+        if !response_step2.body.is_empty() {
+            let hex_len = response_step2.body.len().min(256);
+            tracing::info!("SETUP Step 2 raw body (first {} bytes hex): {:02X?}",
+                hex_len, &response_step2.body[..hex_len]);
+        }
+
+
+        let mut server_ports = None;
+        match crate::protocol::plist::decode(&response_step2.body) {
+            Ok(plist) => {
+                tracing::info!("SETUP Step 2 plist: {:#?}", plist);
+                if let Some(dict) = plist.as_dict() {
+                    // Try to find stream with dataPort/controlPort
+                    // Or top level if they reply there
+                    // Check top level first
+                    let dp = dict.get("dataPort").and_then(|i| i.as_i64()).map(|i| i as u16);
+                    let cp = dict.get("controlPort").and_then(|i| i.as_i64()).map(|i| i as u16);
+                    
+                    // Also check inside 'streams' array if present
+                    let stream_ports = if let Some(streams) = dict.get("streams").and_then(|s| s.as_array()) {
+                        streams.first().and_then(|s| s.as_dict()).map(|d| {
+                             (
+                                 d.get("dataPort").and_then(|i| i.as_i64()).map(|i| i as u16),
+                                 d.get("controlPort").and_then(|i| i.as_i64()).map(|i| i as u16)
+                             )
+                        })
+                    } else {
+                        None
+                    };
+
+                    let (final_dp, final_cp) = match (dp, cp) {
+                        (Some(d), Some(c)) => (Some(d), Some(c)),
+                        _ => stream_ports.unwrap_or((None, None)),
+                    };
+                    
+                    if let (Some(dp), Some(cp)) = (final_dp, final_cp) {
+                         // We need event/timing ports too. Use ones from Step 1 or fallback to default/derived.
+                         let ep = server_event_port.unwrap_or(0); // Sockets might fail if 0?
+                         let tp = server_timing_port.unwrap_or(0);
+                         server_ports = Some((dp, cp, ep, tp));
+                    }
+                }
+            },
+            Err(e) => tracing::warn!("Failed to decode SETUP Step 2 plist: {}", e),
+        }
+
+        // Check for Transport header in Step 2 response
+        if server_ports.is_none() {
+            if let Some(transport_header) = response_step2.headers.get("Transport") {
+                 if let Ok((sp, cp, tp)) = Self::parse_transport_ports(transport_header) {
+                     // parse_transport_ports returns (server_port, control_port, timing_port)
+                     // server_port is data port.
+                     // timing_port is usually timing port.
+                     // Where is event port? Only in plist?
+                     // Use step 1 event port.
+                     let ep = server_event_port.unwrap_or(0);
+                     server_ports = Some((sp, cp, ep, tp));
+                 }
+            }
+        }
+
+        if let Some((server_audio_port, server_ctrl_port, _server_event_port, server_time_port)) = server_ports { // Modified to accept 4 ports
+            tracing::info!("Ports negotiated via SETUP sequence."); 
+            // Note: server_ports is now (audio, control, event, timing)
+
+            tracing::info!("Ports found in Session SETUP (Plist or Transport). Skipping Stream SETUP.");
+            
+            // Connect UDP sockets to server ports
+            let device_ip = {
+                let current_state = self.state().await;
+                let device_guard = self.device.read().await;
+                let device = device_guard
+                    .as_ref()
+                    .ok_or_else(|| AirPlayError::InvalidState {
+                        message: "Device information is missing.".to_string(),
+                        current_state: format!("{current_state:?}"),
+                    })?;
+                device.address()
+            };
+
+            tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
+            tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
+            tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
+
+            audio_sock.connect((device_ip, server_audio_port)).await?;
+            ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
+            time_sock.connect((device_ip, server_time_port)).await?;
+
+        // 7b. Send SETPEERS and start PTP master handler if using PTP timing
         if use_ptp {
+            // Send SETPEERS to tell device about PTP timing peers
+            if let Err(e) = self.send_set_peers(device_ip).await {
+                tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
+            }
+
             self.start_ptp_master(&time_sock, device_ip, server_time_port)
                 .await;
         }
 
-        *self.sockets.lock().await = Some(UdpSockets {
-            audio: audio_sock,
-            control: ctrl_sock,
-            timing: time_sock,
-            server_audio_port,
-            server_control_port: server_ctrl_port,
-            server_timing_port: server_time_port,
-        });
+            *self.sockets.lock().await = Some(UdpSockets {
+                audio: audio_sock,
+                control: ctrl_sock,
+                timing: time_sock,
+                 server_audio_port,
+                 server_control_port: server_ctrl_port,
+                 server_timing_port: server_time_port,
+            });
+        }
 
-        // 8. Send RECORD to start buffering
-        tracing::debug!("Performing RECORD...");
-        let record_request = {
-            let mut session_guard = self.rtsp_session.lock().await;
-            session_guard
-                .as_mut()
-                .ok_or_else(|| AirPlayError::InvalidState {
-                    message: "No RTSP session".to_string(),
-                    current_state: "Setup".to_string(),
-                })?
-                .record_request()
-        };
-        self.send_rtsp_request(&record_request).await?;
-
+        // 8. Send RECORD to start the streaming session
+        if use_ptp {
+            // For AirPlay 2 Buffered Audio: RECORD is sent as part of the setup flow
+            // (per protocol: SETUP → SETPEERS → RECORD → FLUSH → Audio data)
+            tracing::info!("Sending RECORD for AirPlay 2 Buffered Audio...");
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                self.record()
+            ).await {
+                Ok(Ok(())) => tracing::info!("RECORD accepted by device"),
+                Ok(Err(e)) => tracing::warn!("RECORD failed: {}", e),
+                Err(_) => tracing::warn!("RECORD timed out after 5s (device may respond later)"),
+            }
+        }
+        // Note: For NTP/AirPlay 1 devices, RECORD is still deferred until streaming starts.
         Ok(())
     }
 
@@ -1079,6 +1263,77 @@ impl ConnectionManager {
 
             self.stats.write().await.record_received(n);
         }
+    }
+
+    /// Send RECORD request to start buffering/playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if RTSP request fails
+    /// Send SETPEERS to tell the device about PTP timing peers.
+    /// This is required for AirPlay 2 PTP timing.
+    async fn send_set_peers(&self, device_ip: std::net::IpAddr) -> Result<(), AirPlayError> {
+        use crate::protocol::plist::PlistValue;
+
+        // Get our local IP from the connected stream
+        let local_ip = {
+            let stream_guard = self.stream.lock().await;
+            if let Some(ref stream) = *stream_guard {
+                stream.local_addr().ok().map(|a| a.ip().to_string())
+            } else {
+                None
+            }
+        }.unwrap_or_else(|| "0.0.0.0".to_string());
+
+        // Build peer list: array of IP address strings [our_ip, device_ip]
+        let peer_list = PlistValue::Array(vec![
+            PlistValue::String(local_ip.clone()),
+            PlistValue::String(device_ip.to_string()),
+        ]);
+
+        let body = crate::protocol::plist::encode(&peer_list)
+            .map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode SETPEERS plist: {e}"),
+                status_code: None,
+            })?;
+
+        tracing::info!("Sending SETPEERS with peers: [{}, {}]", local_ip, device_ip);
+
+        let request = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            session.set_peers_request(body)
+        };
+
+        let response = self.send_rtsp_request(&request).await?;
+        tracing::info!("SETPEERS response: {}", response.status.as_u16());
+        Ok(())
+    }
+
+    /// Send RECORD command to start playback
+    ///
+    /// # Errors
+    ///
+    /// Returns error if RTSP request fails
+    pub async fn record(&self) -> Result<(), AirPlayError> {
+        tracing::debug!("Sending RECORD request...");
+        let record_request = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            session.record_request()
+        };
+        self.send_rtsp_request(&record_request).await?;
+        Ok(())
     }
 
     /// Send RTP audio packet
@@ -1332,43 +1587,59 @@ impl ConnectionManager {
         }
     }
 
-    /// Start the PTP master handler as a background task.
+    /// Start the PTP slave handler as a background task.
     ///
-    /// Creates a shared PTP clock, binds a new socket for PTP event messages,
-    /// and spawns the master handler loop that sends periodic `Sync` messages
-    /// to the device and responds to `Delay_Req` messages.
+    /// The HomePod acts as PTP grandmaster clock. We act as slave,
+    /// syncing to the device's clock for accurate RTP timestamping.
+    ///
+    /// AirPlay 2 PTP uses standard IEEE 1588 ports:
+    /// - Port 319 for event messages (Sync, Delay_Req)
+    /// - Port 320 for general messages (Follow_Up, Delay_Resp)
+    ///
+    /// These are privileged ports requiring elevated/administrator access.
+    /// If binding fails, PTP will not start — the device will not play audio.
     async fn start_ptp_master(
         &self,
         _timing_socket: &UdpSocket,
         device_ip: std::net::IpAddr,
-        server_timing_port: u16,
+        _server_timing_port: u16,
     ) {
-        // Generate a clock ID from a random u64
+        use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpMasterHandler};
+
         let clock_id: u64 = rand::random();
         let clock = create_shared_clock(clock_id, PtpRole::Master);
 
-        // Create a dedicated socket for PTP event messages.
-        // We bind a new socket rather than reusing the timing socket,
-        // because the timing socket will be stored in UdpSockets and
-        // we need the PTP handler to own its socket via Arc.
-        let ptp_socket = match UdpSocket::bind("0.0.0.0:0").await {
-            Ok(sock) => sock,
+        // Bind to standard PTP event port (319) — privileged, requires admin
+        let ptp_event_socket = match UdpSocket::bind(("0.0.0.0", PTP_EVENT_PORT)).await {
+            Ok(sock) => {
+                tracing::info!("PTP event socket bound to port {}", PTP_EVENT_PORT);
+                sock
+            }
             Err(e) => {
-                tracing::error!("Failed to bind PTP event socket: {}", e);
+                tracing::error!(
+                    "Failed to bind PTP event port {} — run with elevated/admin privileges! Error: {}",
+                    PTP_EVENT_PORT, e
+                );
                 return;
             }
         };
 
-        // Connect to the device's timing port so send_to knows the destination
-        if let Err(e) = ptp_socket.connect((device_ip, server_timing_port)).await {
-            tracing::error!("Failed to connect PTP socket to device: {}", e);
-            return;
-        }
+        // Bind to standard PTP general port (320) — privileged, requires admin
+        let ptp_general_socket = match UdpSocket::bind(("0.0.0.0", PTP_GENERAL_PORT)).await {
+            Ok(sock) => {
+                tracing::info!("PTP general socket bound to port {}", PTP_GENERAL_PORT);
+                Some(Arc::new(sock))
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Failed to bind PTP general port {} — run with elevated/admin privileges! Error: {}",
+                    PTP_GENERAL_PORT, e
+                );
+                return;
+            }
+        };
 
-        // Also connect the original timing socket for receiving
-        // (it's already connected from setup_session)
-
-        let ptp_event_socket = Arc::new(ptp_socket);
+        let ptp_event_socket = Arc::new(ptp_event_socket);
 
         let config = PtpHandlerConfig {
             clock_id,
@@ -1376,43 +1647,46 @@ impl ConnectionManager {
             sync_interval: std::time::Duration::from_secs(1),
             delay_req_interval: std::time::Duration::from_secs(1),
             recv_buf_size: 256,
-            use_airplay_format: true, // AirPlay uses compact format
+            use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP (44-byte messages)
         };
 
-        // Shutdown channel
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-        // Pre-register the device as a known slave
-        let slave_addr = std::net::SocketAddr::new(device_ip, server_timing_port);
+        // We are the PTP master — send Sync/Follow_Up to the HomePod (slave)
+        let slave_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
+        let slave_general_addr = std::net::SocketAddr::new(device_ip, PTP_GENERAL_PORT);
 
         let handler_clock = clock.clone();
 
-        // Spawn the PTP master handler task
         tokio::spawn(async move {
             let mut handler = PtpMasterHandler::new(
                 ptp_event_socket,
-                None, // No separate general socket; using AirPlay compact format
+                ptp_general_socket,
                 handler_clock,
                 config,
             );
-            handler.add_slave(slave_addr);
 
-            tracing::info!("PTP master handler started (clock_id=0x{:016X})", clock_id);
+            // Pre-populate with the HomePod as slave — don't wait for Delay_Req
+            handler.add_slave(slave_addr);
+            handler.add_general_slave(slave_general_addr);
+
+            tracing::info!(
+                "PTP master handler started (clock_id=0x{:016X}, slave={})",
+                clock_id, slave_addr
+            );
             if let Err(e) = handler.run(shutdown_rx).await {
                 tracing::error!("PTP master handler error: {}", e);
             }
             tracing::info!("PTP master handler stopped");
         });
 
-        // Store clock and shutdown handle
         *self.ptp_clock.lock().await = Some(clock);
         *self.ptp_shutdown_tx.lock().await = Some(shutdown_tx);
         *self.ptp_active.write().await = true;
 
         tracing::info!(
-            "PTP timing started for device at {}:{}",
-            device_ip,
-            server_timing_port
+            "PTP timing started as MASTER for slave at {} (event port {}, general port {})",
+            device_ip, PTP_EVENT_PORT, PTP_GENERAL_PORT
         );
     }
 

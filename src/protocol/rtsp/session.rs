@@ -129,10 +129,18 @@ impl RtspSession {
     pub fn setup_session_request(
         &mut self,
         plist: &crate::protocol::plist::PlistValue,
+        transport: Option<&str>,
     ) -> RtspRequest {
-        self.request_builder(Method::Setup, "/")
-            .body_plist(plist)
-            .build()
+        // Per airplay2-homepod.md, SETUP requires session ID in URL: rtsp://<host>/<session-id>
+        let path = format!("/{}", self.client_session_id);
+        let mut builder = self.request_builder(Method::Setup, &path)
+            .body_plist(plist);
+        
+        if let Some(t) = transport {
+            builder = builder.header(names::TRANSPORT, t);
+        }
+        
+        builder.build()
     }
 
     /// Create ANNOUNCE request with SDP
@@ -155,9 +163,8 @@ impl RtspSession {
     /// Create RECORD request
     #[must_use]
     pub fn record_request(&mut self) -> RtspRequest {
-        self.request_builder(Method::Record, "")
-            .header("Range", "npt=0-")
-            .header("RTP-Info", "seq=0;rtptime=0")
+        let path = format!("/{}", self.client_session_id);
+        self.request_builder(Method::Record, &path)
             .build()
     }
 
@@ -166,6 +173,16 @@ impl RtspSession {
     pub fn play_request(&mut self, content_type: &str, body: Vec<u8>) -> RtspRequest {
         self.request_builder(Method::Play, "")
             .content_type(content_type)
+            .body(body)
+            .build()
+    }
+
+    /// Create SETPEERS request for PTP timing peer list
+    #[must_use]
+    pub fn set_peers_request(&mut self, body: Vec<u8>) -> RtspRequest {
+        let path = format!("/{}", self.client_session_id);
+        self.request_builder(Method::SetPeers, &path)
+            .content_type("/peer-list-changed")
             .body(body)
             .build()
     }
@@ -325,7 +342,7 @@ impl RtspSession {
                 )
                 | (
                     _,
-                    Method::Options | Method::Teardown | Method::Get | Method::SetRateAnchorTime
+                    Method::Options | Method::Teardown | Method::Get | Method::SetRateAnchorTime | Method::SetPeers
                 )
         )
     }

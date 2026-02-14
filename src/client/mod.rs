@@ -512,6 +512,22 @@ impl AirPlayClient {
         Ok(())
     }
 
+    /// Get playback info from device (debug)
+    /// 
+    /// Sends a GET_PARAMETER request with body "playback-info\r\n"
+    pub async fn get_playback_info(&self) -> Result<Vec<u8>, AirPlayError> {
+        self.ensure_connected().await?;
+        
+        // Try querying playback-info
+        // Some devices might prefer "progress"
+        let body = "playback-info\r\n";
+        self.connection.send_command(
+            crate::protocol::rtsp::Method::GetParameter,
+            Some(body.as_bytes().to_vec()),
+            Some("text/parameters".to_string())
+        ).await
+    }
+
     /// Stream raw PCM audio from a source
     ///
     /// # Errors
@@ -551,6 +567,20 @@ impl AirPlayClient {
 
         self.state.update(|s| s.playback.is_playing = true).await;
         self.playback.set_playing(true).await;
+
+        // Send RECORD request to start buffering on device
+        // We spawn this because it might block waiting for sync, or we want to start streaming first
+        let connection = self.connection.clone();
+        tokio::spawn(async move {
+            // Short delay to allow streamer to fill buffer and start sending
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            tracing::info!("Sending RECORD request to device...");
+            match connection.record().await {
+                Ok(()) => tracing::info!("RECORD request accepted by device"),
+                Err(e) => tracing::error!("RECORD request failed: {}", e),
+            }
+        });
+
         streamer.stream(source).await
     }
 
