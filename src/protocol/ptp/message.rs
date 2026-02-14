@@ -1,8 +1,8 @@
 //! PTP message types, parsing, and encoding.
 //!
-//! Implements IEEE 1588 PTP message format with AirPlay extensions.
+//! Implements IEEE 1588 PTP message format with `AirPlay` extensions.
 //! Supports both the standard 34-byte header format and the compact
-//! AirPlay timing packet format.
+//! `AirPlay` timing packet format.
 
 use super::timestamp::PtpTimestamp;
 
@@ -26,6 +26,9 @@ pub enum PtpMessageType {
 
 impl PtpMessageType {
     /// Parse from the lower 4 bits of a byte.
+    ///
+    /// # Errors
+    /// Returns `PtpParseError` if the value is not a known message type.
     pub fn from_nibble(value: u8) -> Result<Self, PtpParseError> {
         match value & 0x0F {
             0x00 => Ok(Self::Sync),
@@ -179,7 +182,7 @@ impl PtpHeader {
         let mut buf = [0u8; Self::SIZE];
         buf[0] = (self.transport_specific << 4) | (self.message_type as u8 & 0x0F);
         buf[1] = self.version & 0x0F;
-        let total_len = (Self::SIZE + body_length) as u16;
+        let total_len = u16::try_from(Self::SIZE + body_length).unwrap_or(u16::MAX);
         buf[2..4].copy_from_slice(&total_len.to_be_bytes());
         buf[4] = self.domain_number;
         // buf[5] reserved
@@ -190,11 +193,17 @@ impl PtpHeader {
         buf[20..30].copy_from_slice(&port_id);
         buf[30..32].copy_from_slice(&self.sequence_id.to_be_bytes());
         buf[32] = self.control_field;
-        buf[33] = self.log_message_interval as u8;
+        #[allow(clippy::cast_sign_loss)]
+        {
+            buf[33] = self.log_message_interval as u8;
+        }
         buf
     }
 
     /// Decode from bytes.
+    ///
+    /// # Errors
+    /// Returns `PtpParseError` if the packet is too short or has an unknown message type.
     pub fn decode(data: &[u8]) -> Result<Self, PtpParseError> {
         if data.len() < Self::SIZE {
             return Err(PtpParseError::TooShort {
@@ -221,6 +230,7 @@ impl PtpHeader {
             source_port_identity,
             sequence_id: u16::from_be_bytes([data[30], data[31]]),
             control_field: data[32],
+            #[allow(clippy::cast_possible_wrap)]
             log_message_interval: data[33] as i8,
         })
     }
@@ -255,7 +265,7 @@ pub enum PtpMessageBody {
     },
     /// Delay response: receive timestamp (T4) and requesting port identity.
     DelayResp {
-        /// Receive timestamp (when master received the Delay_Req).
+        /// Receive timestamp (when master received the `Delay_Req`).
         receive_timestamp: PtpTimestamp,
         /// Port identity of the requester.
         requesting_port_identity: PtpPortIdentity,
@@ -278,7 +288,7 @@ pub enum PtpMessageBody {
 impl PtpMessage {
     /// Body size for Sync/FollowUp/DelayReq (10-byte timestamp).
     const TIMESTAMP_BODY_SIZE: usize = 10;
-    /// Body size for DelayResp (10-byte timestamp + 10-byte port identity).
+    /// Body size for `DelayResp` (10-byte timestamp + 10-byte port identity).
     const DELAY_RESP_BODY_SIZE: usize = 20;
     /// Body size for Announce (10-byte timestamp + 20 bytes of clock properties).
     /// IEEE 1588: originTimestamp(10) + currentUtcOffset(2) + reserved(1) +
@@ -287,6 +297,9 @@ impl PtpMessage {
     const ANNOUNCE_BODY_SIZE: usize = 30;
 
     /// Parse a complete PTP message from bytes.
+    ///
+    /// # Errors
+    /// Returns `PtpParseError` if the packet is too short or has an unknown message type.
     pub fn decode(data: &[u8]) -> Result<Self, PtpParseError> {
         let header = PtpHeader::decode(data)?;
         let body_data = &data[PtpHeader::SIZE..];
@@ -527,9 +540,9 @@ impl PtpMessage {
 
 // --- Compact AirPlay timing packet ---
 
-/// Compact AirPlay PTP timing packet (24 bytes on wire).
+/// Compact `AirPlay` PTP timing packet (24 bytes on wire).
 ///
-/// This is the simplified format used by AirPlay 2 for timing exchanges
+/// This is the simplified format used by `AirPlay` 2 for timing exchanges
 /// on the timing channel port.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AirPlayTimingPacket {
@@ -537,7 +550,7 @@ pub struct AirPlayTimingPacket {
     pub message_type: PtpMessageType,
     /// Sequence ID.
     pub sequence_id: u16,
-    /// Timestamp in AirPlay compact format (48.16 fixed-point).
+    /// Timestamp in `AirPlay` compact format (48.16 fixed-point).
     pub timestamp: PtpTimestamp,
     /// Clock identity.
     pub clock_id: u64,
@@ -548,6 +561,9 @@ impl AirPlayTimingPacket {
     pub const SIZE: usize = 24;
 
     /// Parse from bytes.
+    ///
+    /// # Errors
+    /// Returns `PtpParseError` if the packet is too short or has an unknown message type.
     pub fn decode(data: &[u8]) -> Result<Self, PtpParseError> {
         if data.len() < 22 {
             return Err(PtpParseError::TooShort {

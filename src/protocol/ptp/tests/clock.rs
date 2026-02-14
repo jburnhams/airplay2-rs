@@ -6,17 +6,17 @@ use std::time::Duration;
 
 #[test]
 fn test_new_clock_not_synchronized() {
-    let clock = PtpClock::new(0x123456, PtpRole::Slave);
+    let clock = PtpClock::new(0x0012_3456, PtpRole::Slave);
     assert!(!clock.is_synchronized());
     assert_eq!(clock.offset_nanos(), 0);
-    assert_eq!(clock.drift_ppm(), 0.0);
+    assert!(clock.drift_ppm().abs() < f64::EPSILON);
     assert_eq!(clock.measurement_count(), 0);
 }
 
 #[test]
 fn test_clock_id() {
-    let clock = PtpClock::new(0xDEADBEEF, PtpRole::Master);
-    assert_eq!(clock.clock_id(), 0xDEADBEEF);
+    let clock = PtpClock::new(0xDEAD_BEEF, PtpRole::Master);
+    assert_eq!(clock.clock_id(), 0xDEAD_BEEF);
 }
 
 #[test]
@@ -95,11 +95,7 @@ fn test_measurement_rtt_calculation() {
 
     // RTT = (t4 - t1) - (t3 - t2) = 40ms - 5ms = 35ms
     let expected_rtt = Duration::from_millis(35);
-    let diff = if m.rtt > expected_rtt {
-        m.rtt - expected_rtt
-    } else {
-        expected_rtt - m.rtt
-    };
+    let diff = m.rtt.abs_diff(expected_rtt);
     assert!(
         diff < Duration::from_millis(1),
         "Expected RTT ~{expected_rtt:?}, got {:?}",
@@ -310,7 +306,7 @@ fn test_remote_to_local_with_offset() {
 
     // local should be remote - offset ≈ 200 - 5 = 195
     assert!(
-        (local.seconds as i64 - 195).abs() <= 1,
+        local.seconds.abs_diff(195) <= 1,
         "Expected ~195s, got {}",
         local.seconds
     );
@@ -332,7 +328,7 @@ fn test_local_to_remote_with_offset() {
 
     // remote should be local + offset ≈ 195 + 5 = 200
     assert!(
-        (remote.seconds as i64 - 200).abs() <= 1,
+        remote.seconds.abs_diff(200) <= 1,
         "Expected ~200s, got {}",
         remote.seconds
     );
@@ -366,11 +362,11 @@ fn test_rtp_to_local_ptp_basic() {
     let clock = PtpClock::new(0, PtpRole::Slave);
     let sample_rate = 44100;
 
-    let anchor_rtp: u32 = 0;
-    let anchor_ptp = PtpTimestamp::new(100, 0);
+    let rtp_anchor: u32 = 0;
+    let ptp_anchor = PtpTimestamp::new(100, 0);
 
     // 44100 samples later = 1 second.
-    let local_ptp = clock.rtp_to_local_ptp(44100, sample_rate, anchor_rtp, anchor_ptp);
+    let local_ptp = clock.rtp_to_local_ptp(44100, sample_rate, rtp_anchor, ptp_anchor);
     assert_eq!(local_ptp.seconds, 101);
     assert!(local_ptp.nanoseconds < 1_000_000); // Should be very close to 0.
 }
@@ -380,12 +376,12 @@ fn test_rtp_to_local_ptp_wrapping() {
     let clock = PtpClock::new(0, PtpRole::Slave);
     let sample_rate = 44100;
 
-    let anchor_rtp: u32 = u32::MAX - 1000;
-    let anchor_ptp = PtpTimestamp::new(100, 0);
+    let rtp_anchor: u32 = u32::MAX - 1000;
+    let ptp_anchor = PtpTimestamp::new(100, 0);
 
     // Wrap around.
-    let rtp_after_wrap = anchor_rtp.wrapping_add(44100);
-    let local_ptp = clock.rtp_to_local_ptp(rtp_after_wrap, sample_rate, anchor_rtp, anchor_ptp);
+    let rtp_after_wrap = rtp_anchor.wrapping_add(44100);
+    let local_ptp = clock.rtp_to_local_ptp(rtp_after_wrap, sample_rate, rtp_anchor, ptp_anchor);
 
     // Should be ~1 second after anchor.
     assert_eq!(local_ptp.seconds, 101);
@@ -408,7 +404,7 @@ fn test_reset_clears_state() {
     assert!(!clock.is_synchronized());
     assert_eq!(clock.measurement_count(), 0);
     assert_eq!(clock.offset_nanos(), 0);
-    assert_eq!(clock.drift_ppm(), 0.0);
+    assert!(clock.drift_ppm().abs() < f64::EPSILON);
 }
 
 // ===== RTT accessors =====
@@ -432,7 +428,7 @@ fn test_last_rtt_some_after_measurement() {
     let rtt = clock.last_rtt().unwrap();
     // RTT = (5ms - 0) - (2ms - 1ms) = 5ms - 1ms = 4ms
     assert!(
-        (rtt.as_millis() as i64 - 4).abs() <= 1,
+        rtt.as_millis().abs_diff(4) <= 1,
         "Expected RTT ~4ms, got {rtt:?}"
     );
 }

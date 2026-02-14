@@ -91,7 +91,7 @@ fn test_message_type_display() {
 
 #[test]
 fn test_port_identity_encode_decode_roundtrip() {
-    let id = PtpPortIdentity::new(0xDEADBEEF_CAFEBABE, 42);
+    let id = PtpPortIdentity::new(0xDEAD_BEEF_CAFE_BABE, 42);
     let encoded = id.encode();
     let decoded = PtpPortIdentity::decode(&encoded).unwrap();
     assert_eq!(id, decoded);
@@ -111,7 +111,7 @@ fn test_port_identity_encode_length() {
 
 #[test]
 fn test_port_identity_known_bytes() {
-    let id = PtpPortIdentity::new(0x0102030405060708, 0x0A0B);
+    let id = PtpPortIdentity::new(0x0102_0304_0506_0708, 0x0A0B);
     let buf = id.encode();
     assert_eq!(
         buf,
@@ -123,7 +123,7 @@ fn test_port_identity_known_bytes() {
 
 #[test]
 fn test_header_encode_decode_roundtrip() {
-    let source = PtpPortIdentity::new(0x123456789ABCDEF0, 1);
+    let source = PtpPortIdentity::new(0x1234_5678_9ABC_DEF0, 1);
     let header = PtpHeader::new(PtpMessageType::Sync, source, 42);
     let encoded = header.encode(10); // 10-byte body
     let decoded = PtpHeader::decode(&encoded).unwrap();
@@ -193,10 +193,10 @@ fn test_header_flags_preserved() {
 fn test_header_correction_field_preserved() {
     let source = PtpPortIdentity::new(0, 1);
     let mut header = PtpHeader::new(PtpMessageType::Sync, source, 0);
-    header.correction_field = 123456789;
+    header.correction_field = 123_456_789;
     let encoded = header.encode(0);
     let decoded = PtpHeader::decode(&encoded).unwrap();
-    assert_eq!(decoded.correction_field, 123456789);
+    assert_eq!(decoded.correction_field, 123_456_789);
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn test_header_sequence_wrapping() {
 
 #[test]
 fn test_sync_message_roundtrip() {
-    let source = PtpPortIdentity::new(0xAABBCCDDEEFF0011, 1);
+    let source = PtpPortIdentity::new(0xAABB_CCDD_EEFF_0011, 1);
     let ts = PtpTimestamp::new(1000, 500_000_000);
     let msg = PtpMessage::sync(source, 7, ts);
     let encoded = msg.encode();
@@ -231,7 +231,7 @@ fn test_sync_message_roundtrip() {
 
 #[test]
 fn test_follow_up_message_roundtrip() {
-    let source = PtpPortIdentity::new(0x1122334455667788, 1);
+    let source = PtpPortIdentity::new(0x1122_3344_5566_7788, 1);
     let ts = PtpTimestamp::new(2000, 123_456_789);
     let msg = PtpMessage::follow_up(source, 12, ts);
     let encoded = msg.encode();
@@ -250,7 +250,7 @@ fn test_follow_up_message_roundtrip() {
 
 #[test]
 fn test_delay_req_message_roundtrip() {
-    let source = PtpPortIdentity::new(0xDEADBEEF00000000, 2);
+    let source = PtpPortIdentity::new(0xDEAD_BEEF_0000_0000, 2);
     let ts = PtpTimestamp::new(3000, 999_999_999);
     let msg = PtpMessage::delay_req(source, 99, ts);
     let encoded = msg.encode();
@@ -268,8 +268,8 @@ fn test_delay_req_message_roundtrip() {
 
 #[test]
 fn test_delay_resp_message_roundtrip() {
-    let source = PtpPortIdentity::new(0x1111111111111111, 1);
-    let requesting = PtpPortIdentity::new(0x2222222222222222, 2);
+    let source = PtpPortIdentity::new(0x1111_1111_1111_1111, 1);
+    let requesting = PtpPortIdentity::new(0x2222_2222_2222_2222, 2);
     let ts = PtpTimestamp::new(4000, 0);
     let msg = PtpMessage::delay_resp(source, 50, ts, requesting);
     let encoded = msg.encode();
@@ -290,8 +290,8 @@ fn test_delay_resp_message_roundtrip() {
 
 #[test]
 fn test_announce_message_roundtrip() {
-    let source = PtpPortIdentity::new(0xAAAABBBBCCCCDDDD, 1);
-    let gm_id = 0xEEEEFFFF00001111;
+    let source = PtpPortIdentity::new(0xAAAA_BBBB_CCCC_DDDD, 1);
+    let gm_id = 0xEEEE_FFFF_0000_1111;
     let msg = PtpMessage::announce(source, 1, gm_id, 128, 248);
     let encoded = msg.encode();
     let decoded = PtpMessage::decode(&encoded).unwrap();
@@ -372,7 +372,7 @@ fn test_airplay_packet_sync_roundtrip() {
         message_type: PtpMessageType::Sync,
         sequence_id: 100,
         timestamp: PtpTimestamp::new(1000, 0),
-        clock_id: 0xDEADBEEFCAFEBABE,
+        clock_id: 0xDEAD_BEEF_CAFE_BABE,
     };
     let encoded = pkt.encode();
     assert_eq!(encoded.len(), AirPlayTimingPacket::SIZE);
@@ -380,7 +380,7 @@ fn test_airplay_packet_sync_roundtrip() {
     let decoded = AirPlayTimingPacket::decode(&encoded).unwrap();
     assert_eq!(decoded.message_type, PtpMessageType::Sync);
     assert_eq!(decoded.sequence_id, 100);
-    assert_eq!(decoded.clock_id, 0xDEADBEEFCAFEBABE);
+    assert_eq!(decoded.clock_id, 0xDEAD_BEEF_CAFE_BABE);
     // Timestamp seconds should match.
     assert_eq!(decoded.timestamp.seconds, 1000);
 }
@@ -391,7 +391,7 @@ fn test_airplay_packet_delay_req_roundtrip() {
         message_type: PtpMessageType::DelayReq,
         sequence_id: 0xFFFF,
         timestamp: PtpTimestamp::new(5000, 500_000_000),
-        clock_id: 0x0123456789ABCDEF,
+        clock_id: 0x0123_4567_89AB_CDEF,
     };
     let encoded = pkt.encode();
     let decoded = AirPlayTimingPacket::decode(&encoded).unwrap();

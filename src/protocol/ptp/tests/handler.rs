@@ -39,9 +39,9 @@ fn test_handler_config_defaults() {
 
 #[tokio::test]
 async fn test_create_shared_clock() {
-    let clock = create_shared_clock(0x12345678, PtpRole::Slave);
+    let clock = create_shared_clock(0x1234_5678, PtpRole::Slave);
     let locked = clock.read().await;
-    assert_eq!(locked.clock_id(), 0x12345678);
+    assert_eq!(locked.clock_id(), 0x1234_5678);
     assert_eq!(locked.role(), PtpRole::Slave);
     assert!(!locked.is_synchronized());
 }

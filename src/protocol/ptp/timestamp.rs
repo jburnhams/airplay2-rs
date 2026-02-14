@@ -1,7 +1,7 @@
 //! PTP timestamp representation and conversions.
 //!
 //! IEEE 1588 PTP uses 80-bit timestamps (48-bit seconds + 32-bit nanoseconds).
-//! AirPlay 2 uses a compact 64-bit format (48-bit seconds + 16-bit fraction).
+//! `AirPlay` 2 uses a compact 64-bit format (48-bit seconds + 16-bit fraction).
 //! This module supports both formats with lossless round-trip conversion.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -9,9 +9,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// IEEE 1588 PTP timestamp: 48-bit seconds + 32-bit nanoseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct PtpTimestamp {
-    /// Seconds since PTP epoch (TAI, but used as wall-clock in AirPlay).
+    /// Seconds since PTP epoch (TAI, but used as wall-clock in `AirPlay`).
     pub seconds: u64,
-    /// Nanoseconds within the current second (0..999_999_999).
+    /// Nanoseconds within the current second (`0..999_999_999`).
     pub nanoseconds: u32,
 }
 
@@ -54,17 +54,19 @@ impl PtpTimestamp {
     /// Convert to total nanoseconds since epoch.
     #[must_use]
     pub fn to_nanos(&self) -> i128 {
-        self.seconds as i128 * Self::NANOS_PER_SEC as i128 + self.nanoseconds as i128
+        i128::from(self.seconds) * i128::from(Self::NANOS_PER_SEC) + i128::from(self.nanoseconds)
     }
 
     /// Create from total nanoseconds since epoch.
     ///
-    /// Panics on negative values.
+    /// # Panics
+    /// Panics on negative values or if seconds overflow `u64`.
     #[must_use]
     pub fn from_nanos(nanos: i128) -> Self {
         assert!(nanos >= 0, "PTP timestamp cannot be negative");
-        let seconds = (nanos / Self::NANOS_PER_SEC as i128) as u64;
-        let nanoseconds = (nanos % Self::NANOS_PER_SEC as i128) as u32;
+        let seconds =
+            u64::try_from(nanos / i128::from(Self::NANOS_PER_SEC)).expect("Seconds overflow");
+        let nanoseconds = u32::try_from(nanos % i128::from(Self::NANOS_PER_SEC)).unwrap();
         Self {
             seconds,
             nanoseconds,
@@ -73,8 +75,9 @@ impl PtpTimestamp {
 
     /// Convert to total microseconds since epoch.
     #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
     pub fn to_micros(&self) -> i64 {
-        self.seconds as i64 * 1_000_000 + self.nanoseconds as i64 / 1_000
+        (self.seconds as i64 * 1_000_000) + (i64::from(self.nanoseconds) / 1_000)
     }
 
     /// Signed difference in nanoseconds: `self - other`.
@@ -119,24 +122,32 @@ impl PtpTimestamp {
         })
     }
 
-    /// Encode as AirPlay compact format: 48.16 fixed-point (64-bit).
+    /// Encode as `AirPlay` compact format: 48.16 fixed-point (64-bit).
     ///
     /// Upper 48 bits = seconds, lower 16 bits = fraction (1/65536 seconds).
     #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub fn to_airplay_compact(&self) -> u64 {
-        let fraction = (self.nanoseconds as u64 * 65536 / Self::NANOS_PER_SEC as u64) as u16;
+        let fraction =
+            (u64::from(self.nanoseconds) * 65536 / u64::from(Self::NANOS_PER_SEC)) as u16;
         // Mask seconds to 48 bits to prevent overflow into the fraction field
         let seconds_48 = self.seconds & Self::MAX_SECONDS_48BIT;
-        (seconds_48 << 16) | fraction as u64
+        (seconds_48 << 16) | u64::from(fraction)
     }
 
-    /// Decode from AirPlay compact format: 48.16 fixed-point (64-bit).
+    /// Decode from `AirPlay` compact format: 48.16 fixed-point (64-bit).
+    ///
+    /// # Panics
+    /// Panics if the calculated nanoseconds are invalid (should not happen with valid input).
     #[must_use]
     pub fn from_airplay_compact(value: u64) -> Self {
         let seconds = value >> 16;
-        let fraction = (value & 0xFFFF) as u64;
-        let nanoseconds = ((fraction * Self::NANOS_PER_SEC as u64) / 65536)
-            .min(Self::NANOS_PER_SEC as u64 - 1) as u32;
+        let fraction = value & 0xFFFF;
+        let nanoseconds = u32::try_from(
+            ((fraction * u64::from(Self::NANOS_PER_SEC)) / 65536)
+                .min(u64::from(Self::NANOS_PER_SEC) - 1),
+        )
+        .unwrap();
         Self {
             seconds,
             nanoseconds,
@@ -159,13 +170,16 @@ impl PtpTimestamp {
     }
 
     /// Add a `Duration` to this timestamp.
+    ///
+    /// # Panics
+    /// Panics if the calculated nanoseconds are invalid (should not happen).
     #[must_use]
     pub fn add_duration(&self, d: Duration) -> Self {
-        let total_nanos = self.nanoseconds as u64 + d.subsec_nanos() as u64;
-        let carry = total_nanos / Self::NANOS_PER_SEC as u64;
+        let total_nanos = u64::from(self.nanoseconds) + u64::from(d.subsec_nanos());
+        let carry = total_nanos / u64::from(Self::NANOS_PER_SEC);
         Self {
             seconds: self.seconds + d.as_secs() + carry,
-            nanoseconds: (total_nanos % Self::NANOS_PER_SEC as u64) as u32,
+            nanoseconds: u32::try_from(total_nanos % u64::from(Self::NANOS_PER_SEC)).unwrap(),
         }
     }
 }

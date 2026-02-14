@@ -233,7 +233,7 @@ fn test_airplay_compact_precision_loss_bounded() {
     for nanos in [0, 1000, 100_000, 500_000_000, 999_000_000] {
         let original = PtpTimestamp::new(100, nanos);
         let back = PtpTimestamp::from_airplay_compact(original.to_airplay_compact());
-        let diff = (back.nanoseconds as i64 - nanos as i64).unsigned_abs();
+        let diff = (i64::from(back.nanoseconds) - i64::from(nanos)).unsigned_abs();
         assert!(
             diff < 30_000,
             "Precision loss too large: original={nanos} back={} diff={diff}",

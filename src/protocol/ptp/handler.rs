@@ -2,7 +2,7 @@
 //!
 //! Provides both master (client/sender) and slave (receiver) handlers
 //! for PTP timing over UDP. Standard PTP uses port 319 (event) and
-//! port 320 (general), but AirPlay may use its own timing port.
+//! port 320 (general), but `AirPlay` may use its own timing port.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -17,10 +17,10 @@ use super::message::{
 };
 use super::timestamp::PtpTimestamp;
 
-/// Standard PTP event port (Sync, Delay_Req).
+/// Standard PTP event port (Sync, `Delay_Req`).
 pub const PTP_EVENT_PORT: u16 = 319;
 
-/// Standard PTP general port (Follow_Up, Delay_Resp, Announce).
+/// Standard PTP general port (`Follow_Up`, `Delay_Resp`, Announce).
 pub const PTP_GENERAL_PORT: u16 = 320;
 
 /// Configuration for PTP handler.
@@ -32,11 +32,11 @@ pub struct PtpHandlerConfig {
     pub role: PtpRole,
     /// Interval between Sync messages when acting as master.
     pub sync_interval: Duration,
-    /// Interval between Delay_Req messages when acting as slave.
+    /// Interval between `Delay_Req` messages when acting as slave.
     pub delay_req_interval: Duration,
     /// Maximum receive buffer size.
     pub recv_buf_size: usize,
-    /// Use AirPlay compact packet format instead of IEEE 1588.
+    /// Use `AirPlay` compact packet format instead of IEEE 1588.
     pub use_airplay_format: bool,
 }
 
@@ -58,12 +58,12 @@ pub type SharedPtpClock = Arc<RwLock<PtpClock>>;
 
 /// PTP slave handler.
 ///
-/// Listens for Sync/Follow-up from master, sends Delay_Req,
-/// and processes Delay_Resp to synchronize the local clock.
+/// Listens for Sync/Follow-up from master, sends `Delay_Req`,
+/// and processes `Delay_Resp` to synchronize the local clock.
 pub struct PtpSlaveHandler {
-    /// Event socket (port 319 or AirPlay timing port).
+    /// Event socket (port 319 or `AirPlay` timing port).
     event_socket: Arc<UdpSocket>,
-    /// General socket (port 320), optional if using AirPlay format.
+    /// General socket (port 320), optional if using `AirPlay` format.
     general_socket: Option<Arc<UdpSocket>>,
     /// Shared clock state.
     clock: SharedPtpClock,
@@ -71,13 +71,13 @@ pub struct PtpSlaveHandler {
     config: PtpHandlerConfig,
     /// Address of the master.
     master_addr: SocketAddr,
-    /// Next sequence ID for Delay_Req.
+    /// Next sequence ID for `Delay_Req`.
     delay_req_sequence: u16,
     /// Pending Sync T1 (from Sync or Follow-up).
     pending_t1: Option<PtpTimestamp>,
     /// T2 corresponding to pending T1.
     pending_t2: Option<PtpTimestamp>,
-    /// Pending Delay_Req T3.
+    /// Pending `Delay_Req` T3.
     pending_t3: Option<PtpTimestamp>,
 }
 
@@ -108,8 +108,8 @@ impl PtpSlaveHandler {
     /// This spawns a task that:
     /// 1. Receives Sync messages and records T2
     /// 2. Receives Follow-up messages and records T1
-    /// 3. Sends Delay_Req messages periodically (recording T3)
-    /// 4. Receives Delay_Resp messages and records T4
+    /// 3. Sends `Delay_Req` messages periodically (recording T3)
+    /// 4. Receives `Delay_Resp` messages and records T4
     /// 5. Updates the PTP clock with complete measurements
     ///
     /// # Errors
@@ -140,7 +140,7 @@ impl PtpSlaveHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_packet(&general_buf[..len], src).await?;
+                    self.handle_general_packet(&general_buf[..len], src);
                 }
 
                 // Send Delay_Req periodically (only if we have a Sync but no pending exchange).
@@ -237,13 +237,9 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    async fn handle_general_packet(
-        &mut self,
-        data: &[u8],
-        _src: SocketAddr,
-    ) -> Result<(), std::io::Error> {
+    fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
         if self.config.use_airplay_format {
-            return Ok(());
+            return;
         }
 
         match PtpMessage::decode(data) {
@@ -268,7 +264,6 @@ impl PtpSlaveHandler {
                     data.len(), hex.join(", "), e);
             }
         }
-        Ok(())
     }
 
     async fn send_delay_req(&mut self) -> Result<(), std::io::Error> {
@@ -304,12 +299,12 @@ impl PtpSlaveHandler {
 
 /// PTP master handler.
 ///
-/// Sends periodic Sync/Follow-up messages and responds to Delay_Req
-/// with Delay_Resp. Used by the AirPlay client/sender.
+/// Sends periodic Sync/Follow-up messages and responds to `Delay_Req`
+/// with `Delay_Resp`. Used by the `AirPlay` client/sender.
 pub struct PtpMasterHandler {
     /// Event socket.
     event_socket: Arc<UdpSocket>,
-    /// General socket (for Follow-up, optional if using AirPlay format).
+    /// General socket (for Follow-up, optional if using `AirPlay` format).
     general_socket: Option<Arc<UdpSocket>>,
     /// Shared clock state.
     clock: SharedPtpClock,
@@ -317,7 +312,7 @@ pub struct PtpMasterHandler {
     config: PtpHandlerConfig,
     /// Next Sync sequence ID.
     sync_sequence: u16,
-    /// Known slave event addresses (port 319) for Sync messages.
+    /// Known slave addresses (discovered from `Delay_Req` messages).
     known_slaves: Vec<SocketAddr>,
     /// Known slave general addresses (port 320) for Follow_Up messages.
     known_general_slaves: Vec<SocketAddr>,
