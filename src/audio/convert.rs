@@ -3,6 +3,7 @@
 use super::format::{ChannelConfig, SampleFormat};
 
 /// Convert between sample formats
+// Precision loss and truncation are expected when converting between integer and float formats for audio
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[must_use]
@@ -21,6 +22,7 @@ pub fn convert_samples(
 }
 
 /// Convert bytes to f32 samples
+// Precision loss is acceptable for audio sample conversion (e.g. i32 to f32)
 #[allow(clippy::cast_precision_loss)]
 #[must_use]
 pub fn to_f32(input: &[u8], format: SampleFormat) -> Vec<f32> {
@@ -55,6 +57,7 @@ pub fn to_f32(input: &[u8], format: SampleFormat) -> Vec<f32> {
 }
 
 /// Convert f32 samples to bytes in target format
+// Truncation and precision loss are expected when converting back to integer formats
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[must_use]
@@ -177,6 +180,7 @@ pub fn convert_channels_into(
 /// Simple sample rate conversion (linear interpolation)
 ///
 /// For production use, consider a proper resampler like rubato
+// Linear resampling involves floating point calculations and index casting that may lose precision or truncate
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_sign_loss)]
