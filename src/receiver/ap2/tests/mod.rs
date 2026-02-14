@@ -2,6 +2,8 @@ mod advertisement;
 mod body_handler;
 mod config;
 mod features;
+mod pairing_server;
+mod password_auth;
 mod request_handler;
 mod request_router;
 mod response_builder;

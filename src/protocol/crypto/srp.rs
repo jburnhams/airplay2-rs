@@ -330,7 +330,7 @@ fn compute_x(salt: &[u8], username: &[u8], password: &[u8]) -> BigUint {
 
     let mut outer = Sha512::new();
     outer.update(salt);
-    outer.update(h_up);
+    outer.update(strip_leading_zeros(&h_up));
     BigUint::from_bytes_be(&outer.finalize())
 }
 
@@ -359,12 +359,27 @@ fn compute_m1(
     let h_user = Sha512::digest(username);
 
     let mut hasher = Sha512::new();
-    hasher.update(&hn_xor_hg);
-    hasher.update(&h_user);
+    hasher.update(strip_leading_zeros(&hn_xor_hg));
+    hasher.update(strip_leading_zeros(&h_user));
     hasher.update(salt);
     // Use minimal-bytes representation of A (not padded) to match standard
     hasher.update(a_pub.to_bytes_be());
     hasher.update(b_pub.to_bytes_be());
-    hasher.update(k_session);
+    hasher.update(strip_leading_zeros(k_session));
     hasher.finalize().to_vec()
+}
+
+fn strip_leading_zeros(bytes: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i < bytes.len() && bytes[i] == 0 {
+        i += 1;
+    }
+    // If all zeros, return empty slice? Or one zero byte?
+    // srp.py uses to_bytes which returns minimal bytes.
+    // to_bytes(0) is empty bytes.
+    if i == bytes.len() {
+        &[]
+    } else {
+        &bytes[i..]
+    }
 }

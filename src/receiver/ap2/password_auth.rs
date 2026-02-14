@@ -226,9 +226,14 @@ impl PasswordAuthManager {
 
         // Track success/failure
         let success = result.error.is_none();
-        let is_m4 = result.new_state == PairingServerState::PairSetupComplete;
 
-        if is_m4 {
+        // Check if this was an authentication attempt (M3)
+        // Success: Transitioned to PairSetupComplete
+        // Failure: AuthenticationFailed error
+        let is_auth_attempt = result.new_state == PairingServerState::PairSetupComplete
+            || matches!(result.error, Some(PairingError::AuthenticationFailed));
+
+        if is_auth_attempt {
             self.failed_attempts
                 .write()
                 .unwrap()
@@ -331,74 +336,4 @@ pub enum PasswordAuthError {
     /// Pairing error
     #[error("Pairing error: {0}")]
     PairingError(String),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_password_validation() {
-        // Valid passwords
-        assert!(Ap2Config::validate_password("1234").is_ok());
-        assert!(Ap2Config::validate_password("password123").is_ok());
-
-        // Invalid passwords
-        assert!(Ap2Config::validate_password("").is_err());
-        assert!(Ap2Config::validate_password("123").is_err()); // Too short
-    }
-
-    #[test]
-    fn test_lockout_tracking() {
-        let mut tracker = FailedAttemptTracker::new();
-        tracker.max_attempts = 3;
-        tracker.window = std::time::Duration::from_secs(60);
-        tracker.lockout_duration = std::time::Duration::from_secs(5);
-
-        // First few attempts should not lock
-        tracker.record_attempt(false);
-        assert!(!tracker.is_locked());
-        tracker.record_attempt(false);
-        assert!(!tracker.is_locked());
-
-        // Third attempt should lock
-        tracker.record_attempt(false);
-        assert!(tracker.is_locked());
-        assert!(tracker.lockout_remaining().is_some());
-    }
-
-    #[test]
-    fn test_successful_auth_clears_attempts() {
-        let mut tracker = FailedAttemptTracker::new();
-
-        tracker.record_attempt(false);
-        tracker.record_attempt(false);
-        assert_eq!(tracker.attempts.len(), 2);
-
-        // Successful attempt clears history
-        tracker.record_attempt(true);
-        assert_eq!(tracker.attempts.len(), 0);
-        assert!(!tracker.is_locked());
-    }
-
-    #[test]
-    fn test_manager_creation() {
-        let identity = Ed25519KeyPair::generate();
-        let manager = PasswordAuthManager::new(identity);
-
-        assert!(!manager.is_enabled());
-        assert!(!manager.is_locked_out());
-    }
-
-    #[test]
-    fn test_set_password_enables_auth() {
-        let identity = Ed25519KeyPair::generate();
-        let mut manager = PasswordAuthManager::new(identity);
-
-        manager.set_password("test1234".to_string());
-        assert!(manager.is_enabled());
-
-        manager.clear_password();
-        assert!(!manager.is_enabled());
-    }
 }
