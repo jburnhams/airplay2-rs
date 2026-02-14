@@ -143,11 +143,7 @@ impl Default for AudioLatencies {
 impl DeviceCapabilities {
     /// Create default capabilities for an audio-only receiver
     #[must_use]
-    pub fn audio_receiver(
-        device_id: &str,
-        name: &str,
-        public_key: [u8; 32],
-    ) -> Self {
+    pub fn audio_receiver(device_id: &str, name: &str, public_key: [u8; 32]) -> Self {
         Self {
             device_id: device_id.to_string(),
             name: name.to_string(),
@@ -161,7 +157,7 @@ impl DeviceCapabilities {
             os_build_version: None,
 
             features: Self::default_audio_features(),
-            status_flags: 0x04,  // Supports PIN
+            status_flags: 0x04, // Supports PIN
 
             public_key,
             pairing_identity: Self::derive_pairing_identity(device_id),
@@ -190,28 +186,28 @@ impl DeviceCapabilities {
         let mut features: u64 = 0;
 
         // Core audio
-        features |= 1 << 9;   // Audio
-        features |= 1 << 11;  // Audio redundant
+        features |= 1 << 9; // Audio
+        features |= 1 << 11; // Audio redundant
 
         // Audio formats
-        features |= 1 << 22;  // ALAC
-        features |= 1 << 23;  // AAC-LC
-        features |= 1 << 25;  // AAC-ELD
+        features |= 1 << 22; // ALAC
+        features |= 1 << 23; // AAC-LC
+        features |= 1 << 25; // AAC-ELD
 
         // Authentication
-        features |= 1 << 14;  // Auth setup
-        features |= 1 << 17;  // Legacy pairing
-        features |= 1 << 26;  // PIN
-        features |= 1 << 27;  // Transient pairing
-        features |= 1 << 46;  // HomeKit
+        features |= 1 << 14; // Auth setup
+        features |= 1 << 17; // Legacy pairing
+        features |= 1 << 26; // PIN
+        features |= 1 << 27; // Transient pairing
+        features |= 1 << 46; // HomeKit
 
         // Timing
-        features |= 1 << 38;  // Buffered audio
-        features |= 1 << 40;  // PTP
+        features |= 1 << 38; // Buffered audio
+        features |= 1 << 40; // PTP
 
         // Control
-        features |= 1 << 18;  // Unified media control
-        features |= 1 << 19;  // Volume control
+        features |= 1 << 18; // Unified media control
+        features |= 1 << 19; // Volume control
 
         features
     }
@@ -256,7 +252,7 @@ impl DeviceCapabilities {
 
     /// Derive pairing identity from device ID
     fn derive_pairing_identity(device_id: &str) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
 
         let mut hasher = Sha256::new();
         hasher.update(device_id.as_bytes());
@@ -265,11 +261,22 @@ impl DeviceCapabilities {
 
         format!(
             "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-            hash[0], hash[1], hash[2], hash[3],
-            hash[4], hash[5],
-            (hash[6] & 0x0f) | 0x40, hash[7],
-            (hash[8] & 0x3f) | 0x80, hash[9],
-            hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]
+            hash[0],
+            hash[1],
+            hash[2],
+            hash[3],
+            hash[4],
+            hash[5],
+            (hash[6] & 0x0f) | 0x40,
+            hash[7],
+            (hash[8] & 0x3f) | 0x80,
+            hash[9],
+            hash[10],
+            hash[11],
+            hash[12],
+            hash[13],
+            hash[14],
+            hash[15]
         )
     }
 
@@ -279,42 +286,75 @@ impl DeviceCapabilities {
         let mut dict: HashMap<String, PlistValue> = HashMap::new();
 
         // Device identification
-        dict.insert("deviceid".to_string(), PlistValue::String(self.device_id.clone()));
+        dict.insert(
+            "deviceid".to_string(),
+            PlistValue::String(self.device_id.clone()),
+        );
         dict.insert("name".to_string(), PlistValue::String(self.name.clone()));
         dict.insert("model".to_string(), PlistValue::String(self.model.clone()));
-        dict.insert("manufacturer".to_string(), PlistValue::String(self.manufacturer.clone()));
+        dict.insert(
+            "manufacturer".to_string(),
+            PlistValue::String(self.manufacturer.clone()),
+        );
 
         if let Some(ref serial) = self.serial_number {
-            dict.insert("serialNumber".to_string(), PlistValue::String(serial.clone()));
+            dict.insert(
+                "serialNumber".to_string(),
+                PlistValue::String(serial.clone()),
+            );
         }
 
         // Version information
-        dict.insert("srcvers".to_string(), PlistValue::String(self.source_version.clone()));
-        dict.insert("protovers".to_string(), PlistValue::String(self.protocol_version.clone()));
-        dict.insert("fv".to_string(), PlistValue::String(self.firmware_version.clone()));
+        dict.insert(
+            "srcvers".to_string(),
+            PlistValue::String(self.source_version.clone()),
+        );
+        dict.insert(
+            "protovers".to_string(),
+            PlistValue::String(self.protocol_version.clone()),
+        );
+        dict.insert(
+            "fv".to_string(),
+            PlistValue::String(self.firmware_version.clone()),
+        );
 
         if let Some(ref os_build) = self.os_build_version {
-            dict.insert("osBuildVersion".to_string(), PlistValue::String(os_build.clone()));
+            dict.insert(
+                "osBuildVersion".to_string(),
+                PlistValue::String(os_build.clone()),
+            );
         }
 
         // Feature flags
         dict.insert("features".to_string(), PlistValue::from(self.features));
-        dict.insert("statusFlags".to_string(), PlistValue::Integer(i64::from(self.status_flags)));
+        dict.insert(
+            "statusFlags".to_string(),
+            PlistValue::Integer(i64::from(self.status_flags)),
+        );
 
         // Public key
         dict.insert("pk".to_string(), PlistValue::Data(self.public_key.to_vec()));
 
         // Pairing identity
-        dict.insert("pi".to_string(), PlistValue::String(self.pairing_identity.clone()));
+        dict.insert(
+            "pi".to_string(),
+            PlistValue::String(self.pairing_identity.clone()),
+        );
 
         // Audio formats
         dict.insert("audioFormats".to_string(), self.audio_formats_to_plist());
 
         // Audio latencies
-        dict.insert("audioLatencies".to_string(), self.audio_latencies_to_plist());
+        dict.insert(
+            "audioLatencies".to_string(),
+            self.audio_latencies_to_plist(),
+        );
 
         // Volume
-        dict.insert("initialVolume".to_string(), PlistValue::Real(f64::from(self.initial_volume)));
+        dict.insert(
+            "initialVolume".to_string(),
+            PlistValue::Real(f64::from(self.initial_volume)),
+        );
 
         // Timing
         if self.supports_ptp {
@@ -326,36 +366,58 @@ impl DeviceCapabilities {
 
         // Group
         if let Some(ref group_uuid) = self.group_uuid {
-            dict.insert("groupUUID".to_string(), PlistValue::String(group_uuid.clone()));
+            dict.insert(
+                "groupUUID".to_string(),
+                PlistValue::String(group_uuid.clone()),
+            );
         }
-        dict.insert("isGroupLeader".to_string(), PlistValue::Boolean(self.group_leader));
+        dict.insert(
+            "isGroupLeader".to_string(),
+            PlistValue::Boolean(self.group_leader),
+        );
 
         PlistValue::Dictionary(dict)
     }
 
     fn audio_formats_to_plist(&self) -> PlistValue {
-        let formats: Vec<PlistValue> = self.audio_formats.iter().map(|fmt| {
-            let mut dict: HashMap<String, PlistValue> = HashMap::new();
-            dict.insert("type".to_string(), PlistValue::Integer(i64::from(fmt.type_id)));
-            dict.insert("ch".to_string(), PlistValue::Integer(i64::from(fmt.channels)));
+        let formats: Vec<PlistValue> = self
+            .audio_formats
+            .iter()
+            .map(|fmt| {
+                let mut dict: HashMap<String, PlistValue> = HashMap::new();
+                dict.insert(
+                    "type".to_string(),
+                    PlistValue::Integer(i64::from(fmt.type_id)),
+                );
+                dict.insert(
+                    "ch".to_string(),
+                    PlistValue::Integer(i64::from(fmt.channels)),
+                );
 
-            let sample_rates: Vec<PlistValue> = fmt.sample_rates.iter()
-                .map(|&sr| PlistValue::Integer(i64::from(sr)))
-                .collect();
-            dict.insert("sr".to_string(), PlistValue::Array(sample_rates));
+                let sample_rates: Vec<PlistValue> = fmt
+                    .sample_rates
+                    .iter()
+                    .map(|&sr| PlistValue::Integer(i64::from(sr)))
+                    .collect();
+                dict.insert("sr".to_string(), PlistValue::Array(sample_rates));
 
-            let bits: Vec<PlistValue> = fmt.bits_per_sample.iter()
-                .map(|&b| PlistValue::Integer(i64::from(b)))
-                .collect();
-            dict.insert("ss".to_string(), PlistValue::Array(bits));
+                let bits: Vec<PlistValue> = fmt
+                    .bits_per_sample
+                    .iter()
+                    .map(|&b| PlistValue::Integer(i64::from(b)))
+                    .collect();
+                dict.insert("ss".to_string(), PlistValue::Array(bits));
 
-            let enc_types: Vec<PlistValue> = fmt.encryption_types.iter()
-                .map(|&e| PlistValue::Integer(e as i64))
-                .collect();
-            dict.insert("et".to_string(), PlistValue::Array(enc_types));
+                let enc_types: Vec<PlistValue> = fmt
+                    .encryption_types
+                    .iter()
+                    .map(|&e| PlistValue::Integer(e as i64))
+                    .collect();
+                dict.insert("et".to_string(), PlistValue::Array(enc_types));
 
-            PlistValue::Dictionary(dict)
-        }).collect();
+                PlistValue::Dictionary(dict)
+            })
+            .collect();
 
         PlistValue::Array(formats)
     }
@@ -363,10 +425,15 @@ impl DeviceCapabilities {
     fn audio_latencies_to_plist(&self) -> PlistValue {
         let mut latency_entry: HashMap<String, PlistValue> = HashMap::new();
         latency_entry.insert("inputLatencyMicros".to_string(), PlistValue::Integer(0));
-        latency_entry.insert("outputLatencyMicros".to_string(),
-            PlistValue::Integer(i64::from(self.audio_latencies.default_latency_ms * 1000)));
-        latency_entry.insert("type".to_string(), PlistValue::Integer(96));  // Default format
-        latency_entry.insert("audioType".to_string(), PlistValue::String("default".to_string()));
+        latency_entry.insert(
+            "outputLatencyMicros".to_string(),
+            PlistValue::Integer(i64::from(self.audio_latencies.default_latency_ms * 1000)),
+        );
+        latency_entry.insert("type".to_string(), PlistValue::Integer(96)); // Default format
+        latency_entry.insert(
+            "audioType".to_string(),
+            PlistValue::String("default".to_string()),
+        );
 
         PlistValue::Array(vec![PlistValue::Dictionary(latency_entry)])
     }
