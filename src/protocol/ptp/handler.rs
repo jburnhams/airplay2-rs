@@ -421,6 +421,14 @@ impl PtpMasterHandler {
         data: &[u8],
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
+        if self.config.use_airplay_format {
+            if let Ok(req) = AirPlayTimingPacket::decode(data) {
+                if req.message_type == PtpMessageType::DelayReq {
+                    return self.handle_delay_req(data, src).await;
+                }
+            }
+        }
+
         match PtpMessage::decode(data) {
             Ok(msg) => {
                 match &msg.body {

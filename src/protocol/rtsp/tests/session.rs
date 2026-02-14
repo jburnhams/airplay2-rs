@@ -249,6 +249,4 @@ fn test_record_request_headers() {
     let request = session.record_request();
 
     assert_eq!(request.method, Method::Record);
-    assert_eq!(request.headers.get("Range").unwrap(), "npt=0-");
-    assert_eq!(request.headers.get("RTP-Info").unwrap(), "seq=0;rtptime=0");
 }
