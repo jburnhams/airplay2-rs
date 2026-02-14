@@ -1,7 +1,9 @@
 mod advertisement;
 mod body_handler;
+mod capabilities;
 mod config;
 mod features;
+mod info_endpoint;
 mod request_handler;
 mod request_router;
 mod response_builder;
