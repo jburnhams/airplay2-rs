@@ -4,6 +4,7 @@
 //! via the /info endpoint.
 
 use crate::protocol::plist::PlistValue;
+use crate::receiver::ap2::features::{FeatureFlag, FeatureFlags};
 use std::collections::HashMap;
 
 /// Device capabilities for /info response
@@ -183,33 +184,33 @@ impl DeviceCapabilities {
 
     /// Default feature flags for audio receiver
     fn default_audio_features() -> u64 {
-        let mut features: u64 = 0;
+        let mut flags = FeatureFlags::new();
 
         // Core audio
-        features |= 1 << 9; // Audio
-        features |= 1 << 11; // Audio redundant
+        flags.set(FeatureFlag::Audio);
+        flags.set(FeatureFlag::AudioRedundant);
 
         // Audio formats
-        features |= 1 << 22; // ALAC
-        features |= 1 << 23; // AAC-LC
-        features |= 1 << 25; // AAC-ELD
+        flags.set(FeatureFlag::AudioFormatAlac);
+        flags.set(FeatureFlag::AudioFormatAacLc);
+        flags.set(FeatureFlag::AudioFormatAacEld);
 
         // Authentication
-        features |= 1 << 14; // Auth setup
-        features |= 1 << 17; // Legacy pairing
-        features |= 1 << 26; // PIN
-        features |= 1 << 27; // Transient pairing
-        features |= 1 << 46; // HomeKit
+        flags.set(FeatureFlag::AuthenticationSetup);
+        flags.set(FeatureFlag::LegacyPairing);
+        flags.set(FeatureFlag::SupportsPin);
+        flags.set(FeatureFlag::SupportsTransientPairing);
+        flags.set(FeatureFlag::SupportsHomeKit);
 
         // Timing
-        features |= 1 << 38; // Buffered audio
-        features |= 1 << 40; // PTP
+        flags.set(FeatureFlag::SupportsBufferedAudio);
+        flags.set(FeatureFlag::SupportsPtp);
 
         // Control
-        features |= 1 << 18; // Unified media control
-        features |= 1 << 19; // Volume control
+        flags.set(FeatureFlag::UnifiedMediaControl);
+        flags.set(FeatureFlag::SupportsVolume);
 
-        features
+        flags.raw()
     }
 
     /// Default audio formats for receiver
