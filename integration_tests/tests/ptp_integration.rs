@@ -14,7 +14,9 @@ fn init() {
     INIT.call_once(|| {
         // Initialize logging for tests
         let _ = tracing_subscriber::fmt()
-            .with_env_filter("info,airplay2::connection::manager=debug,airplay2::streaming::pcm=debug")
+            .with_env_filter(
+                "info,airplay2::connection::manager=debug,airplay2::streaming::pcm=debug",
+            )
             .with_test_writer()
             .try_init();
     });
