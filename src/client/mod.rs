@@ -574,8 +574,10 @@ impl AirPlayClient {
         tokio::spawn(async move {
             // Short delay to allow streamer to fill buffer and start sending
             tokio::time::sleep(Duration::from_millis(100)).await;
-            if let Err(e) = connection.record().await {
-                 tracing::warn!("Failed to send RECORD request: {}", e);
+            tracing::info!("Sending RECORD request to device...");
+            match connection.record().await {
+                Ok(()) => tracing::info!("RECORD request accepted by device"),
+                Err(e) => tracing::error!("RECORD request failed: {}", e),
             }
         });
 

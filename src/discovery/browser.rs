@@ -227,11 +227,18 @@ impl DeviceBrowserStream {
             raop::parse_raop_service_name(info.get_fullname())
                 .map_or_else(|| "Unknown RAOP Device".to_string(), |(_, n)| n)
         } else {
-            txt_records
-                .get("model")
-                .cloned()
-                .or_else(|| name.split('.').next().map(ToString::to_string))
-                .unwrap_or_else(|| "AirPlay Device".to_string())
+            // For AirPlay 2 devices, the service instance name (before the service type)
+            // is the user-assigned friendly name (e.g., "Kitchen" from "Kitchen._airplay._tcp.local.")
+            name.split('.')
+                .next()
+                .filter(|n| !n.is_empty())
+                .map(ToString::to_string)
+                .unwrap_or_else(|| {
+                    txt_records
+                        .get("model")
+                        .cloned()
+                        .unwrap_or_else(|| "AirPlay Device".to_string())
+                })
         };
 
         // Create or update device

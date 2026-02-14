@@ -50,6 +50,8 @@ pub enum Method {
     Get,
     /// Set playback rate and anchor time
     SetRateAnchorTime,
+    /// Set PTP timing peers (AirPlay 2)
+    SetPeers,
 }
 
 impl Method {
@@ -70,6 +72,7 @@ impl Method {
             Method::Post => "POST",
             Method::Get => "GET",
             Method::SetRateAnchorTime => "SETRATEANCHORTIME",
+            Method::SetPeers => "SETPEERS",
         }
     }
 }
@@ -92,6 +95,7 @@ impl std::str::FromStr for Method {
             "POST" => Ok(Method::Post),
             "GET" => Ok(Method::Get),
             "SETRATEANCHORTIME" => Ok(Method::SetRateAnchorTime),
+            "SETPEERS" => Ok(Method::SetPeers),
             _ => Err(()),
         }
     }
