@@ -386,7 +386,7 @@ impl PtpMasterHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_message(&general_buf[..len], src)?;
+                    Self::handle_general_message(&general_buf[..len], src);
                 }
 
                 // Send periodic Sync + Follow_Up to known slaves.
@@ -462,44 +462,60 @@ impl PtpMasterHandler {
     }
 
     /// Handle incoming message on general port (320).
-    fn handle_general_message(
-        &mut self,
-        data: &[u8],
-        src: SocketAddr,
-    ) -> Result<(), std::io::Error> {
+    fn handle_general_message(data: &[u8], src: SocketAddr) {
         match PtpMessage::decode(data) {
             Ok(msg) => {
                 match &msg.body {
-                    PtpMessageBody::FollowUp { precise_origin_timestamp } => {
+                    PtpMessageBody::FollowUp {
+                        precise_origin_timestamp,
+                    } => {
                         tracing::info!(
                             "PTP master: Received Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
-                            src, msg.header.sequence_id, precise_origin_timestamp,
+                            src,
+                            msg.header.sequence_id,
+                            precise_origin_timestamp,
                             msg.header.source_port_identity.clock_identity
                         );
                     }
-                    PtpMessageBody::Announce { grandmaster_identity, grandmaster_priority1, .. } => {
+                    PtpMessageBody::Announce {
+                        grandmaster_identity,
+                        grandmaster_priority1,
+                        ..
+                    } => {
                         tracing::info!(
                             "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
-                            src, msg.header.sequence_id, grandmaster_identity, grandmaster_priority1
+                            src,
+                            msg.header.sequence_id,
+                            grandmaster_identity,
+                            grandmaster_priority1
                         );
                     }
                     PtpMessageBody::Signaling => {
-                        tracing::debug!("PTP master: Received Signaling from {} seq={}",
-                            src, msg.header.sequence_id);
+                        tracing::debug!(
+                            "PTP master: Received Signaling from {} seq={}",
+                            src,
+                            msg.header.sequence_id
+                        );
                     }
                     _ => {
-                        tracing::debug!("PTP master: Received {:?} on general port from {}",
-                            msg.header.message_type, src);
+                        tracing::debug!(
+                            "PTP master: Received {:?} on general port from {}",
+                            msg.header.message_type,
+                            src
+                        );
                     }
                 }
             }
             Err(e) => {
                 let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
-                tracing::warn!("PTP master: Failed to decode general packet ({} bytes, first 20: [{}]): {}",
-                    data.len(), hex.join(", "), e);
+                tracing::warn!(
+                    "PTP master: Failed to decode general packet ({} bytes, first 20: [{}]): {}",
+                    data.len(),
+                    hex.join(", "),
+                    e
+                );
             }
         }
-        Ok(())
     }
 
     /// Send Announce message to establish ourselves as PTP master.
