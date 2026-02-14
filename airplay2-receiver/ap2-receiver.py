@@ -368,9 +368,7 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             self.hap = None
 
     def parse_request(self):
-        self.logger.info(f"Raw request (pre-replace): {self.raw_requestline}")
         self.raw_requestline = self.raw_requestline.replace(b"RTSP/1.0", b"HTTP/1.1")
-        self.logger.info(f"Raw request (post-replace): {self.raw_requestline}")
 
         r = http.server.BaseHTTPRequestHandler.parse_request(self)
         self.protocol_version = "RTSP/1.0"
@@ -378,7 +376,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         return r
 
     def process_info(self, device_name):
-        self.logger.info('Process info called')
         device_info["name"] = "TODO"
 
     def send_response(self, code, message=None):
@@ -501,6 +498,74 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         ua = self.headers.get("User-Agent")
         self.logger.info(f'{self.command}: {self.path}')
         self.logger.debug(self.headers)
+
+        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
+            content_len = int(self.headers["Content-Length"])
+            if content_len > 0:
+                body = self.rfile.read(content_len)
+
+                plist = readPlistFromString(body)
+                self.logger.debug(self.pp.pformat(plist))
+
+                if not self.session:
+                    """ Only set up session first time at connection """
+                    self.session = Session(plist, self.fairplay_keymsg)
+
+                if "streams" not in plist:
+                    self.logger.debug("Sending EVENT:")
+                    self.server.event_port, self.server.event_proc = EventGeneric.spawn(
+                        self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
+                    device_setup["eventPort"] = self.server.event_port
+                    self.logger.debug(f"[+] eventPort={self.server.event_port}")
+
+                    self.logger.debug(self.pp.pformat(device_setup))
+                    res = writePlistToString(device_setup)
+                    self.send_response(200)
+                    self.send_header("Content-Length", len(res))
+                    self.send_header("Content-Type", HTTP_CT_BPLIST)
+                    self.send_header("Server", self.version_string())
+                    self.send_header("CSeq", self.headers["CSeq"])
+                    self.end_headers()
+                    self.wfile.write(res)
+                    self.logger.info('')
+                else:
+                    for stream in plist["streams"]:
+                        s = Stream(
+                            stream,
+                            IPADDR,
+                            buff_size=AIRPLAY_BUFFER,
+                            stream_id=increase_stream_id(),
+                            shared_key=self.ecdh_shared_key,
+                            isDebug=DEBUG,
+                        )
+                        self.logger.debug("Building stream channels:")
+                        self.server.streams.append(s)
+                        stream_setup_data["streams"].append(
+                            s.descriptor
+                        )
+
+                        self.logger.debug(s.getSummaryMessage())
+
+                        if s.getStreamType() == Stream.BUFFERED:
+                            set_volume_pid(s.getControlProc().pid)
+                        if s.getStreamType() == Stream.REALTIME:
+                            set_volume_pid(s.getControlProc().pid)
+
+                    self.logger.debug(self.pp.pformat(stream_setup_data))
+                    res = writePlistToString(stream_setup_data)
+
+                    self.send_response(200)
+                    self.send_header("Content-Length", len(res))
+                    self.send_header("Content-Type", HTTP_CT_BPLIST)
+                    self.send_header("Server", self.version_string())
+                    self.send_header("CSeq", self.headers["CSeq"])
+                    self.end_headers()
+                    self.wfile.write(res)
+                    self.logger.info('')
+                    # Send flag that we're active
+                    update_status_flags(StatusFlags.getRecvSessActive(StatusFlags), on=True)
+                return
+
         # Found in SETUP after ANNOUNCE:
         if self.headers["Transport"]:
             # self.logger.debug(self.headers["Transport"])
@@ -570,73 +635,6 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             # Send flag that we're active
             update_status_flags(StatusFlags.getRecvSessActive(StatusFlags), on=True)
             return
-
-        if self.headers["Content-Type"] == HTTP_CT_BPLIST:
-            content_len = int(self.headers["Content-Length"])
-            if content_len > 0:
-                body = self.rfile.read(content_len)
-
-                plist = readPlistFromString(body)
-                self.logger.debug(self.pp.pformat(plist))
-
-                if not self.session:
-                    """ Only set up session first time at connection """
-                    self.session = Session(plist, self.fairplay_keymsg)
-
-                if "streams" not in plist:
-                    self.logger.debug("Sending EVENT:")
-                    self.server.event_port, self.server.event_proc = EventGeneric.spawn(
-                        self.server.server_address, name='events', shared_key=self.ecdh_shared_key, isDebug=DEBUG)
-                    device_setup["eventPort"] = self.server.event_port
-                    self.logger.debug(f"[+] eventPort={self.server.event_port}")
-
-                    self.logger.debug(self.pp.pformat(device_setup))
-                    res = writePlistToString(device_setup)
-                    self.send_response(200)
-                    self.send_header("Content-Length", len(res))
-                    self.send_header("Content-Type", HTTP_CT_BPLIST)
-                    self.send_header("Server", self.version_string())
-                    self.send_header("CSeq", self.headers["CSeq"])
-                    self.end_headers()
-                    self.wfile.write(res)
-                    self.logger.info('')
-                else:
-                    for stream in plist["streams"]:
-                        s = Stream(
-                            stream,
-                            IPADDR,
-                            buff_size=AIRPLAY_BUFFER,
-                            stream_id=increase_stream_id(),
-                            shared_key=self.ecdh_shared_key,
-                            isDebug=DEBUG,
-                        )
-                        self.logger.debug("Building stream channels:")
-                        self.server.streams.append(s)
-                        stream_setup_data["streams"].append(
-                            s.descriptor
-                        )
-
-                        self.logger.debug(s.getSummaryMessage())
-
-                        if s.getStreamType() == Stream.BUFFERED:
-                            set_volume_pid(s.getControlProc().pid)
-                        if s.getStreamType() == Stream.REALTIME:
-                            set_volume_pid(s.getControlProc().pid)
-
-                    self.logger.debug(self.pp.pformat(stream_setup_data))
-                    res = writePlistToString(stream_setup_data)
-
-                    self.send_response(200)
-                    self.send_header("Content-Length", len(res))
-                    self.send_header("Content-Type", HTTP_CT_BPLIST)
-                    self.send_header("Server", self.version_string())
-                    self.send_header("CSeq", self.headers["CSeq"])
-                    self.end_headers()
-                    self.wfile.write(res)
-                    self.logger.info('')
-                    # Send flag that we're active
-                    update_status_flags(StatusFlags.getRecvSessActive(StatusFlags), on=True)
-                return
         self.send_error(404)
         self.logger.info('')
 

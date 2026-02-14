@@ -920,12 +920,34 @@ impl ConnectionManager {
             100
         };
 
+        // Determine ct (compression type) and audioFormat
+        // ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD
+        let (ct, spf, audio_format) = match self.config.audio_codec {
+            AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
+            AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
+            AudioCodec::Aac => (0x4, 1024, 1 << 11), // AAC_LC -> Output as PCM 44100/16/2
+            AudioCodec::Opus => (0x0, 480, 0),      // Not supported by standard receivers usually
+        };
+
+        // Note: audioFormat values are bitmasks or specific IDs.
+        // For compatibility with the Python receiver (which expects audioFormat), we send a valid one.
+        // 1<<11 (2048) works for PCM in the receiver.
+        // For AAC, let's try 0x100 (256) or just use the same default if it's ignored for AAC?
+        // Receiver uses audio_format for ALSA setup?
+        // Let's assume 0x400 (1024) or similar?
+        // Actually, Python receiver uses audio_format in AudioRealtime/Buffered.
+        // If we send 1<<11 (2048), it sets up 44100/16/2 PCM.
+        // Even for AAC streaming, the receiver might decode to PCM?
+        // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output format?
+
         let stream_entry = DictBuilder::new()
             .insert("type", stream_type)
-            .insert("ct", 0x1) // Control Type (Audio)
-            .insert("spf", 352) // Samples per frame (ALAC)
+            .insert("ct", ct)
+            .insert("audioFormat", audio_format)
+            .insert("spf", spf)
             .insert("audioType", "default")
             .insert("shk", ek.to_vec())
+            .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
             .build();
@@ -1085,6 +1107,9 @@ impl ConnectionManager {
             // For AirPlay 2 Buffered Audio: RECORD is sent as part of the setup flow
             // (per protocol: SETUP → SETPEERS → RECORD → FLUSH → Audio data)
             tracing::info!("Sending RECORD for AirPlay 2 Buffered Audio...");
+            // Add a small delay to allow receiver to process SETPEERS/sockets
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
             match tokio::time::timeout(std::time::Duration::from_secs(5), self.record()).await {
                 Ok(Ok(())) => tracing::info!("RECORD accepted by device"),
                 Ok(Err(e)) => tracing::warn!("RECORD failed: {}", e),
