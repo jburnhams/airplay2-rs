@@ -6,7 +6,8 @@ use crate::audio::aac_encoder::AacEncoder;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
-use crate::protocol::rtp::RtpCodec;
+use crate::protocol::ptp::{PtpTimestamp, SharedPtpClock};
+use crate::protocol::rtp::{RtpCodec, TimeAnnouncePtp};
 
 use async_trait::async_trait;
 use std::borrow::Cow;
@@ -19,12 +20,26 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 pub trait RtpSender: Send + Sync {
     /// Send RTP audio packet
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError>;
+
+    /// Send control packet (RTCP)
+    async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError>;
+
+    /// Get PTP clock if available
+    async fn ptp_clock(&self) -> Option<SharedPtpClock>;
 }
 
 #[async_trait]
 impl RtpSender for ConnectionManager {
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
         self.send_rtp_audio(packet).await
+    }
+
+    async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        self.send_control_packet(packet).await
+    }
+
+    async fn ptp_clock(&self) -> Option<SharedPtpClock> {
+        self.ptp_clock().await
     }
 }
 
@@ -244,9 +259,49 @@ impl PcmStreamer {
         // Reusable buffer for encoding output to avoid allocations
         let mut encoding_buffer = vec![0u8; 4096];
 
+        let mut last_announce = tokio::time::Instant::now();
+
         loop {
             // Wait for next tick
             interval.tick().await;
+
+            // Check if we need to send TimeAnnouncePtp
+            if last_announce.elapsed() >= Duration::from_secs(1) {
+                if let Some(clock) = self.connection.ptp_clock().await {
+                    let clock_guard = clock.read().await;
+                    // Send if synchronized or master
+                    if clock_guard.is_synchronized()
+                        || clock_guard.role() == crate::protocol::ptp::PtpRole::Master
+                    {
+                        let now = PtpTimestamp::now();
+                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        let monotonic_ns = now.to_nanos() as u64;
+
+                        let codec = self.rtp_codec.lock().await;
+                        let rtp_timestamp = codec.timestamp();
+
+                        // Latency: 2 seconds (88200 frames)
+                        let latency_frames = 88200;
+                        let play_at_timestamp = rtp_timestamp.wrapping_add(latency_frames);
+
+                        let clock_identity = clock_guard.clock_id().to_be_bytes();
+
+                        let announce = TimeAnnouncePtp {
+                            rtp_timestamp,
+                            monotonic_ns,
+                            play_at_timestamp,
+                            clock_identity,
+                        };
+
+                        // Ignore error (e.g. if connection dropped)
+                        let _ = self
+                            .connection
+                            .send_control_packet(&announce.encode())
+                            .await;
+                    }
+                }
+                last_announce = tokio::time::Instant::now();
+            }
 
             // Check for commands
             match cmd_rx.try_recv() {

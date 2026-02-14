@@ -1106,6 +1106,31 @@ impl ConnectionManager {
         }
     }
 
+    /// Send RTCP control packet
+    ///
+    /// # Errors
+    ///
+    /// Returns error if sockets are not connected or send fails
+    pub async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        let sockets = self.sockets.lock().await;
+        if let Some(ref socks) = *sockets {
+            socks
+                .control
+                .send(packet)
+                .await
+                .map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to send RTCP control packet: {e}"),
+                    status_code: None,
+                })?;
+            Ok(())
+        } else {
+            Err(AirPlayError::InvalidState {
+                message: "RTCP sockets not connected".to_string(),
+                current_state: "Disconnected".to_string(),
+            })
+        }
+    }
+
     /// Send an arbitrary RTSP command
     ///
     /// # Errors

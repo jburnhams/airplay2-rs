@@ -1,5 +1,6 @@
 use crate::audio::AudioFormat;
 use crate::error::AirPlayError;
+use crate::protocol::ptp::SharedPtpClock;
 use crate::streaming::{PcmStreamer, RtpSender, SliceSource, StreamerState};
 use async_trait::async_trait;
 use std::sync::{Arc, Mutex};
@@ -8,6 +9,7 @@ use tokio::time::Duration;
 #[derive(Default)]
 struct MockRtpSender {
     packets: Arc<Mutex<Vec<Vec<u8>>>>,
+    control_packets: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
 #[async_trait]
@@ -15,6 +17,15 @@ impl RtpSender for MockRtpSender {
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
         self.packets.lock().unwrap().push(packet.to_vec());
         Ok(())
+    }
+
+    async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        self.control_packets.lock().unwrap().push(packet.to_vec());
+        Ok(())
+    }
+
+    async fn ptp_clock(&self) -> Option<SharedPtpClock> {
+        None
     }
 }
 
