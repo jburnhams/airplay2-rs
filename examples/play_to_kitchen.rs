@@ -5,8 +5,8 @@
 //! 2. Connect using transient pairing (default)
 //! 3. Stream PCM audio (Sine Wave)
 
-use airplay2::{AirPlayPlayer, audio::AudioFormat};
 use airplay2::streaming::source::SliceSource;
+use airplay2::{AirPlayPlayer, audio::AudioFormat};
 
 use tokio::io::{self, AsyncBufReadExt};
 
@@ -29,20 +29,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut player = AirPlayPlayer::new();
 
     loop {
-        println!("Attempt {}/{}: Connecting to '{}'...", retry_count + 1, max_retries, device_name);
-        
+        println!(
+            "Attempt {}/{}: Connecting to '{}'...",
+            retry_count + 1,
+            max_retries,
+            device_name
+        );
+
         // Scan and list all devices first for debugging
         println!("Scanning network...");
-        let scan_result = player.client().scan(std::time::Duration::from_secs(3)).await;
-        
+        let scan_result = player
+            .client()
+            .scan(std::time::Duration::from_secs(3))
+            .await;
+
         let mut target_device = None;
 
         match scan_result {
             Ok(devices) => {
                 println!("Found {} devices:", devices.len());
                 for d in &devices {
-                    println!(" - Name: '{}', ID: '{}', IP: {:?}, Port: {}", d.name, d.id, d.addresses, d.port);
-                    if d.name.contains(device_name) || d.name.contains("bedroom") || d.id == "DC:9B:9C:EF:90:E9" {
+                    println!(
+                        " - Name: '{}', ID: '{}', IP: {:?}, Port: {}",
+                        d.name, d.id, d.addresses, d.port
+                    );
+                    if d.name.contains(device_name)
+                        || d.name.contains("bedroom")
+                        || d.id == "DC:9B:9C:EF:90:E9"
+                    {
                         target_device = Some(d.clone());
                     }
                 }
@@ -56,10 +70,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(_) => {
                     println!("Connected successfully!");
                     break;
-                },
+                }
                 Err(e) => {
-                     eprintln!("Connection failed: {:?}", e);
-                     retry_count += 1;
+                    eprintln!("Connection failed: {:?}", e);
+                    retry_count += 1;
                 }
             }
         } else {
@@ -68,8 +82,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if retry_count >= max_retries {
-             tracing::error!("Connection failure after {} attempts", max_retries);
-             return Ok(());
+            tracing::error!("Connection failure after {} attempts", max_retries);
+            return Ok(());
         }
         println!("Retrying in 2 seconds...");
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -93,10 +107,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let t = (i as f32) / (sample_rate as f32);
         let sample = (t * frequency * 2.0 * std::f32::consts::PI).sin() * amplitude;
         let sample_i16 = sample as i16;
-        
+
         // Stereo: Left and Right same
         samples.push(sample_i16);
-        samples.push(sample_i16); 
+        samples.push(sample_i16);
     }
 
     println!("Generated {} samples of sine wave.", samples.len() / 2);
@@ -110,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = SliceSource::from_i16(&samples, format);
 
     println!("Streaming audio (PCM)...");
-    
+
     // Use client_mut() to access stream_audio
     player.client_mut().stream_audio(source).await?;
 
@@ -124,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Stopping playback...");
     player.stop().await?;
-    
+
     println!("Disconnecting...");
     player.disconnect().await?;
 

@@ -395,31 +395,35 @@ impl AirPlayPlayer {
     ///
     /// Returns error if file cannot be opened or playback fails.
     #[cfg(feature = "decoders")]
-    pub async fn play_file(&mut self, path: impl AsRef<std::path::Path>) -> Result<(), AirPlayError> {
-        let source = crate::streaming::file::FileSource::new(path).map_err(|e| AirPlayError::IoError {
-            message: e.to_string(),
-            source: Some(Box::new(e)),
-        })?;
-        
+    pub async fn play_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), AirPlayError> {
+        let source =
+            crate::streaming::file::FileSource::new(path).map_err(|e| AirPlayError::IoError {
+                message: e.to_string(),
+                source: Some(Box::new(e)),
+            })?;
+
         // Ensure connected
         if !self.is_connected().await {
-             // Use auto-connect if configured target is set, otherwise fail?
-             // Or just fail. The user should handle connection.
-             // But for convenience, let's try to verify connection or error.
-             if let Some(ref name) = self.target_device_name {
-                  self.connect_by_name(name, Duration::from_secs(5)).await?;
-             } else {
-                  // Check if we have a last device
-                   let last = self.last_device.read().await.clone();
-                   if let Some(d) = last {
-                        self.connect(&d).await?;
-                   } else {
-                        return Err(AirPlayError::InvalidState {
-                            message: "Not connected to any device".to_string(),
-                            current_state: "Disconnected".to_string(),
-                        });
-                   }
-             }
+            // Use auto-connect if configured target is set, otherwise fail?
+            // Or just fail. The user should handle connection.
+            // But for convenience, let's try to verify connection or error.
+            if let Some(ref name) = self.target_device_name {
+                self.connect_by_name(name, Duration::from_secs(5)).await?;
+            } else {
+                // Check if we have a last device
+                let last = self.last_device.read().await.clone();
+                if let Some(d) = last {
+                    self.connect(&d).await?;
+                } else {
+                    return Err(AirPlayError::InvalidState {
+                        message: "Not connected to any device".to_string(),
+                        current_state: "Disconnected".to_string(),
+                    });
+                }
+            }
         }
 
         self.client.stream_audio(source).await
@@ -480,8 +484,6 @@ impl PlayerBuilder {
         player
     }
 }
-
-
 
 impl Default for PlayerBuilder {
     fn default() -> Self {

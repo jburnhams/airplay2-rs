@@ -359,9 +359,9 @@ fn test_message_encode_sizes() {
     let drp = PtpMessage::delay_resp(source, 0, PtpTimestamp::ZERO, requesting);
     assert_eq!(drp.encode().len(), 54);
 
-    // Announce: 34 + 20 = 54.
+    // Announce: 34 + 30 = 64.
     let ann = PtpMessage::announce(source, 0, 0, 128, 248);
-    assert_eq!(ann.encode().len(), 54);
+    assert_eq!(ann.encode().len(), 64);
 }
 
 // ===== AirPlayTimingPacket =====

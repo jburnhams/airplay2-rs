@@ -195,18 +195,27 @@ impl PtpSlaveHandler {
             match msg.body {
                 PtpMessageBody::Sync { origin_timestamp } => {
                     let two_step = msg.header.flags & 0x0200 != 0;
-                    tracing::info!("PTP slave: Sync seq={}, two_step={}, T1={:?}",
-                        msg.header.sequence_id, two_step, origin_timestamp);
+                    tracing::info!(
+                        "PTP slave: Sync seq={}, two_step={}, T1={:?}",
+                        msg.header.sequence_id,
+                        two_step,
+                        origin_timestamp
+                    );
                     // Always store T1 from Sync. For two-step, Follow_Up will
                     // overwrite with the precise value. If Follow_Up never arrives,
                     // this at least allows Delay_Req to be sent (keeping PTP alive).
                     self.pending_t1 = Some(origin_timestamp);
                     self.pending_t2 = Some(t2);
                 }
-                PtpMessageBody::FollowUp { precise_origin_timestamp } => {
+                PtpMessageBody::FollowUp {
+                    precise_origin_timestamp,
+                } => {
                     // Follow_Up might arrive on event port in some implementations
-                    tracing::info!("PTP slave: Follow_Up (on event port) seq={}, T1={:?}",
-                        msg.header.sequence_id, precise_origin_timestamp);
+                    tracing::info!(
+                        "PTP slave: Follow_Up (on event port) seq={}, T1={:?}",
+                        msg.header.sequence_id,
+                        precise_origin_timestamp
+                    );
                     self.pending_t1 = Some(precise_origin_timestamp);
                 }
                 PtpMessageBody::DelayResp {
@@ -220,8 +229,10 @@ impl PtpSlaveHandler {
                         let t4 = receive_timestamp;
                         let mut clock = self.clock.write().await;
                         clock.process_timing(t1, t2_saved, t3, t4);
-                        tracing::info!("PTP slave: Clock synced (offset={:.3}ms)",
-                            clock.offset_millis());
+                        tracing::info!(
+                            "PTP slave: Clock synced (offset={:.3}ms)",
+                            clock.offset_millis()
+                        );
                         self.pending_t1 = None;
                         self.pending_t2 = None;
                         self.pending_t3 = None;
@@ -232,7 +243,10 @@ impl PtpSlaveHandler {
                 }
             }
         } else {
-            tracing::warn!("PTP slave: Failed to decode event packet ({} bytes)", data.len());
+            tracing::warn!(
+                "PTP slave: Failed to decode event packet ({} bytes)",
+                data.len()
+            );
         }
         Ok(())
     }
@@ -248,8 +262,11 @@ impl PtpSlaveHandler {
                     PtpMessageBody::FollowUp {
                         precise_origin_timestamp,
                     } => {
-                        tracing::info!("PTP slave: Follow_Up seq={}, T1={:?}",
-                            msg.header.sequence_id, precise_origin_timestamp);
+                        tracing::info!(
+                            "PTP slave: Follow_Up seq={}, T1={:?}",
+                            msg.header.sequence_id,
+                            precise_origin_timestamp
+                        );
                         // Two-step Sync: the Follow-up carries the precise T1.
                         self.pending_t1 = Some(precise_origin_timestamp);
                     }
@@ -259,9 +276,13 @@ impl PtpSlaveHandler {
                 }
             }
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{:02X}", b)).collect();
-                tracing::warn!("PTP slave: Failed to decode general packet ({} bytes, first 20: [{}]): {:?}",
-                    data.len(), hex.join(", "), e);
+                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
+                tracing::warn!(
+                    "PTP slave: Failed to decode general packet ({} bytes, first 20: [{}]): {:?}",
+                    data.len(),
+                    hex.join(", "),
+                    e
+                );
             }
         }
     }
@@ -284,7 +305,11 @@ impl PtpSlaveHandler {
             msg.encode()
         };
 
-        tracing::info!("PTP slave: Sending Delay_Req seq={} to {}", self.delay_req_sequence, self.master_addr);
+        tracing::info!(
+            "PTP slave: Sending Delay_Req seq={} to {}",
+            self.delay_req_sequence,
+            self.master_addr
+        );
         self.event_socket.send_to(&data, self.master_addr).await?;
         self.delay_req_sequence = self.delay_req_sequence.wrapping_add(1);
         Ok(())
@@ -314,7 +339,7 @@ pub struct PtpMasterHandler {
     sync_sequence: u16,
     /// Known slave addresses (discovered from `Delay_Req` messages).
     known_slaves: Vec<SocketAddr>,
-    /// Known slave general addresses (port 320) for Follow_Up messages.
+    /// Known slave general addresses (port 320) for `Follow_Up` messages.
     known_general_slaves: Vec<SocketAddr>,
 }
 
@@ -344,7 +369,7 @@ impl PtpMasterHandler {
         }
     }
 
-    /// Add a known slave general address (port 320) for Follow_Up messages.
+    /// Add a known slave general address (port 320) for `Follow_Up` messages.
     pub fn add_general_slave(&mut self, addr: SocketAddr) {
         if !self.known_general_slaves.contains(&addr) {
             self.known_general_slaves.push(addr);
@@ -386,7 +411,7 @@ impl PtpMasterHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_message(&general_buf[..len], src).await?;
+                    Self::handle_general_message(&general_buf[..len], src);
                 }
 
                 // Send periodic Sync + Follow_Up to known slaves.
@@ -421,77 +446,116 @@ impl PtpMasterHandler {
         data: &[u8],
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
-        match PtpMessage::decode(data) {
-            Ok(msg) => {
-                match &msg.body {
-                    PtpMessageBody::Sync { origin_timestamp } => {
-                        let two_step = msg.header.flags & 0x0200 != 0;
-                        tracing::debug!(
-                            "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, T1={}",
-                            src, msg.header.sequence_id, two_step,
-                            msg.header.source_port_identity.clock_identity,
-                            origin_timestamp
-                        );
-                    }
-                    PtpMessageBody::DelayReq { .. } => {
-                        tracing::info!("PTP master: Received Delay_Req from {} seq={}",
-                            src, msg.header.sequence_id);
-                        self.handle_delay_req(data, src).await?;
-                    }
-                    _ => {
-                        tracing::debug!("PTP master: Received {:?} on event port from {}",
-                            msg.header.message_type, src);
-                    }
+        if self.config.use_airplay_format {
+            if let Ok(req) = AirPlayTimingPacket::decode(data) {
+                if req.message_type == PtpMessageType::DelayReq {
+                    return self.handle_airplay_delay_req(req, src).await;
                 }
+                tracing::debug!(
+                    "PTP master: Received AirPlay message type {:?} from {} (ignored)",
+                    req.message_type,
+                    src
+                );
+                return Ok(());
             }
+            return Ok(());
+        }
+
+        match PtpMessage::decode(data) {
+            Ok(msg) => match &msg.body {
+                PtpMessageBody::Sync { origin_timestamp } => {
+                    let two_step = msg.header.flags & 0x0200 != 0;
+                    tracing::debug!(
+                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, T1={}",
+                        src,
+                        msg.header.sequence_id,
+                        two_step,
+                        msg.header.source_port_identity.clock_identity,
+                        origin_timestamp
+                    );
+                }
+                PtpMessageBody::DelayReq { .. } => {
+                    tracing::info!(
+                        "PTP master: Received Delay_Req from {} seq={}",
+                        src,
+                        msg.header.sequence_id
+                    );
+                    self.handle_ieee_delay_req(msg, src).await?;
+                }
+                _ => {
+                    tracing::debug!(
+                        "PTP master: Received {:?} on event port from {}",
+                        msg.header.message_type,
+                        src
+                    );
+                }
+            },
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{:02X}", b)).collect();
-                tracing::warn!("PTP master: Failed to decode event packet ({} bytes, first 20: [{}]): {}",
-                    data.len(), hex.join(", "), e);
+                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
+                tracing::warn!(
+                    "PTP master: Failed to decode event packet ({} bytes, first 20: [{}]): {}",
+                    data.len(),
+                    hex.join(", "),
+                    e
+                );
             }
         }
         Ok(())
     }
 
     /// Handle incoming message on general port (320).
-    async fn handle_general_message(
-        &mut self,
-        data: &[u8],
-        src: SocketAddr,
-    ) -> Result<(), std::io::Error> {
+    fn handle_general_message(data: &[u8], src: SocketAddr) {
         match PtpMessage::decode(data) {
-            Ok(msg) => {
-                match &msg.body {
-                    PtpMessageBody::FollowUp { precise_origin_timestamp } => {
-                        tracing::info!(
-                            "PTP master: Received Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
-                            src, msg.header.sequence_id, precise_origin_timestamp,
-                            msg.header.source_port_identity.clock_identity
-                        );
-                    }
-                    PtpMessageBody::Announce { grandmaster_identity, grandmaster_priority1, .. } => {
-                        tracing::info!(
-                            "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
-                            src, msg.header.sequence_id, grandmaster_identity, grandmaster_priority1
-                        );
-                    }
-                    PtpMessageBody::Signaling => {
-                        tracing::debug!("PTP master: Received Signaling from {} seq={}",
-                            src, msg.header.sequence_id);
-                    }
-                    _ => {
-                        tracing::debug!("PTP master: Received {:?} on general port from {}",
-                            msg.header.message_type, src);
-                    }
+            Ok(msg) => match &msg.body {
+                PtpMessageBody::FollowUp {
+                    precise_origin_timestamp,
+                } => {
+                    tracing::info!(
+                        "PTP master: Received Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
+                        src,
+                        msg.header.sequence_id,
+                        precise_origin_timestamp,
+                        msg.header.source_port_identity.clock_identity
+                    );
                 }
-            }
+                PtpMessageBody::Announce {
+                    grandmaster_identity,
+                    grandmaster_priority1,
+                    ..
+                } => {
+                    tracing::info!(
+                        "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
+                        src,
+                        msg.header.sequence_id,
+                        grandmaster_identity,
+                        grandmaster_priority1
+                    );
+                }
+                PtpMessageBody::Signaling => {
+                    tracing::debug!(
+                        "PTP master: Received Signaling from {} seq={}",
+                        src,
+                        msg.header.sequence_id
+                    );
+                }
+                _ => {
+                    tracing::debug!(
+                        "PTP master: Received {:?} on general port from {}",
+                        msg.header.message_type,
+                        src
+                    );
+                }
+            },
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{:02X}", b)).collect();
-                tracing::warn!("PTP master: Failed to decode general packet ({} bytes, first 20: [{}]): {}",
-                    data.len(), hex.join(", "), e);
+                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
+                tracing::warn!(
+                    "PTP master: Failed to decode general packet ({} bytes, first 20: [{}]): {}",
+                    data.len(),
+                    hex.join(", "),
+                    e
+                );
             }
         }
-        Ok(())
     }
 
     /// Send Announce message to establish ourselves as PTP master.
@@ -501,16 +565,20 @@ impl PtpMasterHandler {
             source,
             *sequence,
             self.config.clock_id, // grandmaster = ourselves
-            128, // priority1 (lower = better, 128 = default; HomePod sends 248)
-            128, // priority2
+            128,                  // priority1 (lower = better, 128 = default; HomePod sends 248)
+            128,                  // priority2
         );
         let encoded = announce.encode();
         if let Some(ref general) = self.general_socket {
             for &addr in &self.known_general_slaves {
                 general.send_to(&encoded, addr).await?;
             }
-            tracing::info!("PTP master: Sent Announce seq={}, {} bytes, clock=0x{:016X}, priority1=128",
-                *sequence, encoded.len(), self.config.clock_id);
+            tracing::info!(
+                "PTP master: Sent Announce seq={}, {} bytes, clock=0x{:016X}, priority1=128",
+                *sequence,
+                encoded.len(),
+                self.config.clock_id
+            );
         }
         *sequence = sequence.wrapping_add(1);
         Ok(())
@@ -537,7 +605,11 @@ impl PtpMasterHandler {
                 self.event_socket
                     .send_to(&sync_msg.encode(), slave_addr)
                     .await?;
-                tracing::debug!("PTP master: Sent Sync seq={} to {}", self.sync_sequence, slave_addr);
+                tracing::debug!(
+                    "PTP master: Sent Sync seq={} to {}",
+                    self.sync_sequence,
+                    slave_addr
+                );
 
                 // Precise timestamp (in practice, captured by hardware).
                 let precise_t1 = PtpTimestamp::now();
@@ -546,7 +618,11 @@ impl PtpMasterHandler {
                     // Send Follow_Up to general port addresses (port 320)
                     for &general_addr in &self.known_general_slaves {
                         general.send_to(&follow_up.encode(), general_addr).await?;
-                        tracing::debug!("PTP master: Sent Follow_Up seq={} to {}", self.sync_sequence, general_addr);
+                        tracing::debug!(
+                            "PTP master: Sent Follow_Up seq={} to {}",
+                            self.sync_sequence,
+                            general_addr
+                        );
                     }
                     // Fallback: also send to slave event addr if no general slaves
                     if self.known_general_slaves.is_empty() {
@@ -564,9 +640,36 @@ impl PtpMasterHandler {
         Ok(())
     }
 
-    async fn handle_delay_req(
+    async fn handle_airplay_delay_req(
         &mut self,
-        data: &[u8],
+        req: AirPlayTimingPacket,
+        src: SocketAddr,
+    ) -> Result<(), std::io::Error> {
+        // Remember this slave for future Sync broadcasts.
+        self.add_slave(src);
+        let t4 = PtpTimestamp::now();
+
+        tracing::info!(
+            "PTP: AirPlay format message type={:?}, seq={}",
+            req.message_type,
+            req.sequence_id
+        );
+
+        let resp = AirPlayTimingPacket {
+            message_type: PtpMessageType::DelayResp,
+            sequence_id: req.sequence_id,
+            timestamp: t4,
+            clock_id: self.config.clock_id,
+        };
+        self.event_socket.send_to(&resp.encode(), src).await?;
+        tracing::info!("PTP: Sent AirPlay DelayResp to {}", src);
+
+        Ok(())
+    }
+
+    async fn handle_ieee_delay_req(
+        &mut self,
+        msg: PtpMessage,
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
         // Remember this slave for future Sync broadcasts.
@@ -574,43 +677,25 @@ impl PtpMasterHandler {
         let t4 = PtpTimestamp::now();
         let source = PtpPortIdentity::new(self.config.clock_id, 1);
 
-        if self.config.use_airplay_format {
-            if let Ok(req) = AirPlayTimingPacket::decode(data) {
-                tracing::info!("PTP: AirPlay format message type={:?}, seq={}", req.message_type, req.sequence_id);
-                if req.message_type == PtpMessageType::DelayReq {
-                    let resp = AirPlayTimingPacket {
-                        message_type: PtpMessageType::DelayResp,
-                        sequence_id: req.sequence_id,
-                        timestamp: t4,
-                        clock_id: self.config.clock_id,
-                    };
-                    self.event_socket.send_to(&resp.encode(), src).await?;
-                    tracing::info!("PTP: Sent AirPlay DelayResp to {}", src);
-                }
-            } else {
-                tracing::warn!("PTP: Failed to decode AirPlay format packet ({} bytes)", data.len());
-            }
-        } else if let Ok(msg) = PtpMessage::decode(data) {
-            tracing::info!("PTP: IEEE 1588 message type={:?}, seq={}", msg.body, msg.header.sequence_id);
-            if let PtpMessageBody::DelayReq { .. } = msg.body {
-                let resp = PtpMessage::delay_resp(
-                    source,
-                    msg.header.sequence_id,
-                    t4,
-                    msg.header.source_port_identity,
-                );
-                // Delay_Resp goes on general port if available.
-                if let Some(ref general) = self.general_socket {
-                    general.send_to(&resp.encode(), src).await?;
-                } else {
-                    self.event_socket.send_to(&resp.encode(), src).await?;
-                }
-                tracing::info!("PTP: Sent IEEE 1588 DelayResp to {}", src);
-            }
+        tracing::info!(
+            "PTP: IEEE 1588 message type={:?}, seq={}",
+            msg.body,
+            msg.header.sequence_id
+        );
+
+        let resp = PtpMessage::delay_resp(
+            source,
+            msg.header.sequence_id,
+            t4,
+            msg.header.source_port_identity,
+        );
+        // Delay_Resp goes on general port if available.
+        if let Some(ref general) = self.general_socket {
+            general.send_to(&resp.encode(), src).await?;
         } else {
-            tracing::warn!("PTP: Failed to decode IEEE 1588 message ({} bytes): {:02X?}",
-                data.len(), &data[..data.len().min(20)]);
+            self.event_socket.send_to(&resp.encode(), src).await?;
         }
+        tracing::info!("PTP: Sent IEEE 1588 DelayResp to {}", src);
 
         Ok(())
     }

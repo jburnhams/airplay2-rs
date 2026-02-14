@@ -1,6 +1,15 @@
 from ap2.playfair import FairPlayAES
 
 
+class UnwrappedKey:
+    def __init__(self, key, iv):
+        self.aeskey = key
+        self.aesiv = iv
+    def getAESKey(self):
+        return self.aeskey
+    def getAESIV(self):
+        return self.aesiv
+
 class Session():
     """ place to hold session information """
 
@@ -53,7 +62,16 @@ class Session():
         if 'eiv' in info and 'ekey' in info:
             self.aesiv = info['eiv']
             self.aeskey = info['ekey']
-            self.aeskeyobj = FairPlayAES(fpaeskey=self.aeskey, aesiv=self.aesiv, keymsg=keymsg)
+            # If encryption type is 4 (MFi/Transient), ekey is not FairPlay-wrapped.
+            # FairPlayAES expects a 72-byte wrapped key. If we have != 72 bytes, assume it's unwrapped.
+            if len(self.aeskey) != 72:
+                # Use a dummy object or just set the key directly if possible?
+                # FairPlayAES constructor expects wrapped key.
+                # We can mock FairPlayAES or handle it here.
+                # Creating a mock object that mimics FairPlayAES interface
+                self.aeskeyobj = UnwrappedKey(self.aeskey, self.aesiv)
+            else:
+                self.aeskeyobj = FairPlayAES(fpaeskey=self.aeskey, aesiv=self.aesiv, keymsg=keymsg)
 
         if 'timingPeerInfo' in info:
             """ consists of:

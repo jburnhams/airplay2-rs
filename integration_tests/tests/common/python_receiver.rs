@@ -441,6 +441,8 @@ impl PythonReceiver {
             capabilities: airplay2::DeviceCapabilities {
                 airplay2: true,
                 supports_transient_pairing: true,
+                supports_buffered_audio: true, // Python receiver expects stream type 96 or 103
+                supports_ptp: true,            // AirPlay 2 implies PTP
                 ..Default::default()
             },
             raop_port: None,

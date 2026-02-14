@@ -513,19 +513,25 @@ impl AirPlayClient {
     }
 
     /// Get playback info from device (debug)
-    /// 
-    /// Sends a GET_PARAMETER request with body "playback-info\r\n"
+    ///
+    /// Sends a `GET_PARAMETER` request with body "playback-info\r\n"
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network operation fails.
     pub async fn get_playback_info(&self) -> Result<Vec<u8>, AirPlayError> {
         self.ensure_connected().await?;
-        
+
         // Try querying playback-info
         // Some devices might prefer "progress"
         let body = "playback-info\r\n";
-        self.connection.send_command(
-            crate::protocol::rtsp::Method::GetParameter,
-            Some(body.as_bytes().to_vec()),
-            Some("text/parameters".to_string())
-        ).await
+        self.connection
+            .send_command(
+                crate::protocol::rtsp::Method::GetParameter,
+                Some(body.as_bytes().to_vec()),
+                Some("text/parameters".to_string()),
+            )
+            .await
     }
 
     /// Stream raw PCM audio from a source
