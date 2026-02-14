@@ -25,9 +25,9 @@ pub struct TimingMeasurement {
     pub t1: PtpTimestamp,
     /// T2: slave receive time (when slave received Sync).
     pub t2: PtpTimestamp,
-    /// T3: slave send time (origin timestamp of Delay_Req).
+    /// T3: slave send time (origin timestamp of `Delay_Req`).
     pub t3: PtpTimestamp,
-    /// T4: master receive time (from Delay_Resp).
+    /// T4: master receive time (from `Delay_Resp`).
     pub t4: PtpTimestamp,
     /// Local wall-clock time when this measurement was recorded.
     pub local_time: Instant,
@@ -60,7 +60,7 @@ impl TimingMeasurement {
 
         // RTT = (t4 - t1) - (t3 - t2) = total round trip minus processing
         let rtt_nanos = (t4.diff_nanos(&t1) - t3.diff_nanos(&t2)).max(0);
-        let rtt = Duration::from_nanos(rtt_nanos as u64);
+        let rtt = Duration::from_nanos(u64::try_from(rtt_nanos).unwrap_or(u64::MAX));
 
         Self {
             t1,
@@ -145,8 +145,8 @@ impl PtpClock {
     ///
     /// - T1: master send time (from Sync / Follow-up)
     /// - T2: slave receive time
-    /// - T3: slave send time (Delay_Req origin)
-    /// - T4: master receive time (from Delay_Resp)
+    /// - T3: slave send time (`Delay_Req` origin)
+    /// - T4: master receive time (from `Delay_Resp`)
     ///
     /// Returns `true` if the measurement was accepted.
     pub fn process_timing(
@@ -189,7 +189,7 @@ impl PtpClock {
             return;
         }
         let mut offsets: Vec<i128> = self.measurements.iter().map(|m| m.offset_ns).collect();
-        offsets.sort();
+        offsets.sort_unstable();
         self.offset_ns = offsets[offsets.len() / 2];
     }
 
@@ -212,6 +212,7 @@ impl PtpClock {
 
         // Simple two-point drift estimate. For production, a full linear regression
         // over all measurements would be more robust.
+        #[allow(clippy::cast_precision_loss)]
         let offset_diff_ns = (last.offset_ns - first.offset_ns) as f64;
         // Drift in ppm: (offset change in ns) / (time in ns) * 1e6
         self.drift_ppm = offset_diff_ns / (time_diff_secs * 1e9) * 1e6;
@@ -256,11 +257,12 @@ impl PtpClock {
     /// Get the current offset estimate in microseconds.
     #[must_use]
     pub fn offset_micros(&self) -> i64 {
-        (self.offset_ns / 1_000) as i64
+        i64::try_from(self.offset_ns / 1_000).unwrap_or(i64::MAX)
     }
 
     /// Get the current offset estimate in milliseconds.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn offset_millis(&self) -> f64 {
         self.offset_ns as f64 / 1_000_000.0
     }
@@ -308,7 +310,7 @@ impl PtpClock {
             return None;
         }
         let mut rtts: Vec<Duration> = self.measurements.iter().map(|m| m.rtt).collect();
-        rtts.sort();
+        rtts.sort_unstable();
         Some(rtts[rtts.len() / 2])
     }
 
@@ -333,12 +335,13 @@ impl PtpClock {
         &self,
         rtp_timestamp: u32,
         sample_rate: u32,
-        anchor_rtp: u32,
-        anchor_ptp: PtpTimestamp,
+        rtp_anchor: u32,
+        ptp_anchor: PtpTimestamp,
     ) -> PtpTimestamp {
-        let sample_diff = rtp_timestamp.wrapping_sub(anchor_rtp) as i64;
-        let nanos_diff = sample_diff * 1_000_000_000 / sample_rate as i64;
-        let remote_ptp_nanos = anchor_ptp.to_nanos() + nanos_diff as i128;
+        #[allow(clippy::cast_possible_wrap)]
+        let sample_diff = i64::from(rtp_timestamp.wrapping_sub(rtp_anchor) as i32);
+        let nanos_diff = sample_diff * 1_000_000_000 / i64::from(sample_rate);
+        let remote_ptp_nanos = ptp_anchor.to_nanos() + i128::from(nanos_diff);
         let remote_ptp = if remote_ptp_nanos >= 0 {
             PtpTimestamp::from_nanos(remote_ptp_nanos)
         } else {
@@ -357,6 +360,6 @@ impl std::fmt::Debug for PtpClock {
             .field("offset_ms", &self.offset_millis())
             .field("drift_ppm", &self.drift_ppm)
             .field("measurements", &self.measurements.len())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
