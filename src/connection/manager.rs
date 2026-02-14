@@ -838,8 +838,14 @@ impl ConnectionManager {
             Ok(plist) => {
                 tracing::info!("SETUP Step 1 plist: {:#?}", plist);
                 if let Some(dict) = plist.as_dict() {
-                    let ep = dict.get("eventPort").and_then(|i| i.as_i64()).map(|i| i as u16);
-                    let tp = dict.get("timingPort").and_then(|i| i.as_i64()).map(|i| i as u16);
+                    let ep = dict
+                        .get("eventPort")
+                        .and_then(crate::protocol::plist::PlistValue::as_i64)
+                        .and_then(|i| u16::try_from(i).ok());
+                    let tp = dict
+                        .get("timingPort")
+                        .and_then(crate::protocol::plist::PlistValue::as_i64)
+                        .and_then(|i| u16::try_from(i).ok());
                     tracing::info!("SETUP Step 1 ports: eventPort={:?}, timingPort={:?}", ep, tp);
                     // Also log timingPeerInfo from device
                     if let Some(tpi) = dict.get("timingPeerInfo") {
@@ -869,11 +875,20 @@ impl ConnectionManager {
         tracing::debug!("Bound local ports: Audio={}, Control={}, Timing={}", audio_port, ctrl_port, time_port);
 
         let transport = format!(
-            "RTP/AVP/UDP;unicast;mode=record;client_port={};control_port={};timing_port={}",
-             audio_port, ctrl_port, time_port
+            "RTP/AVP/UDP;unicast;mode=record;client_port={audio_port};control_port={ctrl_port};timing_port={time_port}"
         );
-        
-        let stream_type = if self.device.read().await.as_ref().map(|d| d.capabilities.supports_buffered_audio).unwrap_or(false) { 96 } else { 100 };
+
+        let stream_type = if self
+            .device
+            .read()
+            .await
+            .as_ref()
+            .is_some_and(|d| d.capabilities.supports_buffered_audio)
+        {
+            96
+        } else {
+            100
+        };
 
         let stream_entry = DictBuilder::new()
             .insert("type", stream_type)
@@ -918,16 +933,28 @@ impl ConnectionManager {
                     // Try to find stream with dataPort/controlPort
                     // Or top level if they reply there
                     // Check top level first
-                    let dp = dict.get("dataPort").and_then(|i| i.as_i64()).map(|i| i as u16);
-                    let cp = dict.get("controlPort").and_then(|i| i.as_i64()).map(|i| i as u16);
-                    
+                    let dp = dict
+                        .get("dataPort")
+                        .and_then(crate::protocol::plist::PlistValue::as_i64)
+                        .and_then(|i| u16::try_from(i).ok());
+                    let cp = dict
+                        .get("controlPort")
+                        .and_then(crate::protocol::plist::PlistValue::as_i64)
+                        .and_then(|i| u16::try_from(i).ok());
+
                     // Also check inside 'streams' array if present
-                    let stream_ports = if let Some(streams) = dict.get("streams").and_then(|s| s.as_array()) {
+                    let stream_ports = if let Some(streams) =
+                        dict.get("streams").and_then(crate::protocol::plist::PlistValue::as_array)
+                    {
                         streams.first().and_then(|s| s.as_dict()).map(|d| {
-                             (
-                                 d.get("dataPort").and_then(|i| i.as_i64()).map(|i| i as u16),
-                                 d.get("controlPort").and_then(|i| i.as_i64()).map(|i| i as u16)
-                             )
+                            (
+                                d.get("dataPort")
+                                    .and_then(crate::protocol::plist::PlistValue::as_i64)
+                                    .and_then(|i| u16::try_from(i).ok()),
+                                d.get("controlPort")
+                                    .and_then(crate::protocol::plist::PlistValue::as_i64)
+                                    .and_then(|i| u16::try_from(i).ok()),
+                            )
                         })
                     } else {
                         None
@@ -1271,7 +1298,7 @@ impl ConnectionManager {
     ///
     /// Returns error if RTSP request fails
     /// Send SETPEERS to tell the device about PTP timing peers.
-    /// This is required for AirPlay 2 PTP timing.
+    /// This is required for `AirPlay` 2 PTP timing.
     async fn send_set_peers(&self, device_ip: std::net::IpAddr) -> Result<(), AirPlayError> {
         use crate::protocol::plist::PlistValue;
 
@@ -1589,12 +1616,12 @@ impl ConnectionManager {
 
     /// Start the PTP slave handler as a background task.
     ///
-    /// The HomePod acts as PTP grandmaster clock. We act as slave,
+    /// The `HomePod` acts as PTP grandmaster clock. We act as slave,
     /// syncing to the device's clock for accurate RTP timestamping.
     ///
-    /// AirPlay 2 PTP uses standard IEEE 1588 ports:
-    /// - Port 319 for event messages (Sync, Delay_Req)
-    /// - Port 320 for general messages (Follow_Up, Delay_Resp)
+    /// `AirPlay` 2 PTP uses standard IEEE 1588 ports:
+    /// - Port 319 for event messages (Sync, `Delay_Req`)
+    /// - Port 320 for general messages (`Follow_Up`, `Delay_Resp`)
     ///
     /// These are privileged ports requiring elevated/administrator access.
     /// If binding fails, PTP will not start — the device will not play audio.

@@ -50,7 +50,7 @@ pub enum Method {
     Get,
     /// Set playback rate and anchor time
     SetRateAnchorTime,
-    /// Set PTP timing peers (AirPlay 2)
+    /// Set PTP timing peers (`AirPlay` 2)
     SetPeers,
 }
 

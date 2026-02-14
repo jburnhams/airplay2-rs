@@ -2,7 +2,7 @@ use std::fs::File;
 use std::path::Path;
 use std::io;
 
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 
 use symphonia::core::codecs::{Decoder, DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::formats::{FormatOptions, FormatReader};
@@ -31,23 +31,24 @@ impl FileSource {
     /// Returns error if file cannot be opened or format is not supported
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let src = File::open(path)?;
-        let mss = MediaSourceStream::new(Box::new(src), Default::default());
+        let mss = MediaSourceStream::new(Box::new(src), MediaSourceStreamOptions::default());
 
         let hint = symphonia::core::probe::Hint::new();
-        let meta_opts: MetadataOptions = Default::default();
-        let fmt_opts: FormatOptions = Default::default();
+        let meta_opts = MetadataOptions::default();
+        let fmt_opts = FormatOptions::default();
 
         let probed = symphonia::default::get_probe()
             .format(&hint, mss, &fmt_opts, &meta_opts)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let format = probed.format;
-        let track = format.tracks()
+        let track = format
+            .tracks()
             .iter()
             .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no supported audio tracks"))?;
 
-        let dec_opts: DecoderOptions = Default::default();
+        let dec_opts = DecoderOptions::default();
         let decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &dec_opts)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -75,7 +76,6 @@ impl FileSource {
 
         // Map sample rate
         let sample_rate = match rate {
-            44100 => SampleRate::Hz44100,
             48000 => SampleRate::Hz48000,
             _ => SampleRate::Hz44100, // Fallback/Incorrect mapping (should be precise)
         };
@@ -97,7 +97,7 @@ impl FileSource {
 
 impl AudioSource for FileSource {
     fn format(&self) -> AudioFormat {
-        self.audio_format.clone()
+        self.audio_format
     }
 
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
@@ -189,8 +189,7 @@ impl AudioSource for FileSource {
                     }
                 }
                 Err(e) => {
-                     tracing::warn!("Decode error: {}", e);
-                     continue;
+                    tracing::warn!("Decode error: {}", e);
                 }
             }
         }

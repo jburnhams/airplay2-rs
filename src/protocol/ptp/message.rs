@@ -158,8 +158,7 @@ impl PtpHeader {
             PtpMessageType::DelayReq => 0x01,
             PtpMessageType::FollowUp => 0x02,
             PtpMessageType::DelayResp => 0x03,
-            PtpMessageType::Announce => 0x05,
-            PtpMessageType::Signaling => 0x05,
+            PtpMessageType::Announce | PtpMessageType::Signaling => 0x05,
         };
         Self {
             transport_specific: 0,

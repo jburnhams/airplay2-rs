@@ -259,7 +259,7 @@ impl PtpSlaveHandler {
                 }
             }
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{:02X}", b)).collect();
+                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
                 tracing::warn!("PTP slave: Failed to decode general packet ({} bytes, first 20: [{}]): {:?}",
                     data.len(), hex.join(", "), e);
             }
@@ -314,7 +314,7 @@ pub struct PtpMasterHandler {
     sync_sequence: u16,
     /// Known slave addresses (discovered from `Delay_Req` messages).
     known_slaves: Vec<SocketAddr>,
-    /// Known slave general addresses (port 320) for Follow_Up messages.
+    /// Known slave general addresses (port 320) for `Follow_Up` messages.
     known_general_slaves: Vec<SocketAddr>,
 }
 
@@ -344,7 +344,7 @@ impl PtpMasterHandler {
         }
     }
 
-    /// Add a known slave general address (port 320) for Follow_Up messages.
+    /// Add a known slave general address (port 320) for `Follow_Up` messages.
     pub fn add_general_slave(&mut self, addr: SocketAddr) {
         if !self.known_general_slaves.contains(&addr) {
             self.known_general_slaves.push(addr);
@@ -386,7 +386,7 @@ impl PtpMasterHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_message(&general_buf[..len], src).await?;
+                    self.handle_general_message(&general_buf[..len], src)?;
                 }
 
                 // Send periodic Sync + Follow_Up to known slaves.
@@ -453,7 +453,7 @@ impl PtpMasterHandler {
                 }
             }
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{:02X}", b)).collect();
+                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
                 tracing::warn!("PTP master: Failed to decode event packet ({} bytes, first 20: [{}]): {}",
                     data.len(), hex.join(", "), e);
             }
@@ -462,7 +462,7 @@ impl PtpMasterHandler {
     }
 
     /// Handle incoming message on general port (320).
-    async fn handle_general_message(
+    fn handle_general_message(
         &mut self,
         data: &[u8],
         src: SocketAddr,
@@ -494,7 +494,7 @@ impl PtpMasterHandler {
                 }
             }
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{:02X}", b)).collect();
+                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
                 tracing::warn!("PTP master: Failed to decode general packet ({} bytes, first 20: [{}]): {}",
                     data.len(), hex.join(", "), e);
             }

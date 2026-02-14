@@ -19,7 +19,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_name = "Kitchen";
     println!("Connecting to '{}'...", target_name);
 
-    let player = AirPlayPlayer::new();
+    #[allow(unused_mut)]
+    let mut player = AirPlayPlayer::new();
     let mut retry_count = 0;
     let max_retries = 5;
 

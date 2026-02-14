@@ -232,13 +232,15 @@ impl DeviceBrowserStream {
             name.split('.')
                 .next()
                 .filter(|n| !n.is_empty())
-                .map(ToString::to_string)
-                .unwrap_or_else(|| {
-                    txt_records
-                        .get("model")
-                        .cloned()
-                        .unwrap_or_else(|| "AirPlay Device".to_string())
-                })
+                .map_or_else(
+                    || {
+                        txt_records
+                            .get("model")
+                            .cloned()
+                            .unwrap_or_else(|| "AirPlay Device".to_string())
+                    },
+                    ToString::to_string,
+                )
         };
 
         // Create or update device
