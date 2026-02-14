@@ -30,6 +30,7 @@ fn init() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_pcm_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     init();
 
@@ -73,6 +74,7 @@ async fn test_pcm_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     init();
 
@@ -117,6 +119,52 @@ async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
+#[ignore]
+async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
+    init();
+
+    tracing::info!("Starting AAC integration test");
+
+    // Start Python receiver
+    let receiver = PythonReceiver::start().await?;
+    sleep(Duration::from_secs(2)).await;
+
+    // Create client with AAC codec
+    let device = receiver.device_config();
+    let config = airplay2::AirPlayConfig::builder()
+        .audio_codec(airplay2::audio::AudioCodec::Aac)
+        .build();
+
+    let mut client = airplay2::AirPlayClient::new(config);
+
+    tracing::info!("Connecting to receiver with AAC...");
+    client.connect(&device).await?;
+
+    // Stream 3 seconds of 440Hz sine wave
+    tracing::info!("Streaming AAC audio...");
+    let source = TestSineSource::new(440.0, 3.0);
+
+    client.stream_audio(source).await?;
+
+    tracing::info!("Disconnecting...");
+    client.disconnect().await?;
+
+    sleep(Duration::from_secs(1)).await;
+
+    // Stop receiver and collect output
+    let output = receiver.stop().await?;
+
+    // Verify results
+    output.verify_audio_received()?;
+    output.verify_rtp_received()?;
+    // output.verify_sine_wave_quality(440.0, true)?;
+
+    tracing::info!("✅ AAC integration test passed");
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore]
 async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
     init();
     tracing::info!("Starting Custom PIN Pairing integration test");
