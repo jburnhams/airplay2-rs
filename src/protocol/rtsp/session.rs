@@ -129,10 +129,18 @@ impl RtspSession {
     pub fn setup_session_request(
         &mut self,
         plist: &crate::protocol::plist::PlistValue,
+        transport: Option<&str>,
     ) -> RtspRequest {
-        self.request_builder(Method::Setup, "/")
-            .body_plist(plist)
-            .build()
+        // Per airplay2-homepod.md, SETUP requires session ID in URL: rtsp://<host>/<session-id>
+        let path = format!("/{}", self.client_session_id);
+        let mut builder = self.request_builder(Method::Setup, &path)
+            .body_plist(plist);
+        
+        if let Some(t) = transport {
+            builder = builder.header(names::TRANSPORT, t);
+        }
+        
+        builder.build()
     }
 
     /// Create ANNOUNCE request with SDP
