@@ -1,7 +1,7 @@
 use crate::protocol::crypto::Ed25519KeyPair;
 use crate::protocol::pairing::tlv::{TlvEncoder, TlvType};
 use crate::receiver::ap2::config::Ap2Config;
-use crate::receiver::ap2::password_auth::{PasswordAuthManager, PasswordAuthError};
+use crate::receiver::ap2::password_auth::{PasswordAuthError, PasswordAuthManager};
 
 #[test]
 fn test_password_validation() {

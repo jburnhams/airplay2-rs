@@ -1,10 +1,10 @@
 use airplay2::protocol::crypto::Ed25519KeyPair;
+use airplay2::protocol::pairing::tlv::{TlvEncoder, TlvType};
 use airplay2::protocol::rtsp::{Headers, Method, RtspRequest};
 use airplay2::receiver::ap2::password_auth::PasswordAuthManager;
 use airplay2::receiver::ap2::password_integration::AuthenticationHandler;
 use airplay2::receiver::ap2::request_handler::Ap2RequestContext;
 use airplay2::receiver::ap2::session_state::Ap2SessionState;
-use airplay2::protocol::pairing::tlv::{TlvEncoder, TlvType};
 
 fn make_request(method: Method, uri: &str, body: Vec<u8>) -> RtspRequest {
     let mut headers = Headers::new();
@@ -119,7 +119,10 @@ fn test_lockout_propagation() {
     };
 
     // Trigger lockout
-    let m1_body = TlvEncoder::new().add_state(1).add_byte(TlvType::Method, 0).build();
+    let m1_body = TlvEncoder::new()
+        .add_state(1)
+        .add_byte(TlvType::Method, 0)
+        .build();
     let m3_body = TlvEncoder::new()
         .add_state(3)
         .add(TlvType::PublicKey, &[0u8; 32])

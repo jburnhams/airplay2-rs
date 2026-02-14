@@ -629,4 +629,3 @@ pub enum PairingError {
     #[error("Signature verification failed")]
     SignatureVerificationFailed,
 }
-

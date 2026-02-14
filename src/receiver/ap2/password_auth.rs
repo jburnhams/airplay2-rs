@@ -337,4 +337,3 @@ pub enum PasswordAuthError {
     #[error("Pairing error: {0}")]
     PairingError(String),
 }
-
