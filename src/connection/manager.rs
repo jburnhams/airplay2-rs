@@ -925,7 +925,7 @@ impl ConnectionManager {
         let (ct, spf, audio_format) = match self.config.audio_codec {
             AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
             AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
-            AudioCodec::Aac => (0x4, 1024, 1 << 11), // AAC_LC -> Output as PCM 44100/16/2
+            AudioCodec::Aac => (0x4, 1024, 1 << 22), // AAC_LC_44100_2
             AudioCodec::Opus => (0x0, 480, 0),      // Not supported by standard receivers usually
         };
 
