@@ -4,8 +4,11 @@ use super::format::{ChannelConfig, SampleFormat};
 
 /// Convert between sample formats
 // Precision loss and truncation are expected when converting between integer and float formats for audio
-#[allow(clippy::cast_precision_loss)]
-#[allow(clippy::cast_possible_truncation)]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "Precision loss and truncation are expected when converting between integer and float formats for audio"
+)]
 #[must_use]
 pub fn convert_samples(
     input: &[u8],
@@ -23,7 +26,10 @@ pub fn convert_samples(
 
 /// Convert bytes to f32 samples
 // Precision loss is acceptable for audio sample conversion (e.g. i32 to f32)
-#[allow(clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "Precision loss is acceptable for audio sample conversion (e.g. i32 to f32)"
+)]
 #[must_use]
 pub fn to_f32(input: &[u8], format: SampleFormat) -> Vec<f32> {
     match format {
@@ -58,8 +64,11 @@ pub fn to_f32(input: &[u8], format: SampleFormat) -> Vec<f32> {
 
 /// Convert f32 samples to bytes in target format
 // Truncation and precision loss are expected when converting back to integer formats
-#[allow(clippy::cast_precision_loss)]
-#[allow(clippy::cast_possible_truncation)]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "Truncation and precision loss are expected when converting back to integer formats"
+)]
 #[must_use]
 pub fn from_f32(input: &[f32], format: SampleFormat) -> Vec<u8> {
     match format {
@@ -181,9 +190,12 @@ pub fn convert_channels_into(
 ///
 /// For production use, consider a proper resampler like rubato
 // Linear resampling involves floating point calculations and index casting that may lose precision or truncate
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_precision_loss)]
-#[allow(clippy::cast_sign_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "Linear resampling involves floating point calculations and index casting that may lose precision or truncate"
+)]
 #[must_use]
 pub fn resample_linear(input: &[f32], input_rate: u32, output_rate: u32, channels: u8) -> Vec<f32> {
     if input_rate == output_rate {

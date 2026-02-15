@@ -9,9 +9,10 @@ pub struct NtpTimestamp {
 
 impl NtpTimestamp {
     /// NTP epoch offset from Unix epoch (70 years in seconds)
-    const NTP_UNIX_OFFSET: u64 = 2208988800;
+    const NTP_UNIX_OFFSET: u64 = 2_208_988_800;
 
     /// Create from current time
+    #[must_use]
     pub fn now() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -20,15 +21,24 @@ impl NtpTimestamp {
             .unwrap_or_default();
 
         let ntp_secs = duration.as_secs() + Self::NTP_UNIX_OFFSET;
-        let fraction = ((duration.subsec_nanos() as u64) << 32) / 1_000_000_000;
+        let fraction = (u64::from(duration.subsec_nanos()) << 32) / 1_000_000_000;
 
         Self {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "NTP timestamp seconds wrap around in 2036 (Year 2038 problem)"
+            )]
             seconds: ntp_secs as u32,
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Fractional part calculation fits within u32"
+            )]
             fraction: fraction as u32,
         }
     }
 
     /// Encode to 8 bytes
+    #[must_use]
     pub fn encode(&self) -> [u8; 8] {
         let mut buf = [0u8; 8];
         buf[0..4].copy_from_slice(&self.seconds.to_be_bytes());
@@ -37,6 +47,7 @@ impl NtpTimestamp {
     }
 
     /// Decode from 8 bytes
+    #[must_use]
     pub fn decode(buf: &[u8]) -> Self {
         Self {
             seconds: u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]),
@@ -45,9 +56,10 @@ impl NtpTimestamp {
     }
 
     /// Convert to microseconds since NTP epoch
+    #[must_use]
     pub fn to_micros(&self) -> u64 {
-        let secs = self.seconds as u64;
-        let frac_micros = ((self.fraction as u64) * 1_000_000) >> 32;
+        let secs = u64::from(self.seconds);
+        let frac_micros = (u64::from(self.fraction) * 1_000_000) >> 32;
         secs * 1_000_000 + frac_micros
     }
 }
@@ -63,11 +75,18 @@ pub struct TimingRequest {
     pub send_time: NtpTimestamp,
 }
 
+impl Default for TimingRequest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TimingRequest {
     /// Packet size
     pub const SIZE: usize = 40;
 
     /// Create a new timing request
+    #[must_use]
     pub fn new() -> Self {
         let now = NtpTimestamp::now();
         Self {
@@ -78,6 +97,7 @@ impl TimingRequest {
     }
 
     /// Encode to bytes (including RTP header)
+    #[must_use]
     pub fn encode(&self, sequence: u16, ssrc: u32) -> Vec<u8> {
         let mut buf = Vec::with_capacity(32);
 
@@ -111,6 +131,10 @@ pub struct TimingResponse {
 
 impl TimingResponse {
     /// Decode from bytes (excluding RTP header)
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpDecodeError` if buffer is too small
     pub fn decode(buf: &[u8]) -> Result<Self, super::packet::RtpDecodeError> {
         if buf.len() < 24 {
             return Err(super::packet::RtpDecodeError::BufferTooSmall {
@@ -129,6 +153,11 @@ impl TimingResponse {
     /// Calculate clock offset (server time - client time)
     ///
     /// Returns offset in microseconds
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "Timestamp values converted to microseconds fit within i64 for typical operation"
+    )]
     pub fn calculate_offset(&self, client_receive_time: NtpTimestamp) -> i64 {
         // offset = ((T2 - T1) + (T3 - T4)) / 2
         // where:
@@ -148,6 +177,7 @@ impl TimingResponse {
     /// Calculate round-trip time
     ///
     /// Returns RTT in microseconds
+    #[must_use]
     pub fn calculate_rtt(&self, client_receive_time: NtpTimestamp) -> u64 {
         // RTT = (T4 - T1) - (T3 - T2)
 

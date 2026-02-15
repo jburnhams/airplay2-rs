@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// RTP payload types for AirPlay
+/// RTP payload types for `AirPlay`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PayloadType {
@@ -20,6 +20,7 @@ pub enum PayloadType {
 
 impl PayloadType {
     /// Parse from byte value
+    #[must_use]
     pub fn from_byte(b: u8) -> Option<Self> {
         match b & 0x7F {
             0x52 => Some(Self::TimingRequest),
@@ -33,7 +34,7 @@ impl PayloadType {
     }
 }
 
-/// RTP header (12 bytes standard, extended for AirPlay)
+/// RTP header (12 bytes standard, extended for `AirPlay`)
 #[derive(Debug, Clone)]
 pub struct RtpHeader {
     /// Version (2 bits, always 2)
@@ -61,6 +62,7 @@ impl RtpHeader {
     pub const SIZE: usize = 12;
 
     /// Create a new audio packet header
+    #[must_use]
     pub fn new_audio(sequence: u16, timestamp: u32, ssrc: u32, buffered: bool) -> Self {
         Self {
             version: 2,
@@ -80,17 +82,18 @@ impl RtpHeader {
     }
 
     /// Encode header to bytes
+    #[must_use]
     pub fn encode(&self) -> [u8; 12] {
         let mut buf = [0u8; 12];
 
         // Byte 0: V(2) | P(1) | X(1) | CC(4)
         buf[0] = (self.version << 6)
-            | ((self.padding as u8) << 5)
-            | ((self.extension as u8) << 4)
+            | (u8::from(self.padding) << 5)
+            | (u8::from(self.extension) << 4)
             | (self.csrc_count & 0x0F);
 
         // Byte 1: M(1) | PT(7)
-        buf[1] = ((self.marker as u8) << 7) | (self.payload_type as u8 & 0x7F);
+        buf[1] = (u8::from(self.marker) << 7) | (self.payload_type as u8 & 0x7F);
 
         // Bytes 2-3: Sequence number
         buf[2..4].copy_from_slice(&self.sequence.to_be_bytes());
@@ -105,6 +108,10 @@ impl RtpHeader {
     }
 
     /// Decode header from bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpDecodeError` if buffer is too small or version is invalid.
     pub fn decode(buf: &[u8]) -> Result<Self, RtpDecodeError> {
         if buf.len() < Self::SIZE {
             return Err(RtpDecodeError::BufferTooSmall {
@@ -148,8 +155,8 @@ pub enum RtpDecodeError {
     #[error("unknown payload type: 0x{0:02x}")]
     UnknownPayloadType(u8),
 
-    #[error("decryption failed")]
-    DecryptionFailed,
+    #[error("decryption failed: {0}")]
+    DecryptionFailed(String),
 }
 
 /// Complete RTP packet with header and payload
@@ -163,11 +170,13 @@ pub struct RtpPacket {
 
 impl RtpPacket {
     /// Create a new RTP packet
+    #[must_use]
     pub fn new(header: RtpHeader, payload: Vec<u8>) -> Self {
         Self { header, payload }
     }
 
     /// Create an audio packet
+    #[must_use]
     pub fn audio(
         sequence: u16,
         timestamp: u32,
@@ -182,6 +191,7 @@ impl RtpPacket {
     }
 
     /// Encode packet to bytes (without encryption)
+    #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(RtpHeader::SIZE + self.payload.len());
         buf.extend_from_slice(&self.header.encode());
@@ -190,6 +200,10 @@ impl RtpPacket {
     }
 
     /// Decode packet from bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpDecodeError` if buffer is too small or header is invalid.
     pub fn decode(buf: &[u8]) -> Result<Self, RtpDecodeError> {
         let header = RtpHeader::decode(buf)?;
         let payload = buf[RtpHeader::SIZE..].to_vec();

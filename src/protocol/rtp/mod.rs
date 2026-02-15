@@ -1,9 +1,4 @@
-//! RTP/RAOP protocol implementation for AirPlay audio streaming
-
-#![allow(clippy::all)]
-#![allow(clippy::pedantic)]
-#![allow(clippy::nursery)]
-#![allow(missing_docs)]
+//! RTP/RAOP protocol implementation for `AirPlay` audio streaming
 
 mod codec;
 mod control;
@@ -21,7 +16,7 @@ pub use control::{ControlPacket, RetransmitRequest};
 pub use packet::{PayloadType, RtpDecodeError, RtpHeader, RtpPacket};
 pub use timing::{NtpTimestamp, TimingPacket, TimingRequest, TimingResponse};
 
-/// RTP protocol constants for AirPlay
+/// RTP protocol constants for `AirPlay`
 pub mod constants {
     /// Default RTP audio port
     pub const AUDIO_PORT: u16 = 6000;

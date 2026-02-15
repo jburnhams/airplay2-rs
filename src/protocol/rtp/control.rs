@@ -11,6 +11,7 @@ pub struct RetransmitRequest {
 
 impl RetransmitRequest {
     /// Create a new retransmit request
+    #[must_use]
     pub fn new(sequence_start: u16, count: u16) -> Self {
         Self {
             sequence_start,
@@ -19,6 +20,7 @@ impl RetransmitRequest {
     }
 
     /// Encode to bytes (including RTP-like header)
+    #[must_use]
     pub fn encode(&self, ssrc: u32) -> Vec<u8> {
         let mut buf = Vec::with_capacity(16);
 
@@ -37,6 +39,10 @@ impl RetransmitRequest {
     }
 
     /// Decode from bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpDecodeError` if buffer is too small.
     pub fn decode(buf: &[u8]) -> Result<Self, RtpDecodeError> {
         if buf.len() < 4 {
             return Err(RtpDecodeError::BufferTooSmall {
@@ -67,6 +73,10 @@ pub enum ControlPacket {
 
 impl ControlPacket {
     /// Parse control packet from bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpDecodeError` if buffer is too small or payload type is unknown.
     pub fn decode(buf: &[u8]) -> Result<Self, RtpDecodeError> {
         if buf.len() < 12 {
             return Err(RtpDecodeError::BufferTooSmall {
