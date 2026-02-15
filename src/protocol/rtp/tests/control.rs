@@ -3,7 +3,7 @@ use crate::protocol::rtp::{ControlPacket, RetransmitRequest, RtpDecodeError};
 #[test]
 fn test_retransmit_request_encode() {
     let req = RetransmitRequest::new(100, 5);
-    let ssrc = 0x12345678;
+    let ssrc = 0x1234_5678;
 
     let encoded = req.encode(ssrc);
 
@@ -80,8 +80,8 @@ fn test_control_packet_decode_sync() {
     } = packet
     {
         assert_eq!(rtp_timestamp, 43707);
-        assert_eq!(ntp_timestamp.seconds, 0x11223344);
-        assert_eq!(ntp_timestamp.fraction, 0x55667788);
+        assert_eq!(ntp_timestamp.seconds, 0x1122_3344);
+        assert_eq!(ntp_timestamp.fraction, 0x5566_7788);
         assert_eq!(next_timestamp, 52445);
     } else {
         panic!("Expected Sync packet");

@@ -26,9 +26,9 @@ pub enum RtpCodecError {
 pub enum RtpEncryptionMode {
     /// No encryption
     None,
-    /// AES-128-CTR (legacy AirPlay 1)
+    /// AES-128-CTR (legacy `AirPlay` 1)
     Aes128Ctr,
-    /// ChaCha20-Poly1305 (AirPlay 2)
+    /// ChaCha20-Poly1305 (`AirPlay` 2)
     ChaCha20Poly1305,
 }
 
@@ -54,10 +54,12 @@ pub struct RtpCodec {
     buffered_mode: bool,
     /// Nonce counter for ChaCha20-Poly1305
     nonce_counter: u64,
+    /// Frames per packet (default 352)
+    frames_per_packet: u32,
 }
 
 impl RtpCodec {
-    /// Samples per packet
+    /// Samples per packet (default)
     pub const FRAMES_PER_PACKET: u32 = 352;
 
     /// Poly1305 tag size
@@ -67,6 +69,7 @@ impl RtpCodec {
     pub const NONCE_SIZE: usize = 8;
 
     /// Create a new codec
+    #[must_use]
     pub fn new(ssrc: u32) -> Self {
         Self {
             ssrc,
@@ -78,7 +81,19 @@ impl RtpCodec {
             encryption_mode: RtpEncryptionMode::None,
             buffered_mode: false,
             nonce_counter: 0,
+            frames_per_packet: Self::FRAMES_PER_PACKET,
         }
+    }
+
+    /// Set frames per packet
+    pub fn set_frames_per_packet(&mut self, frames: u32) {
+        self.frames_per_packet = frames;
+    }
+
+    /// Get frames per packet
+    #[must_use]
+    pub fn frames_per_packet(&self) -> u32 {
+        self.frames_per_packet
     }
 
     /// Set AES-128-CTR encryption keys (legacy)
@@ -88,13 +103,14 @@ impl RtpCodec {
         self.encryption_mode = RtpEncryptionMode::Aes128Ctr;
     }
 
-    /// Set ChaCha20-Poly1305 encryption key (AirPlay 2)
+    /// Set ChaCha20-Poly1305 encryption key (`AirPlay` 2)
     pub fn set_chacha_encryption(&mut self, key: [u8; 32]) {
         self.chacha_key = Some(key);
         self.encryption_mode = RtpEncryptionMode::ChaCha20Poly1305;
     }
 
     /// Get the encryption mode
+    #[must_use]
     pub fn encryption_mode(&self) -> RtpEncryptionMode {
         self.encryption_mode
     }
@@ -112,11 +128,13 @@ impl RtpCodec {
     }
 
     /// Get current sequence number
+    #[must_use]
     pub fn sequence(&self) -> u16 {
         self.sequence
     }
 
     /// Get current timestamp
+    #[must_use]
     pub fn timestamp(&self) -> u32 {
         self.timestamp
     }
@@ -124,13 +142,17 @@ impl RtpCodec {
     /// Encode PCM audio to RTP packet
     ///
     /// Audio should be 16-bit signed little-endian stereo PCM.
-    /// Expects exactly FRAMES_PER_PACKET * 4 bytes (352 frames * 4 bytes/frame).
+    /// Expects exactly `frames_per_packet` * 4 bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpCodecError` if audio size is invalid or encryption fails.
     pub fn encode_audio(
         &mut self,
         pcm_data: &[u8],
         output: &mut Vec<u8>,
     ) -> Result<(), RtpCodecError> {
-        let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
+        let expected_size = self.frames_per_packet as usize * 4;
         if pcm_data.len() != expected_size {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
         }
@@ -139,6 +161,10 @@ impl RtpCodec {
     }
 
     /// Encode arbitrary audio payload (e.g. ALAC) to RTP packet
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpCodecError` if encryption fails.
     pub fn encode_arbitrary_payload(
         &mut self,
         data: &[u8],
@@ -163,11 +189,11 @@ impl RtpCodec {
                         .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
                     // NOTE: AES-CTR seek might need adjustment for variable packet sizes if sequence is frame-based
                     // For now assuming frame-based seeking works or this is only used for fixed PCM in legacy mode.
-                    let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
+                    let expected_size = self.frames_per_packet as usize * 4;
                     // Seek based on frame count, assuming 1:1 mapping if it was PCM.
                     // For ALAC, this logic might need review if legacy AirPlay 1 uses ALAC.
                     // But we are focusing on AirPlay 2 (ChaCha20).
-                    cipher.seek((self.sequence as u64) * expected_size as u64);
+                    cipher.seek(u64::from(self.sequence) * expected_size as u64);
                     cipher.apply_keystream(&mut payload);
                 }
                 let packet = RtpPacket::new(header, payload);
@@ -215,7 +241,7 @@ impl RtpCodec {
                 output.extend_from_slice(tag);
                 output.extend_from_slice(&nonce_bytes);
             }
-        };
+        }
 
         // Update state logic moved to caller or stays here?
         // encode_audio updated state. We should too.
@@ -224,7 +250,7 @@ impl RtpCodec {
 
         // Update state for next packet
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);
+        self.timestamp = self.timestamp.wrapping_add(self.frames_per_packet);
 
         Ok(())
     }
@@ -232,8 +258,12 @@ impl RtpCodec {
     /// Encode multiple frames of audio
     ///
     /// Returns vector of encoded RTP packets
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpCodecError` if encryption fails.
     pub fn encode_audio_frames(&mut self, pcm_data: &[u8]) -> Result<Vec<Vec<u8>>, RtpCodecError> {
-        let frame_size = Self::FRAMES_PER_PACKET as usize * 4;
+        let frame_size = self.frames_per_packet as usize * 4;
         let mut packets = Vec::new();
 
         for chunk in pcm_data.chunks(frame_size) {
@@ -254,6 +284,10 @@ impl RtpCodec {
     }
 
     /// Decode RTP packet
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpCodecError` if decryption fails or buffer is too small.
     pub fn decode_audio(&self, data: &[u8]) -> Result<RtpPacket, RtpCodecError> {
         match self.encryption_mode {
             RtpEncryptionMode::None => {
@@ -266,8 +300,8 @@ impl RtpCodec {
                 if let (Some(key), Some(iv)) = (&self.aes_key, &self.aes_iv) {
                     let mut cipher = Aes128Ctr::new(key, iv)
                         .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
-                    let frame_size = Self::FRAMES_PER_PACKET as usize * 4;
-                    cipher.seek((packet.header.sequence as u64) * frame_size as u64);
+                    let frame_size = self.frames_per_packet as usize * 4;
+                    cipher.seek(u64::from(packet.header.sequence) * frame_size as u64);
                     cipher.apply_keystream(&mut packet.payload);
                 }
                 Ok(packet)
@@ -331,6 +365,7 @@ pub struct AudioPacketBuilder {
 
 impl AudioPacketBuilder {
     /// Create a new builder
+    #[must_use]
     pub fn new(ssrc: u32) -> Self {
         Self {
             codec: RtpCodec::new(ssrc),
@@ -339,18 +374,24 @@ impl AudioPacketBuilder {
     }
 
     /// Set AES-128-CTR encryption (legacy)
+    #[must_use]
     pub fn with_encryption(mut self, key: [u8; 16], iv: [u8; 16]) -> Self {
         self.codec.set_encryption(key, iv);
         self
     }
 
-    /// Set ChaCha20-Poly1305 encryption (AirPlay 2)
+    /// Set ChaCha20-Poly1305 encryption (`AirPlay` 2)
+    #[must_use]
     pub fn with_chacha_encryption(mut self, key: [u8; 32]) -> Self {
         self.codec.set_chacha_encryption(key);
         self
     }
 
     /// Add audio data
+    ///
+    /// # Errors
+    ///
+    /// Returns `RtpCodecError` if audio processing fails.
     pub fn add_audio(mut self, pcm_data: &[u8]) -> Result<Self, RtpCodecError> {
         let new_packets = self.codec.encode_audio_frames(pcm_data)?;
         self.packets.extend(new_packets);
@@ -358,6 +399,7 @@ impl AudioPacketBuilder {
     }
 
     /// Build all packets
+    #[must_use]
     pub fn build(self) -> Vec<Vec<u8>> {
         self.packets
     }

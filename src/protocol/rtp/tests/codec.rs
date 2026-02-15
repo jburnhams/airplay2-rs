@@ -2,7 +2,7 @@ use crate::protocol::rtp::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpPacke
 
 #[test]
 fn test_codec_sequence_increment() {
-    let mut codec = RtpCodec::new(0x12345678);
+    let mut codec = RtpCodec::new(0x1234_5678);
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
     let audio = vec![0u8; frame_size];
@@ -18,7 +18,7 @@ fn test_codec_sequence_increment() {
 
 #[test]
 fn test_codec_timestamp_increment() {
-    let mut codec = RtpCodec::new(0x12345678);
+    let mut codec = RtpCodec::new(0x1234_5678);
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
     let audio = vec![0u8; frame_size];
@@ -78,10 +78,10 @@ fn test_codec_encrypt_decrypt_roundtrip() {
     let key = [0x42u8; 16];
     let iv = [0x00u8; 16];
 
-    let mut encoder = RtpCodec::new(0x12345678);
+    let mut encoder = RtpCodec::new(0x1234_5678);
     encoder.set_encryption(key, iv);
 
-    let _decoder = RtpCodec::new(0x12345678);
+    let _decoder = RtpCodec::new(0x1234_5678);
     // Note: decoder needs same keys for decryption
 
     let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
@@ -91,10 +91,10 @@ fn test_codec_encrypt_decrypt_roundtrip() {
     encoder.encode_audio(&original, &mut packet).unwrap();
 
     // Create decoder with same keys
-    let mut decoder = RtpCodec::new(0);
-    decoder.set_encryption(key, iv);
+    let mut rtp_decoder = RtpCodec::new(0);
+    rtp_decoder.set_encryption(key, iv);
 
-    let decoded = decoder.decode_audio(&packet).unwrap();
+    let decoded = rtp_decoder.decode_audio(&packet).unwrap();
     assert_eq!(decoded.payload, original);
 }
 

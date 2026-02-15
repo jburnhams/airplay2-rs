@@ -862,11 +862,21 @@ impl ConnectionManager {
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .map(|i| {
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                {
+                                    i as u16
+                                }
+                            });
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .map(|i| {
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                {
+                                    i as u16
+                                }
+                            });
                         tracing::info!(
                             "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
                             ep,
@@ -908,17 +918,8 @@ impl ConnectionManager {
             "RTP/AVP/UDP;unicast;mode=record;client_port={audio_port};control_port={ctrl_port};timing_port={time_port}"
         );
 
-        let stream_type = if self
-            .device
-            .read()
-            .await
-            .as_ref()
-            .is_some_and(|d| d.capabilities.supports_buffered_audio)
-        {
-            96
-        } else {
-            100
-        };
+        // AirPlay 2 uses 96 (General Audio) with buffered audio params for both buffered and realtime
+        let stream_type = 96;
 
         // Determine ct (compression type) and audioFormat
         // ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD
@@ -950,6 +951,8 @@ impl ConnectionManager {
             .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
+            .insert("latencyMin", 11025) // 250ms in samples
+            .insert("latencyMax", 88200) // 2s in samples
             .build();
 
         let setup_plist_step2 = DictBuilder::new()
@@ -993,11 +996,21 @@ impl ConnectionManager {
                     let dp = dict
                         .get("dataPort")
                         .and_then(crate::protocol::plist::PlistValue::as_i64)
-                        .and_then(|i| u16::try_from(i).ok());
+                        .map(|i| {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            {
+                                i as u16
+                            }
+                        });
                     let cp = dict
                         .get("controlPort")
                         .and_then(crate::protocol::plist::PlistValue::as_i64)
-                        .and_then(|i| u16::try_from(i).ok());
+                        .map(|i| {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            {
+                                i as u16
+                            }
+                        });
 
                     // Also check inside 'streams' array if present
                     let stream_ports = if let Some(streams) = dict
@@ -1008,10 +1021,26 @@ impl ConnectionManager {
                             (
                                 d.get("dataPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .map(|i| {
+                                        #[allow(
+                                            clippy::cast_possible_truncation,
+                                            clippy::cast_sign_loss
+                                        )]
+                                        {
+                                            i as u16
+                                        }
+                                    }),
                                 d.get("controlPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .map(|i| {
+                                        #[allow(
+                                            clippy::cast_possible_truncation,
+                                            clippy::cast_sign_loss
+                                        )]
+                                        {
+                                            i as u16
+                                        }
+                                    }),
                             )
                         })
                     } else {

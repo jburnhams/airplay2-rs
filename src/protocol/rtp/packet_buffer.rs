@@ -50,12 +50,7 @@ impl PacketBuffer {
     }
 
     /// Get a range of packets for retransmission
-    #[must_use]
-    pub fn get_range<'a>(
-        &'a self,
-        start: u16,
-        count: u16,
-    ) -> impl Iterator<Item = &'a BufferedPacket> + 'a {
+    pub fn get_range(&self, start: u16, count: u16) -> impl Iterator<Item = &BufferedPacket> + '_ {
         let mut requested_seqs = (0..count).map(move |i| start.wrapping_add(i)).peekable();
 
         self.packets.iter().filter(move |packet| {

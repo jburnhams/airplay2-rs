@@ -20,14 +20,14 @@ fn test_sync_packet_encode_decode() {
 #[test]
 fn test_audio_packet_encode_decode() {
     let payload = vec![0x01, 0x02, 0x03, 0x04];
-    let packet = RaopAudioPacket::new(100, 44100, 0x12345678, payload.clone()).with_marker();
+    let packet = RaopAudioPacket::new(100, 44100, 0x1234_5678, payload.clone()).with_marker();
 
     let encoded = packet.encode();
     let decoded = RaopAudioPacket::decode(&encoded).unwrap();
 
     assert_eq!(decoded.sequence, 100);
     assert_eq!(decoded.timestamp, 44100);
-    assert_eq!(decoded.ssrc, 0x12345678);
+    assert_eq!(decoded.ssrc, 0x1234_5678);
     assert!(decoded.marker);
     assert_eq!(decoded.payload, payload);
 }
