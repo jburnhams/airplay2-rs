@@ -859,14 +859,15 @@ impl ConnectionManager {
                 Ok(plist) => {
                     tracing::info!("SETUP Step 1 plist: {:#?}", plist);
                     if let Some(dict) = plist.as_dict() {
+                        // Handle potential negative values (overflows) by casting
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .and_then(Self::parse_port);
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .and_then(Self::parse_port);
                         tracing::info!(
                             "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
                             ep,
@@ -940,6 +941,10 @@ impl ConnectionManager {
         // Even for AAC streaming, the receiver might decode to PCM?
         // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output format?
 
+        // Python receiver expects latencyMin/latencyMax for Realtime streams
+        let latency_min = 11025; // 44100 / 4
+        let latency_max = 88200; // 44100 * 2
+
         let stream_entry = DictBuilder::new()
             .insert("type", stream_type)
             .insert("ct", ct)
@@ -950,6 +955,8 @@ impl ConnectionManager {
             .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
+            .insert("latencyMin", latency_min)
+            .insert("latencyMax", latency_max)
             .build();
 
         let setup_plist_step2 = DictBuilder::new()
@@ -1008,10 +1015,10 @@ impl ConnectionManager {
                             (
                                 d.get("dataPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .and_then(Self::parse_port),
                                 d.get("controlPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .and_then(Self::parse_port),
                             )
                         })
                     } else {
@@ -1075,11 +1082,16 @@ impl ConnectionManager {
 
             tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
             tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
-            tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
 
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-            time_sock.connect((device_ip, server_time_port)).await?;
+
+            if server_time_port != 0 {
+                tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
+                time_sock.connect((device_ip, server_time_port)).await?;
+            } else {
+                tracing::info!("Timing port is 0, not connecting timing socket.");
+            }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
@@ -1452,6 +1464,31 @@ impl ConnectionManager {
         }
     }
 
+    /// Send control packet (e.g. `TimeAnnouncePtp`)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if sockets are not connected or send fails
+    pub async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        let sockets = self.sockets.lock().await;
+        if let Some(ref socks) = *sockets {
+            socks
+                .control
+                .send(packet)
+                .await
+                .map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to send control packet: {e}"),
+                    status_code: None,
+                })?;
+            Ok(())
+        } else {
+            Err(AirPlayError::InvalidState {
+                message: "RTP sockets not connected".to_string(),
+                current_state: "Disconnected".to_string(),
+            })
+        }
+    }
+
     /// Send an arbitrary RTSP command
     ///
     /// # Errors
@@ -1800,6 +1837,37 @@ impl ConnectionManager {
     /// Check if PTP timing is active for the current connection.
     pub async fn is_ptp_active(&self) -> bool {
         *self.ptp_active.read().await
+    }
+
+    /// Safely parse port number from plist integer (i64).
+    ///
+    /// The `biplist` crate parses integers as `i64`. Unsigned 16-bit ports
+    /// greater than 32767 might be interpreted as negative `i16` values
+    /// if the source encoded them as 16-bit signed integers.
+    ///
+    /// This function handles:
+    /// 1. Positive values that fit in `u16` (0..=65535) via `try_from`.
+    /// 2. Negative values that correspond to high `u16` range when reinterpreted bits (-32768..=-1).
+    ///
+    /// It rejects values outside these valid ranges to prevent unsafe wrapping of arbitrary invalid data.
+    fn parse_port(i: i64) -> Option<u16> {
+        // Try direct conversion (for positive values fitting in u16)
+        if let Ok(port) = u16::try_from(i) {
+            return Some(port);
+        }
+
+        // Handle negative values resulting from 16-bit signed interpretation of u16
+        // e.g. 54428 (0xD49C) parsed as -11108 (0xD49C)
+        // Range valid for i16 is -32768 to 32767.
+        // We accept negative values only if they fall within i16 range,
+        // implying they are reinterpreted u16s.
+        if i >= i64::from(i16::MIN) && i < 0 {
+            #[allow(clippy::cast_sign_loss)]
+            #[allow(clippy::cast_possible_truncation)]
+            return Some(i as u16);
+        }
+
+        None
     }
 
     fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {

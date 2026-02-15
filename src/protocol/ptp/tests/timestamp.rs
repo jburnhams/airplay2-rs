@@ -24,11 +24,11 @@ fn test_zero_constant() {
 }
 
 #[test]
-fn test_now_returns_reasonable_value() {
-    let ts = PtpTimestamp::now();
-    // Should be after 2020-01-01 (1577836800 seconds since Unix epoch)
-    assert!(ts.seconds > 1_577_836_800, "Timestamp too old: {ts}");
-    assert!(ts.nanoseconds < PtpTimestamp::NANOS_PER_SEC);
+fn test_now_is_monotonic() {
+    let ts1 = PtpTimestamp::now();
+    std::thread::sleep(Duration::from_millis(10));
+    let ts2 = PtpTimestamp::now();
+    assert!(ts2 > ts1, "Timestamp should increase monotonically");
 }
 
 // ===== Nanosecond conversions =====

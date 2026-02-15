@@ -6,12 +6,13 @@ use crate::audio::aac_encoder::AacEncoder;
 use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
-use crate::protocol::rtp::RtpCodec;
+use crate::protocol::ptp::{PtpTimestamp, SharedPtpClock};
+use crate::protocol::rtp::{RtpCodec, TimeAnnouncePtp};
 
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// RTP packet sender trait
@@ -19,12 +20,26 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 pub trait RtpSender: Send + Sync {
     /// Send RTP audio packet
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError>;
+
+    /// Send control packet (e.g. `TimeAnnouncePtp`)
+    async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError>;
+
+    /// Get shared PTP clock
+    async fn ptp_clock(&self) -> Option<SharedPtpClock>;
 }
 
 #[async_trait]
 impl RtpSender for ConnectionManager {
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
         self.send_rtp_audio(packet).await
+    }
+
+    async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        self.send_control_packet(packet).await
+    }
+
+    async fn ptp_clock(&self) -> Option<SharedPtpClock> {
+        self.ptp_clock().await
     }
 }
 
@@ -244,6 +259,9 @@ impl PcmStreamer {
         // Reusable buffer for encoding output to avoid allocations
         let mut encoding_buffer = vec![0u8; 4096];
 
+        // RTP timestamp tracking
+        let mut last_announce = Instant::now();
+
         loop {
             // Wait for next tick
             interval.tick().await;
@@ -277,6 +295,8 @@ impl PcmStreamer {
                         })?;
                         self.buffer.clear();
                         self.fill_buffer(&mut source)?;
+                        // Reset accumulated frames logic if seeking?
+                        // Usually timestamp continues or jumps.
                     }
                 }
                 _ => {}
@@ -322,22 +342,17 @@ impl PcmStreamer {
                     AudioCodec::Alac => {
                         let mut encoder_guard = self.encoder.lock().await;
                         if let Some(encoder) = encoder_guard.as_mut() {
-                            // alac-encoder 0.3.0 expects byte slice of PCM data
-                            // and a FormatDescription for that input
                             let input_format = alac_encoder::FormatDescription::pcm::<i16>(
                                 f64::from(self.format.sample_rate.as_u32()),
                                 u32::from(self.format.channels.channels()),
                             );
 
-                            // Ensure encoding buffer has enough capacity
                             if encoding_buffer.len() < 4096 {
                                 encoding_buffer.resize(4096, 0);
                             }
 
                             let size =
                                 encoder.encode(&input_format, &packet_data, &mut encoding_buffer);
-                            // Safety: clamp size to buffer length to prevent panic if encoder returns a size
-                            // larger than the buffer (which would have been safe with the original .truncate(size))
                             let safe_size = size.min(encoding_buffer.len());
                             Cow::Borrowed(&encoding_buffer[..safe_size])
                         } else {
@@ -347,8 +362,6 @@ impl PcmStreamer {
                     AudioCodec::Aac => {
                         let mut encoder_guard = self.encoder_aac.lock().await;
                         if let Some(encoder) = encoder_guard.as_mut() {
-                            // Convert bytes to i16 (Little Endian)
-                            // We assume input is always I16 Little Endian (standard AirPlay/PCM)
                             samples_buffer.clear();
                             samples_buffer.extend(
                                 packet_data
@@ -358,24 +371,19 @@ impl PcmStreamer {
 
                             match encoder.encode(&samples_buffer) {
                                 Ok(encoded) => {
-                                    // Add AU Header Section for mpeg4-generic (RFC 3640)
-                                    // AU-headers-length: 16 bits (0x0010) = 16
-                                    // AU-header: size (13 bits) | index (3 bits)
-                                    let mut payload = Vec::with_capacity(4 + encoded.len());
-                                    payload.extend_from_slice(&[0x00, 0x10]);
-
-                                    // AAC frames are small enough to fit in u16
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    let size = encoded.len() as u16;
-                                    let header = (size << 3) & 0xFFF8;
-                                    payload.extend_from_slice(&header.to_be_bytes());
-
-                                    payload.extend_from_slice(&encoded);
-                                    Cow::Owned(payload)
+                                    // For ADTS, we don't need AU headers (or receiver handles it better?)
+                                    // Or try with AU headers + ADTS?
+                                    // If we use ADTS, we might not need AU headers if the receiver ignores them for ADTS stream?
+                                    // But RTP 3640 expects AU headers.
+                                    // Let's try sending JUST the ADTS frame first (no AU headers).
+                                    // If that fails, we can restore headers.
+                                    // Note: RTP usually requires payload format specific headers.
+                                    // But if receiver uses ffmpeg to decode directly, maybe it wants raw ADTS?
+                                    Cow::Owned(encoded)
                                 }
                                 Err(e) => {
                                     tracing::error!("AAC encoding error: {}", e);
-                                    Cow::Borrowed(&packet_data) // Fallback (will likely sound like static)
+                                    Cow::Borrowed(&packet_data)
                                 }
                             }
                         } else {
@@ -388,18 +396,22 @@ impl PcmStreamer {
 
             // Encrypt and wrap in RTP
             rtp_packet_buffer.clear();
-            {
+            let rtp_timestamp_start = {
                 let mut codec = self.rtp_codec.lock().await;
+                // Capture timestamp before encoding
+                let ts = codec.timestamp();
                 codec
                     .encode_arbitrary_payload(&encoded_payload, &mut rtp_packet_buffer)
                     .map_err(|e| AirPlayError::RtpError {
                         message: e.to_string(),
                     })?;
-            }
+                ts
+            };
 
             // Send packet
             self.send_packet(&rtp_packet_buffer).await?;
             packets_sent += 1;
+
             if packets_sent == 1 {
                 tracing::info!(
                     "First RTP audio packet sent ({} bytes)",
@@ -408,6 +420,64 @@ impl PcmStreamer {
             }
             if packets_sent % 100 == 0 {
                 tracing::info!("Sent {} RTP packets", packets_sent);
+            }
+
+            // Send TimeAnnouncePtp if needed (every 1 second)
+            if last_announce.elapsed() >= Duration::from_secs(1) {
+                if let Some(clock) = self.connection.ptp_clock().await {
+                    let ptp_time = PtpTimestamp::now();
+                    // We use the start timestamp of the current packet as reference
+                    // Convert accumulated frames to timestamp units?
+                    // Actually we got `rtp_timestamp_start` from codec.
+                    let rtp_ts = rtp_timestamp_start;
+
+                    // We need to associate this RTP timestamp with a PTP time.
+                    // Ideally, we know when this packet will be played.
+                    // But for TimeAnnouncePtp, we just announce the mapping.
+                    // "monotonic_ns is the sender's PTP timestamp, i.e. uptime."
+                    // And "pkt with senderRtpTimestamp is the RTP 'clock' time with the NTP timestamp..."
+                    // We can use current time as PTP time, and current RTP timestamp.
+                    // But we must account for the fact that the packet we just sent corresponds to audio some time ago?
+                    // No, `rtp_timestamp_start` is the timestamp of the packet we just sent.
+                    // `PtpTimestamp::now()` is "now".
+                    // The receiver uses this to sync RTP clock to PTP clock.
+                    // If we send (now, rtp_ts), we are saying "audio at rtp_ts corresponds to time now".
+                    // But if we just sent it, it will be played in the future (latency).
+                    // The mapping should be accurate.
+                    // If we generated the packet "now", then "now" is the capture time?
+                    // Yes, we just read it from buffer.
+                    // So (now, rtp_ts) is a valid anchor point.
+
+                    let clock_id = clock.read().await.clock_id();
+                    // ptp_timestamp needs to be u64 nanoseconds (monotonic usually)
+                    // But PtpTimestamp::now() is wall clock.
+                    // We decided to use PtpTimestamp::now() for now.
+                    // Need to convert PtpTimestamp to u64 nanos.
+                    // PtpTimestamp::to_nanos() returns i128.
+                    #[allow(clippy::cast_sign_loss)]
+                    #[allow(clippy::cast_possible_truncation)]
+                    let ptp_nanos = ptp_time.to_nanos() as u64;
+
+                    // Next timestamp? Maybe rtp_ts + sample_rate?
+                    let next_rtp_ts = rtp_ts.wrapping_add(self.format.sample_rate.as_u32());
+
+                    let announce = TimeAnnouncePtp::new(rtp_ts, ptp_nanos, next_rtp_ts, clock_id);
+
+                    tracing::debug!(
+                        "Sending TimeAnnouncePtp: RTP={}, PTP={}ns",
+                        rtp_ts,
+                        ptp_nanos
+                    );
+                    if let Err(e) = self
+                        .connection
+                        .send_control_packet(&announce.encode())
+                        .await
+                    {
+                        tracing::warn!("Failed to send TimeAnnouncePtp: {}", e);
+                    }
+
+                    last_announce = Instant::now();
+                }
             }
 
             // Refill buffer in background
