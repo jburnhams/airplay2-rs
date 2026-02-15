@@ -56,7 +56,7 @@ Sender                              Receiver
 
 ### 52.1 SETUP Request Parsing
 
-- [ ] **52.1.1** Define SETUP request structures
+- [x] **52.1.1** Define SETUP request structures
 
 **File:** `src/receiver/ap2/setup_handler.rs`
 
@@ -416,7 +416,7 @@ pub enum SetupParseError {
 
 ### 52.2 SETUP Response Builder
 
-- [ ] **52.2.1** Build SETUP response with allocated ports
+- [x] **52.2.1** Build SETUP response with allocated ports
 
 **File:** `src/receiver/ap2/setup_handler.rs` (continued)
 
@@ -562,7 +562,7 @@ impl SetupResponse {
 
 ### 52.3 SETUP Handler Implementation
 
-- [ ] **52.3.1** Implement SETUP request handler
+- [x] **52.3.1** Implement SETUP request handler
 
 **File:** `src/receiver/ap2/setup_handler.rs` (continued)
 
@@ -882,7 +882,7 @@ impl SetupHandler {
 
 ### 52.4 SETUP Tests
 
-- [ ] **52.4.1** Test SETUP request parsing and response generation
+- [x] **52.4.1** Test SETUP request parsing and response generation
 
 **File:** `src/receiver/ap2/setup_handler.rs` (test module)
 
@@ -1021,15 +1021,15 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Phase 1 SETUP correctly parses event/timing streams
-- [ ] Phase 2 SETUP correctly parses audio streams
-- [ ] Port allocation works within configured range
-- [ ] Response contains all required fields
-- [ ] Audio latency correctly reported
-- [ ] Session state advances through phases
-- [ ] Events emitted for pipeline coordination
-- [ ] Cleanup releases all allocated ports
-- [ ] All unit tests pass
+- [x] Phase 1 SETUP correctly parses event/timing streams
+- [x] Phase 2 SETUP correctly parses audio streams
+- [x] Port allocation works within configured range
+- [x] Response contains all required fields
+- [x] Audio latency correctly reported
+- [x] Session state advances through phases
+- [x] Events emitted for pipeline coordination
+- [x] Cleanup releases all allocated ports
+- [x] All unit tests pass
 
 ---
 
