@@ -321,9 +321,9 @@ impl ConnectionManager {
 
     /// Authenticate with the device
     async fn authenticate(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
-        // 1. Try Transient Pairing first (most common for HomePods allowing it)
-        if self.try_transient_pairing().await.is_ok() {
-            return Ok(());
+        // 1. Try configured PIN first if available (prioritize user config)
+        if let Some(ref pin) = self.config.pin {
+            return self.try_configured_pin(device, pin).await;
         }
 
         // 2. Check if we have stored keys
@@ -331,9 +331,9 @@ impl ConnectionManager {
             return Ok(());
         }
 
-        // 3. Try configured PIN first if available
-        if let Some(ref pin) = self.config.pin {
-            return self.try_configured_pin(device, pin).await;
+        // 3. Try Transient Pairing first (most common for HomePods allowing it)
+        if self.try_transient_pairing().await.is_ok() {
+            return Ok(());
         }
 
         // 4. Try various credentials for SRP Pairing
@@ -899,9 +899,18 @@ impl ConnectionManager {
 
         // 5. Stream Setup (SETUP Step 2: Audio/Control)
         tracing::debug!("Performing Stream SETUP (Step 2)...");
-        let audio_sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
-        let ctrl_sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
-        let time_sock = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
+
+        // Helper to try binding IPv4 then IPv6
+        async fn bind_udp_retry() -> std::io::Result<tokio::net::UdpSocket> {
+            match tokio::net::UdpSocket::bind("0.0.0.0:0").await {
+                Ok(s) => Ok(s),
+                Err(_) => tokio::net::UdpSocket::bind("[::]:0").await,
+            }
+        }
+
+        let audio_sock = bind_udp_retry().await?;
+        let ctrl_sock = bind_udp_retry().await?;
+        let time_sock = bind_udp_retry().await?;
 
         let audio_port = audio_sock.local_addr()?.port();
         let ctrl_port = ctrl_sock.local_addr()?.port();
@@ -1736,12 +1745,18 @@ impl ConnectionManager {
                 sock
             }
             Err(e) => {
-                tracing::error!(
-                    "Failed to bind PTP event port {} — run with elevated/admin privileges! Error: {}",
+                tracing::warn!(
+                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. (Run as root for standard PTP)",
                     PTP_EVENT_PORT,
                     e
                 );
-                return;
+                match UdpSocket::bind("0.0.0.0:0").await {
+                    Ok(sock) => sock,
+                    Err(e) => {
+                        tracing::error!("Failed to bind fallback PTP event socket: {}", e);
+                        return;
+                    }
+                }
             }
         };
 
@@ -1752,12 +1767,18 @@ impl ConnectionManager {
                 Some(Arc::new(sock))
             }
             Err(e) => {
-                tracing::error!(
-                    "Failed to bind PTP general port {} — run with elevated/admin privileges! Error: {}",
+                tracing::warn!(
+                    "Failed to bind PTP general port {} ({}); falling back to ephemeral port.",
                     PTP_GENERAL_PORT,
                     e
                 );
-                return;
+                match UdpSocket::bind("0.0.0.0:0").await {
+                    Ok(sock) => Some(Arc::new(sock)),
+                    Err(e) => {
+                        tracing::error!("Failed to bind fallback PTP general socket: {}", e);
+                        return;
+                    }
+                }
             }
         };
 
