@@ -863,21 +863,11 @@ impl ConnectionManager {
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .map(|i| {
-                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                {
-                                    i as u16
-                                }
-                            });
+                            .and_then(Self::parse_port);
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .map(|i| {
-                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                {
-                                    i as u16
-                                }
-                            });
+                            .and_then(Self::parse_port);
                         tracing::info!(
                             "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
                             ep,
@@ -1025,26 +1015,10 @@ impl ConnectionManager {
                             (
                                 d.get("dataPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .map(|i| {
-                                        #[allow(
-                                            clippy::cast_possible_truncation,
-                                            clippy::cast_sign_loss
-                                        )]
-                                        {
-                                            i as u16
-                                        }
-                                    }),
+                                    .and_then(Self::parse_port),
                                 d.get("controlPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .map(|i| {
-                                        #[allow(
-                                            clippy::cast_possible_truncation,
-                                            clippy::cast_sign_loss
-                                        )]
-                                        {
-                                            i as u16
-                                        }
-                                    }),
+                                    .and_then(Self::parse_port),
                             )
                         })
                     } else {
@@ -1863,6 +1837,37 @@ impl ConnectionManager {
     /// Check if PTP timing is active for the current connection.
     pub async fn is_ptp_active(&self) -> bool {
         *self.ptp_active.read().await
+    }
+
+    /// Safely parse port number from plist integer (i64).
+    ///
+    /// The `biplist` crate parses integers as `i64`. Unsigned 16-bit ports
+    /// greater than 32767 might be interpreted as negative `i16` values
+    /// if the source encoded them as 16-bit signed integers.
+    ///
+    /// This function handles:
+    /// 1. Positive values that fit in `u16` (0..=65535) via `try_from`.
+    /// 2. Negative values that correspond to high `u16` range when reinterpreted bits (-32768..=-1).
+    ///
+    /// It rejects values outside these valid ranges to prevent unsafe wrapping of arbitrary invalid data.
+    fn parse_port(i: i64) -> Option<u16> {
+        // Try direct conversion (for positive values fitting in u16)
+        if let Ok(port) = u16::try_from(i) {
+            return Some(port);
+        }
+
+        // Handle negative values resulting from 16-bit signed interpretation of u16
+        // e.g. 54428 (0xD49C) parsed as -11108 (0xD49C)
+        // Range valid for i16 is -32768 to 32767.
+        // We accept negative values only if they fall within i16 range,
+        // implying they are reinterpreted u16s.
+        if i >= i64::from(i16::MIN) && i < 0 {
+            #[allow(clippy::cast_sign_loss)]
+            #[allow(clippy::cast_possible_truncation)]
+            return Some(i as u16);
+        }
+
+        None
     }
 
     fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {
