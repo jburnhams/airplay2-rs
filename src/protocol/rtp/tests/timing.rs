@@ -109,8 +109,5 @@ fn test_offset_calculation() {
     let expected = 4_995_000;
     let tolerance = 5_000; // 5ms tolerance
 
-    assert!(
-        (offset - expected).abs() < tolerance,
-        "Offset was {offset}",
-    );
+    assert!((offset - expected).abs() < tolerance, "Offset was {offset}",);
 }

@@ -20,8 +20,7 @@ fn test_sync_packet_encode_decode() {
 #[test]
 fn test_audio_packet_encode_decode() {
     let payload = vec![0x01, 0x02, 0x03, 0x04];
-    let packet =
-        RaopAudioPacket::new(100, 44100, 0x1234_5678, payload.clone()).with_marker();
+    let packet = RaopAudioPacket::new(100, 44100, 0x1234_5678, payload.clone()).with_marker();
 
     let encoded = packet.encode();
     let decoded = RaopAudioPacket::decode(&encoded).unwrap();
