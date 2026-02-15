@@ -6,7 +6,6 @@
 use super::request_router::{Ap2Endpoint, Ap2RequestType, RtspMethod};
 use super::response_builder::Ap2ResponseBuilder;
 use super::session_state::Ap2SessionState;
-use super::stream::{AudioStreamFormat, EncryptionType, TimingPeerInfo, TimingProtocol};
 use crate::protocol::rtsp::{RtspRequest, StatusCode};
 
 /// Result of handling a request
@@ -40,10 +39,6 @@ pub enum Ap2Event {
         timing_port: u16,
         /// UDP port for event channel
         event_port: u16,
-        /// Timing peer info (for PTP)
-        timing_peer_info: Option<TimingPeerInfo>,
-        /// Timing protocol (NTP or PTP)
-        timing_protocol: TimingProtocol,
     },
 
     /// Second SETUP phase complete, audio channels ready
@@ -52,12 +47,6 @@ pub enum Ap2Event {
         audio_data_port: u16,
         /// UDP port for audio control
         audio_control_port: u16,
-        /// Audio format (for audio streams)
-        audio_format: Option<AudioStreamFormat>,
-        /// Encryption type
-        encryption_type: EncryptionType,
-        /// Shared encryption key (if provided)
-        shared_key: Option<Vec<u8>>,
     },
 
     /// Streaming started
