@@ -859,14 +859,15 @@ impl ConnectionManager {
                 Ok(plist) => {
                     tracing::info!("SETUP Step 1 plist: {:#?}", plist);
                     if let Some(dict) = plist.as_dict() {
+                        // Handle potential negative values (overflows) by casting
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .map(|i| i as u16);
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .map(|i| i as u16);
                         tracing::info!(
                             "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
                             ep,
@@ -1075,11 +1076,16 @@ impl ConnectionManager {
 
             tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
             tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
-            tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
 
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-            time_sock.connect((device_ip, server_time_port)).await?;
+
+            if server_time_port != 0 {
+                tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
+                time_sock.connect((device_ip, server_time_port)).await?;
+            } else {
+                tracing::info!("Timing port is 0, not connecting timing socket.");
+            }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
@@ -1441,6 +1447,31 @@ impl ConnectionManager {
                 .await
                 .map_err(|e| AirPlayError::RtspError {
                     message: format!("Failed to send RTP audio: {e}"),
+                    status_code: None,
+                })?;
+            Ok(())
+        } else {
+            Err(AirPlayError::InvalidState {
+                message: "RTP sockets not connected".to_string(),
+                current_state: "Disconnected".to_string(),
+            })
+        }
+    }
+
+    /// Send control packet (e.g. TimeAnnouncePtp)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if sockets are not connected or send fails
+    pub async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        let sockets = self.sockets.lock().await;
+        if let Some(ref socks) = *sockets {
+            socks
+                .control
+                .send(packet)
+                .await
+                .map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to send control packet: {e}"),
                     status_code: None,
                 })?;
             Ok(())

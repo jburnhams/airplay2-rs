@@ -22,6 +22,8 @@ pub struct PythonReceiver {
     port: u16,
     // Flag to ensure logs are written once
     logs_written: bool,
+    // Log file path
+    log_path: PathBuf,
 }
 
 impl PythonReceiver {
@@ -241,6 +243,29 @@ impl PythonReceiver {
             }
         });
 
+        // Determine log path
+        let mut target_dir = match std::env::current_dir() {
+            Ok(pb) => pb,
+            Err(_) => PathBuf::from("."),
+        };
+        if !target_dir.join("target").exists()
+            && target_dir
+                .parent()
+                .map(|p| p.join("target").exists())
+                .unwrap_or(false)
+        {
+            target_dir = target_dir.parent().unwrap().to_path_buf();
+        }
+        let log_dir = target_dir.join("target");
+        // Ensure log dir exists
+        if !log_dir.exists() {
+            let _ = fs::create_dir_all(&log_dir);
+        }
+        let log_path = log_dir.join(format!(
+            "integration-test-{}.log",
+            chrono::Utc::now().timestamp_millis()
+        ));
+
         Ok(Self {
             process,
             output_dir,
@@ -249,6 +274,7 @@ impl PythonReceiver {
             _temp_dir: Some(temp_dir),
             port: actual_port,
             logs_written: false,
+            log_path,
         })
     }
 
@@ -305,50 +331,15 @@ impl PythonReceiver {
             return;
         }
 
-        // Write to root/target/integration-test-TIMESTAMP.log
-        // If we are in integration_tests crate, root is ../
-        // But the current dir is usually where we ran cargo test from.
-        // If run from workspace root, current_dir is root.
-        // If run from integration_tests, current_dir is integration_tests.
-
-        let mut target_dir = match std::env::current_dir() {
-            Ok(pb) => pb,
-            Err(_) => PathBuf::from("."),
-        };
-
-        // If we are in integration_tests, go up one level?
-        // But workspace target dir is usually shared.
-        // If running `cargo test -p integration_tests`, it might put artifacts in `target`.
-        // Let's try to find the `target` directory.
-        if !target_dir.join("target").exists()
-            && target_dir
-                .parent()
-                .map(|p| p.join("target").exists())
-                .unwrap_or(false)
-        {
-            target_dir = target_dir.parent().unwrap().to_path_buf();
-        }
-
-        let log_dir = target_dir.join("target");
-        // Ensure log dir exists
-        if !log_dir.exists() {
-            let _ = fs::create_dir_all(&log_dir);
-        }
-
-        let log_path = log_dir.join(format!(
-            "integration-test-{}.log",
-            chrono::Utc::now().timestamp_millis()
-        ));
-
         if let Ok(logs) = self.log_buffer.lock() {
-            if let Err(e) = fs::write(&log_path, logs.join("\n")) {
+            if let Err(e) = fs::write(&self.log_path, logs.join("\n")) {
                 tracing::warn!(
                     "Failed to write integration test logs to {:?}: {}",
-                    log_path,
+                    self.log_path,
                     e
                 );
             } else {
-                tracing::info!("Wrote integration test logs to: {:?}", log_path);
+                tracing::info!("Wrote integration test logs to: {:?}", self.log_path);
             }
         }
         self.logs_written = true;
@@ -393,30 +384,6 @@ impl PythonReceiver {
 
         self.write_logs();
 
-        // Return log path relative to where we think it is?
-        // We constructed it in write_logs but didn't store it.
-        // Reconstruct for return.
-        let mut target_dir = match std::env::current_dir() {
-            Ok(pb) => pb,
-            Err(_) => PathBuf::from("."),
-        };
-        if !target_dir.join("target").exists()
-            && target_dir
-                .parent()
-                .map(|p| p.join("target").exists())
-                .unwrap_or(false)
-        {
-            target_dir = target_dir.parent().unwrap().to_path_buf();
-        }
-        let log_path = target_dir.join("target").join(format!(
-            "integration-test-{}.log",
-            // Note: timestamp will be slightly different if we call now() again.
-            // Ideally we should store the path in self.
-            // But for now, we just want logs written.
-            // The return value is used for manual inspection.
-            "UNKNOWN"
-        ));
-
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
@@ -424,7 +391,7 @@ impl PythonReceiver {
         Ok(ReceiverOutput {
             audio_data,
             rtp_data,
-            log_path,
+            log_path: self.log_path.clone(),
         })
     }
 

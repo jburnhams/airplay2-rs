@@ -90,7 +90,8 @@ fn test_control_packet_decode_sync() {
 
 #[test]
 fn test_control_packet_buffer_too_small() {
-    let buf = [0u8; 5];
+    // PT=0x55 (Retransmit) requires 12 bytes
+    let buf = [0x80, 0x55, 0x00, 0x00, 0x00];
     let result = ControlPacket::decode(&buf);
     assert!(matches!(result, Err(RtpDecodeError::BufferTooSmall { .. })));
 }
