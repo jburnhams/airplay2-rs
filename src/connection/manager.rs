@@ -900,7 +900,12 @@ impl ConnectionManager {
         // 5. Stream Setup (SETUP Step 2: Audio/Control)
         tracing::debug!("Performing Stream SETUP (Step 2)...");
 
-        let device_ip = self.device.read().await.as_ref().map(|d| d.address());
+        let device_ip = self
+            .device
+            .read()
+            .await
+            .as_ref()
+            .map(crate::types::AirPlayDevice::address);
         let audio_sock = Self::bind_ephemeral_socket(device_ip.as_ref()).await?;
         let ctrl_sock = Self::bind_ephemeral_socket(device_ip.as_ref()).await?;
         let time_sock = Self::bind_ephemeral_socket(device_ip.as_ref()).await?;
@@ -1104,13 +1109,26 @@ impl ConnectionManager {
                 device.address()
             };
 
-            tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
-            tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
-            tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
+            if server_audio_port > 0 {
+                tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
+                audio_sock.connect((device_ip, server_audio_port)).await?;
+            } else {
+                tracing::warn!("Skipping Audio socket connect: port is 0");
+            }
 
-            audio_sock.connect((device_ip, server_audio_port)).await?;
-            ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-            time_sock.connect((device_ip, server_time_port)).await?;
+            if server_ctrl_port > 0 {
+                tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
+                ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
+            } else {
+                tracing::warn!("Skipping Control socket connect: port is 0");
+            }
+
+            if server_time_port > 0 {
+                tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
+                time_sock.connect((device_ip, server_time_port)).await?;
+            } else {
+                tracing::warn!("Skipping Timing socket connect: port is 0");
+            }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
@@ -1715,9 +1733,11 @@ impl ConnectionManager {
     ///
     /// If `target_ip` is provided, it attempts to bind to the same protocol family (IPv4/IPv6).
     /// If binding to "Any" (`0.0.0.0` or `[::]`) fails, it falls back to localhost.
-    async fn bind_ephemeral_socket(target_ip: Option<&std::net::IpAddr>) -> std::io::Result<UdpSocket> {
-        let prefer_ipv6 = target_ip.is_some_and(|ip| ip.is_ipv6());
-        let prefer_ipv4 = target_ip.is_some_and(|ip| ip.is_ipv4());
+    async fn bind_ephemeral_socket(
+        target_ip: Option<&std::net::IpAddr>,
+    ) -> std::io::Result<UdpSocket> {
+        let prefer_ipv6 = target_ip.is_some_and(std::net::IpAddr::is_ipv6);
+        let prefer_ipv4 = target_ip.is_some_and(std::net::IpAddr::is_ipv4);
 
         if prefer_ipv6 {
             if let Ok(sock) = UdpSocket::bind("[::]:0").await {
