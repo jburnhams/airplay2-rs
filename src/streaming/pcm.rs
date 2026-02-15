@@ -371,14 +371,15 @@ impl PcmStreamer {
 
                             match encoder.encode(&samples_buffer) {
                                 Ok(encoded) => {
-                                    let mut payload = Vec::with_capacity(4 + encoded.len());
-                                    payload.extend_from_slice(&[0x00, 0x10]);
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    let size = encoded.len() as u16;
-                                    let header = (size << 3) & 0xFFF8;
-                                    payload.extend_from_slice(&header.to_be_bytes());
-                                    payload.extend_from_slice(&encoded);
-                                    Cow::Owned(payload)
+                                    // For ADTS, we don't need AU headers (or receiver handles it better?)
+                                    // Or try with AU headers + ADTS?
+                                    // If we use ADTS, we might not need AU headers if the receiver ignores them for ADTS stream?
+                                    // But RTP 3640 expects AU headers.
+                                    // Let's try sending JUST the ADTS frame first (no AU headers).
+                                    // If that fails, we can restore headers.
+                                    // Note: RTP usually requires payload format specific headers.
+                                    // But if receiver uses ffmpeg to decode directly, maybe it wants raw ADTS?
+                                    Cow::Owned(encoded)
                                 }
                                 Err(e) => {
                                     tracing::error!("AAC encoding error: {}", e);

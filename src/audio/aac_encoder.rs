@@ -35,7 +35,7 @@ impl AacEncoder {
     pub fn new(sample_rate: u32, channels: u32, bitrate: u32) -> Result<Self, AacEncoderError> {
         let params = EncoderParams {
             bit_rate: BitRate::Cbr(bitrate),
-            transport: Transport::Raw, // Raw AAC frames for RTP
+            transport: Transport::Adts, // ADTS for compatibility
             audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
             channels: match channels {
                 1 => ChannelMode::Mono,

@@ -58,7 +58,13 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     let output = receiver.stop().await?;
 
     // Verify audio received
-    output.verify_audio_received()?;
+    if let Err(e) = output.verify_audio_received() {
+        if output.log_path.exists() {
+            let logs = std::fs::read_to_string(&output.log_path)?;
+            println!("Receiver Logs (Verification Failed):\n{}", logs);
+        }
+        return Err(e);
+    }
     output.verify_rtp_received()?;
 
     if output.log_path.exists() {

@@ -951,6 +951,10 @@ impl ConnectionManager {
         // Even for AAC streaming, the receiver might decode to PCM?
         // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output format?
 
+        // Python receiver expects latencyMin/latencyMax for Realtime streams
+        let latency_min = 11025; // 44100 / 4
+        let latency_max = 88200; // 44100 * 2
+
         let stream_entry = DictBuilder::new()
             .insert("type", stream_type)
             .insert("ct", ct)
@@ -961,6 +965,8 @@ impl ConnectionManager {
             .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
+            .insert("latencyMin", latency_min)
+            .insert("latencyMax", latency_max)
             .build();
 
         let setup_plist_step2 = DictBuilder::new()
@@ -1019,10 +1025,20 @@ impl ConnectionManager {
                             (
                                 d.get("dataPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .map(|i| {
+                                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                        {
+                                            i as u16
+                                        }
+                                    }),
                                 d.get("controlPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .map(|i| {
+                                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                        {
+                                            i as u16
+                                        }
+                                    }),
                             )
                         })
                     } else {
