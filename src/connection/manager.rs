@@ -1026,7 +1026,10 @@ impl ConnectionManager {
                                 d.get("dataPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
                                     .map(|i| {
-                                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                        #[allow(
+                                            clippy::cast_possible_truncation,
+                                            clippy::cast_sign_loss
+                                        )]
                                         {
                                             i as u16
                                         }
@@ -1034,7 +1037,10 @@ impl ConnectionManager {
                                 d.get("controlPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
                                     .map(|i| {
-                                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                        #[allow(
+                                            clippy::cast_possible_truncation,
+                                            clippy::cast_sign_loss
+                                        )]
                                         {
                                             i as u16
                                         }
