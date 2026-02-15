@@ -214,8 +214,24 @@ impl PcmStreamer {
     // Complexity is necessary for the main streaming logic
     #[allow(clippy::too_many_lines)]
     async fn streaming_loop<S: AudioSource>(&self, mut source: S) -> Result<(), AirPlayError> {
-        let bytes_per_packet = Self::FRAMES_PER_PACKET * self.format.bytes_per_frame();
-        let packet_duration = self.format.frames_to_duration(Self::FRAMES_PER_PACKET);
+        let codec_type = *self.codec_type.read().await;
+        let frames_per_packet = match codec_type {
+            AudioCodec::Aac => 1024,
+            _ => Self::FRAMES_PER_PACKET,
+        };
+
+        // Update RTP codec with correct frame size
+        {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Frame count fits in u32"
+            )]
+            let frames = frames_per_packet as u32;
+            self.rtp_codec.lock().await.set_frames_per_packet(frames);
+        }
+
+        let bytes_per_packet = frames_per_packet * self.format.bytes_per_frame();
+        let packet_duration = self.format.frames_to_duration(frames_per_packet);
 
         tracing::debug!(
             "Starting streaming loop: bytes_per_packet={}, packet_duration={:?}",
@@ -317,7 +333,6 @@ impl PcmStreamer {
 
             // Encode payload
             let encoded_payload: Cow<'_, [u8]> = {
-                let codec_type = *self.codec_type.read().await;
                 match codec_type {
                     AudioCodec::Alac => {
                         let mut encoder_guard = self.encoder.lock().await;

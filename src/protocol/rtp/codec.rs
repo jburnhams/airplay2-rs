@@ -54,10 +54,12 @@ pub struct RtpCodec {
     buffered_mode: bool,
     /// Nonce counter for ChaCha20-Poly1305
     nonce_counter: u64,
+    /// Frames per packet (default 352)
+    frames_per_packet: u32,
 }
 
 impl RtpCodec {
-    /// Samples per packet
+    /// Samples per packet (default)
     pub const FRAMES_PER_PACKET: u32 = 352;
 
     /// Poly1305 tag size
@@ -79,7 +81,19 @@ impl RtpCodec {
             encryption_mode: RtpEncryptionMode::None,
             buffered_mode: false,
             nonce_counter: 0,
+            frames_per_packet: Self::FRAMES_PER_PACKET,
         }
+    }
+
+    /// Set frames per packet
+    pub fn set_frames_per_packet(&mut self, frames: u32) {
+        self.frames_per_packet = frames;
+    }
+
+    /// Get frames per packet
+    #[must_use]
+    pub fn frames_per_packet(&self) -> u32 {
+        self.frames_per_packet
     }
 
     /// Set AES-128-CTR encryption keys (legacy)
@@ -128,7 +142,7 @@ impl RtpCodec {
     /// Encode PCM audio to RTP packet
     ///
     /// Audio should be 16-bit signed little-endian stereo PCM.
-    /// Expects exactly `FRAMES_PER_PACKET` * 4 bytes (352 frames * 4 bytes/frame).
+    /// Expects exactly `frames_per_packet` * 4 bytes.
     ///
     /// # Errors
     ///
@@ -138,7 +152,7 @@ impl RtpCodec {
         pcm_data: &[u8],
         output: &mut Vec<u8>,
     ) -> Result<(), RtpCodecError> {
-        let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
+        let expected_size = self.frames_per_packet as usize * 4;
         if pcm_data.len() != expected_size {
             return Err(RtpCodecError::InvalidAudioSize(pcm_data.len()));
         }
@@ -175,7 +189,7 @@ impl RtpCodec {
                         .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
                     // NOTE: AES-CTR seek might need adjustment for variable packet sizes if sequence is frame-based
                     // For now assuming frame-based seeking works or this is only used for fixed PCM in legacy mode.
-                    let expected_size = Self::FRAMES_PER_PACKET as usize * 4;
+                    let expected_size = self.frames_per_packet as usize * 4;
                     // Seek based on frame count, assuming 1:1 mapping if it was PCM.
                     // For ALAC, this logic might need review if legacy AirPlay 1 uses ALAC.
                     // But we are focusing on AirPlay 2 (ChaCha20).
@@ -236,7 +250,7 @@ impl RtpCodec {
 
         // Update state for next packet
         self.sequence = self.sequence.wrapping_add(1);
-        self.timestamp = self.timestamp.wrapping_add(Self::FRAMES_PER_PACKET);
+        self.timestamp = self.timestamp.wrapping_add(self.frames_per_packet);
 
         Ok(())
     }
@@ -249,7 +263,7 @@ impl RtpCodec {
     ///
     /// Returns `RtpCodecError` if encryption fails.
     pub fn encode_audio_frames(&mut self, pcm_data: &[u8]) -> Result<Vec<Vec<u8>>, RtpCodecError> {
-        let frame_size = Self::FRAMES_PER_PACKET as usize * 4;
+        let frame_size = self.frames_per_packet as usize * 4;
         let mut packets = Vec::new();
 
         for chunk in pcm_data.chunks(frame_size) {
@@ -286,7 +300,7 @@ impl RtpCodec {
                 if let (Some(key), Some(iv)) = (&self.aes_key, &self.aes_iv) {
                     let mut cipher = Aes128Ctr::new(key, iv)
                         .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
-                    let frame_size = Self::FRAMES_PER_PACKET as usize * 4;
+                    let frame_size = self.frames_per_packet as usize * 4;
                     cipher.seek(u64::from(packet.header.sequence) * frame_size as u64);
                     cipher.apply_keystream(&mut packet.payload);
                 }
