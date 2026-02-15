@@ -4,6 +4,8 @@ mod capabilities;
 mod config;
 mod features;
 mod info_endpoint;
+mod pairing_server;
+mod password_integration;
 mod request_handler;
 mod request_router;
 mod response_builder;
