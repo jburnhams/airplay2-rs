@@ -55,8 +55,8 @@ impl SetupRequest {
     ///
     /// Returns error if plist parsing fails or structure is invalid
     pub fn parse(body: &[u8]) -> Result<Self, SetupParseError> {
-        let plist = parse_bplist_body(body)
-            .map_err(|e| SetupParseError::InvalidPlist(e.to_string()))?;
+        let plist =
+            parse_bplist_body(body).map_err(|e| SetupParseError::InvalidPlist(e.to_string()))?;
 
         Self::from_plist(&plist)
     }
@@ -308,20 +308,17 @@ impl SetupRequest {
     /// Check if this is phase 1 (event/timing)
     #[must_use]
     pub fn is_phase1(&self) -> bool {
-        self.streams.iter().any(|s| {
-            matches!(s.stream_type, StreamType::Event | StreamType::Timing)
-        })
+        self.streams
+            .iter()
+            .any(|s| matches!(s.stream_type, StreamType::Event | StreamType::Timing))
     }
 
     /// Check if this is phase 2 (audio)
     #[must_use]
     pub fn is_phase2(&self) -> bool {
-        self.streams.iter().any(|s| {
-            matches!(
-                s.stream_type,
-                StreamType::Audio | StreamType::BufferedAudio
-            )
-        })
+        self.streams
+            .iter()
+            .any(|s| matches!(s.stream_type, StreamType::Audio | StreamType::BufferedAudio))
     }
 }
 
@@ -411,14 +408,12 @@ impl SetupResponse {
             control_port: Some(control_port),
             audio_latency,
             timing_peer_info: None,
-            streams: vec![
-                StreamResponse {
-                    stream_type: StreamType::Audio,
-                    data_port: Some(data_port),
-                    control_port: Some(control_port),
-                    stream_id: 3,
-                },
-            ],
+            streams: vec![StreamResponse {
+                stream_type: StreamType::Audio,
+                data_port: Some(data_port),
+                control_port: Some(control_port),
+                stream_id: 3,
+            }],
         }
     }
 
@@ -479,10 +474,8 @@ impl SetupResponse {
                 );
 
                 if let Some(port) = s.data_port {
-                    stream_dict.insert(
-                        "dataPort".to_string(),
-                        PlistValue::Integer(i64::from(port)),
-                    );
+                    stream_dict
+                        .insert("dataPort".to_string(), PlistValue::Integer(i64::from(port)));
                 }
                 if let Some(port) = s.control_port {
                     stream_dict.insert(
@@ -619,11 +612,7 @@ pub struct SessionPorts {
 impl SetupHandler {
     /// Create a new SETUP handler
     #[must_use]
-    pub fn new(
-        port_range_start: u16,
-        port_range_end: u16,
-        audio_latency_samples: u32,
-    ) -> Self {
+    pub fn new(port_range_start: u16, port_range_end: u16, audio_latency_samples: u32) -> Self {
         Self {
             port_allocator: Arc::new(Mutex::new(PortAllocator::new(
                 port_range_start,
@@ -720,8 +709,7 @@ impl SetupHandler {
 
         info!(
             "SETUP phase 1 complete: event={}, timing={}",
-            event_port,
-            timing_port
+            event_port, timing_port
         );
 
         Ap2HandleResult {
@@ -767,8 +755,7 @@ impl SetupHandler {
         *self.current_phase.lock().unwrap() = SetupPhase::Phase2Complete;
 
         // Build response with audio latency
-        let response =
-            SetupResponse::phase2(data_port, control_port, self.audio_latency_samples);
+        let response = SetupResponse::phase2(data_port, control_port, self.audio_latency_samples);
 
         let body = match encode_bplist_body(&response.to_plist()) {
             Ok(b) => b,
@@ -786,14 +773,15 @@ impl SetupHandler {
 
         info!(
             "SETUP phase 2 complete: data={}, control={}, latency={}",
-            data_port,
-            control_port,
-            self.audio_latency_samples
+            data_port, control_port, self.audio_latency_samples
         );
 
         // Extract audio stream info
         // We assume the first audio stream is the relevant one for configuration
-        let audio_stream = request.streams.iter().find(|s| matches!(s.stream_type, StreamType::Audio | StreamType::BufferedAudio));
+        let audio_stream = request
+            .streams
+            .iter()
+            .find(|s| matches!(s.stream_type, StreamType::Audio | StreamType::BufferedAudio));
 
         let audio_format = audio_stream.and_then(|s| s.audio_format.clone());
 

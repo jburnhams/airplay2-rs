@@ -68,13 +68,13 @@ fn test_port_allocator() {
     let p2 = allocator.allocate().unwrap();
 
     assert_ne!(p1, p2);
-    assert!(p1 >= 7000 && p1 <= 7010);
-    assert!(p2 >= 7000 && p2 <= 7010);
+    assert!((7000..=7010).contains(&p1));
+    assert!((7000..=7010).contains(&p2));
 
     allocator.release(p1);
 
     let p3 = allocator.allocate().unwrap();
-    assert!(p3 >= 7000 && p3 <= 7010);
+    assert!((7000..=7010).contains(&p3));
 }
 
 #[test]
