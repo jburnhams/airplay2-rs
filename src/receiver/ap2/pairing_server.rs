@@ -24,7 +24,7 @@ pub struct PairingServer {
     srp_salt: [u8; 16],
 
     /// Current pairing session state
-    state: PairingServerState,
+    pub(crate) state: PairingServerState,
 
     /// SRP server instance (during pair-setup)
     srp_server: Option<SrpServer>,
@@ -628,73 +628,4 @@ pub enum PairingError {
     /// Signature verification failed
     #[error("Signature verification failed")]
     SignatureVerificationFailed,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn create_test_server() -> PairingServer {
-        let identity = Ed25519KeyPair::generate();
-        let mut server = PairingServer::new(identity);
-        server.set_password("1234");
-        server
-    }
-
-    #[test]
-    fn test_initial_state() {
-        let server = create_test_server();
-        assert_eq!(server.state, PairingServerState::Idle);
-    }
-
-    #[test]
-    fn test_m1_handling() {
-        let mut server = create_test_server();
-
-        // Build M1 TLV
-        let m1 = TlvEncoder::new()
-            .add_state(1)
-            .add_byte(TlvType::Method, 0)
-            .build();
-
-        let result = server.process_pair_setup(&m1);
-
-        assert!(result.error.is_none());
-        assert_eq!(result.new_state, PairingServerState::WaitingForM3);
-
-        // Response should contain state=2, salt, and public key
-        let response_tlv = TlvDecoder::decode(&result.response).unwrap();
-        assert_eq!(response_tlv.get_state().ok(), Some(2));
-        assert!(response_tlv.get(TlvType::Salt).is_some());
-        assert!(response_tlv.get(TlvType::PublicKey).is_some());
-    }
-
-    #[test]
-    fn test_state_machine_enforcement() {
-        let mut server = create_test_server();
-
-        // Try M3 before M1 - should fail
-        let m3 = TlvEncoder::new().add_state(3).build();
-
-        let result = server.process_pair_setup(&m3);
-        assert!(result.error.is_some());
-    }
-
-    #[test]
-    fn test_reset() {
-        let mut server = create_test_server();
-
-        // Process M1
-        let m1 = TlvEncoder::new()
-            .add_state(1)
-            .add_byte(TlvType::Method, 0)
-            .build();
-
-        let _ = server.process_pair_setup(&m1);
-        assert_eq!(server.state, PairingServerState::WaitingForM3);
-
-        // Reset
-        server.reset();
-        assert_eq!(server.state, PairingServerState::Idle);
-    }
 }

@@ -5,5 +5,6 @@ mod packet;
 mod packet_buffer;
 mod packet_extra;
 mod raop;
+mod raop_timing;
 mod timing;
 mod wrapping;
