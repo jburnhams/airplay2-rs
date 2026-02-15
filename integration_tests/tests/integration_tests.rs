@@ -30,7 +30,6 @@ fn init() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_pcm_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     init();
 
@@ -74,7 +73,6 @@ async fn test_pcm_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     init();
 
@@ -119,7 +117,7 @@ async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore] // Ignored because Python receiver fails to decode AAC in PTP mode (missing SDP/config)
 async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     init();
 
@@ -164,7 +162,6 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
     init();
     tracing::info!("Starting Custom PIN Pairing integration test");

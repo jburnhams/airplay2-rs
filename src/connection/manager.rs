@@ -321,19 +321,19 @@ impl ConnectionManager {
 
     /// Authenticate with the device
     async fn authenticate(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
-        // 1. Try Transient Pairing first (most common for HomePods allowing it)
-        if self.try_transient_pairing().await.is_ok() {
-            return Ok(());
-        }
-
-        // 2. Check if we have stored keys
+        // 1. Check if we have stored keys
         if self.try_stored_keys(device).await.is_ok() {
             return Ok(());
         }
 
-        // 3. Try configured PIN first if available
+        // 2. Try configured PIN first if available
         if let Some(ref pin) = self.config.pin {
             return self.try_configured_pin(device, pin).await;
+        }
+
+        // 3. Try Transient Pairing (most common for HomePods allowing it)
+        if self.try_transient_pairing().await.is_ok() {
+            return Ok(());
         }
 
         // 4. Try various credentials for SRP Pairing
@@ -681,7 +681,7 @@ impl ConnectionManager {
     }
 
     /// Setup RTSP session (`AirPlay` 2 sequence)
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     async fn setup_session(&self) -> Result<(), AirPlayError> {
         use crate::protocol::plist::DictBuilder;
 
@@ -735,7 +735,7 @@ impl ConnectionManager {
                     "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
                 }
                 AudioCodec::Aac => {
-                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024\r\n".to_string()
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024;config=1210\r\n".to_string()
                 }
                 AudioCodec::Opus => {
                     return Err(AirPlayError::InvalidParameter {
@@ -862,11 +862,11 @@ impl ConnectionManager {
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .map(|i| i as u16);
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .and_then(|i| u16::try_from(i).ok());
+                            .map(|i| i as u16);
                         tracing::info!(
                             "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
                             ep,
@@ -950,6 +950,8 @@ impl ConnectionManager {
             .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
+            .insert("latencyMin", 11025)
+            .insert("latencyMax", 88200)
             .build();
 
         let setup_plist_step2 = DictBuilder::new()
@@ -993,11 +995,11 @@ impl ConnectionManager {
                     let dp = dict
                         .get("dataPort")
                         .and_then(crate::protocol::plist::PlistValue::as_i64)
-                        .and_then(|i| u16::try_from(i).ok());
+                        .map(|i| i as u16);
                     let cp = dict
                         .get("controlPort")
                         .and_then(crate::protocol::plist::PlistValue::as_i64)
-                        .and_then(|i| u16::try_from(i).ok());
+                        .map(|i| i as u16);
 
                     // Also check inside 'streams' array if present
                     let stream_ports = if let Some(streams) = dict
@@ -1008,10 +1010,10 @@ impl ConnectionManager {
                             (
                                 d.get("dataPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .map(|i| i as u16),
                                 d.get("controlPort")
                                     .and_then(crate::protocol::plist::PlistValue::as_i64)
-                                    .and_then(|i| u16::try_from(i).ok()),
+                                    .map(|i| i as u16),
                             )
                         })
                     } else {
@@ -1099,6 +1101,13 @@ impl ConnectionManager {
                 server_audio_port,
                 server_control_port: server_ctrl_port,
                 server_timing_port: server_time_port,
+            });
+        }
+
+        if self.sockets.lock().await.is_none() {
+            return Err(AirPlayError::RtspError {
+                message: "Failed to negotiate server ports".to_string(),
+                status_code: None,
             });
         }
 
