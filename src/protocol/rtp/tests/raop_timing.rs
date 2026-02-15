@@ -4,7 +4,7 @@ use crate::protocol::rtp::timing::NtpTimestamp;
 fn ntp_from_micros(micros: u64) -> NtpTimestamp {
     let seconds = u32::try_from(micros / 1_000_000).unwrap();
     let micros_rem = micros % 1_000_000;
-    let fraction = u32::try_from((micros_rem * 4_294_967_296) / 1_000_000).unwrap();
+    let fraction = u32::try_from((micros_rem * (1_u64 << 32)) / 1_000_000).unwrap();
     NtpTimestamp { seconds, fraction }
 }
 
