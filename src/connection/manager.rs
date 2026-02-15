@@ -900,17 +900,9 @@ impl ConnectionManager {
         // 5. Stream Setup (SETUP Step 2: Audio/Control)
         tracing::debug!("Performing Stream SETUP (Step 2)...");
 
-        // Helper to try binding IPv4 then IPv6
-        async fn bind_udp_retry() -> std::io::Result<tokio::net::UdpSocket> {
-            match tokio::net::UdpSocket::bind("0.0.0.0:0").await {
-                Ok(s) => Ok(s),
-                Err(_) => tokio::net::UdpSocket::bind("[::]:0").await,
-            }
-        }
-
-        let audio_sock = bind_udp_retry().await?;
-        let ctrl_sock = bind_udp_retry().await?;
-        let time_sock = bind_udp_retry().await?;
+        let audio_sock = Self::bind_ephemeral_socket().await?;
+        let ctrl_sock = Self::bind_ephemeral_socket().await?;
+        let time_sock = Self::bind_ephemeral_socket().await?;
 
         let audio_port = audio_sock.local_addr()?.port();
         let ctrl_port = ctrl_sock.local_addr()?.port();
@@ -1716,6 +1708,29 @@ impl ConnectionManager {
         }
     }
 
+    /// Try to bind a UDP socket to an ephemeral port, trying multiple addresses.
+    ///
+    /// This helper attempts to bind to:
+    /// 1. `0.0.0.0:0` (IPv4 any)
+    /// 2. `127.0.0.1:0` (IPv4 localhost)
+    /// 3. `[::]:0` (IPv6 any)
+    ///
+    /// This provides robustness against environments with restricted networking (like some CI runners).
+    async fn bind_ephemeral_socket() -> std::io::Result<UdpSocket> {
+        // Try IPv4 Any
+        if let Ok(sock) = UdpSocket::bind("0.0.0.0:0").await {
+            return Ok(sock);
+        }
+
+        // Try IPv4 Localhost (sometimes required if 0.0.0.0 is restricted)
+        if let Ok(sock) = UdpSocket::bind("127.0.0.1:0").await {
+            return Ok(sock);
+        }
+
+        // Try IPv6 Any
+        UdpSocket::bind("[::]:0").await
+    }
+
     /// Start the PTP slave handler as a background task.
     ///
     /// The `HomePod` acts as PTP grandmaster clock. We act as slave,
@@ -1750,7 +1765,7 @@ impl ConnectionManager {
                     PTP_EVENT_PORT,
                     e
                 );
-                match UdpSocket::bind("0.0.0.0:0").await {
+                match Self::bind_ephemeral_socket().await {
                     Ok(sock) => sock,
                     Err(e) => {
                         tracing::error!("Failed to bind fallback PTP event socket: {}", e);
@@ -1772,7 +1787,7 @@ impl ConnectionManager {
                     PTP_GENERAL_PORT,
                     e
                 );
-                match UdpSocket::bind("0.0.0.0:0").await {
+                match Self::bind_ephemeral_socket().await {
                     Ok(sock) => Some(Arc::new(sock)),
                     Err(e) => {
                         tracing::error!("Failed to bind fallback PTP general socket: {}", e);
