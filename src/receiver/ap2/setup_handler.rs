@@ -238,7 +238,7 @@ impl SetupRequest {
                 })
                 .unwrap_or(16),
             frames_per_packet: dict
-                .get("spf")
+                .get("fp")
                 .and_then(|v| {
                     if let PlistValue::Integer(i) = v {
                         u32::try_from(*i).ok()
