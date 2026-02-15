@@ -866,7 +866,7 @@ impl ConnectionManager {
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .map(|i| i as u16);
+.map(|i| i as u16);
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
