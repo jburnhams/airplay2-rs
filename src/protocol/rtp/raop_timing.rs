@@ -95,9 +95,25 @@ impl RaopTimingResponse {
     /// offset = ((T2 - T1) + (T3 - T4)) / 2
     #[must_use]
     pub fn calculate_offset(&self, client_receive: NtpTimestamp) -> i64 {
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "Timestamp values converted to microseconds fit within i64 for typical operation"
+        )]
         let t1 = self.reference_time.to_micros() as i64;
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "Timestamp values converted to microseconds fit within i64 for typical operation"
+        )]
         let t2 = self.receive_time.to_micros() as i64;
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "Timestamp values converted to microseconds fit within i64 for typical operation"
+        )]
         let t3 = self.send_time.to_micros() as i64;
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "Timestamp values converted to microseconds fit within i64 for typical operation"
+        )]
         let t4 = client_receive.to_micros() as i64;
 
         ((t2 - t1) + (t3 - t4)) / 2
@@ -194,21 +210,33 @@ impl TimingSync {
 
     /// Convert local RTP timestamp to synchronized timestamp
     #[must_use]
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "Casting signed offset to unsigned for wrapping arithmetic is intended"
+    )]
     pub fn local_to_remote(&self, local_ts: u32) -> u32 {
         // Adjust by offset (converted to RTP timestamp units)
         // 44100 samples/sec
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Offset in samples fits in i32 for typical clock drift"
+        )]
         let offset_samples = (self.offset * 44100 / 1_000_000) as i32;
-        (local_ts as i32 + offset_samples) as u32
+        local_ts.wrapping_add(offset_samples as u32)
     }
 
     /// Convert remote RTP timestamp to local timestamp
     #[must_use]
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "Casting signed offset to unsigned for wrapping arithmetic is intended"
+    )]
     pub fn remote_to_local(&self, remote_ts: u32) -> u32 {
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Offset in samples fits in i32 for typical clock drift"
+        )]
         let offset_samples = (self.offset * 44100 / 1_000_000) as i32;
-        (remote_ts as i32 - offset_samples) as u32
+        remote_ts.wrapping_sub(offset_samples as u32)
     }
 }
