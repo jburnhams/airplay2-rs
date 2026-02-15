@@ -681,7 +681,11 @@ impl ConnectionManager {
     }
 
     /// Setup RTSP session (`AirPlay` 2 sequence)
-    #[allow(clippy::too_many_lines, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     async fn setup_session(&self) -> Result<(), AirPlayError> {
         use crate::protocol::plist::DictBuilder;
 
@@ -1075,13 +1079,18 @@ impl ConnectionManager {
                 device.address()
             };
 
-            tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
-            tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
-            tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
-
-            audio_sock.connect((device_ip, server_audio_port)).await?;
-            ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-            time_sock.connect((device_ip, server_time_port)).await?;
+            if server_audio_port > 0 {
+                tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
+                audio_sock.connect((device_ip, server_audio_port)).await?;
+            }
+            if server_ctrl_port > 0 {
+                tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
+                ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
+            }
+            if server_time_port > 0 {
+                tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
+                time_sock.connect((device_ip, server_time_port)).await?;
+            }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
