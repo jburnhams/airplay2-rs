@@ -863,11 +863,21 @@ impl ConnectionManager {
                         let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .map(|i| i as u16);
+                            .map(|i| {
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                {
+                                    i as u16
+                                }
+                            });
                         let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
-                            .map(|i| i as u16);
+                            .map(|i| {
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                {
+                                    i as u16
+                                }
+                            });
                         tracing::info!(
                             "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
                             ep,
@@ -1458,7 +1468,7 @@ impl ConnectionManager {
         }
     }
 
-    /// Send control packet (e.g. TimeAnnouncePtp)
+    /// Send control packet (e.g. `TimeAnnouncePtp`)
     ///
     /// # Errors
     ///

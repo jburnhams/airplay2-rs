@@ -21,7 +21,7 @@ pub trait RtpSender: Send + Sync {
     /// Send RTP audio packet
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError>;
 
-    /// Send control packet (e.g. TimeAnnouncePtp)
+    /// Send control packet (e.g. `TimeAnnouncePtp`)
     async fn send_control_packet(&self, packet: &[u8]) -> Result<(), AirPlayError>;
 
     /// Get shared PTP clock
@@ -460,15 +460,18 @@ impl PcmStreamer {
                     // Next timestamp? Maybe rtp_ts + sample_rate?
                     let next_rtp_ts = rtp_ts.wrapping_add(self.format.sample_rate.as_u32());
 
-                    let announce = TimeAnnouncePtp::new(
-                        rtp_ts,
-                        ptp_nanos,
-                        next_rtp_ts,
-                        clock_id
-                    );
+                    let announce = TimeAnnouncePtp::new(rtp_ts, ptp_nanos, next_rtp_ts, clock_id);
 
-                    tracing::debug!("Sending TimeAnnouncePtp: RTP={}, PTP={}ns", rtp_ts, ptp_nanos);
-                    if let Err(e) = self.connection.send_control_packet(&announce.encode()).await {
+                    tracing::debug!(
+                        "Sending TimeAnnouncePtp: RTP={}, PTP={}ns",
+                        rtp_ts,
+                        ptp_nanos
+                    );
+                    if let Err(e) = self
+                        .connection
+                        .send_control_packet(&announce.encode())
+                        .await
+                    {
                         tracing::warn!("Failed to send TimeAnnouncePtp: {}", e);
                     }
 
