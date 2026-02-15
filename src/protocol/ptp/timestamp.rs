@@ -4,7 +4,11 @@
 //! `AirPlay` 2 uses a compact 64-bit format (48-bit seconds + 16-bit fraction).
 //! This module supports both formats with lossless round-trip conversion.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::LazyLock;
+use std::time::{Duration, Instant};
+
+/// PTP Epoch established at application startup to ensure monotonic timestamps.
+static PTP_EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 /// IEEE 1588 PTP timestamp: 48-bit seconds + 32-bit nanoseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -31,14 +35,12 @@ impl PtpTimestamp {
         }
     }
 
-    /// Create a timestamp from the current system time.
+    /// Create a monotonic timestamp from the PTP epoch.
     ///
-    /// Uses seconds since the Unix epoch as PTP seconds.
+    /// Uses `std::time::Instant` to prevent backward jumps due to NTP or manual clock adjustments.
     #[must_use]
     pub fn now() -> Self {
-        let dur = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO);
+        let dur = Instant::now().duration_since(*PTP_EPOCH);
         Self {
             seconds: dur.as_secs(),
             nanoseconds: dur.subsec_nanos(),
