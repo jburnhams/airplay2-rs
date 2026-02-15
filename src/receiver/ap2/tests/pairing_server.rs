@@ -5,7 +5,7 @@ use crate::protocol::crypto::{
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
 use crate::receiver::ap2::pairing_server::{PairingServer, PairingServerState};
 
-/// Mock client for testing PairingServer
+/// Mock client for testing `PairingServer`
 struct PairingClient {
     srp_client: SrpClient,
     srp_verifier: Option<SrpVerifier>,
@@ -31,7 +31,7 @@ impl PairingClient {
         }
     }
 
-    fn create_m1(&self) -> Vec<u8> {
+    fn create_m1() -> Vec<u8> {
         TlvEncoder::new()
             .add_state(1)
             .add_byte(TlvType::Method, 0)
@@ -192,7 +192,7 @@ fn test_pairing_server_full_flow() {
     // --- Pair Setup ---
 
     // M1: Client -> Server
-    let m1 = client.create_m1();
+    let m1 = PairingClient::create_m1();
     let res1 = server.process_pair_setup(&m1);
     assert!(res1.error.is_none());
     assert_eq!(res1.new_state, PairingServerState::WaitingForM3);
@@ -245,7 +245,7 @@ fn test_pair_setup_wrong_password() {
     let mut client = PairingClient::new("wrong");
 
     // M1
-    let m1 = client.create_m1();
+    let m1 = PairingClient::create_m1();
     let res1 = server.process_pair_setup(&m1);
     assert!(res1.error.is_none());
 

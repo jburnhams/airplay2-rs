@@ -1,5 +1,5 @@
 use crate::protocol::crypto::Ed25519KeyPair;
-use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, StatusCode};
+use crate::protocol::rtsp::{Headers, Method, RtspCodec, RtspRequest, StatusCode};
 use crate::receiver::ap2::pairing_handlers::PairingHandler;
 use crate::receiver::ap2::pairing_server::PairingServer;
 use crate::receiver::ap2::password_auth::PasswordAuthManager;
@@ -38,7 +38,7 @@ fn test_password_only_mode() {
     let request = RtspRequest {
         method: Method::Post,
         uri: "/pair-setup".to_string(),
-        headers: Default::default(),
+        headers: Headers::default(),
         body,
     };
 
@@ -68,7 +68,7 @@ fn test_password_only_mode_disabled() {
     let request = RtspRequest {
         method: Method::Post,
         uri: "/pair-setup".to_string(),
-        headers: Default::default(),
+        headers: Headers::default(),
         body: vec![0x06, 0x01, 0x01, 0x00, 0x01, 0x00],
     };
 
@@ -99,7 +99,7 @@ fn test_homekit_only_mode() {
     let request = RtspRequest {
         method: Method::Post,
         uri: "/pair-setup".to_string(),
-        headers: Default::default(),
+        headers: Headers::default(),
         body,
     };
 
@@ -134,7 +134,7 @@ fn test_both_modes_password_priority() {
     let request = RtspRequest {
         method: Method::Post,
         uri: "/pair-setup".to_string(),
-        headers: Default::default(),
+        headers: Headers::default(),
         body,
     };
 
@@ -169,7 +169,7 @@ fn test_both_modes_fallback() {
     let request = RtspRequest {
         method: Method::Post,
         uri: "/pair-setup".to_string(),
-        headers: Default::default(),
+        headers: Headers::default(),
         body,
     };
 
