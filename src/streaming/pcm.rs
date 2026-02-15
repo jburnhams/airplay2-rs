@@ -369,22 +369,7 @@ impl PcmStreamer {
                             );
 
                             match encoder.encode(&samples_buffer) {
-                                Ok(encoded) => {
-                                    // Add AU Header Section for mpeg4-generic (RFC 3640)
-                                    // AU-headers-length: 16 bits (0x0010) = 16
-                                    // AU-header: size (13 bits) | index (3 bits)
-                                    let mut payload = Vec::with_capacity(4 + encoded.len());
-                                    payload.extend_from_slice(&[0x00, 0x10]);
-
-                                    // AAC frames are small enough to fit in u16
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    let size = encoded.len() as u16;
-                                    let header = (size << 3) & 0xFFF8;
-                                    payload.extend_from_slice(&header.to_be_bytes());
-
-                                    payload.extend_from_slice(&encoded);
-                                    Cow::Owned(payload)
-                                }
+                                Ok(encoded) => Cow::Owned(encoded),
                                 Err(e) => {
                                     tracing::error!("AAC encoding error: {}", e);
                                     Cow::Borrowed(&packet_data) // Fallback (will likely sound like static)
