@@ -3,8 +3,8 @@ use crate::protocol::rtp::timing::{NtpTimestamp, TimingRequest, TimingResponse};
 #[test]
 fn test_ntp_timestamp_encode_decode() {
     let ts = NtpTimestamp {
-        seconds: 1234567890,
-        fraction: 0x80000000,
+        seconds: 1_234_567_890,
+        fraction: 0x8000_0000,
     };
 
     let encoded = ts.encode();
@@ -19,13 +19,13 @@ fn test_ntp_timestamp_now() {
     let ts = NtpTimestamp::now();
 
     // Should be somewhere reasonable (after 2020)
-    assert!(ts.seconds > 3786825600); // 2020-01-01 in NTP time
+    assert!(ts.seconds > 3_786_825_600); // 2020-01-01 in NTP time
 }
 
 #[test]
 fn test_timing_request_encode() {
     let request = TimingRequest::new();
-    let encoded = request.encode(1, 0x12345678);
+    let encoded = request.encode(1, 0x1234_5678);
 
     // Check header
     assert_eq!(encoded[0], 0x80); // V=2
@@ -44,15 +44,15 @@ fn test_rtt_calculation() {
     };
     let t2 = NtpTimestamp {
         seconds: 100,
-        fraction: 0x028F5C28,
+        fraction: 0x028F_5C28,
     }; // +10ms
     let t3 = NtpTimestamp {
         seconds: 100,
-        fraction: 0x051EB851,
+        fraction: 0x051E_B851,
     }; // +20ms
     let t4 = NtpTimestamp {
         seconds: 100,
-        fraction: 0x0A3D70A3,
+        fraction: 0x0A3D_70A3,
     }; // +40ms
 
     let response = TimingResponse {
@@ -65,7 +65,7 @@ fn test_rtt_calculation() {
 
     // RTT = (40-0) - (20-10) = 40 - 10 = 30ms ≈ 30000 microseconds
     // Allow some tolerance for floating point
-    assert!(rtt > 25000 && rtt < 35000, "RTT was {}", rtt);
+    assert!(rtt > 25000 && rtt < 35000, "RTT was {rtt}");
 }
 
 #[test]
@@ -85,15 +85,15 @@ fn test_offset_calculation() {
     };
     let t2 = NtpTimestamp {
         seconds: 105,
-        fraction: 0x028F5C28,
+        fraction: 0x028F_5C28,
     }; // 10ms
     let t3 = NtpTimestamp {
         seconds: 105,
-        fraction: 0x051EB851,
+        fraction: 0x051E_B851,
     }; // 20ms
     let t4 = NtpTimestamp {
         seconds: 100,
-        fraction: 0x0A3D70A3,
+        fraction: 0x0A3D_70A3,
     }; // 40ms
 
     let response = TimingResponse {
@@ -111,7 +111,6 @@ fn test_offset_calculation() {
 
     assert!(
         (offset - expected).abs() < tolerance,
-        "Offset was {}",
-        offset
+        "Offset was {offset}",
     );
 }

@@ -2,7 +2,7 @@ use crate::protocol::rtp::{PayloadType, RtpDecodeError, RtpHeader, RtpPacket};
 
 #[test]
 fn test_header_encode_decode() {
-    let header = RtpHeader::new_audio(100, 44100, 0x12345678, false);
+    let header = RtpHeader::new_audio(100, 44100, 0x1234_5678, false);
 
     let encoded = header.encode();
     let decoded = RtpHeader::decode(&encoded).unwrap();
@@ -10,14 +10,14 @@ fn test_header_encode_decode() {
     assert_eq!(decoded.version, 2);
     assert_eq!(decoded.sequence, 100);
     assert_eq!(decoded.timestamp, 44100);
-    assert_eq!(decoded.ssrc, 0x12345678);
+    assert_eq!(decoded.ssrc, 0x1234_5678);
     assert!(decoded.marker);
 }
 
 #[test]
 fn test_packet_encode_decode() {
     let payload = vec![0x01, 0x02, 0x03, 0x04];
-    let header = RtpHeader::new_audio(101, 44100, 0x12345678, false);
+    let header = RtpHeader::new_audio(101, 44100, 0x1234_5678, false);
     let packet = RtpPacket::new(header, payload.clone());
 
     let encoded = packet.encode();
