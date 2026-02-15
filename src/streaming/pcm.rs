@@ -222,10 +222,7 @@ impl PcmStreamer {
 
         // Update RTP codec with correct frame size
         {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Frame count fits in u32"
-            )]
+            #[allow(clippy::cast_possible_truncation, reason = "Frame count fits in u32")]
             let frames = frames_per_packet as u32;
             self.rtp_codec.lock().await.set_frames_per_packet(frames);
         }
