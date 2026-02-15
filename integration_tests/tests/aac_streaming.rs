@@ -8,7 +8,7 @@ use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioCodec};
 use common::python_receiver::{PythonReceiver, TestSineSource};
 
 #[tokio::test]
-#[ignore]
+#[ignore] // Ignored because Python receiver fails to decode AAC in PTP mode (missing SDP/config)
 async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     common::init_logging();
     tracing::info!("Starting AAC Streaming integration test");
