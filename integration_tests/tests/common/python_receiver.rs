@@ -387,9 +387,11 @@ impl PythonReceiver {
         // Read output files
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
         let rtp_path = self.output_dir.join("rtp_packets.bin");
+        let ptp_path = self.output_dir.join("ntp.bin");
 
         let audio_data = fs::read(&audio_path).ok();
         let rtp_data = fs::read(&rtp_path).ok();
+        let ptp_data = fs::read(&ptp_path).ok();
 
         self.write_logs();
 
@@ -420,10 +422,14 @@ impl PythonReceiver {
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
+        if let Some(ref data) = ptp_data {
+            tracing::info!("Read {} bytes from {}", data.len(), ptp_path.display());
+        }
 
         Ok(ReceiverOutput {
             audio_data,
             rtp_data,
+            ptp_data,
             log_path,
         })
     }
@@ -464,11 +470,24 @@ impl Drop for PythonReceiver {
 pub struct ReceiverOutput {
     pub audio_data: Option<Vec<u8>>,
     pub rtp_data: Option<Vec<u8>>,
+    pub ptp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
 }
 
 impl ReceiverOutput {
+    /// Verify PTP data was received
+    pub fn verify_ptp_received(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let ptp = self.ptp_data.as_ref().ok_or("No PTP data received")?;
+
+        if ptp.is_empty() {
+            return Err("PTP data is empty".into());
+        }
+
+        tracing::info!("Verified PTP data: {} bytes", ptp.len());
+        Ok(())
+    }
+
     /// Verify audio data meets minimum requirements
     pub fn verify_audio_received(&self) -> Result<(), Box<dyn std::error::Error>> {
         let audio = self.audio_data.as_ref().ok_or("No audio data received")?;

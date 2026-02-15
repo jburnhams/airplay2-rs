@@ -17,7 +17,7 @@ mod timing;
 mod tests;
 
 pub use codec::{AudioPacketBuilder, RtpCodec, RtpCodecError, RtpEncryptionMode};
-pub use control::{ControlPacket, RetransmitRequest};
+pub use control::{ControlPacket, RetransmitRequest, TimeAnnouncePtp};
 pub use packet::{PayloadType, RtpDecodeError, RtpHeader, RtpPacket};
 pub use timing::{NtpTimestamp, TimingPacket, TimingRequest, TimingResponse};
 
