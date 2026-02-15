@@ -2,9 +2,9 @@ use crate::protocol::rtp::raop_timing::{RaopTimingRequest, RaopTimingResponse, T
 use crate::protocol::rtp::timing::NtpTimestamp;
 
 fn ntp_from_micros(micros: u64) -> NtpTimestamp {
-    let seconds = (micros / 1_000_000) as u32;
+    let seconds = u32::try_from(micros / 1_000_000).unwrap();
     let micros_rem = micros % 1_000_000;
-    let fraction = ((micros_rem as u64 * 4_294_967_296) / 1_000_000) as u32;
+    let fraction = u32::try_from((micros_rem * 4_294_967_296) / 1_000_000).unwrap();
     NtpTimestamp { seconds, fraction }
 }
 
@@ -13,8 +13,8 @@ fn test_timing_request_encode() {
     let mut request = RaopTimingRequest::new();
     // Fix reference time for deterministic output
     request.reference_time = NtpTimestamp {
-        seconds: 0x12345678,
-        fraction: 0x9ABCDEF0,
+        seconds: 0x1234_5678,
+        fraction: 0x9ABC_DEF0,
     };
 
     let encoded = request.encode(12345);
@@ -46,7 +46,7 @@ fn test_timing_response_decode() {
     };
     let recv_time = NtpTimestamp {
         seconds: 100,
-        fraction: 0x80000000,
+        fraction: 0x8000_0000,
     }; // +0.5s
     let send_time = NtpTimestamp {
         seconds: 101,
@@ -63,7 +63,7 @@ fn test_timing_response_decode() {
     let response = RaopTimingResponse::decode(&buf).expect("Decode failed");
 
     assert_eq!(response.reference_time.seconds, 100);
-    assert_eq!(response.receive_time.fraction, 0x80000000);
+    assert_eq!(response.receive_time.fraction, 0x8000_0000);
     assert_eq!(response.send_time.seconds, 101);
 }
 
@@ -79,7 +79,7 @@ fn test_offset_calculation() {
     }; // 105.0 (Client 100 -> Server 105, offset +5)
     let t3 = NtpTimestamp {
         seconds: 105,
-        fraction: 0x80000000,
+        fraction: 0x8000_0000,
     }; // 105.5 (Server processing 0.5s)
     let t4 = NtpTimestamp {
         seconds: 101,

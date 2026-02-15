@@ -179,19 +179,19 @@ fn test_port_allocation_exhaustion() {
 
     // Phase 1 (uses 2 ports)
     let body1 = encode_bplist_body(&create_phase1_plist()).unwrap();
-    let req1 = create_setup_request(&body1);
-    let res1 = handler.handle(&req1, 1, &context);
-    assert!(res1.error.is_none());
+    let request1 = create_setup_request(&body1);
+    let response1 = handler.handle(&request1, 1, &context);
+    assert!(response1.error.is_none());
 
     // Phase 2 (needs 2 more ports, but only 1 left)
     let body2 = encode_bplist_body(&create_phase2_plist()).unwrap();
-    let req2 = create_setup_request(&body2);
-    let res2 = handler.handle(&req2, 2, &context);
+    let request2 = create_setup_request(&body2);
+    let response2 = handler.handle(&request2, 2, &context);
 
-    assert!(res2.error.is_some()); // Should fail
+    assert!(response2.error.is_some()); // Should fail
 
     // Response should indicate error
-    let (headers, _) = parse_response(&res2.response);
+    let (headers, _) = parse_response(&response2.response);
     let status_line = headers.lines().next().unwrap();
     assert!(status_line.contains("453")); // Not Enough Bandwidth
 }
