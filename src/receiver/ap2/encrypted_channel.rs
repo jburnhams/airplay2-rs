@@ -172,10 +172,9 @@ impl EncryptedChannel {
 
         // Consume the frame
         let _ = self.input_buffer.get_u16_le(); // length prefix
-        let ciphertext: Vec<u8> = self
+        let ciphertext_with_tag = self
             .input_buffer
-            .split_to(plaintext_len + TAG_SIZE)
-            .to_vec();
+            .split_to(plaintext_len + TAG_SIZE);
 
         // Build nonce
         let nonce = Nonce::from_counter(self.decrypt_nonce);
@@ -186,9 +185,8 @@ impl EncryptedChannel {
             .map_err(|_| EncryptionError::DecryptionFailed)?;
 
         let plaintext = cipher
-            .decrypt(&nonce, &ciphertext)
+            .decrypt(&nonce, &ciphertext_with_tag)
             .map_err(|_| EncryptionError::DecryptionFailed)?;
-
         Ok(Some(plaintext))
     }
 
