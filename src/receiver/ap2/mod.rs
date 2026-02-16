@@ -23,6 +23,7 @@ pub mod session_state;
 pub mod setup_handler;
 pub mod stream;
 // pub mod receiver;
+pub mod encrypted_channel;
 // pub mod rtp_decryptor;
 // pub mod ptp_clock;
 // pub mod command_handler;

@@ -19,12 +19,27 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 pub trait RtpSender: Send + Sync {
     /// Send RTP audio packet
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError>;
+
+    /// Send PTP Time Announce control packet
+    async fn send_time_announce(
+        &self,
+        rtp_timestamp: u32,
+        sample_rate: u32,
+    ) -> Result<(), AirPlayError>;
 }
 
 #[async_trait]
 impl RtpSender for ConnectionManager {
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
         self.send_rtp_audio(packet).await
+    }
+
+    async fn send_time_announce(
+        &self,
+        rtp_timestamp: u32,
+        sample_rate: u32,
+    ) -> Result<(), AirPlayError> {
+        self.send_time_announce(rtp_timestamp, sample_rate).await
     }
 }
 
@@ -239,10 +254,15 @@ impl PcmStreamer {
         let mut packet_data = vec![0u8; bytes_per_packet];
         let mut cmd_rx = self.cmd_rx.lock().await;
 
-        // Use interval for precise timing
-        let mut interval = tokio::time::interval(packet_duration);
+        // Use interval for precise timing of audio packets
+        let mut audio_interval = tokio::time::interval(packet_duration);
+        audio_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
         // The first tick completes immediately
-        interval.tick().await;
+        audio_interval.tick().await;
+
+        // Use a separate interval for periodic time announcements (every 1 second)
+        let mut announce_interval = tokio::time::interval(Duration::from_secs(1));
+        announce_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         // Reusable buffer for refills
         let mut refill_buffer = vec![0u8; bytes_per_packet * 4];
@@ -258,175 +278,202 @@ impl PcmStreamer {
         let mut encoding_buffer = vec![0u8; 4096];
 
         loop {
-            // Wait for next tick
-            interval.tick().await;
+            tokio::select! {
+                // Audio packet processing
+                _ = audio_interval.tick() => {
+                    // Read from buffer
+                    let mut bytes_read = self.buffer.read(&mut packet_data);
+                    tracing::trace!(
+                        "Read {} bytes from buffer, available={}",
+                        bytes_read,
+                        self.buffer.available()
+                    );
 
-            // Check for commands
-            match cmd_rx.try_recv() {
-                Ok(StreamerCommand::Pause) => {
-                    *self.state.write().await = StreamerState::Paused;
-                    // Wait for resume
-                    loop {
-                        match cmd_rx.recv().await {
-                            Some(StreamerCommand::Resume) => break,
-                            Some(StreamerCommand::Stop) => {
-                                *self.state.write().await = StreamerState::Idle;
-                                return Ok(());
-                            }
-                            _ => {}
+                    if bytes_read == 0 {
+                        // Try to fill buffer
+                        let n = source
+                            .read(&mut refill_buffer)
+                            .map_err(|e| AirPlayError::IoError {
+                                message: "Read failed".to_string(),
+                                source: Some(Box::new(e)),
+                            })?;
+
+                        if n == 0 {
+                            // EOF
+                            tracing::debug!("Source EOF after {} packets sent", packets_sent);
+                            *self.state.write().await = StreamerState::Finished;
+                            return Ok(());
                         }
-                    }
-                    *self.state.write().await = StreamerState::Streaming;
-                }
-                Ok(StreamerCommand::Stop) => {
-                    *self.state.write().await = StreamerState::Idle;
-                    return Ok(());
-                }
-                Ok(StreamerCommand::Seek(pos)) => {
-                    if source.is_seekable() {
-                        source.seek(pos).map_err(|e| AirPlayError::IoError {
-                            message: "Seek failed".to_string(),
-                            source: Some(Box::new(e)),
-                        })?;
-                        self.buffer.clear();
-                        self.fill_buffer(&mut source)?;
-                    }
-                }
-                _ => {}
-            }
 
-            // Read from buffer
-            let bytes_read = self.buffer.read(&mut packet_data);
-            tracing::trace!(
-                "Read {} bytes from buffer, available={}",
-                bytes_read,
-                self.buffer.available()
-            );
-
-            if bytes_read == 0 {
-                // Try to fill buffer
-                let n = source
-                    .read(&mut refill_buffer)
-                    .map_err(|e| AirPlayError::IoError {
-                        message: "Read failed".to_string(),
-                        source: Some(Box::new(e)),
-                    })?;
-
-                if n == 0 {
-                    // EOF
-                    tracing::debug!("Source EOF after {} packets sent", packets_sent);
-                    *self.state.write().await = StreamerState::Finished;
-                    return Ok(());
-                }
-
-                self.buffer.write(&refill_buffer[..n]);
-                continue;
-            }
-
-            // Pad if needed
-            if bytes_read < bytes_per_packet {
-                packet_data[bytes_read..].fill(0);
-            }
-
-            // Encode payload
-            let encoded_payload: Cow<'_, [u8]> = {
-                match codec_type {
-                    AudioCodec::Alac => {
-                        let mut encoder_guard = self.encoder.lock().await;
-                        if let Some(encoder) = encoder_guard.as_mut() {
-                            // alac-encoder 0.3.0 expects byte slice of PCM data
-                            // and a FormatDescription for that input
-                            let input_format = alac_encoder::FormatDescription::pcm::<i16>(
-                                f64::from(self.format.sample_rate.as_u32()),
-                                u32::from(self.format.channels.channels()),
-                            );
-
-                            // Ensure encoding buffer has enough capacity
-                            if encoding_buffer.len() < 4096 {
-                                encoding_buffer.resize(4096, 0);
-                            }
-
-                            let size =
-                                encoder.encode(&input_format, &packet_data, &mut encoding_buffer);
-                            // Safety: clamp size to buffer length to prevent panic if encoder returns a size
-                            // larger than the buffer (which would have been safe with the original .truncate(size))
-                            let safe_size = size.min(encoding_buffer.len());
-                            Cow::Borrowed(&encoding_buffer[..safe_size])
-                        } else {
-                            Cow::Borrowed(&packet_data)
-                        }
-                    }
-                    AudioCodec::Aac => {
-                        let mut encoder_guard = self.encoder_aac.lock().await;
-                        if let Some(encoder) = encoder_guard.as_mut() {
-                            // Convert bytes to i16 (Little Endian)
-                            // We assume input is always I16 Little Endian (standard AirPlay/PCM)
-                            samples_buffer.clear();
-                            samples_buffer.extend(
-                                packet_data
-                                    .chunks_exact(2)
-                                    .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]])),
-                            );
-
-                            match encoder.encode(&samples_buffer) {
-                                Ok(encoded) => {
-                                    // Add AU Header Section for mpeg4-generic (RFC 3640)
-                                    // AU-headers-length: 16 bits (0x0010) = 16
-                                    // AU-header: size (13 bits) | index (3 bits)
-                                    let mut payload = Vec::with_capacity(4 + encoded.len());
-                                    payload.extend_from_slice(&[0x00, 0x10]);
-
-                                    // AAC frames are small enough to fit in u16
-                                    #[allow(clippy::cast_possible_truncation)]
-                                    let size = encoded.len() as u16;
-                                    let header = (size << 3) & 0xFFF8;
-                                    payload.extend_from_slice(&header.to_be_bytes());
-
-                                    payload.extend_from_slice(&encoded);
-                                    Cow::Owned(payload)
-                                }
-                                Err(e) => {
-                                    tracing::error!("AAC encoding error: {}", e);
-                                    Cow::Borrowed(&packet_data) // Fallback (will likely sound like static)
-                                }
-                            }
-                        } else {
-                            Cow::Borrowed(&packet_data)
-                        }
-                    }
-                    _ => Cow::Borrowed(&packet_data),
-                }
-            };
-
-            // Encrypt and wrap in RTP
-            rtp_packet_buffer.clear();
-            {
-                let mut codec = self.rtp_codec.lock().await;
-                codec
-                    .encode_arbitrary_payload(&encoded_payload, &mut rtp_packet_buffer)
-                    .map_err(|e| AirPlayError::RtpError {
-                        message: e.to_string(),
-                    })?;
-            }
-
-            // Send packet
-            self.send_packet(&rtp_packet_buffer).await?;
-            packets_sent += 1;
-            if packets_sent == 1 {
-                tracing::info!(
-                    "First RTP audio packet sent ({} bytes)",
-                    rtp_packet_buffer.len()
-                );
-            }
-            if packets_sent % 100 == 0 {
-                tracing::info!("Sent {} RTP packets", packets_sent);
-            }
-
-            // Refill buffer in background
-            if self.buffer.is_underrunning() {
-                if let Ok(n) = source.read(&mut refill_buffer) {
-                    if n > 0 {
                         self.buffer.write(&refill_buffer[..n]);
+
+                        // Try to read again from the refilled buffer
+                        bytes_read = self.buffer.read(&mut packet_data);
+                    }
+
+                    // Pad if needed
+                    if bytes_read < bytes_per_packet {
+                        packet_data[bytes_read..].fill(0);
+                    }
+
+                    // Encode payload
+                    let encoded_payload: Cow<'_, [u8]> = {
+                        match codec_type {
+                            AudioCodec::Alac => {
+                                let mut encoder_guard = self.encoder.lock().await;
+                                if let Some(encoder) = encoder_guard.as_mut() {
+                                    // alac-encoder 0.3.0 expects byte slice of PCM data
+                                    // and a FormatDescription for that input
+                                    let input_format = alac_encoder::FormatDescription::pcm::<i16>(
+                                        f64::from(self.format.sample_rate.as_u32()),
+                                        u32::from(self.format.channels.channels()),
+                                    );
+
+                                    // Ensure encoding buffer has enough capacity
+                                    if encoding_buffer.len() < 4096 {
+                                        encoding_buffer.resize(4096, 0);
+                                    }
+
+                                    let size =
+                                        encoder.encode(&input_format, &packet_data, &mut encoding_buffer);
+                                    // Safety: clamp size to buffer length to prevent panic if encoder returns a size
+                                    // larger than the buffer (which would have been safe with the original .truncate(size))
+                                    let safe_size = size.min(encoding_buffer.len());
+                                    Cow::Borrowed(&encoding_buffer[..safe_size])
+                                } else {
+                                    Cow::Borrowed(&packet_data)
+                                }
+                            }
+                            AudioCodec::Aac => {
+                                let mut encoder_guard = self.encoder_aac.lock().await;
+                                if let Some(encoder) = encoder_guard.as_mut() {
+                                    // Convert bytes to i16 (Little Endian)
+                                    // We assume input is always I16 Little Endian (standard AirPlay/PCM)
+                                    samples_buffer.clear();
+                                    samples_buffer.extend(
+                                        packet_data
+                                            .chunks_exact(2)
+                                            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]])),
+                                    );
+
+                                    match encoder.encode(&samples_buffer) {
+                                        Ok(encoded) => {
+                                            // Add AU Header Section for mpeg4-generic (RFC 3640)
+                                            // AU-headers-length: 16 bits (0x0010) = 16
+                                            // AU-header: size (13 bits) | index (3 bits)
+                                            let mut payload = Vec::with_capacity(4 + encoded.len());
+                                            payload.extend_from_slice(&[0x00, 0x10]);
+
+                                            // AAC frames are small enough to fit in u16
+                                            #[allow(clippy::cast_possible_truncation)]
+                                            let size = encoded.len() as u16;
+                                            let header = (size << 3) & 0xFFF8;
+                                            payload.extend_from_slice(&header.to_be_bytes());
+
+                                            payload.extend_from_slice(&encoded);
+                                            Cow::Owned(payload)
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("AAC encoding error: {}", e);
+                                            Cow::Borrowed(&packet_data) // Fallback (will likely sound like static)
+                                        }
+                                    }
+                                } else {
+                                    Cow::Borrowed(&packet_data)
+                                }
+                            }
+                            _ => Cow::Borrowed(&packet_data),
+                        }
+                    };
+
+                    // Encrypt and wrap in RTP
+                    rtp_packet_buffer.clear();
+                    {
+                        let mut codec = self.rtp_codec.lock().await;
+                        codec
+                            .encode_arbitrary_payload(&encoded_payload, &mut rtp_packet_buffer)
+                            .map_err(|e| AirPlayError::RtpError {
+                                message: e.to_string(),
+                            })?;
+                    }
+
+                    // Send packet
+                    self.send_packet(&rtp_packet_buffer).await?;
+                    packets_sent += 1;
+                    if packets_sent == 1 {
+                        tracing::info!(
+                            "First RTP audio packet sent ({} bytes)",
+                            rtp_packet_buffer.len()
+                        );
+                    }
+                    if packets_sent % 100 == 0 {
+                        tracing::info!("Sent {} RTP packets", packets_sent);
+                    }
+
+                    // Refill buffer in background
+                    if self.buffer.is_underrunning() {
+                        if let Ok(n) = source.read(&mut refill_buffer) {
+                            if n > 0 {
+                                self.buffer.write(&refill_buffer[..n]);
+                            }
+                        }
+                    }
+                }
+
+                // Time Announcement
+                _ = announce_interval.tick() => {
+                     // Get current RTP timestamp from codec
+                    let rtp_ts = self.rtp_codec.lock().await.timestamp();
+                    if let Err(e) = self
+                        .connection
+                        .send_time_announce(rtp_ts, self.format.sample_rate.as_u32())
+                        .await
+                    {
+                        tracing::warn!("Failed to send Time Announce: {}", e);
+                    }
+                }
+
+                // Command processing
+                cmd = cmd_rx.recv() => {
+                    match cmd {
+                        Some(StreamerCommand::Pause) => {
+                            *self.state.write().await = StreamerState::Paused;
+                            // Wait for resume
+                            loop {
+                                match cmd_rx.recv().await {
+                                    Some(StreamerCommand::Resume) => break,
+                                    Some(StreamerCommand::Stop) => {
+                                        *self.state.write().await = StreamerState::Idle;
+                                        return Ok(());
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            *self.state.write().await = StreamerState::Streaming;
+                            // Reset intervals to avoid burst?
+                            // audio_interval.reset();
+                        }
+                        Some(StreamerCommand::Stop) => {
+                            *self.state.write().await = StreamerState::Idle;
+                            return Ok(());
+                        }
+                        Some(StreamerCommand::Seek(pos)) => {
+                            if source.is_seekable() {
+                                source.seek(pos).map_err(|e| AirPlayError::IoError {
+                                    message: "Seek failed".to_string(),
+                                    source: Some(Box::new(e)),
+                                })?;
+                                self.buffer.clear();
+                                self.fill_buffer(&mut source)?;
+                            }
+                        }
+                        None => {
+                            // Channel closed
+                            tracing::debug!("Command channel closed, stopping streamer");
+                            *self.state.write().await = StreamerState::Idle;
+                            return Ok(());
+                        }
+                        _ => {}
                     }
                 }
             }
