@@ -8,6 +8,8 @@ pub mod advertisement;
 pub mod body_handler;
 pub mod capabilities;
 pub mod config;
+pub mod encrypted_channel;
+pub mod encrypted_rtsp;
 pub mod features;
 pub mod info_endpoint;
 pub mod pairing_handlers;

@@ -110,13 +110,17 @@ impl EncryptedChannel {
         // Encrypt with AEAD
         let cipher = ChaCha20Poly1305Cipher::new(&self.encrypt_key)
             .map_err(|_| EncryptionError::EncryptionFailed)?;
+
         let ciphertext = cipher
             .encrypt(&nonce, plaintext)
             .map_err(|_| EncryptionError::EncryptionFailed)?;
 
         // Build frame: length (2 bytes LE) + ciphertext (includes tag)
         let mut frame = Vec::with_capacity(LENGTH_SIZE + ciphertext.len());
-        frame.put_u16_le(u16::try_from(plaintext.len()).unwrap());
+        // We've already checked that plaintext.len() <= MAX_FRAME_SIZE (u16::MAX),
+        // so this cast is safe.
+        frame.put_u16_le(plaintext.len() as u16);
+
         frame.extend_from_slice(&ciphertext);
 
         Ok(frame)
@@ -130,7 +134,7 @@ impl EncryptedChannel {
     /// Try to decrypt a complete frame from the buffer
     ///
     /// # Errors
-    /// Returns `EncryptionError` if the frame is invalid or decryption fails.
+    /// Returns `EncryptionError` if decryption fails or frame length is invalid.
     pub fn decrypt(&mut self) -> Result<Option<Vec<u8>>, EncryptionError> {
         if !self.enabled {
             // Passthrough mode - return entire buffer
