@@ -300,7 +300,12 @@ fn test_setup_missing_streams() {
     let result = handler.handle(&request, 1, &context);
 
     assert!(result.error.is_some());
-    assert!(result.error.unwrap().contains("Missing required field: streams"));
+    assert!(
+        result
+            .error
+            .unwrap()
+            .contains("Missing required field: streams")
+    );
 }
 
 #[test]

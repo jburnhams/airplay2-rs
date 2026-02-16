@@ -1109,7 +1109,11 @@ impl ConnectionManager {
 
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-            time_sock.connect((device_ip, server_time_port)).await?;
+            if server_time_port > 0 {
+                time_sock.connect((device_ip, server_time_port)).await?;
+            } else {
+                tracing::info!("Server timing port is 0, skipping UDP connection for timing socket");
+            }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
