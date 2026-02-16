@@ -108,15 +108,18 @@ impl EncryptedChannel {
         let cipher = ChaCha20Poly1305Cipher::new(&self.encrypt_key)
             .map_err(|_| EncryptionError::EncryptionFailed)?;
 
-        let ciphertext = cipher
-            .encrypt(&nonce, plaintext)
+        let ciphertext = cipher.encrypt(&nonce, plaintext)
             .map_err(|_| EncryptionError::EncryptionFailed)?;
 
         // Build frame: length (2 bytes LE) + ciphertext (includes tag)
         let mut frame = Vec::with_capacity(LENGTH_SIZE + ciphertext.len());
-        // We've already checked that plaintext.len() <= MAX_FRAME_SIZE (u16::MAX),
-        // so this cast is safe.
-        frame.put_u16_le(plaintext.len() as u16);
+        // frame.put_u16_le(plaintext.len() as u16);
+        // clippy::cast_possible_truncation: we checked length against MAX_FRAME_SIZE (65535)
+        // so it fits in u16.
+        frame.put_u16_le(u16::try_from(plaintext.len()).map_err(|_| EncryptionError::MessageTooLarge {
+             size: plaintext.len(),
+             max: MAX_FRAME_SIZE,
+        })?);
 
         frame.extend_from_slice(&ciphertext);
 
@@ -148,8 +151,10 @@ impl EncryptedChannel {
         }
 
         // Read length (peek, don't consume yet)
-        let plaintext_len =
-            u16::from_le_bytes([self.input_buffer[0], self.input_buffer[1]]) as usize;
+        let plaintext_len = u16::from_le_bytes([
+            self.input_buffer[0],
+            self.input_buffer[1],
+        ]) as usize;
 
         // Validate length
         if plaintext_len > MAX_FRAME_SIZE {
@@ -166,9 +171,7 @@ impl EncryptedChannel {
 
         // Consume the frame
         let _ = self.input_buffer.get_u16_le(); // length prefix
-        let ciphertext_with_tag = self
-            .input_buffer
-            .split_to(plaintext_len + TAG_SIZE);
+        let ciphertext: Vec<u8> = self.input_buffer.split_to(plaintext_len + TAG_SIZE).to_vec();
 
         // Build nonce
         let nonce = Nonce::from_counter(self.decrypt_nonce);
@@ -176,11 +179,11 @@ impl EncryptedChannel {
 
         // Decrypt with AEAD
         let cipher = ChaCha20Poly1305Cipher::new(&self.decrypt_key)
+             .map_err(|_| EncryptionError::DecryptionFailed)?;
+
+        let plaintext = cipher.decrypt(&nonce, &ciphertext)
             .map_err(|_| EncryptionError::DecryptionFailed)?;
 
-        let plaintext = cipher
-            .decrypt(&nonce, &ciphertext_with_tag)
-            .map_err(|_| EncryptionError::DecryptionFailed)?;
         Ok(Some(plaintext))
     }
 
