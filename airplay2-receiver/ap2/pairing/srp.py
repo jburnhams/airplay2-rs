@@ -105,19 +105,19 @@ class SRPServer():
 
     @property
     def salt(self):
-        return to_bytes(self.s)
+        return to_bytes_padded(self.s, 16)
 
     @property
     def public_key(self):
-        return to_bytes(self.B)
+        return to_bytes_padded(self.B, PAD_L)
 
     @property
     def proof(self):
-        return to_bytes(self.M2)
+        return to_bytes_padded(self.M2, 64)
 
     @property
     def session_key(self):
-        return to_bytes(self.K)
+        return to_bytes_padded(self.K, 64)
 
     def set_client_public(self, A):
         self.A = from_bytes(A)
