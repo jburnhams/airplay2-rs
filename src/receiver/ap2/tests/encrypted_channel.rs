@@ -116,14 +116,13 @@ fn test_wrong_key_fails() {
 
     // Decryption should fail authentication
     let result = receiver.decrypt();
-    println!("Decryption result: {:?}", result);
     assert!(matches!(result, Err(EncryptionError::DecryptionFailed)));
 }
 
 #[test]
 fn test_nonce_format() {
     use crate::protocol::crypto::Nonce;
-    let nonce = Nonce::from_counter(0x0102030405060708);
+    let nonce = Nonce::from_counter(0x0102_0304_0506_0708);
     let nonce_bytes = nonce.as_bytes();
 
     // First 4 bytes zero, last 8 bytes are counter LE
