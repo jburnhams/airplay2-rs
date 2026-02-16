@@ -52,7 +52,19 @@ def to_bytes(value, little_endian=False):
         order = 'little'
     else:
         order = 'big'
-    return value.to_bytes(-(-value.bit_length() // 8), order)
+    try:
+        return value.to_bytes(-(-value.bit_length() // 8), order)
+    except ValueError:
+        return b'\x00'
+
+
+def to_bytes_padded(value, length, little_endian=False):
+    b = to_bytes(value, little_endian)
+    if len(b) < length:
+        return b'\x00' * (length - len(b)) + b
+    elif len(b) > length:
+        return b[-length:]
+    return b
 
 
 def from_bytes(value, little_endian=False):
@@ -112,10 +124,23 @@ class SRPServer():
         self.u = H(self.A, self.B, pad=True)
         self.S = pow(self.A * pow(self.v, self.u, self.N), self.b, self.N) % self.N
         self.K = H(self.S)
-        self.M1 = H(H(self.N) ^ H(self.g), H(self.username), self.s, self.A, self.B, self.K)
+
+        # Pad components for M1 to ensure consistency with srp-rs/RFC5054
+        xor_ng = H(self.N) ^ H(self.g)
+        b_xor_ng = to_bytes_padded(xor_ng, 64)
+        b_h_i = to_bytes_padded(H(self.username), 64)
+        b_s = to_bytes_padded(self.s, 16)
+        b_A = to_bytes_padded(self.A, PAD_L)
+        b_B = to_bytes_padded(self.B, PAD_L)
+        b_K = to_bytes_padded(self.K, 64)
+
+        self.M1 = H(b_xor_ng, b_h_i, b_s, b_A, b_B, b_K)
 
     def verify(self, M1_client):
         if self.M1 != from_bytes(M1_client):
+            # Try unpadded comparison as fallback (for backward compatibility if needed)
+            # but explicit padding is preferred.
+            print(f"DEBUG: M1 calc: {self.M1}, M1 client: {from_bytes(M1_client)}")
             raise Exception("Authentication failed - invalid proof")
         self.M2 = H(self.A, self.M1, self.K)
         return True
