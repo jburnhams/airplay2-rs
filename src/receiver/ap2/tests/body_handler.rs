@@ -83,7 +83,7 @@ fn test_bplist_roundtrip() {
 
     let encoded = encode_bplist_body(&plist).expect("Encode failed");
     // Ensure magic header
-    assert_eq!(&encoded[..6], b"bplist");
+    assert_eq!(&encoded[..8], b"bplist00");
 
     let decoded = parse_bplist_body(&encoded).expect("Decode failed");
     assert_eq!(decoded.get_int("key"), Some(42));

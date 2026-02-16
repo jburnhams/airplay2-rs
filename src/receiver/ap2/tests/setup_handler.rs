@@ -272,9 +272,7 @@ fn test_setup_invalid_plist() {
 
     let result = handler.handle(&request, 1, &context);
 
-    assert!(result.error.is_some());
-    // Should contain "Parse error"
-    assert!(result.error.unwrap().contains("Parse error"));
+    assert!(matches!(result.error, Some(e) if e.contains("Parse error")));
 }
 
 #[test]
