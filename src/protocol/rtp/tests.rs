@@ -4,6 +4,7 @@ mod extra_packet;
 mod packet;
 mod packet_buffer;
 mod packet_extra;
+mod packet_proptest;
 mod raop;
 mod raop_timing;
 mod timing;
