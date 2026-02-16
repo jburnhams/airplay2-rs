@@ -16,6 +16,14 @@ impl RtpSender for MockRtpSender {
         self.packets.lock().unwrap().push(packet.to_vec());
         Ok(())
     }
+
+    async fn send_time_announce(
+        &self,
+        _rtp_timestamp: u32,
+        _sample_rate: u32,
+    ) -> Result<(), AirPlayError> {
+        Ok(())
+    }
 }
 
 #[tokio::test]

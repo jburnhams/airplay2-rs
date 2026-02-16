@@ -108,3 +108,45 @@ fn test_control_packet_unknown_payload() {
         Err(RtpDecodeError::UnknownPayloadType(0x19))
     ));
 }
+
+#[test]
+fn test_control_packet_time_announce_ptp() {
+    let packet = ControlPacket::TimeAnnouncePtp {
+        rtp_timestamp: 0xAABBCCDD,
+        ptp_timestamp: 0x1122334455667788,
+        rtp_timestamp_next: 0xEEFF0011,
+        clock_identity: 0x9988776655443322,
+    };
+
+    let encoded = packet.encode();
+    assert_eq!(encoded.len(), 28);
+
+    // Header
+    assert_eq!(encoded[0], 0x80);
+    assert_eq!(encoded[1], 0xD7); // 215
+    assert_eq!(encoded[2], 0x00);
+    assert_eq!(encoded[3], 0x06); // length 6
+
+    // Payload
+    assert_eq!(encoded[4..8], [0xAA, 0xBB, 0xCC, 0xDD]);
+    assert_eq!(encoded[8..16], [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]);
+    assert_eq!(encoded[16..20], [0xEE, 0xFF, 0x00, 0x11]);
+    assert_eq!(encoded[20..28], [0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22]);
+
+    // Decode back
+    let decoded = ControlPacket::decode(&encoded).unwrap();
+    if let ControlPacket::TimeAnnouncePtp {
+        rtp_timestamp,
+        ptp_timestamp,
+        rtp_timestamp_next,
+        clock_identity,
+    } = decoded
+    {
+        assert_eq!(rtp_timestamp, 0xAABBCCDD);
+        assert_eq!(ptp_timestamp, 0x1122334455667788);
+        assert_eq!(rtp_timestamp_next, 0xEEFF0011);
+        assert_eq!(clock_identity, 0x9988776655443322);
+    } else {
+        panic!("Expected TimeAnnouncePtp packet");
+    }
+}

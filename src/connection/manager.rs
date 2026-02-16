@@ -1482,6 +1482,55 @@ impl ConnectionManager {
         }
     }
 
+    /// Send PTP Time Announce control packet
+    ///
+    /// # Errors
+    ///
+    /// Returns error if sockets are not connected or send fails
+    pub async fn send_time_announce(
+        &self,
+        rtp_timestamp: u32,
+        sample_rate: u32,
+    ) -> Result<(), AirPlayError> {
+        let (ptp_time, clock_id) = {
+            let clock_guard = self.ptp_clock.lock().await;
+            if let Some(clock) = clock_guard.as_ref() {
+                let clock = clock.read().await;
+                (
+                    crate::protocol::ptp::timestamp::PtpTimestamp::now(),
+                    clock.clock_id(),
+                )
+            } else {
+                return Ok(()); // PTP not active, skip
+            }
+        };
+
+        let ptp_nanos = u64::try_from(ptp_time.to_nanos()).unwrap_or(0);
+
+        let packet = crate::protocol::rtp::ControlPacket::TimeAnnouncePtp {
+            rtp_timestamp,
+            ptp_timestamp: ptp_nanos,
+            rtp_timestamp_next: rtp_timestamp.wrapping_add(sample_rate),
+            clock_identity: clock_id,
+        };
+
+        let encoded = packet.encode();
+
+        let sockets = self.sockets.lock().await;
+        if let Some(ref socks) = *sockets {
+            socks
+                .control
+                .send(&encoded)
+                .await
+                .map_err(|e| AirPlayError::RtspError {
+                    message: format!("Failed to send TimeAnnounce: {e}"),
+                    status_code: None,
+                })?;
+        }
+
+        Ok(())
+    }
+
     /// Send an arbitrary RTSP command
     ///
     /// # Errors

@@ -19,12 +19,27 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 pub trait RtpSender: Send + Sync {
     /// Send RTP audio packet
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError>;
+
+    /// Send PTP Time Announce control packet
+    async fn send_time_announce(
+        &self,
+        rtp_timestamp: u32,
+        sample_rate: u32,
+    ) -> Result<(), AirPlayError>;
 }
 
 #[async_trait]
 impl RtpSender for ConnectionManager {
     async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
         self.send_rtp_audio(packet).await
+    }
+
+    async fn send_time_announce(
+        &self,
+        rtp_timestamp: u32,
+        sample_rate: u32,
+    ) -> Result<(), AirPlayError> {
+        self.send_time_announce(rtp_timestamp, sample_rate).await
     }
 }
 
@@ -257,9 +272,26 @@ impl PcmStreamer {
         // Reusable buffer for encoding output to avoid allocations
         let mut encoding_buffer = vec![0u8; 4096];
 
+        // Last time announce timestamp (to send every 1s)
+        let mut last_announce = std::time::Instant::now();
+
         loop {
             // Wait for next tick
             interval.tick().await;
+
+            // Send Time Announce every 1 second
+            if last_announce.elapsed() >= Duration::from_secs(1) {
+                // Get current RTP timestamp from codec
+                let rtp_ts = self.rtp_codec.lock().await.timestamp();
+                if let Err(e) = self
+                    .connection
+                    .send_time_announce(rtp_ts, self.format.sample_rate.as_u32())
+                    .await
+                {
+                    tracing::warn!("Failed to send Time Announce: {}", e);
+                }
+                last_announce = std::time::Instant::now();
+            }
 
             // Check for commands
             match cmd_rx.try_recv() {
