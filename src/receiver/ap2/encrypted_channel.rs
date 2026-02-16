@@ -114,15 +114,9 @@ impl EncryptedChannel {
 
         // Build frame: length (2 bytes LE) + ciphertext (includes tag)
         let mut frame = Vec::with_capacity(LENGTH_SIZE + ciphertext.len());
-        // frame.put_u16_le(plaintext.len() as u16);
-        // clippy::cast_possible_truncation: we checked length against MAX_FRAME_SIZE (65535)
-        // so it fits in u16.
-        frame.put_u16_le(u16::try_from(plaintext.len()).map_err(|_| {
-            EncryptionError::MessageTooLarge {
-                size: plaintext.len(),
-                max: MAX_FRAME_SIZE,
-            }
-        })?);
+        // We've already checked that plaintext.len() <= MAX_FRAME_SIZE (u16::MAX),
+        // so this cast is safe.
+        frame.put_u16_le(plaintext.len() as u16);
 
         frame.extend_from_slice(&ciphertext);
 
