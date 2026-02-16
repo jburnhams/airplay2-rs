@@ -3,7 +3,7 @@ use crate::protocol::rtsp::{Method, RtspRequest};
 use crate::receiver::ap2::body_handler::{encode_bplist_body, parse_bplist_body};
 use crate::receiver::ap2::request_handler::{Ap2Event, Ap2RequestContext};
 use crate::receiver::ap2::session_state::Ap2SessionState;
-use crate::receiver::ap2::setup_handler::{SetupHandler, SetupPhase};
+use crate::receiver::ap2::setup_handler::{PortAllocator, SetupHandler, SetupPhase};
 use crate::receiver::ap2::stream::{EncryptionType, TimingProtocol};
 use std::collections::HashMap;
 
@@ -254,4 +254,84 @@ fn test_response_contains_ports() {
     } else {
         panic!("Response is not a dictionary");
     }
+}
+
+#[test]
+fn test_setup_invalid_plist() {
+    let handler = SetupHandler::new(50000, 50100, 22050);
+    let state = Ap2SessionState::Connected;
+    let context = Ap2RequestContext {
+        state: &state,
+        session_id: None,
+        encrypted: false,
+        decrypt: None,
+    };
+
+    let body = b"invalid plist data";
+    let request = create_setup_request(body);
+
+    let result = handler.handle(&request, 1, &context);
+
+    assert!(matches!(result.error, Some(e) if e.contains("Parse error")));
+}
+
+#[test]
+fn test_setup_missing_streams() {
+    let handler = SetupHandler::new(50000, 50100, 22050);
+    let state = Ap2SessionState::Connected;
+    let context = Ap2RequestContext {
+        state: &state,
+        session_id: None,
+        encrypted: false,
+        decrypt: None,
+    };
+
+    let mut dict = HashMap::new();
+    dict.insert(
+        "timingProtocol".to_string(),
+        PlistValue::String("NTP".to_string()),
+    );
+    // Missing "streams" key
+    let body = encode_bplist_body(&PlistValue::Dictionary(dict)).unwrap();
+    let request = create_setup_request(&body);
+
+    let result = handler.handle(&request, 1, &context);
+
+    assert!(result.error.is_some());
+    assert!(
+        result
+            .error
+            .unwrap()
+            .contains("Missing required field: streams")
+    );
+}
+
+#[test]
+fn test_port_allocator() {
+    let mut allocator = PortAllocator::new(1000, 1002);
+
+    // Allocate 3 ports
+    let p1 = allocator.allocate().expect("p1");
+    let p2 = allocator.allocate().expect("p2");
+    let p3 = allocator.allocate().expect("p3");
+
+    assert_eq!(p1, 1000);
+    assert_eq!(p2, 1001);
+    assert_eq!(p3, 1002);
+
+    // Exhausted
+    assert!(matches!(
+        allocator.allocate(),
+        Err(crate::receiver::ap2::setup_handler::PortAllocationError::NoPortsAvailable)
+    ));
+
+    // Release middle
+    allocator.release(1001);
+    let p4 = allocator.allocate().expect("p4");
+    assert_eq!(p4, 1001);
+
+    // Release end and wrap around behavior
+    allocator.release(1002);
+    let p5 = allocator.allocate().expect("p5");
+    assert_eq!(p5, 1002);
 }
