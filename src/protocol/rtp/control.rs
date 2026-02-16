@@ -84,7 +84,7 @@ impl ControlPacket {
     pub fn encode(&self) -> Vec<u8> {
         match self {
             ControlPacket::RetransmitRequest(req) => req.encode(0), // SSRC 0 placeholder?
-            ControlPacket::Sync { .. } => Vec::new(),               // Not implemented for encoding yet
+            ControlPacket::Sync { .. } => Vec::new(), // Not implemented for encoding yet
             ControlPacket::TimeAnnouncePtp {
                 rtp_timestamp,
                 ptp_timestamp,
@@ -136,16 +136,20 @@ impl ControlPacket {
             }
             return Ok(ControlPacket::TimeAnnouncePtp {
                 rtp_timestamp: u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]),
-                ptp_timestamp: u64::from_be_bytes([buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]]),
+                ptp_timestamp: u64::from_be_bytes([
+                    buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15],
+                ]),
                 rtp_timestamp_next: u32::from_be_bytes([buf[16], buf[17], buf[18], buf[19]]),
-                clock_identity: u64::from_be_bytes([buf[20], buf[21], buf[22], buf[23], buf[24], buf[25], buf[26], buf[27]]),
+                clock_identity: u64::from_be_bytes([
+                    buf[20], buf[21], buf[22], buf[23], buf[24], buf[25], buf[26], buf[27],
+                ]),
             });
         }
 
         match payload_type_masked {
             0x55 => {
                 if buf.len() < 12 {
-                     return Err(RtpDecodeError::BufferTooSmall {
+                    return Err(RtpDecodeError::BufferTooSmall {
                         needed: 12,
                         have: buf.len(),
                     });

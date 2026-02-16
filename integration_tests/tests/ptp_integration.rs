@@ -4,8 +4,8 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 mod common;
-use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioCodec, TimingProtocol};
-use common::python_receiver::{PythonReceiver, TestSineSource, ReceiverOutput};
+use airplay2::{AirPlayClient, AirPlayConfig, TimingProtocol, audio::AudioCodec};
+use common::python_receiver::{PythonReceiver, ReceiverOutput, TestSineSource};
 
 #[tokio::test]
 async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,15 +82,15 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if has_setpeers {
-             tracing::info!("✓ Receiver logs contain 'SETPEERS'");
+            tracing::info!("✓ Receiver logs contain 'SETPEERS'");
         } else {
-             tracing::warn!("Receiver logs DO NOT contain 'SETPEERS'");
+            tracing::warn!("Receiver logs DO NOT contain 'SETPEERS'");
         }
 
         if has_time_announce {
-             tracing::info!("✓ Receiver logs contain 'TIME_ANNOUNCE_PTP'");
+            tracing::info!("✓ Receiver logs contain 'TIME_ANNOUNCE_PTP'");
         } else {
-             tracing::warn!("Receiver logs DO NOT contain 'TIME_ANNOUNCE_PTP'");
+            tracing::warn!("Receiver logs DO NOT contain 'TIME_ANNOUNCE_PTP'");
         }
 
         // Assert that we at least tried to use PTP
