@@ -78,20 +78,26 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
         if has_ptp {
             tracing::info!("✓ Receiver logs contain 'PTP'");
         } else {
-            tracing::warn!("Receiver logs DO NOT contain 'PTP'. Logs:\n{}", logs);
+            tracing::error!("Receiver logs DO NOT contain 'PTP'. Logs:\n{}", logs);
         }
+        assert!(has_ptp, "Receiver logs should contain 'PTP'");
 
         if has_setpeers {
             tracing::info!("✓ Receiver logs contain 'SETPEERS'");
         } else {
-            tracing::warn!("Receiver logs DO NOT contain 'SETPEERS'");
+            tracing::error!("Receiver logs DO NOT contain 'SETPEERS'");
         }
+        assert!(has_setpeers, "Receiver logs should contain 'SETPEERS'");
 
         if has_time_announce {
             tracing::info!("✓ Receiver logs contain 'TIME_ANNOUNCE_PTP'");
         } else {
-            tracing::warn!("Receiver logs DO NOT contain 'TIME_ANNOUNCE_PTP'");
+            tracing::error!("Receiver logs DO NOT contain 'TIME_ANNOUNCE_PTP'");
         }
+        assert!(
+            has_time_announce,
+            "Receiver logs should contain 'TIME_ANNOUNCE_PTP'"
+        );
 
         // Assert that we at least tried to use PTP
         // Note: The python receiver might not log "PTP" explicitly if debug logging isn't high enough,
