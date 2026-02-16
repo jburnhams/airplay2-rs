@@ -46,7 +46,7 @@ After Pairing:
 
 ### 53.1 Encrypted Channel Codec
 
-- [ ] **53.1.1** Implement the encrypted channel codec
+- [x] **53.1.1** Implement the encrypted channel codec
 
 **File:** `src/receiver/ap2/encrypted_channel.rs`
 
@@ -410,7 +410,7 @@ mod tests {
 
 ### 53.2 Integration with RTSP Handler
 
-- [ ] **53.2.1** Wrap RTSP handling with encryption layer
+- [x] **53.2.1** Wrap RTSP handling with encryption layer
 
 **File:** `src/receiver/ap2/encrypted_rtsp.rs`
 
@@ -619,15 +619,15 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Encryption uses ChaCha20-Poly1305 AEAD
-- [ ] Nonces increment correctly for each direction
-- [ ] Frame format matches HAP specification
-- [ ] Partial frames handled correctly
-- [ ] Authentication failures detected
-- [ ] Plaintext mode works pre-pairing
-- [ ] Seamless transition to encrypted mode
-- [ ] RTSP parsing works with encrypted data
-- [ ] All unit tests pass
+- [x] Encryption uses ChaCha20-Poly1305 AEAD
+- [x] Nonces increment correctly for each direction
+- [x] Frame format matches HAP specification
+- [x] Partial frames handled correctly
+- [x] Authentication failures detected
+- [x] Plaintext mode works pre-pairing
+- [x] Seamless transition to encrypted mode
+- [x] RTSP parsing works with encrypted data
+- [x] All unit tests pass
 
 ---
 
