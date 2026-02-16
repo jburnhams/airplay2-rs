@@ -90,7 +90,7 @@ fn test_control_packet_decode_sync() {
 
 #[test]
 fn test_control_packet_buffer_too_small() {
-    let buf = [0u8; 5];
+    let buf = [0u8; 3];
     let result = ControlPacket::decode(&buf);
     assert!(matches!(result, Err(RtpDecodeError::BufferTooSmall { .. })));
 }
@@ -112,10 +112,10 @@ fn test_control_packet_unknown_payload() {
 #[test]
 fn test_control_packet_time_announce_ptp() {
     let packet = ControlPacket::TimeAnnouncePtp {
-        rtp_timestamp: 0xAABBCCDD,
-        ptp_timestamp: 0x1122334455667788,
-        rtp_timestamp_next: 0xEEFF0011,
-        clock_identity: 0x9988776655443322,
+        rtp_timestamp: 0xAABB_CCDD,
+        ptp_timestamp: 0x1122_3344_5566_7788,
+        rtp_timestamp_next: 0xEEFF_0011,
+        clock_identity: 0x9988_7766_5544_3322,
     };
 
     let encoded = packet.encode();
@@ -129,9 +129,15 @@ fn test_control_packet_time_announce_ptp() {
 
     // Payload
     assert_eq!(encoded[4..8], [0xAA, 0xBB, 0xCC, 0xDD]);
-    assert_eq!(encoded[8..16], [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]);
+    assert_eq!(
+        encoded[8..16],
+        [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+    );
     assert_eq!(encoded[16..20], [0xEE, 0xFF, 0x00, 0x11]);
-    assert_eq!(encoded[20..28], [0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22]);
+    assert_eq!(
+        encoded[20..28],
+        [0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22]
+    );
 
     // Decode back
     let decoded = ControlPacket::decode(&encoded).unwrap();
@@ -142,10 +148,10 @@ fn test_control_packet_time_announce_ptp() {
         clock_identity,
     } = decoded
     {
-        assert_eq!(rtp_timestamp, 0xAABBCCDD);
-        assert_eq!(ptp_timestamp, 0x1122334455667788);
-        assert_eq!(rtp_timestamp_next, 0xEEFF0011);
-        assert_eq!(clock_identity, 0x9988776655443322);
+        assert_eq!(rtp_timestamp, 0xAABB_CCDD);
+        assert_eq!(ptp_timestamp, 0x1122_3344_5566_7788);
+        assert_eq!(rtp_timestamp_next, 0xEEFF_0011);
+        assert_eq!(clock_identity, 0x9988_7766_5544_3322);
     } else {
         panic!("Expected TimeAnnouncePtp packet");
     }

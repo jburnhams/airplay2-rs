@@ -69,7 +69,7 @@ pub enum ControlPacket {
         ntp_timestamp: super::timing::NtpTimestamp,
         next_timestamp: u32,
     },
-    /// AirPlay 2 PTP Time Announce packet
+    /// `AirPlay` 2 PTP Time Announce packet
     TimeAnnouncePtp {
         rtp_timestamp: u32,
         ptp_timestamp: u64,
