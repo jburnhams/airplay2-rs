@@ -251,8 +251,10 @@ impl UrlStreamer {
             Ok(PlaybackInfo {
                 position: get_f64("position"),
                 duration: get_f64("duration"),
-                // Rate is typically 0.0 or 1.0, so precision loss is acceptable
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Rate is typically 0.0 or 1.0, so precision loss is acceptable"
+                )]
                 rate: get_f64("rate") as f32,
                 playing: get_f64("rate") != 0.0,
                 ready_to_play: get_bool("readyToPlay"),
