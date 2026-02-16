@@ -493,7 +493,7 @@ class Audio:
             self.codec = av.codec.Codec('opus', 'r')
         # PCM
         elif'PCM' and '_16_' in self.af:
-            self.codec = av.codec.Codec('pcm_s16le_planar', 'r')
+            self.codec = av.codec.Codec('pcm_s16le', 'r')
         elif'PCM' and '_24_' in self.af:
             self.codec = av.codec.Codec('pcm_s24le', 'r')
 
