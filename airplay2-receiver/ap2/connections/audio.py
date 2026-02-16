@@ -583,8 +583,8 @@ class Audio:
             data = data[reduce(add, [row[-1] for row in rtp.block_list]):]
 
         # Strip RFC 3640 AU headers for AAC
-        if 'AAC' in self.af and len(data) > 4:
-             # Check for AU-headers-length = 16 (0x0010) - standard for 1 frame
+        if 'AAC' in self.af and len(data) >= 4:
+            # Check for AU-headers-length = 16 (0x0010) - standard for 1 frame
             if data[0] == 0x00 and data[1] == 0x10:
                 data = data[4:]
 
