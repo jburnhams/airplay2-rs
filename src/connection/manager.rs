@@ -1126,16 +1126,15 @@ impl ConnectionManager {
 
             tracing::info!("Connecting Audio to {}:{}", device_ip, server_audio_port);
             tracing::info!("Connecting Control to {}:{}", device_ip, server_ctrl_port);
-            tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
 
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
 
-            // Only connect timing socket if port is valid (some receivers send 0)
             if server_time_port > 0 {
+                tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
                 time_sock.connect((device_ip, server_time_port)).await?;
             } else {
-                tracing::info!("Skipping timing socket connection (port is 0)");
+                tracing::info!("Timing port is 0; skipping timing socket connection.");
             }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
