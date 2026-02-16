@@ -856,12 +856,13 @@ impl ConnectionManager {
         }
 
         // Parse Event/Timing ports from Step 1
-        let (server_event_port, server_timing_port) =
-            match crate::protocol::plist::decode(&response_step1.body) {
-                Ok(plist) => {
-                    tracing::info!("SETUP Step 1 plist: {:#?}", plist);
-                    if let Some(dict) = plist.as_dict() {
-                        let ep = dict
+        let (server_event_port, server_timing_port) = match crate::protocol::plist::decode(
+            &response_step1.body,
+        ) {
+            Ok(plist) => {
+                tracing::info!("SETUP Step 1 plist: {:#?}", plist);
+                if let Some(dict) = plist.as_dict() {
+                    let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
@@ -874,7 +875,7 @@ impl ConnectionManager {
                                     i as u16
                                 }
                             });
-                        let tp = dict
+                    let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
@@ -887,25 +888,25 @@ impl ConnectionManager {
                                     i as u16
                                 }
                             });
-                        tracing::info!(
-                            "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
-                            ep,
-                            tp
-                        );
-                        // Also log timingPeerInfo from device
-                        if let Some(tpi) = dict.get("timingPeerInfo") {
-                            tracing::info!("Device timingPeerInfo: {:#?}", tpi);
-                        }
-                        (ep, tp)
-                    } else {
-                        (None, None)
+                    tracing::info!(
+                        "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
+                        ep,
+                        tp
+                    );
+                    // Also log timingPeerInfo from device
+                    if let Some(tpi) = dict.get("timingPeerInfo") {
+                        tracing::info!("Device timingPeerInfo: {:#?}", tpi);
                     }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
+                    (ep, tp)
+                } else {
                     (None, None)
                 }
-            };
+            }
+            Err(e) => {
+                tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
+                (None, None)
+            }
+        };
 
         // 5. Stream Setup (SETUP Step 2: Audio/Control)
         tracing::debug!("Performing Stream SETUP (Step 2)...");
@@ -1129,7 +1130,13 @@ impl ConnectionManager {
 
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
-            time_sock.connect((device_ip, server_time_port)).await?;
+
+            // Only connect timing socket if port is valid (some receivers send 0)
+            if server_time_port > 0 {
+                time_sock.connect((device_ip, server_time_port)).await?;
+            } else {
+                tracing::info!("Skipping timing socket connection (port is 0)");
+            }
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
