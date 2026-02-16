@@ -1211,7 +1211,16 @@ def register_mdns(mac, receiver_name, addresses):
         server=f"{mac.replace(':', '')}@{receiver_name}._airplay.local.",
     )
 
-    zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+    zeroconf = None
+    if MDNS_OBJ:
+        zeroconf, _ = MDNS_OBJ
+
+    if zeroconf is None:
+        try:
+            zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+        except OSError as e:
+            SCR_LOG.error(f'mDNS exception during initialization: {repr(e)}')
+            return None
 
     # Remove stale entries
     # This step causes problems in multiprocess: needs asyncio
@@ -1230,6 +1239,9 @@ def register_mdns(mac, receiver_name, addresses):
 
 
 def unregister_mdns(zeroconf, info):
+    if zeroconf is None:
+        return
+
     try:
         asyncio.run(zeroconf.async_unregister_service(info))
         SCR_LOG.info("mDNS: Unregistering")
@@ -1237,7 +1249,10 @@ def unregister_mdns(zeroconf, info):
         # Observed NonUniqueNameException and OSError [Errno 65] No route to host
         SCR_LOG.error(f'mDNS exception during removal: {repr(e)}')
     finally:
-        zeroconf.close()
+        try:
+            zeroconf.close()
+        except OSError:
+            pass
 
 
 class AP2Server(socketserver.ThreadingTCPServer):
@@ -1498,4 +1513,5 @@ if __name__ == "__main__":
         pass
     finally:
         SCR_LOG.info("Shutting down mDNS...")
-        unregister_mdns(*MDNS_OBJ)
+        if MDNS_OBJ:
+            unregister_mdns(*MDNS_OBJ)

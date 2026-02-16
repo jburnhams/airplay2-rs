@@ -493,7 +493,7 @@ class Audio:
             self.codec = av.codec.Codec('opus', 'r')
         # PCM
         elif'PCM' and '_16_' in self.af:
-            self.codec = av.codec.Codec('pcm_s16le_planar', 'r')
+            self.codec = av.codec.Codec('pcm_s16le', 'r')
         elif'PCM' and '_24_' in self.af:
             self.codec = av.codec.Codec('pcm_s24le', 'r')
 
@@ -581,6 +581,13 @@ class Audio:
             # rtp.payloads tuple: type, ts_offset (samples ago), length
             # Set data to start at last block (add all lengths), skip redundancy for now.
             data = data[reduce(add, [row[-1] for row in rtp.block_list]):]
+
+        # Strip RFC 3640 AU headers for AAC
+        if 'AAC' in self.af and len(data) >= 4:
+             # Check for AU-headers-length = 16 (0x0010) - standard for 1 frame
+            if data[0] == 0x00 and data[1] == 0x10:
+                data = data[4:]
+
         packet = av.packet.Packet(data)
         if(len(data) > 0):
             try:

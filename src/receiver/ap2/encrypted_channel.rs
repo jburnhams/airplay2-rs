@@ -119,6 +119,7 @@ impl EncryptedChannel {
         let mut frame = Vec::with_capacity(LENGTH_SIZE + ciphertext.len());
         // We've already checked that plaintext.len() <= MAX_FRAME_SIZE (u16::MAX),
         // so this cast is safe.
+        #[allow(clippy::cast_possible_truncation)]
         frame.put_u16_le(plaintext.len() as u16);
 
         frame.extend_from_slice(&ciphertext);
