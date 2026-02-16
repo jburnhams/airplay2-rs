@@ -256,7 +256,7 @@ impl PcmStreamer {
 
         // Use interval for precise timing of audio packets
         let mut audio_interval = tokio::time::interval(packet_duration);
-        audio_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        audio_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
         // The first tick completes immediately
         audio_interval.tick().await;
 
@@ -282,7 +282,7 @@ impl PcmStreamer {
                 // Audio packet processing
                 _ = audio_interval.tick() => {
                     // Read from buffer
-                    let bytes_read = self.buffer.read(&mut packet_data);
+                    let mut bytes_read = self.buffer.read(&mut packet_data);
                     tracing::trace!(
                         "Read {} bytes from buffer, available={}",
                         bytes_read,
@@ -306,14 +306,9 @@ impl PcmStreamer {
                         }
 
                         self.buffer.write(&refill_buffer[..n]);
-                        // Don't send a packet this tick if we just refilled (or should we?)
-                        // If we just refilled, we can try to read again immediately?
-                        // For simplicity in select! loop, we'll just wait for next tick or let the loop continue?
-                        // Actually, if we return from select!, the loop continues.
-                        // But we consumed the tick.
-                        // Let's retry reading immediately?
-                        // Better: just continue the loop, next tick will happen or if we are behind it will fire immediately.
-                        continue;
+
+                        // Try to read again from the refilled buffer
+                        bytes_read = self.buffer.read(&mut packet_data);
                     }
 
                     // Pad if needed
