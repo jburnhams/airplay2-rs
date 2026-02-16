@@ -1222,7 +1222,7 @@ def register_mdns(mac, receiver_name, addresses):
             # Push out new entries
             zeroconf.register_service(info)
             SCR_LOG.info("mDNS: service registered")
-    except (NonUniqueNameException) as e:
+    except (NonUniqueNameException, OSError) as e:
         SCR_LOG.error(f'mDNS exception during registration: {repr(e)}')
     finally:
         pass
@@ -1233,8 +1233,8 @@ def unregister_mdns(zeroconf, info):
     try:
         asyncio.run(zeroconf.async_unregister_service(info))
         SCR_LOG.info("mDNS: Unregistering")
-    except (NonUniqueNameException) as e:
-        # Observed NonUniqueNameException once during testing
+    except (NonUniqueNameException, OSError) as e:
+        # Observed NonUniqueNameException and OSError [Errno 65] No route to host
         SCR_LOG.error(f'mDNS exception during removal: {repr(e)}')
     finally:
         zeroconf.close()
