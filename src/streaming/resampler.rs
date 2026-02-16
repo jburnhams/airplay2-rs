@@ -78,11 +78,19 @@ impl ResamplingSource {
             chunk_size
         );
 
-        #[allow(clippy::cast_precision_loss)]
-        let chunk_size_f64 = chunk_size as f64;
-        let output_capacity = (chunk_size_f64 / ratio).ceil();
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let output_capacity = output_capacity as usize + 10;
+        let output_capacity = {
+            #[allow(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "Conversion from usize to f64 and back is safe for small chunk sizes"
+            )]
+            {
+                let chunk_size_f64 = chunk_size as f64;
+                let cap = (chunk_size_f64 / ratio).ceil();
+                cap as usize + 10
+            }
+        };
 
         Ok(Self {
             inner: Box::new(source),
@@ -103,8 +111,7 @@ impl ResamplingSource {
     }
 
     /// Process next chunk of audio
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     fn process_next_chunk(&mut self) -> io::Result<bool> {
         let chunk_size = 1024; // Target input chunk size
         let bytes_per_frame = self.input_format.bytes_per_frame();
@@ -190,9 +197,12 @@ impl ResamplingSource {
         Ok(())
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "Floating point phase calculations require truncation to usize index"
+    )]
     fn resample_planar(&mut self, frames_read: usize) {
         let channels = self.input_format.channels.channels() as usize;
 
@@ -300,7 +310,6 @@ impl AudioSource for ResamplingSource {
         self.output_format
     }
 
-    #[allow(clippy::needless_continue)]
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let mut total_written = 0;
 
@@ -322,7 +331,7 @@ impl AudioSource for ResamplingSource {
 
                 // Need more data
                 match self.process_next_chunk() {
-                    Ok(true) => continue, // Got more data
+                    Ok(true) => {} // Got more data
                     Ok(false) => {
                         self.eof = true;
                         break; // EOF

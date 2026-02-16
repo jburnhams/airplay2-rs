@@ -54,16 +54,15 @@ pub struct ConnectionManager {
 }
 
 /// UDP sockets for streaming
-#[allow(dead_code)]
 struct UdpSockets {
     audio: UdpSocket,
     control: UdpSocket,
     timing: UdpSocket,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Fields kept for debugging visibility")]
     server_audio_port: u16,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Fields kept for debugging visibility")]
     server_control_port: u16,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Fields kept for debugging visibility")]
     server_timing_port: u16,
 }
 
@@ -681,7 +680,10 @@ impl ConnectionManager {
     }
 
     /// Setup RTSP session (`AirPlay` 2 sequence)
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Logic is complex and sequential, hard to split without losing context"
+    )]
     async fn setup_session(&self) -> Result<(), AirPlayError> {
         use crate::protocol::plist::DictBuilder;
 
@@ -863,7 +865,11 @@ impl ConnectionManager {
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
-                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                #[allow(
+                                    clippy::cast_possible_truncation,
+                                    clippy::cast_sign_loss,
+                                    reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                )]
                                 {
                                     i as u16
                                 }
@@ -872,7 +878,11 @@ impl ConnectionManager {
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
-                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                #[allow(
+                                    clippy::cast_possible_truncation,
+                                    clippy::cast_sign_loss,
+                                    reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                )]
                                 {
                                     i as u16
                                 }
@@ -998,7 +1008,11 @@ impl ConnectionManager {
                         .get("dataPort")
                         .and_then(crate::protocol::plist::PlistValue::as_i64)
                         .map(|i| {
-                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                clippy::cast_sign_loss,
+                                reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                            )]
                             {
                                 i as u16
                             }
@@ -1007,7 +1021,11 @@ impl ConnectionManager {
                         .get("controlPort")
                         .and_then(crate::protocol::plist::PlistValue::as_i64)
                         .map(|i| {
-                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                clippy::cast_sign_loss,
+                                reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                            )]
                             {
                                 i as u16
                             }
@@ -1025,7 +1043,8 @@ impl ConnectionManager {
                                     .map(|i| {
                                         #[allow(
                                             clippy::cast_possible_truncation,
-                                            clippy::cast_sign_loss
+                                            clippy::cast_sign_loss,
+                                            reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
                                         )]
                                         {
                                             i as u16
@@ -1036,7 +1055,8 @@ impl ConnectionManager {
                                     .map(|i| {
                                         #[allow(
                                             clippy::cast_possible_truncation,
-                                            clippy::cast_sign_loss
+                                            clippy::cast_sign_loss,
+                                            reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
                                         )]
                                         {
                                             i as u16
