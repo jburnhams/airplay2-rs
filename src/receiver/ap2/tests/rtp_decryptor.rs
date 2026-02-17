@@ -9,8 +9,8 @@ fn test_rtp_decryption() {
 
     // Create a dummy RTP packet
     let sequence = 0x1234;
-    let timestamp = 0x56789ABC;
-    let ssrc = 0xDEADBEEF;
+    let timestamp = 0x5678_9ABC;
+    let ssrc = 0xDEAD_BEEF;
     let payload_data = b"Hello AirPlay 2";
 
     let header = RtpHeader::new_audio(sequence, timestamp, ssrc, false);
@@ -68,13 +68,13 @@ fn test_rtp_decryption_with_aad() {
     aad.extend_from_slice(&header.encode());
 
     let cipher = ChaCha20Poly1305Cipher::new(&key).unwrap();
-    let encrypted_payload = cipher
-        .encrypt_with_aad(&nonce, &aad, payload_data)
-        .unwrap();
+    let encrypted_payload = cipher.encrypt_with_aad(&nonce, &aad, payload_data).unwrap();
 
     let packet = RtpPacket::new(header, encrypted_payload);
 
-    let decrypted = decryptor.decrypt(&packet).expect("Decryption with AAD failed");
+    let decrypted = decryptor
+        .decrypt(&packet)
+        .expect("Decryption with AAD failed");
 
     assert_eq!(decrypted, payload_data);
 }

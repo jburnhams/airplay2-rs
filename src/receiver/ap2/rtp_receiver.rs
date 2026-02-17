@@ -112,7 +112,8 @@ impl RtpReceiver {
         self.stats.bytes_received += data.len() as u64;
 
         // Parse RTP header
-        let packet = RtpPacket::decode(data).map_err(|e| ReceiverError::ParseError(e.to_string()))?;
+        let packet =
+            RtpPacket::decode(data).map_err(|e| ReceiverError::ParseError(e.to_string()))?;
 
         // Check for sequence gaps
         let expected_seq = self.stats.last_sequence.wrapping_add(1);
