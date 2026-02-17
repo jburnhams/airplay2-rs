@@ -20,8 +20,12 @@ pub struct PythonReceiver {
     _temp_dir: Option<TempDir>,
     // Detected port
     port: u16,
+    // Detected MAC (Device ID)
+    mac: String,
     // Flag to ensure logs are written once
     logs_written: bool,
+    // Unique name for this receiver
+    name: String,
 }
 
 impl PythonReceiver {
@@ -32,6 +36,10 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
+        // Generate unique name
+        let random_id: u32 = rand::random();
+        let name = format!("Receiver-{}", random_id);
+
         // Locate source directory
         let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
         #[allow(clippy::collapsible_if)]
@@ -74,7 +82,11 @@ impl PythonReceiver {
         // Restore .gitignore to keep repo clean (though irrelevant in temp, good practice)
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
-        tracing::info!("Starting Python receiver on interface: {}", interface);
+        tracing::info!(
+            "Starting Python receiver '{}' on interface: {}",
+            name,
+            interface
+        );
         tracing::debug!("Source dir: {:?}", source_dir);
         tracing::debug!("Output/Temp dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
@@ -91,7 +103,9 @@ impl PythonReceiver {
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("-m")
+            .arg(&name);
 
         // Check if port is already in args
         if !args.contains(&"-p") && !args.contains(&"--port") {
@@ -128,6 +142,7 @@ impl PythonReceiver {
         #[allow(unused_assignments)]
         let mut found_serving = false;
         let mut actual_port = 7000; // Default fallback
+        let mut actual_mac = String::new();
 
         loop {
             if start.elapsed() > timeout {
@@ -156,6 +171,14 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDOUT: {}", line));
                             }
+
+                            if line.contains("Mac: ") {
+                                if let Some(mac) = line.split("Mac: ").nth(1) {
+                                    actual_mac = mac.trim().to_string();
+                                    tracing::info!("Detected receiver MAC: {}", actual_mac);
+                                }
+                            }
+
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
@@ -180,6 +203,13 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDERR: {}", line));
                             }
+                            if line.contains("Mac: ") {
+                                if let Some(mac) = line.split("Mac: ").nth(1) {
+                                    actual_mac = mac.trim().to_string();
+                                    tracing::info!("Detected receiver MAC (stderr): {}", actual_mac);
+                                }
+                            }
+
                             if line.contains("serving on") {
                                 tracing::info!(
                                     "✓ Python receiver started (detected in stderr): {}",
@@ -248,7 +278,9 @@ impl PythonReceiver {
             log_buffer,
             _temp_dir: Some(temp_dir),
             port: actual_port,
+            mac: actual_mac,
             logs_written: false,
+            name,
         })
     }
 
@@ -365,7 +397,7 @@ impl PythonReceiver {
             use nix::unistd::Pid;
             if let Some(id) = self.process.id() {
                 let pid = Pid::from_raw(id as i32);
-                let _ = kill(pid, Signal::SIGTERM);
+                let _ = kill(pid, Signal::SIGINT);
             }
         }
 
@@ -432,9 +464,16 @@ impl PythonReceiver {
     pub fn device_config(&self) -> airplay2::AirPlayDevice {
         use std::collections::HashMap;
 
+        // Use MAC as ID if available, otherwise name (legacy behavior)
+        let id = if !self.mac.is_empty() {
+            self.mac.clone()
+        } else {
+            self.name.clone()
+        };
+
         airplay2::AirPlayDevice {
-            id: "Integration-Test-Receiver".to_string(),
-            name: "Integration-Test-Receiver".to_string(),
+            id,
+            name: self.name.clone(),
             model: Some("AirPlay2-Receiver".to_string()),
             addresses: vec!["127.0.0.1".parse().unwrap()],
             port: self.port, // Use detected port
