@@ -140,7 +140,7 @@ impl PtpSlaveHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_packet(&general_buf[..len], src);
+                    self.handle_general_packet(&general_buf[..len], src).await;
                 }
 
                 // Send Delay_Req periodically (only if we have a Sync but no pending exchange).
@@ -251,7 +251,7 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
+    async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
         if self.config.use_airplay_format {
             return;
         }
@@ -269,6 +269,31 @@ impl PtpSlaveHandler {
                         );
                         // Two-step Sync: the Follow-up carries the precise T1.
                         self.pending_t1 = Some(precise_origin_timestamp);
+                    }
+                    PtpMessageBody::DelayResp {
+                        receive_timestamp, ..
+                    } => {
+                        tracing::info!(
+                            "PTP slave: DelayResp (general port) seq={}, T4={:?}",
+                            msg.header.sequence_id,
+                            receive_timestamp
+                        );
+                        // Delay_Resp is a general message in IEEE 1588 and may
+                        // arrive on port 320 instead of port 319.
+                        if let (Some(t1), Some(t2_saved), Some(t3)) =
+                            (self.pending_t1, self.pending_t2, self.pending_t3)
+                        {
+                            let t4 = receive_timestamp;
+                            let mut clock = self.clock.write().await;
+                            clock.process_timing(t1, t2_saved, t3, t4);
+                            tracing::info!(
+                                "PTP slave: Clock synced via general port (offset={:.3}ms)",
+                                clock.offset_millis()
+                            );
+                            self.pending_t1 = None;
+                            self.pending_t2 = None;
+                            self.pending_t3 = None;
+                        }
                     }
                     _ => {
                         tracing::debug!("PTP slave: Ignoring general message type {:?}", msg.body);

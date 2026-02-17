@@ -8,7 +8,7 @@ use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::{
     AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
 };
-use crate::protocol::ptp::{PtpHandlerConfig, PtpRole, SharedPtpClock, create_shared_clock};
+use crate::protocol::ptp::{PtpNodeConfig, PtpRole, SharedPtpClock, create_shared_clock};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice, TimingProtocol};
 
@@ -1806,10 +1806,12 @@ impl ConnectionManager {
         UdpSocket::bind("[::]:0").await
     }
 
-    /// Start the PTP slave handler as a background task.
+    /// Start the PTP node as a background task.
     ///
-    /// The `HomePod` acts as PTP grandmaster clock. We act as slave,
-    /// syncing to the device's clock for accurate RTP timestamping.
+    /// Uses a unified `PtpNode` that supports both master and slave roles.
+    /// The node starts as master (sending Sync to the device) but will
+    /// switch to slave if the device announces with a better priority
+    /// (e.g. HomePod acting as grandmaster).
     ///
     /// `AirPlay` 2 PTP uses standard IEEE 1588 ports:
     /// - Port 319 for event messages (Sync, `Delay_Req`)
@@ -1823,7 +1825,8 @@ impl ConnectionManager {
         device_ip: std::net::IpAddr,
         _server_timing_port: u16,
     ) {
-        use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpMasterHandler};
+        use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT};
+        use crate::protocol::ptp::node::PtpNode;
 
         let clock_id: u64 = rand::random();
         let clock = create_shared_clock(clock_id, PtpRole::Master);
@@ -1874,40 +1877,46 @@ impl ConnectionManager {
 
         let ptp_event_socket = Arc::new(ptp_event_socket);
 
-        let config = PtpHandlerConfig {
+        let config = PtpNodeConfig {
             clock_id,
-            role: PtpRole::Master,
+            priority1: 128, // Default priority; HomePod sends 248 (lower priority)
+            priority2: 128,
             sync_interval: std::time::Duration::from_secs(1),
             delay_req_interval: std::time::Duration::from_secs(1),
+            announce_interval: std::time::Duration::from_secs(2),
             recv_buf_size: 256,
             use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP (44-byte messages)
         };
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-        // We are the PTP master — send Sync/Follow_Up to the HomePod (slave)
-        let slave_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
-        let slave_general_addr = std::net::SocketAddr::new(device_ip, PTP_GENERAL_PORT);
+        // Pre-populate with the device as peer (for both Sync sending and receiving)
+        let peer_event_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
+        let peer_general_addr = std::net::SocketAddr::new(device_ip, PTP_GENERAL_PORT);
 
         let handler_clock = clock.clone();
 
         tokio::spawn(async move {
-            let mut handler =
-                PtpMasterHandler::new(ptp_event_socket, ptp_general_socket, handler_clock, config);
+            let mut node = PtpNode::new(
+                ptp_event_socket,
+                ptp_general_socket,
+                handler_clock,
+                config,
+            );
 
-            // Pre-populate with the HomePod as slave — don't wait for Delay_Req
-            handler.add_slave(slave_addr);
-            handler.add_general_slave(slave_general_addr);
+            // Pre-populate with the device as a peer
+            node.add_slave(peer_event_addr);
+            node.add_general_slave(peer_general_addr);
 
             tracing::info!(
-                "PTP master handler started (clock_id=0x{:016X}, slave={})",
+                "PTP node started (clock_id=0x{:016X}, peer={})",
                 clock_id,
-                slave_addr
+                peer_event_addr
             );
-            if let Err(e) = handler.run(shutdown_rx).await {
-                tracing::error!("PTP master handler error: {}", e);
+            if let Err(e) = node.run(shutdown_rx).await {
+                tracing::error!("PTP node error: {}", e);
             }
-            tracing::info!("PTP master handler stopped");
+            tracing::info!("PTP node stopped (final role={:?})", node.role());
         });
 
         *self.ptp_clock.lock().await = Some(clock);
@@ -1915,7 +1924,7 @@ impl ConnectionManager {
         *self.ptp_active.write().await = true;
 
         tracing::info!(
-            "PTP timing started as MASTER for slave at {} (event port {}, general port {})",
+            "PTP timing started for peer at {} (event port {}, general port {})",
             device_ip,
             PTP_EVENT_PORT,
             PTP_GENERAL_PORT
