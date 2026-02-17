@@ -1,5 +1,15 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 6):**
+- **Connection Resilience**:
+  - ✅ **VERIFIED**: `reconnection_integration` test suite passes (3/3 tests).
+  - Implemented **Active Keep-Alive**: `AirPlayClient` sends periodic `GET /info` to detect connection loss.
+  - Implemented **Automatic Reconnection**: `AirPlayPlayer` monitors connection state and attempts reconnection with exponential backoff.
+  - Implemented **User-Requested Disconnect**: Explicit disconnect stops auto-reconnect loop.
+- **Python Receiver Fixes**:
+  - Patched `ap2-receiver.py` to correctly announce dynamic ports in mDNS, enabling reliable discovery during reconnection.
+  - Updated `PythonReceiver` harness to use MAC address as stable Device ID, fixing identification across restarts.
+
 **Work Done (Session 5):**
 - **Resampling Implementation**:
   - ✅ **VERIFIED**: Implemented robust, crash-free linear interpolation resampling in `ResamplingSource`.
@@ -192,8 +202,6 @@
 - [ ] Clear keys on logout/disconnection
   - *Status*: Implemented but **not verified**.
 
-## Protocol Stack and Network Transport
-
 ### RTSP (Real-Time Streaming Protocol)
 - [x] Implement RTSP 1.0 client (RFC 2326)
 - [x] Support RTSP URLs: `rtsp://device-ip:port/...`
@@ -303,9 +311,10 @@
 ## Error Handling and Resilience
 
 ### Connection Management
-- [ ] Detect lost network connectivity
-  - *Status*: **Not verified**.
-- [ ] Automatic reconnection with exponential backoff
+- [x] Detect lost network connectivity
+  - ✅ **VERIFIED**: `test_disconnection_detection` passes. `AirPlayClient` uses active keep-alive.
+- [x] Automatic reconnection with exponential backoff
+  - ✅ **VERIFIED**: `test_automatic_reconnection` passes. `AirPlayPlayer` implements this.
 - [x] Graceful shutdown and resource cleanup
 - [x] Connection timeout handling (60+ seconds)
 

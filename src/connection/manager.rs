@@ -1705,6 +1705,15 @@ impl ConnectionManager {
     ///
     /// Returns error if disconnection fails
     pub async fn disconnect(&self) -> Result<(), AirPlayError> {
+        self.disconnect_with_reason(DisconnectReason::UserRequested)
+            .await
+    }
+
+    /// Disconnect with a specific reason
+    pub async fn disconnect_with_reason(
+        &self,
+        reason: DisconnectReason,
+    ) -> Result<(), AirPlayError> {
         let device = self.device.read().await.clone();
 
         // Send TEARDOWN if connected
@@ -1731,10 +1740,7 @@ impl ConnectionManager {
         self.set_state(ConnectionState::Disconnected).await;
 
         if let Some(device) = device {
-            self.send_event(ConnectionEvent::Disconnected {
-                device,
-                reason: DisconnectReason::UserRequested,
-            });
+            self.send_event(ConnectionEvent::Disconnected { device, reason });
         }
 
         Ok(())

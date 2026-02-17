@@ -159,6 +159,10 @@ impl AirPlayClient {
     pub async fn connect(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
         self.connection.connect(device).await?;
 
+        // Start background tasks
+        self.start_monitor();
+        self.start_keep_alive();
+
         // Update state
         self.state.set_device(Some(device.clone())).await;
         self.events.emit(ClientEvent::Connected {
@@ -166,6 +170,87 @@ impl AirPlayClient {
         });
 
         Ok(())
+    }
+
+    fn start_monitor(&self) {
+        let connection = self.connection.clone();
+        let events = self.events.clone();
+        let state = self.state.clone();
+        let mut rx = connection.subscribe();
+
+        tokio::spawn(async move {
+            while let Ok(event) = rx.recv().await {
+                use crate::connection::ConnectionEvent;
+                match event {
+                    ConnectionEvent::Disconnected { device, reason } => {
+                        state.set_device(None).await;
+                        events.emit(ClientEvent::Disconnected {
+                            device,
+                            reason: format!("{reason:?}"),
+                        });
+                        // Stop monitor loop on disconnect
+                        break;
+                    }
+                    ConnectionEvent::Connected { device } => {
+                        state.set_device(Some(device.clone())).await;
+                        events.emit(ClientEvent::Connected { device });
+                    }
+                    ConnectionEvent::Error {
+                        message,
+                        recoverable,
+                    } => {
+                        // Forward errors?
+                        tracing::warn!(
+                            "Connection error: {} (recoverable: {})",
+                            message,
+                            recoverable
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        });
+    }
+
+    fn start_keep_alive(&self) {
+        let connection = self.connection.clone();
+
+        tokio::spawn(async move {
+            // Check more frequently (1s) to detect disconnection faster
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            loop {
+                interval.tick().await;
+
+                // Check if connected
+                if connection.state().await != ConnectionState::Connected {
+                    if connection.state().await == ConnectionState::Disconnected {
+                        tracing::debug!("Keep-alive stopping (disconnected)");
+                        break;
+                    }
+                    continue;
+                }
+
+                tracing::debug!("Sending keep-alive (GET /info)");
+                // Send keep-alive (GET /info)
+                match connection.send_get_command("/info").await {
+                    Ok(_) => {
+                        tracing::debug!("Keep-alive success");
+                    }
+                    Err(e) => {
+                        tracing::warn!("Keep-alive failed: {}", e);
+                        // Trigger disconnect
+                        use crate::connection::DisconnectReason;
+                        let reason = DisconnectReason::NetworkError(e.to_string());
+
+                        // We must force state update because send_get_command might not have done it
+                        // if it failed at logic level. But if it failed with IO error, connection might be broken.
+                        // Calling disconnect_with_reason will ensure state update and event emission.
+                        let _ = connection.disconnect_with_reason(reason).await;
+                        break;
+                    }
+                }
+            }
+        });
     }
 
     /// Disconnect from current device
@@ -184,7 +269,7 @@ impl AirPlayClient {
         if let Some(device) = device {
             self.events.emit(ClientEvent::Disconnected {
                 device,
-                reason: "User requested".to_string(),
+                reason: "UserRequested".to_string(),
             });
         }
 
