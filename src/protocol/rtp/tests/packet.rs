@@ -73,3 +73,33 @@ fn test_audio_samples_iterator() {
     assert_eq!(samples.len(), 1);
     assert_eq!(samples[0], (258, 772));
 }
+
+#[test]
+fn test_header_flags() {
+    let mut header = RtpHeader::new_audio(100, 44100, 0x1234_5678, false);
+    header.padding = true;
+    header.extension = true;
+    header.marker = false; // Audio packet sets marker=true by default, try unsetting it
+
+    let encoded = header.encode();
+    let decoded = RtpHeader::decode(&encoded).unwrap();
+
+    assert!(decoded.padding);
+    assert!(decoded.extension);
+    assert!(!decoded.marker);
+    assert_eq!(decoded.version, 2);
+}
+
+#[test]
+fn test_csrc_count() {
+    let mut header = RtpHeader::new_audio(100, 44100, 0x1234_5678, false);
+    header.csrc_count = 3;
+
+    let encoded = header.encode();
+    let decoded = RtpHeader::decode(&encoded).unwrap();
+
+    assert_eq!(decoded.csrc_count, 3);
+    // Ensure byte 0 is correctly formed: V(2)=2 | P(0) | X(0) | CC(4)
+    // With P=0, X=0, V=2 (10), CC=3 (0011) -> 10000011 -> 0x83
+    assert_eq!(encoded[0], 0x83);
+}

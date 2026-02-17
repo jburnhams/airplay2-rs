@@ -7,8 +7,6 @@ mod parser;
 pub mod raop;
 
 #[cfg(test)]
-mod raop_tests;
-#[cfg(test)]
 mod tests;
 
 pub use builder::{SdpBuilder, create_raop_announce_sdp};

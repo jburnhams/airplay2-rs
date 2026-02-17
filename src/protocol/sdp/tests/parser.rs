@@ -1,4 +1,4 @@
-use super::*;
+use crate::protocol::sdp::*;
 
 #[test]
 fn test_parse_basic_sdp() {
