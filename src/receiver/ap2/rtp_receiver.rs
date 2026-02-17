@@ -126,7 +126,10 @@ impl RtpReceiver {
 
         if self.stats.packets_received > 0 {
             let expected_seq = self.stats.last_sequence.wrapping_add(1);
-            #[allow(clippy::cast_possible_wrap, reason = "RTP sequence differences fit in i16")]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "RTP sequence differences fit in i16"
+            )]
             let diff = packet.header.sequence.wrapping_sub(expected_seq) as i16;
 
             match diff.cmp(&0) {
