@@ -82,7 +82,11 @@ impl PythonReceiver {
         // Restore .gitignore to keep repo clean (though irrelevant in temp, good practice)
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
-        tracing::info!("Starting Python receiver '{}' on interface: {}", name, interface);
+        tracing::info!(
+            "Starting Python receiver '{}' on interface: {}",
+            name,
+            interface
+        );
         tracing::debug!("Source dir: {:?}", source_dir);
         tracing::debug!("Output/Temp dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));

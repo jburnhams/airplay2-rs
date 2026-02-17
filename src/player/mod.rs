@@ -28,6 +28,12 @@ pub struct AirPlayPlayer {
     is_reconnecting: Arc<AtomicBool>,
 }
 
+impl Default for AirPlayPlayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AirPlayPlayer {
     /// Create a new player with default config
     #[must_use]
@@ -90,7 +96,7 @@ impl AirPlayPlayer {
                     tokio::time::sleep(Duration::from_secs(2)).await;
 
                     // Reconnection loop
-                    let mut attempts = 0;
+                    let mut attempts: u32 = 0;
                     let max_attempts = 10;
                     let mut success = false;
 
@@ -105,20 +111,32 @@ impl AirPlayPlayer {
                             // 1. Try connecting directly (fast path)
                             // This works if IP/Port hasn't changed
                             if let Err(e) = client.connect(&device).await {
-                                tracing::debug!("Direct connection failed: {}. Retrying with scan...", e);
+                                tracing::debug!(
+                                    "Direct connection failed: {}. Retrying with scan...",
+                                    e
+                                );
 
                                 // 2. If direct fails, try to re-discover device (IP/Port might have changed)
                                 // We scan for a device with the same ID
                                 match client.scan(Duration::from_secs(3)).await {
                                     Ok(devices) => {
-                                        if let Some(updated_device) = devices.into_iter().find(|d| d.id == device.id) {
-                                            tracing::info!("Found updated device info: {:?} -> {:?}", device.addresses, updated_device.addresses);
+                                        if let Some(updated_device) =
+                                            devices.into_iter().find(|d| d.id == device.id)
+                                        {
+                                            tracing::info!(
+                                                "Found updated device info: {:?} -> {:?}",
+                                                device.addresses,
+                                                updated_device.addresses
+                                            );
                                             device = updated_device;
                                             // Update last_device with new info
                                             *last_device.write().await = Some(device.clone());
 
                                             if let Err(e) = client.connect(&device).await {
-                                                 tracing::warn!("Reconnection failed after scan: {}", e);
+                                                tracing::warn!(
+                                                    "Reconnection failed after scan: {}",
+                                                    e
+                                                );
                                             } else {
                                                 success = true;
                                                 break;
@@ -139,7 +157,7 @@ impl AirPlayPlayer {
                         }
 
                         // Exponential backoff
-                        let backoff = Duration::from_secs(2u64.pow(attempts.min(4) as u32));
+                        let backoff = Duration::from_secs(2u64.pow(attempts.min(4)));
                         tokio::time::sleep(backoff).await;
                     }
 

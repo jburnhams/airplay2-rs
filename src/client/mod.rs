@@ -1,7 +1,7 @@
 //! Main `AirPlay` client implementation
 
 use crate::audio::AudioCodec;
-use crate::connection::{ConnectionManager, ConnectionState};
+use crate::connection::{ConnectionManager, ConnectionState, DisconnectReason};
 use crate::control::playback::{PlaybackController, ShuffleMode};
 use crate::control::queue::PlaybackQueue;
 use crate::control::volume::{Volume, VolumeController};
@@ -239,7 +239,6 @@ impl AirPlayClient {
                     Err(e) => {
                         tracing::warn!("Keep-alive failed: {}", e);
                         // Trigger disconnect
-                        use crate::connection::DisconnectReason;
                         let reason = DisconnectReason::NetworkError(e.to_string());
 
                         // We must force state update because send_get_command might not have done it

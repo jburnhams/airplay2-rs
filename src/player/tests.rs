@@ -19,14 +19,14 @@ async fn test_builder() {
         .device_name("Test Device")
         .build();
 
-    assert!(!player.auto_reconnect);
+    assert!(!player.auto_reconnect.load(Ordering::SeqCst));
     assert!(!player.is_connected().await);
 }
 
 #[tokio::test]
 async fn test_builder_defaults() {
     let player = PlayerBuilder::new().build();
-    assert!(player.auto_reconnect);
+    assert!(player.auto_reconnect.load(Ordering::SeqCst));
 }
 
 #[tokio::test]

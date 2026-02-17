@@ -21,9 +21,7 @@ async fn test_disconnection_detection() -> Result<(), Box<dyn std::error::Error>
 
     // 2. Connect Client
     tracing::info!("Connecting client...");
-    let config = AirPlayConfig::builder()
-        .pin("3939")
-        .build();
+    let config = AirPlayConfig::builder().pin("3939").build();
 
     let client = AirPlayClient::new(config);
     if let Err(e) = client.connect(&device).await {
@@ -85,9 +83,7 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
 
     // 2. Connect Player with auto-reconnect enabled
     tracing::info!("Connecting player...");
-    let config = AirPlayConfig::builder()
-        .pin("3939")
-        .build();
+    let config = AirPlayConfig::builder().pin("3939").build();
 
     let mut player = AirPlayPlayer::with_config(config);
     player.set_auto_reconnect(true);
@@ -121,7 +117,11 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
     let device2 = _receiver2.device_config();
     tracing::info!("New receiver ID: {}", device2.id);
     if device2.id != initial_id {
-        tracing::warn!("Receiver ID changed from {} to {}! Auto-reconnect might fail if it relies on ID.", initial_id, device2.id);
+        tracing::warn!(
+            "Receiver ID changed from {} to {}! Auto-reconnect might fail if it relies on ID.",
+            initial_id,
+            device2.id
+        );
         // Note: If ID changes, the test WILL fail because client looks for old ID.
         // But let's proceed and see.
     }
@@ -134,8 +134,8 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
                 // Verify we are connected to the new device (check port?)
                 let connected_device = player.device().await;
                 if let Some(d) = connected_device {
-                     tracing::info!("Reconnected to: {} (Port: {})", d.name, d.port);
-                     break;
+                    tracing::info!("Reconnected to: {} (Port: {})", d.name, d.port);
+                    break;
                 }
             }
             sleep(Duration::from_millis(500)).await;
@@ -163,9 +163,7 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     sleep(Duration::from_secs(3)).await;
 
     // 2. Connect Player with auto-reconnect enabled
-    let config = AirPlayConfig::builder()
-        .pin("3939")
-        .build();
+    let config = AirPlayConfig::builder().pin("3939").build();
 
     let mut player = AirPlayPlayer::with_config(config);
     player.set_auto_reconnect(true);
@@ -182,6 +180,9 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     tracing::info!("Waiting to ensure no reconnection happens...");
     sleep(Duration::from_secs(5)).await;
 
-    assert!(!player.is_connected().await, "Player should remain disconnected after user disconnect");
+    assert!(
+        !player.is_connected().await,
+        "Player should remain disconnected after user disconnect"
+    );
     Ok(())
 }

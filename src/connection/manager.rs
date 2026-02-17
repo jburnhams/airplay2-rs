@@ -1710,6 +1710,10 @@ impl ConnectionManager {
     }
 
     /// Disconnect with a specific reason
+    ///
+    /// # Errors
+    ///
+    /// Returns error if disconnection sequence fails (e.g. TEARDOWN failure), though the connection will be closed regardless.
     pub async fn disconnect_with_reason(
         &self,
         reason: DisconnectReason,
