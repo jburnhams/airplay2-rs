@@ -1821,7 +1821,7 @@ impl ConnectionManager {
     /// Uses a unified `PtpNode` that supports both master and slave roles.
     /// The node starts as master (sending Sync to the device) but will
     /// switch to slave if the device announces with a better priority
-    /// (e.g. HomePod acting as grandmaster).
+    /// (e.g. `HomePod` acting as grandmaster).
     ///
     /// `AirPlay` 2 PTP uses standard IEEE 1588 ports:
     /// - Port 319 for event messages (Sync, `Delay_Req`)
@@ -1907,12 +1907,8 @@ impl ConnectionManager {
         let handler_clock = clock.clone();
 
         tokio::spawn(async move {
-            let mut node = PtpNode::new(
-                ptp_event_socket,
-                ptp_general_socket,
-                handler_clock,
-                config,
-            );
+            let mut node =
+                PtpNode::new(ptp_event_socket, ptp_general_socket, handler_clock, config);
 
             // Pre-populate with the device as a peer
             node.add_slave(peer_event_addr);

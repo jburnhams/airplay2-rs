@@ -1,11 +1,11 @@
 //! Unified PTP node that participates in both master and slave roles.
 //!
 //! A `PtpNode` can simultaneously:
-//! - Send Sync/Follow_Up and respond to Delay_Req (master behaviour)
-//! - Process incoming Sync/Follow_Up, send Delay_Req, and process Delay_Resp (slave behaviour)
+//! - Send `Sync`/`Follow_Up` and respond to `Delay_Req` (master behaviour)
+//! - Process incoming `Sync`/`Follow_Up`, send `Delay_Req`, and process `Delay_Resp` (slave behaviour)
 //! - Evaluate Announce messages and switch roles via a simplified BMCA
 //!
-//! This is needed because AirPlay 2 devices (e.g. HomePod) may act as
+//! This is needed because `AirPlay` 2 devices (e.g. `HomePod`) may act as
 //! grandmaster clock, and the client must be able to sync to them. The
 //! role is determined by comparing clock priorities from Announce messages.
 
@@ -32,13 +32,13 @@ pub struct PtpNodeConfig {
     pub priority2: u8,
     /// Interval between Sync messages when acting as master.
     pub sync_interval: Duration,
-    /// Interval between Delay_Req messages when acting as slave.
+    /// Interval between `Delay_Req` messages when acting as slave.
     pub delay_req_interval: Duration,
     /// Interval between Announce messages.
     pub announce_interval: Duration,
     /// Maximum receive buffer size.
     pub recv_buf_size: usize,
-    /// Use AirPlay compact packet format instead of IEEE 1588.
+    /// Use `AirPlay` compact packet format instead of IEEE 1588.
     pub use_airplay_format: bool,
 }
 
@@ -68,7 +68,10 @@ pub enum EffectiveRole {
 
 /// State tracked about a remote master discovered via Announce.
 #[derive(Debug, Clone)]
-#[allow(dead_code, reason = "Fields retained for diagnostics and future BMCA extensions")]
+#[allow(
+    dead_code,
+    reason = "Fields retained for diagnostics and future BMCA extensions"
+)]
 struct RemoteMaster {
     /// Clock identity of the grandmaster.
     grandmaster_identity: u64,
@@ -90,9 +93,9 @@ struct RemoteMaster {
 /// flows on the same sockets. Uses a simplified BMCA to determine
 /// whether this node should act as master or slave.
 pub struct PtpNode {
-    /// Event socket (port 319 or AirPlay timing port).
+    /// Event socket (port 319 or `AirPlay` timing port).
     event_socket: Arc<UdpSocket>,
-    /// General socket (port 320), optional if using AirPlay format.
+    /// General socket (port 320), optional if using `AirPlay` format.
     general_socket: Option<Arc<UdpSocket>>,
     /// Shared clock state.
     clock: SharedPtpClock,
@@ -102,19 +105,19 @@ pub struct PtpNode {
     role: EffectiveRole,
     /// Next Sync sequence ID (master).
     sync_sequence: u16,
-    /// Next Delay_Req sequence ID (slave).
+    /// Next `Delay_Req` sequence ID (slave).
     delay_req_sequence: u16,
     /// Next Announce sequence ID.
     announce_sequence: u16,
     /// Known slave addresses for Sync broadcasts (master role).
     known_slaves: Vec<SocketAddr>,
-    /// Known slave general addresses for Follow_Up (master role).
+    /// Known slave general addresses for `Follow_Up` (master role).
     known_general_slaves: Vec<SocketAddr>,
     /// Pending Sync T1 (slave role).
     pending_t1: Option<PtpTimestamp>,
     /// T2 corresponding to pending T1 (slave role).
     pending_t2: Option<PtpTimestamp>,
-    /// Pending Delay_Req T3 (slave role).
+    /// Pending `Delay_Req` T3 (slave role).
     pending_t3: Option<PtpTimestamp>,
     /// The current remote master we are slaving to (if any).
     remote_master: Option<RemoteMaster>,
@@ -164,7 +167,7 @@ impl PtpNode {
         }
     }
 
-    /// Add a known slave general address for Follow_Up messages.
+    /// Add a known slave general address for `Follow_Up` messages.
     ///
     /// Must be called after `add_slave` for the same peer to maintain
     /// parallel index alignment.
@@ -495,7 +498,7 @@ impl PtpNode {
         }
     }
 
-    /// Process a Delay_Resp (from either event or general port) to update the clock.
+    /// Process a `Delay_Resp` (from either event or general port) to update the clock.
     async fn process_delay_resp(&mut self, receive_timestamp: PtpTimestamp) {
         if let (Some(t1), Some(t2_saved), Some(t3)) =
             (self.pending_t1, self.pending_t2, self.pending_t3)
@@ -517,7 +520,7 @@ impl PtpNode {
     /// Simplified BMCA: compare remote Announce with our own priority.
     ///
     /// Lower priority1 wins. If equal, lower priority2 wins.
-    /// If still equal, lower clock_id wins.
+    /// If still equal, lower `clock_id` wins.
     fn process_announce(
         &mut self,
         grandmaster_identity: u64,
@@ -540,9 +543,7 @@ impl PtpNode {
             .iter()
             .find(|a| a.ip() == src.ip())
             .copied()
-            .unwrap_or_else(|| {
-                SocketAddr::new(src.ip(), super::handler::PTP_EVENT_PORT)
-            });
+            .unwrap_or_else(|| SocketAddr::new(src.ip(), super::handler::PTP_EVENT_PORT));
         let general_addr = SocketAddr::new(src.ip(), src.port());
 
         if remote_is_better {
@@ -584,7 +585,7 @@ impl PtpNode {
         if remote_p2 != self.config.priority2 {
             return remote_p2 < self.config.priority2;
         }
-        // Tie-break on clock ID (lower wins).
+        // Tie-break on `clock_id` (lower wins).
         remote_clock_id < self.config.clock_id
     }
 
@@ -751,7 +752,7 @@ impl PtpNode {
     }
 }
 
-/// Create a `PtpNode` with standard configuration for the AirPlay client role.
+/// Create a `PtpNode` with standard configuration for the `AirPlay` client role.
 ///
 /// The client starts as master (priority1=128) and will switch to slave
 /// if a device announces with a better priority.
