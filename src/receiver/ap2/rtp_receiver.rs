@@ -112,18 +112,48 @@ impl RtpReceiver {
         self.stats.bytes_received += data.len() as u64;
 
         // Parse RTP header
-        let packet = RtpPacket::decode(data).map_err(|e| ReceiverError::ParseError(e.to_string()))?;
+        let packet =
+            RtpPacket::decode(data).map_err(|e| ReceiverError::ParseError(e.to_string()))?;
 
         // Check for sequence gaps
-        let expected_seq = self.stats.last_sequence.wrapping_add(1);
-        if self.stats.packets_received > 1 && packet.header.sequence != expected_seq {
-            self.stats.sequence_gaps += 1;
-            warn!(
-                "Sequence gap: expected {}, got {}",
-                expected_seq, packet.header.sequence
-            );
+        // We only flag a gap if the packet is "future" relative to expected.
+        // If packet.sequence < expected (accounting for wrap), it's a late packet (reordering).
+        // If packet.sequence > expected, we missed some packets.
+        // Logic: (packet - expected) as i16.
+        // If diff == 0: exact match.
+        // If diff > 0 (small): gap.
+        // If diff < 0 (small negative or large positive): late packet.
+
+        if self.stats.packets_received > 0 {
+            let expected_seq = self.stats.last_sequence.wrapping_add(1);
+            #[allow(clippy::cast_possible_wrap, reason = "RTP sequence differences fit in i16")]
+            let diff = packet.header.sequence.wrapping_sub(expected_seq) as i16;
+
+            match diff.cmp(&0) {
+                std::cmp::Ordering::Greater => {
+                    // Gap detected (future packet)
+                    self.stats.sequence_gaps += 1;
+                    warn!(
+                        "Sequence gap: expected {}, got {} (missed {} packets)",
+                        expected_seq, packet.header.sequence, diff
+                    );
+                    // Update last_sequence to catch up
+                    self.stats.last_sequence = packet.header.sequence;
+                }
+                std::cmp::Ordering::Less => {
+                    // Late packet (reordered) - do not update last_sequence
+                    // Just log if needed
+                    // debug!("Late packet: expected {}, got {}", expected_seq, packet.header.sequence);
+                }
+                std::cmp::Ordering::Equal => {
+                    // Exact match
+                    self.stats.last_sequence = packet.header.sequence;
+                }
+            }
+        } else {
+            // First packet
+            self.stats.last_sequence = packet.header.sequence;
         }
-        self.stats.last_sequence = packet.header.sequence;
 
         // Decrypt payload
         let decrypted = self.decryptor.decrypt(&packet).map_err(|e| {
