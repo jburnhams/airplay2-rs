@@ -79,12 +79,7 @@ async fn test_bmca_lower_priority1_wins() {
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-    let mut node = PtpNode::new(
-        event_sock,
-        Some(general_sock),
-        clock,
-        config,
-    );
+    let mut node = PtpNode::new(event_sock, Some(general_sock), clock, config);
 
     let handle = tokio::spawn(async move {
         node.run(shutdown_rx).await.unwrap();
@@ -302,18 +297,13 @@ async fn test_node_master_responds_to_delay_req() {
 
     let mut node = PtpNode::new(node_event_sock, None, clock, config);
 
-    let handle = tokio::spawn(async move {
-        node.run(shutdown_rx).await
-    });
+    let handle = tokio::spawn(async move { node.run(shutdown_rx).await });
 
     // Send Delay_Req to the node
     let source = PtpPortIdentity::new(0xBBBB, 1);
     let t3 = PtpTimestamp::new(100, 0);
     let req = PtpMessage::delay_req(source, 42, t3);
-    client_sock
-        .send_to(&req.encode(), node_addr)
-        .await
-        .unwrap();
+    client_sock.send_to(&req.encode(), node_addr).await.unwrap();
 
     // Receive DelayResp
     let mut buf = [0u8; 256];
@@ -353,9 +343,7 @@ async fn test_node_master_airplay_delay_req() {
 
     let mut node = PtpNode::new(node_event_sock, None, clock, config);
 
-    let handle = tokio::spawn(async move {
-        node.run(shutdown_rx).await
-    });
+    let handle = tokio::spawn(async move { node.run(shutdown_rx).await });
 
     // Send AirPlay Delay_Req
     let req = AirPlayTimingPacket {
@@ -364,10 +352,7 @@ async fn test_node_master_airplay_delay_req() {
         timestamp: PtpTimestamp::new(200, 0),
         clock_id: 0xBBBB,
     };
-    client_sock
-        .send_to(&req.encode(), node_addr)
-        .await
-        .unwrap();
+    client_sock.send_to(&req.encode(), node_addr).await.unwrap();
 
     // Receive AirPlay Delay_Resp
     let mut buf = [0u8; 256];
@@ -386,7 +371,7 @@ async fn test_node_master_airplay_delay_req() {
 
 // ===== Two PtpNodes: bidirectional sync over loopback (multi-round) =====
 
-/// Run two PtpNodes against each other on loopback.
+/// Run two `PtpNodes` against each other on loopback.
 /// Node A has priority1=64 (master), Node B has priority1=128 (slave).
 /// Verify that after multiple rounds of Sync/DelayReq exchange,
 /// Node B's clock is synchronized with meaningful measurements.
@@ -509,7 +494,7 @@ async fn test_two_nodes_bidirectional_sync_ieee1588() {
     );
 }
 
-/// Same test but with AirPlay compact format.
+/// Same test but with `AirPlay` compact format.
 #[tokio::test]
 async fn test_two_nodes_bidirectional_sync_airplay_format() {
     // Node A: priority1=64 (master)
@@ -637,7 +622,12 @@ async fn test_sync_convergence_multiple_rounds() {
 
     let barrier_a = barrier.clone();
     let a_handle = tokio::spawn(async move {
-        let mut node_a = PtpNode::new(a_event, Some(a_general), a_clock_ref, fast_config(0x0001, 64));
+        let mut node_a = PtpNode::new(
+            a_event,
+            Some(a_general),
+            a_clock_ref,
+            fast_config(0x0001, 64),
+        );
         node_a.add_slave(b_event_addr);
         node_a.add_general_slave(b_general_addr);
         barrier_a.wait().await;
@@ -646,7 +636,12 @@ async fn test_sync_convergence_multiple_rounds() {
 
     let barrier_b = barrier.clone();
     let b_handle = tokio::spawn(async move {
-        let mut node_b = PtpNode::new(b_event, Some(b_general), b_clock_ref, fast_config(0x0002, 128));
+        let mut node_b = PtpNode::new(
+            b_event,
+            Some(b_general),
+            b_clock_ref,
+            fast_config(0x0002, 128),
+        );
         node_b.add_slave(a_event_addr);
         node_b.add_general_slave(a_general_addr);
         barrier_b.wait().await;
@@ -752,8 +747,8 @@ async fn test_role_reversal_via_announce() {
 
 // ===== Slave handler DelayResp on general port =====
 
-/// Verify that the slave handler (PtpSlaveHandler) correctly processes
-/// DelayResp received on the general port (320) instead of event port.
+/// Verify that the slave handler (`PtpSlaveHandler`) correctly processes
+/// `DelayResp` received on the general port (320) instead of event port.
 #[tokio::test]
 async fn test_slave_handler_delay_resp_on_general_port() {
     use crate::protocol::ptp::handler::{PtpHandlerConfig, PtpSlaveHandler};
