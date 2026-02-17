@@ -1503,7 +1503,7 @@ if __name__ == "__main__":
                 if MDNS_OBJ:
                     unregister_mdns(*MDNS_OBJ)
                     MDNS_OBJ = None
-                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP6ADDR_BIN], PORT)
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
@@ -1515,7 +1515,10 @@ if __name__ == "__main__":
                 if MDNS_OBJ:
                     unregister_mdns(*MDNS_OBJ)
                     MDNS_OBJ = None
-                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
+                addrs_to_register = [IP4ADDR_BIN]
+                if IPV6:
+                    addrs_to_register.append(IP6ADDR_BIN)
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, addrs_to_register, PORT)
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
 

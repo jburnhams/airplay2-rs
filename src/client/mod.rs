@@ -222,8 +222,9 @@ impl AirPlayClient {
                 interval.tick().await;
 
                 // Check if connected
-                if connection.state().await != ConnectionState::Connected {
-                    if connection.state().await == ConnectionState::Disconnected {
+                let state = connection.state().await;
+                if state != ConnectionState::Connected {
+                    if state == ConnectionState::Disconnected {
                         tracing::debug!("Keep-alive stopping (disconnected)");
                         break;
                     }
