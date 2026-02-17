@@ -20,6 +20,8 @@ pub struct PythonReceiver {
     _temp_dir: Option<TempDir>,
     // Detected port
     port: u16,
+    // detected MAC address
+    mac: Option<String>,
     // Flag to ensure logs are written once
     logs_written: bool,
 }
@@ -128,6 +130,7 @@ impl PythonReceiver {
         #[allow(unused_assignments)]
         let mut found_serving = false;
         let mut actual_port = 7000; // Default fallback
+        let mut actual_mac = None;
 
         loop {
             if start.elapsed() > timeout {
@@ -156,6 +159,13 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDOUT: {}", line));
                             }
+                            if line.contains("[Receiver]: Mac:") {
+                                if let Some(mac) = line.split("Mac:").nth(1) {
+                                    let mac = mac.trim().to_string();
+                                    tracing::info!("Detected receiver MAC: {}", mac);
+                                    actual_mac = Some(mac);
+                                }
+                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
@@ -179,6 +189,13 @@ impl PythonReceiver {
                             tracing::warn!("Receiver stderr: {}", line.trim());
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDERR: {}", line));
+                            }
+                            if line.contains("[Receiver]: Mac:") {
+                                if let Some(mac) = line.split("Mac:").nth(1) {
+                                    let mac = mac.trim().to_string();
+                                    tracing::info!("Detected receiver MAC: {}", mac);
+                                    actual_mac = Some(mac);
+                                }
                             }
                             if line.contains("serving on") {
                                 tracing::info!(
@@ -248,6 +265,7 @@ impl PythonReceiver {
             log_buffer,
             _temp_dir: Some(temp_dir),
             port: actual_port,
+            mac: actual_mac,
             logs_written: false,
         })
     }
@@ -432,9 +450,14 @@ impl PythonReceiver {
     pub fn device_config(&self) -> airplay2::AirPlayDevice {
         use std::collections::HashMap;
 
+        let id = self
+            .mac
+            .clone()
+            .unwrap_or_else(|| "Integration-Test-Receiver".to_string());
+
         airplay2::AirPlayDevice {
-            id: "Integration-Test-Receiver".to_string(),
-            name: "Integration-Test-Receiver".to_string(),
+            id: id.clone(),
+            name: id,
             model: Some("AirPlay2-Receiver".to_string()),
             addresses: vec!["127.0.0.1".parse().unwrap()],
             port: self.port, // Use detected port
