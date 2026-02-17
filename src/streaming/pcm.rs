@@ -555,7 +555,10 @@ impl PcmStreamer {
     /// Set codec to ALAC
     pub async fn use_alac(&self) {
         // FRAMES_PER_PACKET (352) fits in u32
-        #[allow(clippy::cast_possible_truncation, reason = "FRAMES_PER_PACKET fits in u32")]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "FRAMES_PER_PACKET fits in u32"
+        )]
         let format = alac_encoder::FormatDescription::alac(
             f64::from(self.format.sample_rate.as_u32()),
             Self::FRAMES_PER_PACKET as u32,
