@@ -18,8 +18,11 @@ impl SineSource48k {
             channels: ChannelConfig::Stereo,
             sample_format: SampleFormat::I16,
         };
-        #[allow(clippy::cast_possible_truncation)]
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Casting duration to samples is safe for test parameters"
+        )]
         let max_samples = (48000.0 * duration_secs) as usize;
 
         Self {
@@ -54,7 +57,10 @@ impl AudioSource for SineSource48k {
 
             let sample = (self.phase * 2.0 * PI).sin();
 
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Float to i16 conversion is safe for test generation"
+            )]
             let value = (sample * f32::from(i16::MAX)) as i16;
             let bytes = value.to_le_bytes();
 
@@ -102,9 +108,12 @@ fn test_resampling_48k_to_44k_sine() {
     // 1 second of 44.1k Stereo I16 = 44100 * 4 bytes = 176400 bytes.
     let expected_bytes = 176_400;
     // Allow some tolerance due to block sizes
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_possible_wrap)]
-    #[allow(clippy::unnecessary_cast)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::unnecessary_cast,
+        reason = "Byte count verification allows truncation and wrap"
+    )]
     let diff = (i32::try_from(output_data.len()).unwrap() - expected_bytes as i32).abs();
     println!(
         "Output bytes: {}, Expected: {}, Diff: {}",
@@ -130,9 +139,15 @@ fn test_resampling_48k_to_44k_sine() {
         prev_sample = sample;
     }
 
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Precision loss in frequency estimation is acceptable for test verification"
+    )]
     let duration = samples.len() as f32 / 44100.0;
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Precision loss in frequency estimation is acceptable for test verification"
+    )]
     let frequency = (zero_crossings as f32 / duration) / 2.0;
 
     println!("Estimated frequency: {frequency:.1} Hz");

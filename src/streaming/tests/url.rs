@@ -14,7 +14,10 @@ async fn test_url_streamer_creation() {
 }
 
 #[test]
-#[allow(clippy::float_cmp)]
+#[allow(
+    clippy::float_cmp,
+    reason = "Exact floating point comparison is intentional for plist deserialization tests"
+)]
 fn test_parse_playback_info() {
     use crate::plist_dict;
     // Construct a sample plist dictionary
@@ -39,7 +42,10 @@ fn test_parse_playback_info() {
 }
 
 #[test]
-#[allow(clippy::float_cmp)]
+#[allow(
+    clippy::float_cmp,
+    reason = "Exact floating point comparison is intentional for plist deserialization tests"
+)]
 fn test_playback_info_defaults() {
     let info = PlaybackInfo {
         position: 0.0,
