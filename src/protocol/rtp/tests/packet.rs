@@ -101,5 +101,5 @@ fn test_csrc_count() {
     assert_eq!(decoded.csrc_count, 3);
     // Ensure byte 0 is correctly formed: V(2)=2 | P(0) | X(0) | CC(4)
     // With P=0, X=0, V=2 (10), CC=3 (0011) -> 10000011 -> 0x83
-    assert_eq!(encoded[0] & 0x0F, 3);
+    assert_eq!(encoded[0], 0x83);
 }
