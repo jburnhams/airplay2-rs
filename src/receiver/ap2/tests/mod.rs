@@ -11,5 +11,7 @@ mod password_integration;
 mod request_handler;
 mod request_router;
 mod response_builder;
+mod rtp_decryptor;
+mod rtp_receiver;
 mod session_state;
 mod setup_handler;
