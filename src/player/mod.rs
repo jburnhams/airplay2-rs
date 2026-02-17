@@ -2,8 +2,11 @@
 
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
+use crate::state::ClientEvent;
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 
@@ -11,41 +14,24 @@ use tokio::sync::RwLock;
 mod tests;
 
 /// Simplified `AirPlay` player for common use cases
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use airplay2::AirPlayPlayer;
-/// use std::time::Duration;
-///
-/// # async fn example() -> Result<(), airplay2::AirPlayError> {
-/// // Create player and connect to first available device
-/// let mut player = AirPlayPlayer::new();
-/// player.auto_connect(Duration::from_secs(5)).await?;
-///
-/// // Play some tracks
-/// player.play_tracks(vec![
-///     ("http://example.com/1.mp3".to_string(), "Song 1".to_string(), "Artist A".to_string()),
-///     ("http://example.com/2.mp3".to_string(), "Song 2".to_string(), "Artist B".to_string()),
-/// ]).await?;
-///
-/// // Control playback
-/// player.pause().await?;
-/// player.skip().await?;
-/// player.set_volume(0.5).await?;
-///
-/// # Ok(())
-/// # }
-/// ```
+#[derive(Clone)]
 pub struct AirPlayPlayer {
     /// Underlying client
     client: AirPlayClient,
     /// Auto-reconnect on disconnect
-    auto_reconnect: bool,
+    auto_reconnect: Arc<AtomicBool>,
     /// Target device name for auto-connection
-    target_device_name: Option<String>,
+    target_device_name: Arc<RwLock<Option<String>>>,
     /// Last connected device
-    last_device: RwLock<Option<AirPlayDevice>>,
+    last_device: Arc<RwLock<Option<AirPlayDevice>>>,
+    /// Reconnection in progress flag
+    is_reconnecting: Arc<AtomicBool>,
+}
+
+impl Default for AirPlayPlayer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AirPlayPlayer {
@@ -58,22 +44,138 @@ impl AirPlayPlayer {
     /// Create with custom config
     #[must_use]
     pub fn with_config(config: AirPlayConfig) -> Self {
-        Self {
+        let player = Self {
             client: AirPlayClient::new(config),
-            auto_reconnect: true,
-            target_device_name: None,
-            last_device: RwLock::new(None),
-        }
+            auto_reconnect: Arc::new(AtomicBool::new(true)),
+            target_device_name: Arc::new(RwLock::new(None)),
+            last_device: Arc::new(RwLock::new(None)),
+            is_reconnecting: Arc::new(AtomicBool::new(false)),
+        };
+
+        player.start_reconnect_monitor();
+        player
     }
 
     /// Enable or disable auto-reconnect
     pub fn set_auto_reconnect(&mut self, enabled: bool) {
-        self.auto_reconnect = enabled;
+        self.auto_reconnect.store(enabled, Ordering::SeqCst);
     }
 
     /// Set target device name for auto-connection
-    pub fn set_target_device_name(&mut self, name: Option<String>) {
-        self.target_device_name = name;
+    pub async fn set_target_device_name(&self, name: Option<String>) {
+        *self.target_device_name.write().await = name;
+    }
+
+    fn start_reconnect_monitor(&self) {
+        let client = self.client.clone();
+        let auto_reconnect = self.auto_reconnect.clone();
+        let last_device = self.last_device.clone();
+        let is_reconnecting = self.is_reconnecting.clone();
+        let mut events = client.subscribe_events();
+
+        tokio::spawn(async move {
+            while let Ok(event) = events.recv().await {
+                if let ClientEvent::Disconnected { reason, .. } = event {
+                    tracing::info!("Player detected disconnect: {}", reason);
+
+                    // Check if we should reconnect
+                    // Don't reconnect if user requested it explicitly via disconnect()
+                    // (which typically sends UserRequested reason)
+                    let should_reconnect = auto_reconnect.load(Ordering::SeqCst);
+                    if !should_reconnect || reason.contains("UserRequested") {
+                        tracing::info!(
+                            "Ignoring disconnect event (Auto-reconnect disabled or UserRequested)."
+                        );
+                        continue;
+                    }
+
+                    if is_reconnecting.swap(true, Ordering::SeqCst) {
+                        tracing::debug!("Reconnection already in progress");
+                        continue;
+                    }
+
+                    tracing::info!("Attempting auto-reconnect in 2s...");
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+
+                    // Reconnection loop
+                    let mut attempts: u32 = 0;
+                    let max_attempts = 10;
+                    let mut success = false;
+
+                    while attempts < max_attempts && auto_reconnect.load(Ordering::SeqCst) {
+                        attempts += 1;
+                        tracing::info!("Reconnection attempt {}/{}", attempts, max_attempts);
+
+                        // Try to get last device info
+                        let target_device = last_device.read().await.clone();
+
+                        if let Some(mut device) = target_device {
+                            // 1. Try connecting directly (fast path)
+                            // This works if IP/Port hasn't changed
+                            if let Err(e) = client.connect(&device).await {
+                                tracing::debug!(
+                                    "Direct connection failed: {}. Retrying with scan...",
+                                    e
+                                );
+
+                                // 2. If direct fails, try to re-discover device (IP/Port might have changed)
+                                // We scan for a device with the same ID
+                                match client.scan(Duration::from_secs(3)).await {
+                                    Ok(devices) => {
+                                        if let Some(updated_device) =
+                                            devices.into_iter().find(|d| d.id == device.id)
+                                        {
+                                            tracing::info!(
+                                                "Found updated device info: {:?} -> {:?}",
+                                                device.addresses,
+                                                updated_device.addresses
+                                            );
+                                            device = updated_device;
+                                            // Update last_device with new info
+                                            *last_device.write().await = Some(device.clone());
+
+                                            if let Err(e) = client.connect(&device).await {
+                                                tracing::warn!(
+                                                    "Reconnection failed after scan: {}",
+                                                    e
+                                                );
+                                            } else {
+                                                success = true;
+                                                break;
+                                            }
+                                        } else {
+                                            tracing::warn!(
+                                                "Device {} not found in scan",
+                                                device.id
+                                            );
+                                        }
+                                    }
+                                    Err(e) => tracing::warn!("Scan failed during reconnect: {}", e),
+                                }
+                            } else {
+                                success = true;
+                                break;
+                            }
+                        } else {
+                            tracing::warn!("No last device to reconnect to");
+                            break;
+                        }
+
+                        // Exponential backoff
+                        let backoff = Duration::from_secs(2u64.pow(attempts.min(4)));
+                        tokio::time::sleep(backoff).await;
+                    }
+
+                    if success {
+                        tracing::info!("✓ Auto-reconnected successfully");
+                    } else {
+                        tracing::error!("Failed to auto-reconnect after {} attempts", max_attempts);
+                    }
+
+                    is_reconnecting.store(false, Ordering::SeqCst);
+                }
+            }
+        });
     }
 
     // === Quick Connect Methods ===
@@ -86,7 +188,9 @@ impl AirPlayPlayer {
     pub async fn auto_connect(&self, timeout: Duration) -> Result<AirPlayDevice, AirPlayError> {
         let devices = self.client.scan(timeout).await?;
 
-        let device = if let Some(target_name) = &self.target_device_name {
+        let target = self.target_device_name.read().await.clone();
+
+        let device = if let Some(target_name) = target {
             let name_lower = target_name.to_lowercase();
             devices
                 .into_iter()
@@ -174,13 +278,9 @@ impl AirPlayPlayer {
             self.client.add_to_queue(track).await;
         }
 
-        // Explicitly start streaming the first track using play_url
-        // because client.play() only resumes/starts if state is already primed,
-        // and doesn't automatically pull from queue to start streaming yet.
         if let Some((url, _, _)) = tracks.first() {
             self.client.play_url(url).await
         } else {
-            // Empty tracks, just try to play/resume whatever state has
             self.client.play().await
         }
     }
@@ -387,7 +487,6 @@ impl AirPlayPlayer {
     pub fn client_mut(&mut self) -> &mut AirPlayClient {
         &mut self.client
     }
-    // === Advanced Playback with Decoders ===
 
     /// Play a local file (requires `decoders` feature)
     ///
@@ -407,13 +506,9 @@ impl AirPlayPlayer {
 
         // Ensure connected
         if !self.is_connected().await {
-            // Use auto-connect if configured target is set, otherwise fail?
-            // Or just fail. The user should handle connection.
-            // But for convenience, let's try to verify connection or error.
-            if let Some(ref name) = self.target_device_name {
+            if let Some(ref name) = *self.target_device_name.read().await {
                 self.connect_by_name(name, Duration::from_secs(5)).await?;
             } else {
-                // Check if we have a last device
                 let last = self.last_device.read().await.clone();
                 if let Some(d) = last {
                     self.connect(&d).await?;
@@ -427,12 +522,6 @@ impl AirPlayPlayer {
         }
 
         self.client.stream_audio(source).await
-    }
-}
-
-impl Default for AirPlayPlayer {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -479,8 +568,10 @@ impl PlayerBuilder {
     #[must_use]
     pub fn build(self) -> AirPlayPlayer {
         let mut player = AirPlayPlayer::with_config(self.config);
-        player.auto_reconnect = self.auto_reconnect;
-        player.target_device_name = self.device_name;
+        player.set_auto_reconnect(self.auto_reconnect);
+        if let Some(name) = self.device_name {
+            player.target_device_name = Arc::new(RwLock::new(Some(name)));
+        }
         player
     }
 }

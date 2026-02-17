@@ -54,6 +54,8 @@ MDNS_OBJ = None
 HK_ACL_LEVEL = 0
 # HomeKit assigned password (numeric PIN) to access
 HK_PW = None
+# Global port variable to ensure mDNS uses correct port
+PORT = 7000
 
 """
 # SERVER_VERSION; presence/absence, and value dictates client behaviours
@@ -134,9 +136,9 @@ def update_status_flags(flag=None, on=False, push=True):
     # If push is false, we skip pushing out the update.
     if push:
         if IPV6 is not None:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
         else:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
 
 
 def setup_global_structs(args, isDebug=False):
@@ -1199,14 +1201,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.logger.debug("----- ENCRYPTED CHANNEL -----")
 
 
-def register_mdns(mac, receiver_name, addresses):
+def register_mdns(mac, receiver_name, addresses, port=7000):
     global MDNS_OBJ
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
         f"{receiver_name}._airplay._tcp.local.",
         addresses=addresses,
-        port=7000,
+        port=port,
         properties=mdns_props,
         server=f"{mac.replace(':', '')}@{receiver_name}._airplay.local.",
     )
@@ -1490,12 +1492,18 @@ if __name__ == "__main__":
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
+        # Update global PORT from args
         PORT = args.port
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
                 IPADDR_BIN = IP6ADDR_BIN
                 IPADDR = IPV6
                 PORT = httpd.server_address[1]
+                # Re-register mDNS with actual port
+                if MDNS_OBJ:
+                    unregister_mdns(*MDNS_OBJ)
+                    MDNS_OBJ = None
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP6ADDR_BIN], PORT)
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
@@ -1503,6 +1511,14 @@ if __name__ == "__main__":
                 IPADDR_BIN = IP4ADDR_BIN
                 IPADDR = IPV4
                 PORT = httpd.server_address[1]
+                # Re-register mDNS with actual port
+                if MDNS_OBJ:
+                    unregister_mdns(*MDNS_OBJ)
+                    MDNS_OBJ = None
+                addrs_to_register = [IP4ADDR_BIN]
+                if IPV6:
+                    addrs_to_register.append(IP6ADDR_BIN)
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, addrs_to_register, PORT)
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
 

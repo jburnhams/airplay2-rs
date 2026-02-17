@@ -24,6 +24,8 @@ pub struct PythonReceiver {
     mac: Option<String>,
     // Flag to ensure logs are written once
     logs_written: bool,
+    // Unique name for this receiver
+    name: String,
 }
 
 impl PythonReceiver {
@@ -34,6 +36,10 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
+        // Generate unique name
+        let random_id: u32 = rand::random();
+        let name = format!("Receiver-{}", random_id);
+
         // Locate source directory
         let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
         #[allow(clippy::collapsible_if)]
@@ -76,7 +82,11 @@ impl PythonReceiver {
         // Restore .gitignore to keep repo clean (though irrelevant in temp, good practice)
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
-        tracing::info!("Starting Python receiver on interface: {}", interface);
+        tracing::info!(
+            "Starting Python receiver '{}' on interface: {}",
+            name,
+            interface
+        );
         tracing::debug!("Source dir: {:?}", source_dir);
         tracing::debug!("Output/Temp dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
@@ -93,7 +103,9 @@ impl PythonReceiver {
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("-m")
+            .arg(&name);
 
         // Check if port is already in args
         if !args.contains(&"-p") && !args.contains(&"--port") {
@@ -267,6 +279,7 @@ impl PythonReceiver {
             port: actual_port,
             mac: actual_mac,
             logs_written: false,
+            name,
         })
     }
 
@@ -383,7 +396,7 @@ impl PythonReceiver {
             use nix::unistd::Pid;
             if let Some(id) = self.process.id() {
                 let pid = Pid::from_raw(id as i32);
-                let _ = kill(pid, Signal::SIGTERM);
+                let _ = kill(pid, Signal::SIGINT);
             }
         }
 
