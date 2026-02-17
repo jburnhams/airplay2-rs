@@ -5,8 +5,8 @@ use crate::error::AirPlayError;
 use crate::state::ClientEvent;
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 
@@ -83,7 +83,9 @@ impl AirPlayPlayer {
                     // (which typically sends UserRequested reason)
                     let should_reconnect = auto_reconnect.load(Ordering::SeqCst);
                     if !should_reconnect || reason.contains("UserRequested") {
-                        tracing::info!("Ignoring disconnect event (Auto-reconnect disabled or UserRequested).");
+                        tracing::info!(
+                            "Ignoring disconnect event (Auto-reconnect disabled or UserRequested)."
+                        );
                         continue;
                     }
 
@@ -142,7 +144,10 @@ impl AirPlayPlayer {
                                                 break;
                                             }
                                         } else {
-                                            tracing::warn!("Device {} not found in scan", device.id);
+                                            tracing::warn!(
+                                                "Device {} not found in scan",
+                                                device.id
+                                            );
                                         }
                                     }
                                     Err(e) => tracing::warn!("Scan failed during reconnect: {}", e),
@@ -501,7 +506,7 @@ impl AirPlayPlayer {
 
         // Ensure connected
         if !self.is_connected().await {
-             if let Some(ref name) = *self.target_device_name.read().await {
+            if let Some(ref name) = *self.target_device_name.read().await {
                 self.connect_by_name(name, Duration::from_secs(5)).await?;
             } else {
                 let last = self.last_device.read().await.clone();
@@ -584,7 +589,9 @@ impl Default for PlayerBuilder {
 /// # Errors
 ///
 /// Returns error if scanning fails, no device found, or playback fails.
-pub async fn quick_play(tracks: Vec<(String, String, String)>) -> Result<AirPlayPlayer, AirPlayError> {
+pub async fn quick_play(
+    tracks: Vec<(String, String, String)>,
+) -> Result<AirPlayPlayer, AirPlayError> {
     let player = AirPlayPlayer::new();
     player.auto_connect(Duration::from_secs(5)).await?;
     player.play_tracks(tracks).await?;
