@@ -206,7 +206,7 @@ impl PythonReceiver {
                             if line.contains("Mac: ") {
                                 if let Some(mac) = line.split("Mac: ").nth(1) {
                                     actual_mac = mac.trim().to_string();
-                                    tracing::info!("Detected receiver MAC: {}", actual_mac);
+                                    tracing::info!("Detected receiver MAC (stderr): {}", actual_mac);
                                 }
                             }
 
