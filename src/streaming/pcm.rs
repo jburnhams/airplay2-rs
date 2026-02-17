@@ -57,7 +57,7 @@ pub enum StreamerState {
     /// Stream ended
     Finished,
     /// Error occurred
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Error variant is reserved for future use")]
     Error,
 }
 
@@ -226,8 +226,10 @@ impl PcmStreamer {
     }
 
     /// Main streaming loop
-    // Complexity is necessary for the main streaming logic
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Complexity is necessary for the main streaming logic"
+    )]
     async fn streaming_loop<S: AudioSource>(&self, mut source: S) -> Result<(), AirPlayError> {
         let codec_type = *self.codec_type.read().await;
         let frames_per_packet = match codec_type {
@@ -365,7 +367,10 @@ impl PcmStreamer {
                                             payload.extend_from_slice(&[0x00, 0x10]);
 
                                             // AAC frames are small enough to fit in u16
-                                            #[allow(clippy::cast_possible_truncation)]
+                                            #[allow(
+                                                clippy::cast_possible_truncation,
+                                                reason = "AAC frame size fits in u16"
+                                            )]
                                             let size = encoded.len() as u16;
                                             let header = (size << 3) & 0xFFF8;
                                             payload.extend_from_slice(&header.to_be_bytes());
@@ -550,7 +555,7 @@ impl PcmStreamer {
     /// Set codec to ALAC
     pub async fn use_alac(&self) {
         // FRAMES_PER_PACKET (352) fits in u32
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, reason = "FRAMES_PER_PACKET fits in u32")]
         let format = alac_encoder::FormatDescription::alac(
             f64::from(self.format.sample_rate.as_u32()),
             Self::FRAMES_PER_PACKET as u32,

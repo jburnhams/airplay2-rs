@@ -111,7 +111,11 @@ impl ResamplingSource {
     }
 
     /// Process next chunk of audio
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        reason = "Precision loss is acceptable for audio sample processing"
+    )]
     fn process_next_chunk(&mut self) -> io::Result<bool> {
         let chunk_size = 1024; // Target input chunk size
         let bytes_per_frame = self.input_format.bytes_per_frame();
@@ -186,7 +190,10 @@ impl ResamplingSource {
                             self.input_bytes_buffer[byte_index + 2],
                         ];
                         let sample_i32 = i32::from_le_bytes([0, bytes[0], bytes[1], bytes[2]]) >> 8;
-                        #[allow(clippy::cast_precision_loss)]
+                        #[allow(
+                            clippy::cast_precision_loss,
+                            reason = "i32 to f32 conversion loss is negligible for 24-bit audio"
+                        )]
                         let sample_float = sample_i32 as f32 / 8_388_608.0;
                         self.input_planar[ch].push(sample_float);
                     }
@@ -295,7 +302,10 @@ impl ResamplingSource {
 
         output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
             let clamped = sample.clamp(-1.0, 1.0);
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Clamped float to i16 conversion is safe"
+            )]
             let value = (clamped * f32::from(i16::MAX)) as i16;
             value.to_le_bytes()
         }));
