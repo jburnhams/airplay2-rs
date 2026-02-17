@@ -12,8 +12,6 @@ pub enum PayloadType {
     AudioRealtime = 0x60,
     /// Audio data (buffered)
     AudioBuffered = 0x61,
-    /// Audio data (PCM)
-    AudioPcm = 0x64,
     /// Retransmit request
     RetransmitRequest = 0x55,
     /// Retransmit response
@@ -29,7 +27,6 @@ impl PayloadType {
             0x53 => Some(Self::TimingResponse),
             0x60 => Some(Self::AudioRealtime),
             0x61 => Some(Self::AudioBuffered),
-            0x64 => Some(Self::AudioPcm),
             0x55 => Some(Self::RetransmitRequest),
             0x56 => Some(Self::RetransmitResponse),
             _ => None,
