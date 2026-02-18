@@ -1219,7 +1219,9 @@ def register_mdns(mac, receiver_name, addresses, port=7000):
 
     if zeroconf is None:
         try:
-            zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+            # Restrict to the chosen interface to avoid "No route to host" errors on other interfaces
+            interfaces = [IPV4] if IPV4 else None
+            zeroconf = Zeroconf(ip_version=IPVersion.V4Only, interfaces=interfaces)
         except OSError as e:
             SCR_LOG.error(f'mDNS exception during initialization: {repr(e)}')
             return None
