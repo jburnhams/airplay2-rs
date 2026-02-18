@@ -185,8 +185,9 @@ impl PairingServer {
         self.encryption_keys = None;
         self.client_public_key = None;
         self.client_curve_public = None;
-        // Regenerate salt for next attempt
-        rand::thread_rng().fill_bytes(&mut self.srp_salt);
+        // Do NOT regenerate salt here because srp_verifier depends on it
+        // and we don't store the password to recompute the verifier.
+        // rand::thread_rng().fill_bytes(&mut self.srp_salt);
     }
 
     // === Internal handlers ===
@@ -298,11 +299,18 @@ impl PairingServer {
         );
         self.state = PairingServerState::PairSetupComplete;
 
+        // For transient pairing, the client may stop here and start using session keys derived from SRP key.
+        // We speculatively derive them here so they are available if the client switches to encryption.
+        // If the client continues with M5 (Persistent Pairing), these keys will be replaced or unused until M6?
+        // Actually, Persistent pairing continues handshake. But if client stops (Transient), we are ready.
+        let enc_keys = Self::derive_session_keys_from_srp(session_key.as_bytes());
+        self.encryption_keys = Some(enc_keys);
+
         PairingResult {
             response,
             new_state: self.state,
             error: None,
-            complete: false, // Still need pair-verify
+            complete: true, // Mark as potentially complete for transient pairing
         }
     }
 
@@ -538,10 +546,14 @@ impl PairingServer {
     }
 
     fn derive_session_keys(shared_secret: &[u8; 32]) -> EncryptionKeys {
+        Self::derive_session_keys_from_srp(shared_secret)
+    }
+
+    fn derive_session_keys_from_srp(secret: &[u8]) -> EncryptionKeys {
         // Derive keys for bidirectional communication
         let encrypt_key = derive_key(
             Some(b"Control-Salt"),
-            shared_secret,
+            secret,
             b"Control-Write-Encryption-Key",
             32,
         )
@@ -549,7 +561,7 @@ impl PairingServer {
 
         let decrypt_key = derive_key(
             Some(b"Control-Salt"),
-            shared_secret,
+            secret,
             b"Control-Read-Encryption-Key",
             32,
         )
