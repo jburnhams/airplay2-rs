@@ -11,6 +11,9 @@ async fn setup_streaming_test(
 ) -> Result<(PythonReceiver, AirPlayClient, AirPlayDevice), Box<dyn std::error::Error>> {
     let receiver = PythonReceiver::start().await?;
 
+    // Give receiver time to start
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
     let mut config = AirPlayConfig::default();
     config.discovery_timeout = Duration::from_secs(5);
     config.connection_timeout = Duration::from_secs(5);

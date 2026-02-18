@@ -14,6 +14,9 @@ async fn test_forget_device() {
         .await
         .expect("Failed to start receiver");
 
+    // Give receiver time to start
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
     // 2. Setup persistent storage
     let dir = tempdir().expect("Failed to create temp dir");
     let storage_path = dir.path().join("pairings.json");
