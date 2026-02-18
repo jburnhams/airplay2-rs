@@ -231,5 +231,9 @@ fn test_depth_accuracy_with_partial_read() {
 
     // Remaining depth should be 1 frame (352 samples) ~7.9ms
     let expected_depth_one = (352 * 1000 / 44100) as u32;
-    assert_eq!(buffer.depth_ms(), expected_depth_one, "Depth after full frame 1 read mismatch");
+    assert_eq!(
+        buffer.depth_ms(),
+        expected_depth_one,
+        "Depth after full frame 1 read mismatch"
+    );
 }
