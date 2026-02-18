@@ -186,8 +186,11 @@ async fn test_resampling_integration() {
 
     // 100ms of audio
     let duration_secs = 0.1;
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Test data generation"
+    )]
     let num_samples = (f64::from(source_format.sample_rate.as_u32()) * duration_secs) as usize;
     let data = vec![0u8; num_samples * source_format.bytes_per_frame()];
     let source = SliceSource::new(data, source_format);

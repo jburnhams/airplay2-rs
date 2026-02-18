@@ -6,6 +6,7 @@ mod encrypted_channel;
 mod encrypted_rtsp;
 mod features;
 mod info_endpoint;
+mod jitter_buffer;
 mod pairing_server;
 mod password_integration;
 mod request_handler;

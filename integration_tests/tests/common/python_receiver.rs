@@ -42,7 +42,10 @@ impl PythonReceiver {
 
         // Locate source directory
         let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
-        #[allow(clippy::collapsible_if)]
+        #[allow(
+            clippy::collapsible_if,
+            reason = "Nested if-let needed to check parent directory"
+        )]
         if !source_dir.exists() {
             if let Some(parent) = std::env::current_dir()?.parent() {
                 let parent_dir = parent.join("airplay2-receiver");
@@ -171,22 +174,22 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDOUT: {}", line));
                             }
-                            if line.contains("[Receiver]: Mac:") {
-                                if let Some(mac) = line.split("Mac:").nth(1) {
+                            if line.contains("[Receiver]: Mac:")
+                                && let Some(mac) = line.split("Mac:").nth(1) {
                                     let mac = mac.trim().to_string();
                                     tracing::info!("Detected receiver MAC: {}", mac);
                                     actual_mac = Some(mac);
                                 }
-                            }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
-                                #[allow(clippy::collapsible_if)]
-                                if let Some(port_str) = line.split(':').next_back() {
-                                    if let Ok(p) = port_str.trim().parse::<u16>() {
-                                        actual_port = p;
-                                        tracing::info!("Detected receiver port: {}", actual_port);
-                                    }
+                                if let Some(p) = line
+                                    .split(':')
+                                    .next_back()
+                                    .and_then(|s| s.trim().parse::<u16>().ok())
+                                {
+                                    actual_port = p;
+                                    tracing::info!("Detected receiver port: {}", actual_port);
                                 }
                                 break;
                             }
@@ -202,13 +205,12 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDERR: {}", line));
                             }
-                            if line.contains("[Receiver]: Mac:") {
-                                if let Some(mac) = line.split("Mac:").nth(1) {
+                            if line.contains("[Receiver]: Mac:")
+                                && let Some(mac) = line.split("Mac:").nth(1) {
                                     let mac = mac.trim().to_string();
                                     tracing::info!("Detected receiver MAC: {}", mac);
                                     actual_mac = Some(mac);
                                 }
-                            }
                             if line.contains("serving on") {
                                 tracing::info!(
                                     "✓ Python receiver started (detected in stderr): {}",
@@ -320,11 +322,12 @@ impl PythonReceiver {
                 return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
             }
 
-            #[allow(clippy::collapsible_if)]
-            if let Ok(guard) = self.log_buffer.lock() {
-                if guard.iter().any(|line| line.contains(pattern)) {
-                    return Ok(());
-                }
+            if self
+                .log_buffer
+                .lock()
+                .is_ok_and(|guard| guard.iter().any(|line| line.contains(pattern)))
+            {
+                return Ok(());
             }
 
             sleep(Duration::from_millis(100)).await;
