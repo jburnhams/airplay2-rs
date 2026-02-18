@@ -256,6 +256,7 @@ impl JitterBuffer {
         self.current_frame_offset = 0;
         self.state = BufferState::Buffering;
         self.started = false;
+        self.update_depth();
         tracing::debug!("Jitter buffer flushed");
     }
 
@@ -269,6 +270,7 @@ impl JitterBuffer {
             }
         }
         self.playback_position = timestamp;
+        self.update_depth();
         tracing::debug!("Jitter buffer flushed to timestamp {}", timestamp);
     }
 

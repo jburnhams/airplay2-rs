@@ -216,12 +216,15 @@ fn test_depth_accuracy_with_partial_read() {
     // Remaining depth should be 1.5 frames (528 samples) ~11.9ms
     let expected_depth_partial = (528 * 1000 / 44100) as u32;
     // Allow slight rounding diff
-    assert!(
-        (buffer.depth_ms() as i32 - expected_depth_partial as i32).abs() <= 1,
-        "Depth after partial read mismatch: got {}, expected {}",
-        buffer.depth_ms(),
-        expected_depth_partial
-    );
+    #[allow(clippy::cast_possible_wrap)]
+    {
+        assert!(
+            (buffer.depth_ms() as i32 - expected_depth_partial as i32).abs() <= 1,
+            "Depth after partial read mismatch: got {}, expected {}",
+            buffer.depth_ms(),
+            expected_depth_partial
+        );
+    }
 
     // Pull remaining half of first frame
     let _ = buffer.pull(176);
