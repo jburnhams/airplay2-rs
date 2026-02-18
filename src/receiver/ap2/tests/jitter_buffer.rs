@@ -103,6 +103,9 @@ fn test_flush() {
     buffer.flush();
 
     assert_eq!(buffer.state(), BufferState::Buffering);
+    // Depth calc depends on first frame or playback position.
+    // Flush clears everything, so frames empty, current_frame None.
+    // update_depth sets to 0.
     assert_eq!(buffer.depth_ms(), 0);
 }
 
@@ -185,4 +188,45 @@ fn test_partial_reads() {
     assert_eq!(samples3.len(), 200);
     assert!(samples3.iter().all(|&s| s == 0));
     assert!(buffer.stats().frames_lost > 0);
+}
+
+#[test]
+fn test_depth_accuracy_with_partial_read() {
+    let config = JitterBufferConfig {
+        target_depth_ms: 0,
+        sample_rate: 44100,
+        ..Default::default()
+    };
+    let mut buffer = JitterBuffer::new(config);
+
+    buffer.set_playback_position(352);
+
+    // Push two frames: 352 (length 352*2 samples) and 352*2 (length 352*2 samples)
+    // Frame duration is 352 samples.
+    buffer.push(make_frame(1, 352));
+    buffer.push(make_frame(2, 352 * 2));
+
+    // Depth should be 2 frames (704 samples) ~15.9ms
+    let expected_depth = (2 * 352 * 1000 / 44100) as u32;
+    assert_eq!(buffer.depth_ms(), expected_depth, "Initial depth mismatch");
+
+    // Pull half of the first frame (176 frames = 352 samples)
+    let _ = buffer.pull(176);
+
+    // Remaining depth should be 1.5 frames (528 samples) ~11.9ms
+    let expected_depth_partial = (528 * 1000 / 44100) as u32;
+    // Allow slight rounding diff
+    assert!(
+        (buffer.depth_ms() as i32 - expected_depth_partial as i32).abs() <= 1,
+        "Depth after partial read mismatch: got {}, expected {}",
+        buffer.depth_ms(),
+        expected_depth_partial
+    );
+
+    // Pull remaining half of first frame
+    let _ = buffer.pull(176);
+
+    // Remaining depth should be 1 frame (352 samples) ~7.9ms
+    let expected_depth_one = (352 * 1000 / 44100) as u32;
+    assert_eq!(buffer.depth_ms(), expected_depth_one, "Depth after full frame 1 read mismatch");
 }

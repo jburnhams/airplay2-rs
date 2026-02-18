@@ -282,28 +282,43 @@ impl JitterBuffer {
     }
 
     fn update_depth(&mut self) {
-        if self.frames.is_empty() {
-            // If we have a current frame, we have some depth?
-            // Maybe negligible for depth stats which are usually about buffered future frames.
+        let channels = self.config.channels as usize;
+
+        // Determine the "end" timestamp (timestamp of the last sample + 1)
+        let end_ts = if let Some((_, last_frame)) = self.frames.iter().next_back() {
+            #[allow(clippy::cast_possible_truncation)]
+            let duration = (last_frame.samples.len() / channels) as u32;
+            last_frame.timestamp.wrapping_add(duration)
+        } else if let Some(ref frame) = self.current_frame {
+            #[allow(clippy::cast_possible_truncation)]
+            let duration = (frame.samples.len() / channels) as u32;
+            frame.timestamp.wrapping_add(duration)
+        } else {
+            // Buffer empty
             self.stats.current_depth_ms = 0;
             return;
-        }
+        };
 
-        let first = *self.frames.keys().next().unwrap();
-        let last = *self.frames.keys().last().unwrap();
+        // Determine the "current" timestamp (playhead)
+        let current_ts = if self.state == BufferState::Buffering {
+            // In buffering, depth is relative to the first frame
+            if let Some((first_ts, _)) = self.frames.iter().next() {
+                *first_ts
+            } else {
+                // Should be covered by empty check above, but safe fallback
+                self.stats.current_depth_ms = 0;
+                return;
+            }
+        } else {
+            // In playing/underrun, depth is relative to playback position
+            // If we have a current frame, we are at playback_position + offset
+            #[allow(clippy::cast_possible_truncation)]
+            let offset_duration = (self.current_frame_offset / channels) as u32;
+            self.playback_position.wrapping_add(offset_duration)
+        };
 
-        // If current frame is playing, `first` in `frames` is the *next* frame.
-        // The depth is from `playback_position` (approx) to `last`.
-        // But `frames` keys are accurate.
-        // Let's stick to `frames` keys for now.
-        // If we want more precision, we'd use `playback_position` vs `last`.
-        // `playback_position` updates as we consume current frame.
+        let depth_samples = end_ts.wrapping_sub(current_ts);
 
-        // Let's use `playback_position` as the start if we are playing?
-        // Or just keep using `frames` for consistency with previous logic.
-        // `frames` contains future frames.
-
-        let depth_samples = last.wrapping_sub(first);
         #[allow(clippy::cast_possible_truncation, reason = "Depth fits in u32")]
         {
             self.stats.current_depth_ms =
