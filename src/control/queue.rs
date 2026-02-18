@@ -1,7 +1,8 @@
 //! Playback queue management
 
-use crate::types::{QueueItem, QueueItemId, TrackInfo};
 use std::collections::VecDeque;
+
+use crate::types::{QueueItem, QueueItemId, TrackInfo};
 
 /// Playback queue
 #[derive(Debug)]

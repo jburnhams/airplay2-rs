@@ -1,6 +1,7 @@
 //! TLV8 encoding for `HomeKit` pairing protocol
 
 use std::collections::HashMap;
+
 use thiserror::Error;
 
 /// TLV type codes used in `HomeKit` pairing

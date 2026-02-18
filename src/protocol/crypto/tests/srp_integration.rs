@@ -3,9 +3,10 @@
 //! These tests verify that our SRP client implementation is compatible with
 //! the Python airplay2-receiver's SRP server implementation.
 
-use super::super::{SrpClient, SrpParams};
 use num_bigint::BigUint;
 use sha2::{Digest, Sha512};
+
+use super::super::{SrpClient, SrpParams};
 
 /// Test that M1 calculation matches Python receiver expectations
 ///

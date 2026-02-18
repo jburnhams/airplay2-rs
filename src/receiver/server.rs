@@ -1,5 +1,11 @@
 //! Main `AirPlay` receiver implementation
 
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{RwLock, broadcast, mpsc};
+
 use super::config::ReceiverConfig;
 use super::events::ReceiverEvent;
 use super::session_manager::{SessionManager, SessionManagerConfig};
@@ -8,11 +14,6 @@ use crate::discovery::advertiser::{AdvertiserConfig, AsyncRaopAdvertiser};
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::transport::TransportHeader;
 use crate::protocol::rtsp::{RtspRequest, RtspServerCodec, encode_response};
-
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{RwLock, broadcast, mpsc};
 
 /// `AirPlay` 1 receiver
 pub struct AirPlayReceiver {

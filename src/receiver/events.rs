@@ -1,9 +1,10 @@
 //! Receiver events for UI and application integration
 
+use std::net::SocketAddr;
+
 use super::artwork_handler::Artwork;
 use super::metadata_handler::TrackMetadata;
 use super::progress_handler::PlaybackProgress;
-use std::net::SocketAddr;
 
 /// Events emitted by the receiver
 #[derive(Debug, Clone)]

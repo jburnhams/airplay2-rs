@@ -1,9 +1,10 @@
 //! Audio pipeline connecting jitter buffer to output
 
+use std::sync::{Arc, Mutex};
+
 use crate::audio::format::{AudioCodec, AudioFormat};
 use crate::audio::jitter::JitterBuffer;
 use crate::audio::output::{AudioCallback, AudioOutput, AudioOutputError};
-use std::sync::{Arc, Mutex};
 
 /// Audio pipeline state
 pub struct AudioPipeline {

@@ -1,5 +1,6 @@
-use super::super::*;
 use rand::RngCore;
+
+use super::super::*;
 
 #[test]
 fn test_srp_client_creation() {

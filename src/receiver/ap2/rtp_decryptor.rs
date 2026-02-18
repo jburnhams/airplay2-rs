@@ -183,7 +183,8 @@ impl AudioDecoder for PcmDecoder {
                         // Construct 32-bit int with sample in upper 24 bits: [0, LSB, Mid, MSB]
                         // This ensures correct sign extension when shifting down.
                         let value = i32::from_le_bytes([0, chunk[0], chunk[1], chunk[2]]);
-                        // Shift right by 16 to get top 16 bits (dropping bottom 8 bits of 24-bit sample)
+                        // Shift right by 16 to get top 16 bits (dropping bottom 8 bits of 24-bit
+                        // sample)
                         #[allow(clippy::cast_possible_truncation)]
                         {
                             (value >> 16) as i16

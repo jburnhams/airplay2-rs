@@ -1,14 +1,15 @@
 //! High-level player API
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
+use tokio::sync::RwLock;
+
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
 use crate::state::ClientEvent;
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
-
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-use tokio::sync::RwLock;
 
 #[cfg(test)]
 mod tests;
@@ -118,7 +119,8 @@ impl AirPlayPlayer {
                                     e
                                 );
 
-                                // 2. If direct fails, try to re-discover device (IP/Port might have changed)
+                                // 2. If direct fails, try to re-discover device (IP/Port might have
+                                //    changed)
                                 // We scan for a device with the same ID
                                 match client.scan(Duration::from_secs(3)).await {
                                     Ok(devices) => {

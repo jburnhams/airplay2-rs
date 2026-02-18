@@ -3,14 +3,15 @@
 //! This module implements the server side of `HomeKit` pairing, used by
 //! `AirPlay` 2 receivers to authenticate connecting senders.
 
+use rand::RngCore;
+use sha2::{Digest, Sha512};
+use thiserror::Error;
+
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, Nonce, SrpParams,
     SrpServer, X25519KeyPair, X25519PublicKey, derive_key,
 };
 use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
-use rand::RngCore;
-use sha2::{Digest, Sha512};
-use thiserror::Error;
 
 /// Pairing server state machine
 pub struct PairingServer {
@@ -299,10 +300,11 @@ impl PairingServer {
         );
         self.state = PairingServerState::PairSetupComplete;
 
-        // For transient pairing, the client may stop here and start using session keys derived from SRP key.
-        // We speculatively derive them here so they are available if the client switches to encryption.
-        // If the client continues with M5 (Persistent Pairing), these keys will be replaced or unused until M6?
-        // Actually, Persistent pairing continues handshake. But if client stops (Transient), we are ready.
+        // For transient pairing, the client may stop here and start using session keys derived from
+        // SRP key. We speculatively derive them here so they are available if the client
+        // switches to encryption. If the client continues with M5 (Persistent Pairing),
+        // these keys will be replaced or unused until M6? Actually, Persistent pairing
+        // continues handshake. But if client stops (Transient), we are ready.
         let enc_keys = Self::derive_session_keys_from_srp(session_key.as_bytes());
         self.encryption_keys = Some(enc_keys);
 

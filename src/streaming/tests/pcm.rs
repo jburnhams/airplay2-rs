@@ -1,9 +1,11 @@
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use tokio::time::Duration;
+
 use crate::audio::AudioFormat;
 use crate::error::AirPlayError;
 use crate::streaming::{PcmStreamer, RtpSender, SliceSource, StreamerState};
-use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
-use tokio::time::Duration;
 
 #[derive(Default)]
 struct MockRtpSender {
@@ -28,9 +30,10 @@ impl RtpSender for MockRtpSender {
 
 #[tokio::test]
 async fn test_pcm_streamer_creation() {
+    use std::sync::Arc;
+
     use crate::connection::ConnectionManager;
     use crate::types::AirPlayConfig;
-    use std::sync::Arc;
 
     let config = AirPlayConfig::default();
     let connection = Arc::new(ConnectionManager::new(config));
@@ -63,7 +66,8 @@ async fn test_streaming_loop() {
     // Allow some time for streaming
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // Check state (might be Streaming or finished if fast, but with interval it should be streaming)
+    // Check state (might be Streaming or finished if fast, but with interval it should be
+    // streaming)
     assert_eq!(streamer_arc.state().await, StreamerState::Streaming);
 
     // Pause
@@ -89,10 +93,11 @@ async fn test_streaming_loop() {
 
 #[tokio::test]
 async fn benchmark_pcm_streaming_performance() {
+    use std::sync::Arc;
+
     use crate::audio::AudioFormat;
     use crate::streaming::PcmStreamer;
     use crate::streaming::source::SliceSource;
-    use std::sync::Arc;
 
     // Pause time to run fast
     tokio::time::pause();

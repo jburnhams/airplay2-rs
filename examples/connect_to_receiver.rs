@@ -3,11 +3,12 @@
 //! This example discovers devices and connects to our airplay2-receiver test instance.
 //! Run the receiver first: `./test_receiver.sh`
 
+use std::f32::consts::PI;
+use std::time::Duration;
+
 use airplay2::audio::AudioFormat;
 use airplay2::streaming::AudioSource;
 use airplay2::{AirPlayClient, AirPlayConfig, scan};
-use std::f32::consts::PI;
-use std::time::Duration;
 
 /// Simple sine wave generator for testing
 struct SineWaveSource {

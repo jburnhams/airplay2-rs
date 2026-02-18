@@ -1,7 +1,8 @@
 //! DACP service advertisement
 
-use super::{DACP_DEFAULT_PORT, txt_keys};
 use std::collections::HashMap;
+
+use super::{DACP_DEFAULT_PORT, txt_keys};
 
 /// DACP service configuration
 #[derive(Debug, Clone)]

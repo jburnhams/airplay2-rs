@@ -1,5 +1,6 @@
-use crate::protocol::plist::{PlistDecodeError, PlistValue};
 use std::collections::HashMap;
+
+use crate::protocol::plist::{PlistDecodeError, PlistValue};
 
 #[test]
 fn test_decode_invalid_magic() {

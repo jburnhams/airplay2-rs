@@ -1,6 +1,7 @@
-use super::raop::RaopCapabilities;
 use std::collections::HashMap;
 use std::net::IpAddr;
+
+use super::raop::RaopCapabilities;
 
 /// Represents a discovered `AirPlay` 2 device on the network
 #[derive(Debug, Clone, PartialEq)]

@@ -1,7 +1,7 @@
-use crate::audio::{AudioFormat, ChannelConfig, SampleFormat, SampleRate};
-use crate::streaming::AudioSource;
-use crate::streaming::ResamplingSource;
 use std::io;
+
+use crate::audio::{AudioFormat, ChannelConfig, SampleFormat, SampleRate};
+use crate::streaming::{AudioSource, ResamplingSource};
 
 struct SineSource48k {
     phase: f32,

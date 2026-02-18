@@ -3,14 +3,16 @@
 //! Simulates an `AirPlay` sender (like iTunes) to test receiver functionality
 //! without requiring real hardware or software.
 
+use std::fmt::Write;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use tokio::net::{TcpStream, UdpSocket};
+
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::{Headers, Method, RtspResponse};
 use crate::receiver::timing::NtpTimestamp;
 use crate::testing::network_sim::NetworkSimulator;
-use std::fmt::Write;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::{TcpStream, UdpSocket};
 
 /// Mock sender configuration
 #[derive(Debug, Clone)]
@@ -352,14 +354,8 @@ impl MockSender {
         };
 
         format!(
-            "v=0\r\n\
-             o=iTunes 0 0 IN IP4 {}\r\n\
-             s=iTunes\r\n\
-             c=IN IP4 {}\r\n\
-             t=0 0\r\n\
-             m=audio 0 RTP/AVP 96\r\n\
-             a=rtpmap:96 {}\r\n\
-             a=fmtp:96 {} 0 16 40 10 14 2 255 0 0 {}\r\n",
+            "v=0\r\no=iTunes 0 0 IN IP4 {}\r\ns=iTunes\r\nc=IN IP4 {}\r\nt=0 0\r\nm=audio 0 \
+             RTP/AVP 96\r\na=rtpmap:96 {}\r\na=fmtp:96 {} 0 16 40 10 14 2 255 0 0 {}\r\n",
             self.config.receiver_addr.ip(),
             self.config.receiver_addr.ip(),
             codec_name,

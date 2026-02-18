@@ -1,7 +1,8 @@
 //! Packet buffer for retransmission support
 
-use bytes::Bytes;
 use std::collections::VecDeque;
+
+use bytes::Bytes;
 
 /// Audio packet with sequence tracking
 #[derive(Debug, Clone)]

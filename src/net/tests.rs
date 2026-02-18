@@ -1,9 +1,10 @@
-use crate::net::traits::AsyncRead;
 use std::io::{Cursor, Result};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 #[cfg(feature = "tokio-runtime")]
 use std::time::Duration;
+
+use crate::net::traits::AsyncRead;
 
 // Mock reader for testing
 struct MockReader {

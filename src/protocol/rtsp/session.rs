@@ -1,4 +1,5 @@
-use super::{Method, RtspRequest, RtspRequestBuilder, RtspResponse, headers::names};
+use super::headers::names;
+use super::{Method, RtspRequest, RtspRequestBuilder, RtspResponse};
 
 /// RTSP session states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

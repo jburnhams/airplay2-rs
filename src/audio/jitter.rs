@@ -3,9 +3,10 @@
 //! Buffers incoming packets, reorders them by sequence number,
 //! and releases them at the appropriate playback time.
 
-use crate::receiver::rtp_receiver::AudioPacket;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+
+use crate::receiver::rtp_receiver::AudioPacket;
 
 /// Jitter buffer configuration
 #[derive(Debug, Clone)]
@@ -249,10 +250,12 @@ impl JitterBuffer {
         // Check wrap-around gap (keys[0] vs keys[last])
         let wrap_gap = u32::from(keys[0]) + 65536 - u32::from(*keys.last().unwrap());
 
-        // If the linear gap is larger than the wrap gap, it means the sequence wraps "inside" the u16 range.
+        // If the linear gap is larger than the wrap gap, it means the sequence wraps "inside" the
+        // u16 range.
         if max_gap > wrap_gap {
             // The sequence is wrapping around 0 in the buffer.
-            // The logical order is keys[max_gap_index+1] ... keys[last] -> keys[0] ... keys[max_gap_index]
+            // The logical order is keys[max_gap_index+1] ... keys[last] -> keys[0] ...
+            // keys[max_gap_index]
             Some(keys[max_gap_index + 1])
         } else {
             // Standard order

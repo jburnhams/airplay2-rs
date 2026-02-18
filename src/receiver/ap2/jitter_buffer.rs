@@ -3,8 +3,9 @@
 //! Buffers audio frames to handle network jitter and enable
 //! synchronized multi-room playback.
 
-use super::rtp_receiver::AudioFrame;
 use std::collections::BTreeMap;
+
+use super::rtp_receiver::AudioFrame;
 
 /// Jitter buffer configuration
 #[derive(Debug, Clone)]
@@ -195,8 +196,8 @@ impl JitterBuffer {
                     // Missing frame - concealment
                     // We don't have a frame, so we don't know its size.
                     // Assume standard size (352) for concealment advancement, or just fill needed?
-                    // If we fill needed, we might desync if the hole was exactly 352 but we needed 100.
-                    // But `playback_position` must match frame timestamps.
+                    // If we fill needed, we might desync if the hole was exactly 352 but we needed
+                    // 100. But `playback_position` must match frame timestamps.
                     // If we are missing frame at T, we assume it existed and had typical duration.
                     // Standard AirPlay 2 ALAC frame is 352 samples.
 
@@ -210,18 +211,20 @@ impl JitterBuffer {
                     let concealment_samples = concealment_frames * channels;
 
                     // We can return as much silence as needed from this "virtual frame",
-                    // or just fill the output request and assume we are "playing" silence until the next real frame?
-                    // But we need to align with next real frame timestamp.
+                    // or just fill the output request and assume we are "playing" silence until the
+                    // next real frame? But we need to align with next real
+                    // frame timestamp.
 
                     // Simplest approach: Assume the missing frame was 352 samples long.
                     // Generate silence for what we need from it (up to 352 samples),
                     // and advance playback_position by 352.
                     // If we need more than 352, we'll hit this again for the next frame.
 
-                    // Wait, if we only need 100 samples, and we decide the missing frame was 352 samples long.
-                    // We return 100 samples of silence.
-                    // We should technically "keep" the remaining 252 samples of silence for the next pull?
-                    // This implies we should create a "Silence Frame".
+                    // Wait, if we only need 100 samples, and we decide the missing frame was 352
+                    // samples long. We return 100 samples of silence.
+                    // We should technically "keep" the remaining 252 samples of silence for the
+                    // next pull? This implies we should create a "Silence
+                    // Frame".
 
                     let silence_vec = vec![0i16; concealment_samples];
                     let silence_frame = AudioFrame {

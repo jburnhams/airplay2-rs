@@ -4,19 +4,20 @@
 //! to test the client functionality without requiring real hardware. It supports
 //! basic RTSP negotiation, audio data reception (stub), and control commands.
 
-use crate::net::{AsyncReadExt, AsyncWriteExt};
-use crate::protocol::crypto::Ed25519KeyPair;
-use crate::protocol::rtp::RtpPacket;
-use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
-use crate::receiver::ap2::PairingServer;
-
 use std::fmt::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{RwLock, mpsc};
+
+use crate::net::{AsyncReadExt, AsyncWriteExt};
+use crate::protocol::crypto::Ed25519KeyPair;
+use crate::protocol::rtp::RtpPacket;
+use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
+use crate::receiver::ap2::PairingServer;
 
 /// Configuration for the Mock `AirPlay` Server.
 #[derive(Debug, Clone)]
@@ -197,8 +198,9 @@ impl MockServer {
         state: Arc<RwLock<ServerState>>,
         config: MockServerConfig,
     ) {
-        use crate::net::secure::HapSecureSession;
         use byteorder::{ByteOrder, LittleEndian};
+
+        use crate::net::secure::HapSecureSession;
 
         let mut buffer = Vec::new();
         let mut raw_buffer = Vec::new();
@@ -210,12 +212,14 @@ impl MockServer {
             if secure_session.is_none() {
                 let state_guard = state.read().await;
                 if let Some(keys) = state_guard.pairing_server.encryption_keys() {
-                    // Keys in PairingServer are named from Client perspective (or derivation strings perspective):
-                    // encrypt_key = Control-Write-Encryption-Key (Client Encrypts, Server Decrypts)
+                    // Keys in PairingServer are named from Client perspective (or derivation
+                    // strings perspective): encrypt_key =
+                    // Control-Write-Encryption-Key (Client Encrypts, Server Decrypts)
                     // decrypt_key = Control-Read-Encryption-Key (Client Decrypts, Server Encrypts)
                     //
                     // HapSecureSession::new(encrypt_key, decrypt_key)
-                    // We are the Server. We encrypt with "Control-Read" and decrypt with "Control-Write".
+                    // We are the Server. We encrypt with "Control-Read" and decrypt with
+                    // "Control-Write".
                     secure_session =
                         Some(HapSecureSession::new(&keys.decrypt_key, &keys.encrypt_key));
                 }
@@ -266,7 +270,8 @@ impl MockServer {
                                 .await;
                         }
 
-                        // Determine if we should encrypt response based on CURRENT session state (before processing which might update keys)
+                        // Determine if we should encrypt response based on CURRENT session state
+                        // (before processing which might update keys)
                         // Actually, if secure_session is set, we encrypt.
                         let was_encrypted = secure_session.is_some();
 
@@ -381,7 +386,8 @@ impl MockServer {
                 cseq,
                 None,
                 Some(
-                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST, PLAY",
+                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, \
+                     GET_PARAMETER, POST, PLAY",
                 ),
             ),
             Method::Setup => {
@@ -400,11 +406,8 @@ impl MockServer {
                 let session_id = state.session_id.clone().unwrap();
 
                 let response = format!(
-                    "RTSP/1.0 200 OK\r\n\
-                     CSeq: {cseq}\r\n\
-                     Session: {session_id}\r\n\
-                     Transport: {transport}\r\n\
-                     \r\n",
+                    "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: {session_id}\r\nTransport: \
+                     {transport}\r\n\r\n",
                 );
 
                 response.into_bytes()
@@ -459,8 +462,9 @@ impl MockServer {
             }
             Method::GetParameter => {
                 if request.uri.ends_with("/info") {
-                    use crate::protocol::plist::{PlistValue, encode};
                     use std::collections::HashMap;
+
+                    use crate::protocol::plist::{PlistValue, encode};
 
                     let mut dict = HashMap::new();
                     dict.insert(
@@ -548,7 +552,8 @@ impl MockServer {
 
         // Re-generate response
         let mut response_vec = format!(
-            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: {}\r\nContent-Type: application/pairing+tlv8\r\n\r\n",
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: {}\r\nContent-Type: \
+             application/pairing+tlv8\r\n\r\n",
             cseq,
             result.response.len()
         )

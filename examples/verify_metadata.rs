@@ -1,11 +1,12 @@
-use airplay2::audio::AudioFormat;
-use airplay2::protocol::daap::TrackMetadata;
-use airplay2::streaming::AudioSource;
-use airplay2::{AirPlayClient, AirPlayConfig, AirPlayDevice, DeviceCapabilities};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
+
+use airplay2::audio::AudioFormat;
+use airplay2::protocol::daap::TrackMetadata;
+use airplay2::streaming::AudioSource;
+use airplay2::{AirPlayClient, AirPlayConfig, AirPlayDevice, DeviceCapabilities};
 
 struct TestSource {
     phase: f32,

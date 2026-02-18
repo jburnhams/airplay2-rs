@@ -2,9 +2,11 @@
 //!
 //! Extracts audio format parameters from RAOP ANNOUNCE SDP.
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
+
 use super::{MediaDescription, SdpParseError, SessionDescription};
 use crate::receiver::session::{AudioCodec, StreamParameters};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 /// ALAC format parameters from fmtp line
 #[derive(Debug, Clone)]

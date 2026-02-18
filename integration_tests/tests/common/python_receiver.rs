@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -609,7 +610,8 @@ impl ReceiverOutput {
         let frequency_tolerance = expected_frequency * 0.05; // 5% tolerance
 
         tracing::info!(
-            "Frequency analysis - expected: {}Hz, estimated: {:.1}Hz, error: {:.1}Hz, tolerance: {:.1}Hz",
+            "Frequency analysis - expected: {}Hz, estimated: {:.1}Hz, error: {:.1}Hz, tolerance: \
+             {:.1}Hz",
             expected_frequency,
             estimated_frequency,
             frequency_error,
@@ -618,12 +620,11 @@ impl ReceiverOutput {
 
         if check_frequency && frequency_error > frequency_tolerance {
             return Err(format!(
-                "Frequency mismatch: expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz tolerance)",
-                expected_frequency,
-                estimated_frequency,
-                frequency_error,
-                frequency_tolerance
-            ).into());
+                "Frequency mismatch: expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz \
+                 tolerance)",
+                expected_frequency, estimated_frequency, frequency_error, frequency_tolerance
+            )
+            .into());
         }
 
         // 4. Check for continuity (shouldn't have long runs of zeros)

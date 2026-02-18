@@ -1,8 +1,10 @@
-use crate::common::python_receiver::PythonReceiver;
+use std::time::Duration;
+
 use airplay2::audio::{AudioFormat, ChannelConfig, SampleFormat, SampleRate};
 use airplay2::streaming::AudioSource;
 use airplay2::{AirPlayClient, AirPlayConfig, AirPlayDevice};
-use std::time::Duration;
+
+use crate::common::python_receiver::PythonReceiver;
 
 mod common;
 

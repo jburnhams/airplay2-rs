@@ -1,7 +1,8 @@
-use crate::audio::buffer::AudioRingBuffer;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+use crate::audio::buffer::AudioRingBuffer;
 
 #[test]
 fn test_concurrent_producer_consumer() {

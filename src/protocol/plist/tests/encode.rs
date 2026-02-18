@@ -1,5 +1,6 @@
-use crate::protocol::plist::PlistValue;
 use std::collections::HashMap;
+
+use crate::protocol::plist::PlistValue;
 
 #[test]
 fn test_encode_boolean() {

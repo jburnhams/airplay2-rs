@@ -1,12 +1,14 @@
 //! RAOP audio streaming coordinator
 
+use std::time::{Duration, Instant};
+
+use bytes::{BufMut, Bytes, BytesMut};
+
 use crate::protocol::crypto::Aes128Ctr;
 use crate::protocol::raop::RaopSessionKeys;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
-use bytes::{BufMut, Bytes, BytesMut};
-use std::time::{Duration, Instant};
 
 /// RAOP streaming configuration
 #[derive(Debug, Clone)]
@@ -213,7 +215,8 @@ impl RaopStreamer {
     ///
     /// # Errors
     ///
-    /// Returns error string if response invalid (legacy reasons, should probably be Result<(), Error>)
+    /// Returns error string if response invalid (legacy reasons, should probably be Result<(),
+    /// Error>)
     pub fn process_timing_response(&mut self, data: &[u8]) -> Result<(), String> {
         self.timing
             .process_response(data)

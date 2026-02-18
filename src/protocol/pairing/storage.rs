@@ -1,8 +1,9 @@
 //! Storage for pairing keys
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Stored pairing keys for a device
 #[derive(Debug, Clone, Serialize, Deserialize)]

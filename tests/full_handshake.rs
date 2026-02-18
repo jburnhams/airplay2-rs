@@ -1,5 +1,6 @@
-use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use std::time::Duration;
+
+use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -30,10 +31,7 @@ async fn test_full_handshake() {
         .unwrap();
 
     // 3. Send OPTIONS
-    let options_req = "OPTIONS * RTSP/1.0\r\n\
-                       CSeq: 1\r\n\
-                       User-Agent: AirPlay/320.20\r\n\
-                       \r\n";
+    let options_req = "OPTIONS * RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: AirPlay/320.20\r\n\r\n";
     stream.write_all(options_req.as_bytes()).await.unwrap();
 
     let mut buf = vec![0u8; 4096];
@@ -45,22 +43,13 @@ async fn test_full_handshake() {
     assert!(response.contains("CSeq: 1"));
 
     // 4. Send ANNOUNCE
-    let sdp = "v=0\r\n\
-               o=- 123456 0 IN IP4 127.0.0.1\r\n\
-               s=AirTunes\r\n\
-               c=IN IP4 127.0.0.1\r\n\
-               t=0 0\r\n\
-               m=audio 0 RTP/AVP 96\r\n\
-               a=rtpmap:96 AppleLossless\r\n\
-               a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n";
+    let sdp = "v=0\r\no=- 123456 0 IN IP4 127.0.0.1\r\ns=AirTunes\r\nc=IN IP4 127.0.0.1\r\nt=0 \
+               0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 \
+               14 2 255 0 0 44100\r\n";
 
     let announce_req = format!(
-        "ANNOUNCE rtsp://127.0.0.1/1234 RTSP/1.0\r\n\
-         CSeq: 2\r\n\
-         Content-Type: application/sdp\r\n\
-         Content-Length: {}\r\n\
-         \r\n\
-         {}",
+        "ANNOUNCE rtsp://127.0.0.1/1234 RTSP/1.0\r\nCSeq: 2\r\nContent-Type: \
+         application/sdp\r\nContent-Length: {}\r\n\r\n{}",
         sdp.len(),
         sdp
     );
@@ -73,10 +62,8 @@ async fn test_full_handshake() {
     assert!(response.contains("CSeq: 2"));
 
     // 5. Send SETUP
-    let setup_req = "SETUP rtsp://127.0.0.1/1234/stream RTSP/1.0\r\n\
-                     CSeq: 3\r\n\
-                     Transport: RTP/AVP/UDP;unicast;mode=record;timing_port=6000;control_port=6001\r\n\
-                     \r\n";
+    let setup_req = "SETUP rtsp://127.0.0.1/1234/stream RTSP/1.0\r\nCSeq: 3\r\nTransport: \
+                     RTP/AVP/UDP;unicast;mode=record;timing_port=6000;control_port=6001\r\n\r\n";
     stream.write_all(setup_req.as_bytes()).await.unwrap();
 
     let n = stream.read(&mut buf).await.unwrap();
@@ -96,11 +83,8 @@ async fn test_full_handshake() {
 
     // 6. Send RECORD
     let record_req = format!(
-        "RECORD rtsp://127.0.0.1/1234/stream RTSP/1.0\r\n\
-         CSeq: 4\r\n\
-         Session: {}\r\n\
-         RTP-Info: seq=1;rtptime=12345\r\n\
-         \r\n",
+        "RECORD rtsp://127.0.0.1/1234/stream RTSP/1.0\r\nCSeq: 4\r\nSession: {}\r\nRTP-Info: \
+         seq=1;rtptime=12345\r\n\r\n",
         session_id
     );
     stream.write_all(record_req.as_bytes()).await.unwrap();
@@ -125,10 +109,7 @@ async fn test_full_handshake() {
 
     // 8. Send TEARDOWN
     let teardown_req = format!(
-        "TEARDOWN rtsp://127.0.0.1/1234/stream RTSP/1.0\r\n\
-         CSeq: 5\r\n\
-         Session: {}\r\n\
-         \r\n",
+        "TEARDOWN rtsp://127.0.0.1/1234/stream RTSP/1.0\r\nCSeq: 5\r\nSession: {}\r\n\r\n",
         session_id
     );
     stream.write_all(teardown_req.as_bytes()).await.unwrap();

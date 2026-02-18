@@ -4,9 +4,11 @@
 //! parsing. Both share the same request/response types but differ in what
 //! they parse vs. generate.
 
-use super::{Headers, Method, RtspRequest, RtspResponse, StatusCode};
-use bytes::{Buf, BytesMut};
 use std::str::{self, FromStr};
+
+use bytes::{Buf, BytesMut};
+
+use super::{Headers, Method, RtspRequest, RtspResponse, StatusCode};
 
 /// Errors during RTSP parsing
 #[derive(Debug, thiserror::Error)]

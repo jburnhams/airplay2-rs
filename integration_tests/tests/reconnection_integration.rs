@@ -1,6 +1,7 @@
 //! Integration test for reconnection logic
 
 use std::time::Duration;
+
 use tokio::time::sleep;
 
 mod common;

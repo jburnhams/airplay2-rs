@@ -1,8 +1,9 @@
 //! RAOP service advertisement for AirPlay 1 receiver
 
-use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// Errors from service advertisement

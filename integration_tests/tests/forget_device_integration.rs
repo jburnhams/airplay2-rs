@@ -1,9 +1,11 @@
-use crate::common::python_receiver::PythonReceiver;
+use std::time::Duration;
+
 use airplay2::protocol::pairing::PairingStorage;
 use airplay2::protocol::pairing::storage::FileStorage;
 use airplay2::{AirPlayClient, AirPlayConfig};
-use std::time::Duration;
 use tempfile::tempdir;
+
+use crate::common::python_receiver::PythonReceiver;
 
 mod common;
 

@@ -6,6 +6,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
 use tokio::net::UdpSocket;
 use tokio::sync::RwLock;
 
@@ -157,7 +158,8 @@ impl ClockSync {
             self.offset_avg = (1.0 - alpha) * self.offset_avg + alpha * (receive_diff as f64);
         }
 
-        // Convert strict casting to avoid clippy warnings if needed, but here simple cast is fine for now
+        // Convert strict casting to avoid clippy warnings if needed, but here simple cast is fine
+        // for now
         #[allow(clippy::cast_possible_truncation)]
         let offset = self.offset_avg as i64;
         self.offset_micros = offset;

@@ -1,7 +1,8 @@
+use std::net::{IpAddr, Ipv4Addr};
+
 use crate::client::{ClientConfig, PreferredProtocol, SelectedProtocol, UnifiedAirPlayClient};
 use crate::testing::mock_raop_server::{MockRaopConfig, MockRaopServer};
 use crate::types::{AirPlayDevice, DeviceCapabilities};
-use std::net::{IpAddr, Ipv4Addr};
 
 async fn create_device_with_server(
     airplay2: bool,

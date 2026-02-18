@@ -1,5 +1,11 @@
 //! Main `AirPlay` client implementation
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use futures::Stream;
+use tokio::sync::{Mutex, RwLock};
+
 use crate::audio::AudioCodec;
 use crate::connection::{ConnectionManager, ConnectionState, DisconnectReason};
 use crate::control::playback::{PlaybackController, ShuffleMode};
@@ -7,17 +13,12 @@ use crate::control::queue::PlaybackQueue;
 use crate::control::volume::{Volume, VolumeController};
 use crate::discovery::{DiscoveryEvent, discover, scan};
 use crate::error::AirPlayError;
+use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use crate::state::{ClientEvent, ClientState, EventBus, StateContainer};
 use crate::streaming::{AudioSource, PcmStreamer, UrlStreamer};
 use crate::types::{
     AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
 };
-
-use crate::protocol::daap::{DmapProgress, TrackMetadata};
-use futures::Stream;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, RwLock};
 
 pub mod protocol;
 pub mod session;
@@ -33,8 +34,9 @@ pub use session::{AirPlay2SessionImpl, AirPlaySession, RaopSessionImpl};
 /// # Example
 ///
 /// ```rust,no_run
-/// use airplay2::{AirPlayClient, AirPlayConfig};
 /// use std::time::Duration;
+///
+/// use airplay2::{AirPlayClient, AirPlayConfig};
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
 /// // Create client with default config
@@ -253,9 +255,11 @@ impl AirPlayClient {
                         // Trigger disconnect
                         let reason = DisconnectReason::NetworkError(e.to_string());
 
-                        // We must force state update because send_get_command might not have done it
-                        // if it failed at logic level. But if it failed with IO error, connection might be broken.
-                        // Calling disconnect_with_reason will ensure state update and event emission.
+                        // We must force state update because send_get_command might not have done
+                        // it if it failed at logic level. But if it failed
+                        // with IO error, connection might be broken.
+                        // Calling disconnect_with_reason will ensure state update and event
+                        // emission.
                         let _ = connection.disconnect_with_reason(reason).await;
                         break;
                     }
@@ -675,7 +679,8 @@ impl AirPlayClient {
         self.playback.set_playing(true).await;
 
         // Send RECORD request to start buffering on device
-        // We spawn this because it might block waiting for sync, or we want to start streaming first
+        // We spawn this because it might block waiting for sync, or we want to start streaming
+        // first
         let connection = self.connection.clone();
         tokio::spawn(async move {
             // Short delay to allow streamer to fill buffer and start sending
