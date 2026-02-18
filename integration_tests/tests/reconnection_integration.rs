@@ -98,12 +98,9 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
     tracing::info!("Waiting for Disconnected event...");
     let disconnected = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            match rx.recv().await {
-                Ok(ClientEvent::Disconnected { reason, .. }) => {
-                    tracing::info!("Disconnected: {}", reason);
-                    return;
-                }
-                _ => {}
+            if let Ok(ClientEvent::Disconnected { reason, .. }) = rx.recv().await {
+                tracing::info!("Disconnected: {}", reason);
+                return;
             }
         }
     })
@@ -177,14 +174,11 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     // Wait for Disconnected event
     let disconnected = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            match rx.recv().await {
-                Ok(ClientEvent::Disconnected { reason, .. }) => {
-                    tracing::info!("Disconnected: {}", reason);
-                    if reason.contains("UserRequested") {
-                        return;
-                    }
+            if let Ok(ClientEvent::Disconnected { reason, .. }) = rx.recv().await {
+                tracing::info!("Disconnected: {}", reason);
+                if reason.contains("UserRequested") {
+                    return;
                 }
-                _ => {}
             }
         }
     })
@@ -197,10 +191,7 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     tracing::info!("Waiting to ensure no reconnection happens...");
     let unexpected_reconnect = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            match rx.recv().await {
-                Ok(ClientEvent::Connected { .. }) => return true,
-                _ => {}
-            }
+            if let Ok(ClientEvent::Connected { .. }) = rx.recv().await { return true }
         }
     })
     .await;
