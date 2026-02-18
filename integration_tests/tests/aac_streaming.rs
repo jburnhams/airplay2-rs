@@ -13,7 +13,7 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     tracing::info!("Starting AAC Streaming integration test");
 
     // 1. Start Receiver
-    let receiver = PythonReceiver::start().await?;
+    let receiver = PythonReceiver::start_with_args(&["-nv"]).await?;
 
     // Give receiver time to start
     sleep(Duration::from_secs(2)).await;
@@ -24,6 +24,7 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     let config = AirPlayConfig::builder()
         .audio_codec(AudioCodec::Aac)
         .pin("3939")
+        .connection_timeout(Duration::from_secs(10))
         .build();
 
     let mut client = AirPlayClient::new(config);
@@ -40,7 +41,7 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
 
     // 3. Stream Audio
     tracing::info!("Streaming AAC audio...");
-    let source = TestSineSource::new(440.0, 3.0); // 3 seconds of audio
+    let source = TestSineSource::new(440.0, 5.0); // 5 seconds of audio
 
     // Stream (blocks until done or error)
     if let Err(e) = client.stream_audio(source).await {
