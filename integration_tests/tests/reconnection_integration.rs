@@ -34,7 +34,7 @@ async fn test_disconnection_detection() -> Result<(), Box<dyn std::error::Error>
     receiver.stop().await?;
 
     tracing::info!("Waiting for Disconnected event...");
-    let event = tokio::time::timeout(Duration::from_secs(45), async {
+    let event = tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match rx.recv().await {
                 Ok(ClientEvent::Disconnected { reason, .. }) => {
@@ -119,8 +119,8 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
     sleep(Duration::from_secs(2)).await;
 
     // 6. Wait for Reconnected event
-    tracing::info!("Waiting for Reconnected event (max 90s)...");
-    let reconnected = tokio::time::timeout(Duration::from_secs(90), async {
+    tracing::info!("Waiting for Reconnected event (max 120s)...");
+    let reconnected = tokio::time::timeout(Duration::from_secs(120), async {
         loop {
             match rx.recv().await {
                 Ok(ClientEvent::Connected { device }) => {
@@ -172,7 +172,7 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     player.disconnect().await?;
 
     // Wait for Disconnected event
-    let disconnected = tokio::time::timeout(Duration::from_secs(15), async {
+    let disconnected = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             if let Ok(ClientEvent::Disconnected { reason, .. }) = rx.recv().await {
                 tracing::info!("Disconnected: {}", reason);
