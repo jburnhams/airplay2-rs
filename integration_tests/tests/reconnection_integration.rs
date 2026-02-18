@@ -191,7 +191,9 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     tracing::info!("Waiting to ensure no reconnection happens...");
     let unexpected_reconnect = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            if let Ok(ClientEvent::Connected { .. }) = rx.recv().await { return true }
+            if let Ok(ClientEvent::Connected { .. }) = rx.recv().await {
+                return true;
+            }
         }
     })
     .await;
