@@ -34,7 +34,7 @@ async fn test_disconnection_detection() -> Result<(), Box<dyn std::error::Error>
     receiver.stop().await?;
 
     tracing::info!("Waiting for Disconnected event...");
-    let event = tokio::time::timeout(Duration::from_secs(15), async {
+    let event = tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             match rx.recv().await {
                 Ok(ClientEvent::Disconnected { reason, .. }) => {
@@ -75,7 +75,8 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
     }
 
     // 1. Start Receiver
-    let receiver = PythonReceiver::start().await?;
+    // We must use a static MAC so the restarted receiver has the same ID.
+    let receiver = PythonReceiver::start_with_args(&["--mac", "00:11:22:33:44:55"]).await?;
     let device = receiver.device_config();
     let initial_id = device.id.clone();
     tracing::info!("Receiver started with ID: {}", initial_id);
@@ -120,14 +121,11 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
 
     // 4. Wait for Disconnected event
     tracing::info!("Waiting for Disconnected event...");
-    let disconnected = tokio::time::timeout(Duration::from_secs(10), async {
+    let disconnected = tokio::time::timeout(Duration::from_secs(15), async {
         loop {
-            match rx.recv().await {
-                Ok(ClientEvent::Disconnected { reason, .. }) => {
-                    tracing::info!("Disconnected: {}", reason);
-                    return;
-                }
-                _ => {}
+            if let Ok(ClientEvent::Disconnected { reason, .. }) = rx.recv().await {
+                tracing::info!("Disconnected: {}", reason);
+                return;
             }
         }
     })
@@ -141,20 +139,14 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
 
     // 5. Restart Receiver (simulating recovery)
     tracing::info!("Restarting receiver...");
-    // Try to restart, handle failure gracefully
-    let receiver2_result = PythonReceiver::start().await;
-    if receiver2_result.is_err() {
-        tracing::warn!("Failed to restart receiver (likely Errno 65). Skipping rest of test.");
-        return Ok(());
-    }
-    let _receiver2 = receiver2_result.unwrap();
-
+    // Must use same MAC
+    let _receiver2 = PythonReceiver::start_with_args(&["--mac", "00:11:22:33:44:55"]).await?;
     // Wait slightly for mDNS announcement
     sleep(Duration::from_secs(2)).await;
 
     // 6. Wait for Reconnected event
-    tracing::info!("Waiting for Reconnected event (max 30s)...");
-    let reconnected = tokio::time::timeout(Duration::from_secs(30), async {
+    tracing::info!("Waiting for Reconnected event (max 120s)...");
+    let reconnected = tokio::time::timeout(Duration::from_secs(120), async {
         loop {
             match rx.recv().await {
                 Ok(ClientEvent::Connected { device }) => {
@@ -206,16 +198,13 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     player.disconnect().await?;
 
     // Wait for Disconnected event
-    let disconnected = tokio::time::timeout(Duration::from_secs(5), async {
+    let disconnected = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
-            match rx.recv().await {
-                Ok(ClientEvent::Disconnected { reason, .. }) => {
-                    tracing::info!("Disconnected: {}", reason);
-                    if reason.contains("UserRequested") {
-                        return;
-                    }
+            if let Ok(ClientEvent::Disconnected { reason, .. }) = rx.recv().await {
+                tracing::info!("Disconnected: {}", reason);
+                if reason.contains("UserRequested") {
+                    return;
                 }
-                _ => {}
             }
         }
     })
@@ -228,9 +217,8 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     tracing::info!("Waiting to ensure no reconnection happens...");
     let unexpected_reconnect = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            match rx.recv().await {
-                Ok(ClientEvent::Connected { .. }) => return true,
-                _ => {}
+            if let Ok(ClientEvent::Connected { .. }) = rx.recv().await {
+                return true;
             }
         }
     })

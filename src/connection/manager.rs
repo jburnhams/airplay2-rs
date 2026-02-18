@@ -7,6 +7,7 @@ use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::{
     AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
+    storage::StorageError,
 };
 use crate::protocol::ptp::{PtpNodeConfig, PtpRole, SharedPtpClock, create_shared_clock};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
@@ -248,6 +249,29 @@ impl ConnectionManager {
 
         self.setup_session().await?;
 
+        Ok(())
+    }
+
+    /// Remove pairing for a device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if removal fails
+    pub async fn remove_pairing(&self, device_id: &str) -> Result<(), AirPlayError> {
+        if let Some(ref mut storage) = *self.pairing_storage.lock().await {
+            storage.remove(device_id).await.map_err(|e| match e {
+                StorageError::Io(err) => AirPlayError::IoError {
+                    message: format!("Failed to remove pairing: {err}"),
+                    source: Some(Box::new(err)),
+                },
+                StorageError::Serialization(msg) => AirPlayError::InternalError {
+                    message: format!("Storage serialization error: {msg}"),
+                },
+                StorageError::NotAvailable => AirPlayError::InternalError {
+                    message: "Storage not available".to_string(),
+                },
+            })?;
+        }
         Ok(())
     }
 

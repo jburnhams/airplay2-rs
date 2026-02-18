@@ -172,6 +172,17 @@ impl AirPlayClient {
         Ok(())
     }
 
+    /// Forget a paired device
+    ///
+    /// Removes persistent pairing keys for the specified device ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if storage operation fails.
+    pub async fn forget_device(&self, device_id: &str) -> Result<(), AirPlayError> {
+        self.connection.remove_pairing(device_id).await
+    }
+
     fn start_monitor(&self) {
         let connection = self.connection.clone();
         let events = self.events.clone();
@@ -639,7 +650,11 @@ impl AirPlayClient {
             sample_format: crate::audio::SampleFormat::I16,
         };
 
-        let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), target_format));
+        let streamer = Arc::new(PcmStreamer::new(
+            self.connection.clone(),
+            target_format,
+            self.config.audio_buffer_frames,
+        ));
 
         // Enable ALAC encoding if configured
         if self.config.audio_codec == AudioCodec::Alac {
