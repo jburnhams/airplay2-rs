@@ -1,5 +1,4 @@
 #[tokio::test]
-#[ignore] // Run manually with `cargo test -- --ignored`
 async fn test_discover_real_devices() {
     use airplay2::scan;
     use std::time::Duration;

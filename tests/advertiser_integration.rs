@@ -94,6 +94,8 @@ async fn test_status_update_reflected_in_txt() {
     let services = scan_with_options(options).await.unwrap();
 
     let found = services.iter().find(|s| s.name.contains("Status Test"));
+    assert!(found.is_some(), "Service should be discoverable");
+
     if let Some(service) = found {
         let sf = service
             .txt_records
