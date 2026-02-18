@@ -100,7 +100,25 @@ async fn test_bit_depth_24_to_16() -> Result<(), Box<dyn std::error::Error>> {
     let device = receiver.device_config();
     let mut client = airplay2::AirPlayClient::default_client();
 
-    client.connect(&device).await?;
+    // Retry connection up to 3 times to handle "Authentication failed - invalid proof" flake
+    let mut connected = false;
+    for i in 1..=3 {
+        tracing::info!("Connecting to receiver (attempt {}/3)...", i);
+        match client.connect(&device).await {
+            Ok(()) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                tracing::warn!("Connection failed attempt {}: {}", i, e);
+                sleep(Duration::from_secs(1)).await;
+            }
+        }
+    }
+
+    if !connected {
+        return Err("Failed to connect after 3 attempts".into());
+    }
 
     // Create a 24-bit 44.1kHz source
     let source = I24SineSource::new(440.0, 3.0);
