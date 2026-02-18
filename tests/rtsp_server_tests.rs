@@ -3,11 +3,12 @@
 //! These tests simulate complete RTSP conversations between
 //! a mock sender and our server codec.
 
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
 use airplay2::protocol::rtsp::Method;
 use airplay2::protocol::rtsp::server_codec::{RtspServerCodec, encode_response};
 use airplay2::receiver::rtsp_handler::handle_request;
 use airplay2::receiver::session::{ReceiverSession, SessionState};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /// Simulate a complete RAOP session negotiation
 #[test]
@@ -27,21 +28,13 @@ fn test_complete_session_negotiation() {
     assert!(response_str.contains("ANNOUNCE"));
 
     // Step 2: ANNOUNCE with SDP
-    let sdp = "v=0\r\n\
-               o=iTunes 1234 0 IN IP4 192.168.1.100\r\n\
-               s=iTunes\r\n\
-               c=IN IP4 192.168.1.1\r\n\
-               t=0 0\r\n\
-               m=audio 0 RTP/AVP 96\r\n\
-               a=rtpmap:96 AppleLossless\r\n\
-               a=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n";
+    let sdp = "v=0\r\no=iTunes 1234 0 IN IP4 192.168.1.100\r\ns=iTunes\r\nc=IN IP4 \
+               192.168.1.1\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+               AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n";
 
     let announce = format!(
-        "ANNOUNCE rtsp://192.168.1.1/1234 RTSP/1.0\r\n\
-         CSeq: 2\r\n\
-         Content-Type: application/sdp\r\n\
-         Content-Length: {}\r\n\
-         \r\n{}",
+        "ANNOUNCE rtsp://192.168.1.1/1234 RTSP/1.0\r\nCSeq: 2\r\nContent-Type: \
+         application/sdp\r\nContent-Length: {}\r\n\r\n{}",
         sdp.len(),
         sdp
     );
@@ -125,12 +118,8 @@ fn test_volume_control() {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345);
     let session = ReceiverSession::new(addr);
 
-    let volume_cmd = "SET_PARAMETER rtsp://192.168.1.1/1234 RTSP/1.0\r\n\
-                      CSeq: 10\r\n\
-                      Content-Type: text/parameters\r\n\
-                      Content-Length: 20\r\n\
-                      \r\n\
-                      volume: -15.000000\r\n";
+    let volume_cmd = "SET_PARAMETER rtsp://192.168.1.1/1234 RTSP/1.0\r\nCSeq: 10\r\nContent-Type: \
+                      text/parameters\r\nContent-Length: 20\r\n\r\nvolume: -15.000000\r\n";
 
     codec.feed(volume_cmd.as_bytes());
     let request = codec.decode().unwrap().unwrap();

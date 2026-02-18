@@ -1,12 +1,13 @@
-use super::parser;
-use super::raop;
-use crate::error::AirPlayError;
-use crate::types::{AirPlayConfig, AirPlayDevice, DeviceCapabilities, RaopCapabilities};
-use futures::{Stream, StreamExt};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
+
+use futures::{Stream, StreamExt};
+
+use super::{parser, raop};
+use crate::error::AirPlayError;
+use crate::types::{AirPlayConfig, AirPlayDevice, DeviceCapabilities, RaopCapabilities};
 
 /// Extended discovery options for both `AirPlay` 1 and 2
 #[derive(Debug, Clone)]
@@ -228,7 +229,8 @@ impl DeviceBrowserStream {
                 .map_or_else(|| "Unknown RAOP Device".to_string(), |(_, n)| n)
         } else {
             // For AirPlay 2 devices, the service instance name (before the service type)
-            // is the user-assigned friendly name (e.g., "Kitchen" from "Kitchen._airplay._tcp.local.")
+            // is the user-assigned friendly name (e.g., "Kitchen" from
+            // "Kitchen._airplay._tcp.local.")
             name.split('.')
                 .next()
                 .filter(|n| !n.is_empty())

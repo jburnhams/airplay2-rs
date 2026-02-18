@@ -2,7 +2,8 @@
 //!
 //! A `PtpNode` can simultaneously:
 //! - Send `Sync`/`Follow_Up` and respond to `Delay_Req` (master behaviour)
-//! - Process incoming `Sync`/`Follow_Up`, send `Delay_Req`, and process `Delay_Resp` (slave behaviour)
+//! - Process incoming `Sync`/`Follow_Up`, send `Delay_Req`, and process `Delay_Resp` (slave
+//!   behaviour)
 //! - Evaluate Announce messages and switch roles via a simplified BMCA
 //!
 //! This is needed because `AirPlay` 2 devices (e.g. `HomePod`) may act as
@@ -559,7 +560,8 @@ impl PtpNode {
             });
             if old_role != EffectiveRole::Slave {
                 tracing::info!(
-                    "PTP BMCA: Switching to SLAVE (remote GM 0x{:016X} p1={} is better than our p1={})",
+                    "PTP BMCA: Switching to SLAVE (remote GM 0x{:016X} p1={} is better than our \
+                     p1={})",
                     grandmaster_identity,
                     priority1,
                     self.config.priority1
@@ -577,7 +579,8 @@ impl PtpNode {
         }
     }
 
-    /// Compare our priority with a remote's. Returns `true` if the remote is better (higher priority).
+    /// Compare our priority with a remote's. Returns `true` if the remote is better (higher
+    /// priority).
     fn compare_priority(&self, remote_p1: u8, remote_p2: u8, remote_clock_id: u64) -> bool {
         if remote_p1 != self.config.priority1 {
             return remote_p1 < self.config.priority1;

@@ -1,6 +1,7 @@
+use std::time::Duration;
+
 use super::*;
 use crate::error::AirPlayError;
-use std::time::Duration;
 
 #[tokio::test]
 async fn test_player_creation() {

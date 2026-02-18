@@ -4,10 +4,8 @@
 //! - Device allows unauthenticated connections
 //! - We don't need to store keys for later
 
-use super::{
-    PairingError, PairingState, PairingStepResult, SessionKeys,
-    tlv::{TlvDecoder, TlvEncoder, TlvType},
-};
+use super::tlv::{TlvDecoder, TlvEncoder, TlvType};
+use super::{PairingError, PairingState, PairingStepResult, SessionKeys};
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, HkdfSha512, Nonce, X25519KeyPair, X25519PublicKey,
 };

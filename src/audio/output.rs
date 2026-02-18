@@ -3,8 +3,9 @@
 //! Platform-agnostic trait for audio playback with implementations
 //! for `CoreAudio`, CPAL, ALSA, etc.
 
-use crate::audio::format::{AudioFormat, SampleRate};
 use std::time::Duration;
+
+use crate::audio::format::{AudioFormat, SampleRate};
 
 /// Errors from audio output
 #[derive(Debug, thiserror::Error)]

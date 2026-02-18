@@ -1,7 +1,8 @@
 #[tokio::test]
 async fn test_discover_real_devices() {
-    use airplay2::scan;
     use std::time::Duration;
+
+    use airplay2::scan;
 
     let devices = scan(Duration::from_secs(5)).await.unwrap();
 

@@ -1,10 +1,11 @@
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::time::Duration;
+
 use airplay2::receiver::session::SessionState;
 use airplay2::receiver::session_manager::{
     PreemptionPolicy, SessionEvent, SessionManager, SessionManagerConfig,
 };
 use rand::Rng;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::time::Duration;
 
 fn random_base_port() -> u16 {
     rand::thread_rng().gen_range(40000..60000)

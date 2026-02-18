@@ -1,6 +1,8 @@
-use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
 use std::collections::HashMap;
+
 use thiserror::Error;
+
+use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
 
 #[derive(Debug, Error)]
 pub enum SdpParseError {

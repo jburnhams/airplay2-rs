@@ -1,8 +1,9 @@
 //! DACP HTTP server for receiving commands
 
+use std::sync::Arc;
+
 use super::commands::{CommandResult, DacpCommand};
 use super::service::DacpError;
-use std::sync::Arc;
 
 /// Handler trait for DACP commands
 pub trait DacpHandler: Send + Sync {

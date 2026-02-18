@@ -491,7 +491,8 @@ impl PtpMasterHandler {
                 PtpMessageBody::Sync { origin_timestamp } => {
                     let two_step = msg.header.flags & 0x0200 != 0;
                     tracing::debug!(
-                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, T1={}",
+                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, \
+                         T1={}",
                         src,
                         msg.header.sequence_id,
                         two_step,

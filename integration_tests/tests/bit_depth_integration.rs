@@ -1,12 +1,12 @@
 use std::f64::consts::PI;
 use std::time::Duration;
+
 use tokio::time::sleep;
 
 mod common;
-use common::python_receiver::PythonReceiver;
-
 use airplay2::audio::{AudioFormat, ChannelConfig, SampleFormat, SampleRate};
 use airplay2::streaming::AudioSource;
+use common::python_receiver::PythonReceiver;
 
 struct I24SineSource {
     phase: f64,

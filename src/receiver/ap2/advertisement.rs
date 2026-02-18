@@ -3,14 +3,16 @@
 //! Handles mDNS advertisement for the `AirPlay` 2 receiver, making it
 //! discoverable by iOS/macOS devices on the local network.
 
-use crate::receiver::ap2::config::Ap2Config;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use base64::Engine;
 use ed25519_dalek::SigningKey;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
+
+use crate::receiver::ap2::config::Ap2Config;
 
 /// TXT record keys for `AirPlay` 2 service advertisement
 pub mod txt_keys {
@@ -136,7 +138,8 @@ impl Ap2TxtRecord {
 
         // Format as UUID (version 4 format, but deterministic)
         format!(
-            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:\
+             02x}{:02x}{:02x}",
             hash[0],
             hash[1],
             hash[2],

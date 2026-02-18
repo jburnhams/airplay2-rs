@@ -1,10 +1,12 @@
 //! RTP timestamp to playback time mapping
 
-use super::control_receiver::SyncPacket;
-use super::timing::{ClockSync, NtpTimestamp};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
 use tokio::sync::RwLock;
+
+use super::control_receiver::SyncPacket;
+use super::timing::{ClockSync, NtpTimestamp};
 
 /// Maps RTP timestamps to wall-clock time for playback scheduling
 pub struct PlaybackTiming {

@@ -1,8 +1,9 @@
+use std::time::Duration;
+
 use airplay2::AirPlayClient;
 use airplay2::state::ClientEvent;
 use airplay2::testing::mock_server::{MockServer, MockServerConfig};
 use airplay2::types::AirPlayDevice;
-use std::time::Duration;
 use tokio::time::timeout;
 
 fn init_tracing() {
@@ -26,7 +27,8 @@ async fn test_client_integration_flow() {
     };
     // Note: MockServer currently only binds TCP RTSP port in start().
     // UDP ports are just used in Transport header response.
-    // For this integration test, we don't need actual UDP traffic unless the client expects it immediately.
+    // For this integration test, we don't need actual UDP traffic unless the client expects it
+    // immediately.
 
     let mut server = MockServer::new(config);
     let addr = server.start().await.expect("Failed to start mock server");
@@ -63,8 +65,8 @@ async fn test_client_integration_flow() {
     assert!(client.is_connected().await);
 
     // Verify Connected event
-    // The event might have been emitted during connect(), so we might have missed it if we subscribed late?
-    // But we subscribed before connect().
+    // The event might have been emitted during connect(), so we might have missed it if we
+    // subscribed late? But we subscribed before connect().
     // Let's drain events to find Connected.
     let mut connected_event_found = false;
     while let Ok(event) = timeout(Duration::from_secs(2), events.recv()).await {

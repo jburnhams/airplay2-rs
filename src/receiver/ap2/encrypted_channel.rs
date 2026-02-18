@@ -3,8 +3,9 @@
 //! After pairing completes, all RTSP traffic is encrypted using
 //! ChaCha20-Poly1305 with HAP-style framing.
 
-use crate::protocol::crypto::{ChaCha20Poly1305Cipher, Nonce};
 use bytes::{Buf, BufMut, BytesMut};
+
+use crate::protocol::crypto::{ChaCha20Poly1305Cipher, Nonce};
 
 /// Maximum frame size (64KB)
 const MAX_FRAME_SIZE: usize = 65535;

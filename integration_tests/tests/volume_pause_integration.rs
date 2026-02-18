@@ -2,9 +2,11 @@
 //!
 //! Verifies that client commands are correctly received and processed by the Python receiver.
 
-use airplay2::streaming::AudioSource;
-use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioFormat};
 use std::time::Duration;
+
+use airplay2::audio::AudioFormat;
+use airplay2::streaming::AudioSource;
+use airplay2::{AirPlayClient, AirPlayConfig};
 use tokio::time::sleep;
 mod common;
 use common::python_receiver::PythonReceiver;
@@ -60,7 +62,8 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Connect
     println!("Connecting...");
-    // Use a longer timeout for CI environments where the Python receiver might be slow to accept connections
+    // Use a longer timeout for CI environments where the Python receiver might be slow to accept
+    // connections
     let config = AirPlayConfig::builder()
         .connection_timeout(Duration::from_secs(30))
         .build();

@@ -1,6 +1,7 @@
+use std::time::Instant;
+
 use crate::receiver::ap2::jitter_buffer::{BufferState, JitterBuffer, JitterBufferConfig};
 use crate::receiver::ap2::rtp_receiver::AudioFrame;
-use std::time::Instant;
 
 fn make_frame(seq: u16, ts: u32) -> AudioFrame {
     AudioFrame {

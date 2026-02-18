@@ -1,6 +1,5 @@
 //! Tokio runtime implementation
 
-use super::traits::{AsyncRead, AsyncWrite};
 use std::io::Result;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -9,6 +8,8 @@ use std::task::{Context, Poll};
 pub use tokio::net::TcpStream;
 pub use tokio::net::UdpSocket;
 pub use tokio::time::{Instant, sleep, timeout};
+
+use super::traits::{AsyncRead, AsyncWrite};
 
 // We don't re-export Duration here to avoid shadowing std::time::Duration if both are imported
 // users can use std::time::Duration

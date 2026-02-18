@@ -1,11 +1,12 @@
 //! Volume control for `AirPlay` devices
 
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
+
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::rtsp::Method;
-
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Volume level (0.0 = silent, 1.0 = max)
 #[derive(Debug, Clone, Copy, PartialEq)]

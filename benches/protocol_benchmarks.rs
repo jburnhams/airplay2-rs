@@ -1,9 +1,10 @@
+use std::collections::HashMap;
+
 use airplay2::protocol::crypto::Aes128Ctr;
 use airplay2::protocol::plist::{PlistValue, decode, encode};
 use airplay2::protocol::rtp::RtpCodec;
 use airplay2::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
-use std::collections::HashMap;
 
 fn packet_buffer_benchmark(c: &mut Criterion) {
     let mut buffer = PacketBuffer::new(PacketBuffer::DEFAULT_SIZE);

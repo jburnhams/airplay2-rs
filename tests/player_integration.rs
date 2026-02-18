@@ -1,7 +1,8 @@
+use std::time::Duration;
+
 use airplay2::AirPlayPlayer;
 use airplay2::testing::mock_server::{MockServer, MockServerConfig};
 use airplay2::types::AirPlayDevice;
-use std::time::Duration;
 
 #[tokio::test]
 async fn test_player_integration() {

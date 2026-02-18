@@ -1,10 +1,12 @@
-use crate::receiver::session_manager::{
-    PreemptionPolicy, SessionEvent, SessionManager, SessionManagerConfig,
-};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::time::sleep;
+
+use crate::receiver::session_manager::{
+    PreemptionPolicy, SessionEvent, SessionManager, SessionManagerConfig,
+};
 
 fn test_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345)

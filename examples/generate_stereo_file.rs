@@ -1,8 +1,9 @@
-use airplay2::audio::AudioFormat;
-use airplay2::streaming::AudioSource;
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::Write;
+
+use airplay2::audio::AudioFormat;
+use airplay2::streaming::AudioSource;
 
 /// Stereo test source: 440Hz Left, 880Hz Right
 struct StereoSource {

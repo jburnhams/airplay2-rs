@@ -3,13 +3,15 @@
 //! Manages session lifecycle, enforces single-session policy,
 //! and handles session preemption.
 
-use super::session::{ReceiverSession, SessionError, SessionState};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 use tokio::time::interval;
+
+use super::session::{ReceiverSession, SessionError, SessionState};
 
 /// Session preemption policy
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,8 +245,8 @@ impl SessionManager {
                     // This recursive case is rare but possible.
                     // For simplicity, we just overwrite it here and let it drop,
                     // but we should ideally cleanup sockets.
-                    // To avoid complexity, we can assume the small race is acceptable to just overwrite
-                    // or we could loop.
+                    // To avoid complexity, we can assume the small race is acceptable to just
+                    // overwrite or we could loop.
                     // Let's just warn and overwrite for now, as proper loop is complex.
                     let old_id = existing.id().to_string();
                     let _ = self.event_tx.send(SessionEvent::SessionEnded {
@@ -282,8 +284,8 @@ impl SessionManager {
         };
 
         // Bind sockets
-        // We use port 0 (dynamic allocation) if the specified port fails, or we can try a few times.
-        // However, the test expects valid ports.
+        // We use port 0 (dynamic allocation) if the specified port fails, or we can try a few
+        // times. However, the test expects valid ports.
         // On Windows, re-binding can be tricky.
         // Let's modify to retry a few times if binding fails.
 

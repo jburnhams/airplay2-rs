@@ -2,9 +2,10 @@ use crate::streaming::url::{PlaybackInfo, UrlStreamer};
 
 #[tokio::test]
 async fn test_url_streamer_creation() {
+    use std::sync::Arc;
+
     use crate::connection::ConnectionManager;
     use crate::types::AirPlayConfig;
-    use std::sync::Arc;
 
     let config = AirPlayConfig::default();
     let connection = Arc::new(ConnectionManager::new(config));

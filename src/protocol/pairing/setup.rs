@@ -3,10 +3,8 @@
 //! This is used when first connecting to a device that requires authentication.
 //! The user must enter a PIN displayed on the device.
 
-use super::{
-    PairingError, PairingState, PairingStepResult, SessionKeys,
-    tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods},
-};
+use super::tlv::{TlvDecoder, TlvEncoder, TlvType, errors, methods};
+use super::{PairingError, PairingState, PairingStepResult, SessionKeys};
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature, HkdfSha512, Nonce,
     SrpClient, SrpParams, SrpVerifier,

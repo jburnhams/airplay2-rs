@@ -1,13 +1,13 @@
 //! URL-based streaming for `AirPlay`
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::plist_dict;
 use crate::protocol::plist::PlistValue;
 use crate::protocol::rtsp::Method;
-
-use std::sync::Arc;
-use std::time::Duration;
 
 /// URL streaming session
 pub struct UrlStreamer {

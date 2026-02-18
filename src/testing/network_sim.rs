@@ -1,7 +1,8 @@
 //! Network condition simulation for testing
 
-use rand::Rng;
 use std::time::Duration;
+
+use rand::Rng;
 
 /// Network condition simulator
 #[derive(Clone, Debug)]

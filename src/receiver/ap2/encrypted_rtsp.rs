@@ -3,10 +3,11 @@
 //! Wraps the RTSP server codec with the encryption layer to handle
 //! encrypted control channel traffic.
 
+use bytes::BytesMut;
+
 use super::encrypted_channel::{EncryptedChannel, EncryptionError};
 use crate::protocol::rtsp::server_codec::ParseError;
 use crate::protocol::rtsp::{RtspRequest, RtspServerCodec};
-use bytes::BytesMut;
 
 /// RTSP codec with optional encryption
 pub struct EncryptedRtspCodec {
