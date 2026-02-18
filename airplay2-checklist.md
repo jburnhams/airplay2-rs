@@ -1,5 +1,15 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 7):**
+- **Buffer Management**:
+  - ✅ **VERIFIED**: Implemented configurable audio buffer size in `PcmStreamer` and `AirPlayClient`.
+  - Added `buffer_integration` test verifying streaming with small (100ms) and large (2s) buffers.
+  - Implemented underrun handling (sending silence) to prevent connection drops.
+- **Session Key Management**:
+  - ✅ **VERIFIED**: Implemented `forget_device` in `AirPlayClient` and `remove_pairing` in `ConnectionManager`.
+  - Added `forget_device_integration` test verifying removal of persistent keys.
+  - Validated "Clear keys on logout/disconnection" (session keys cleared on disconnect, persistent keys on forget).
+
 **Work Done (Session 6):**
 - **Connection Resilience**:
   - ✅ **VERIFIED**: `reconnection_integration` test suite passes (3/3 tests).
@@ -199,8 +209,8 @@
 - [x] Store pairing session keys securely
   - ✅ **VERIFIED**: Keys stored in JSON file and successfully used for reconnection.
 - [ ] Implement session timeout and refresh
-- [ ] Clear keys on logout/disconnection
-  - *Status*: Implemented but **not verified**.
+- [x] Clear keys on logout/disconnection
+  - ✅ **VERIFIED**: Verified via `forget_device_integration` and `reconnection_integration`. Session keys cleared on disconnect, persistent keys on forget.
 
 ### RTSP (Real-Time Streaming Protocol)
 - [x] Implement RTSP 1.0 client (RFC 2326)
@@ -266,10 +276,10 @@
 ## Audio Buffering and Playback
 
 ### Buffer Management
-- [ ] Implement adaptive buffering strategy (configurable depth)
-  - *Status*: Basic buffering in `PcmStreamer` implemented but **not verified** with different depths.
-- [ ] Prevent buffer underrun/overrun
-  - *Status*: **Not verified**.
+- [x] Implement adaptive buffering strategy (configurable depth)
+  - ✅ **VERIFIED**: Implemented configurable `audio_buffer_frames`. Validated via `buffer_integration` test.
+- [x] Prevent buffer underrun/overrun
+  - ✅ **VERIFIED**: `PcmStreamer` sends silent frames on buffer underrun, maintaining stream.
 
 ### Playback Engine
 - [x] Decode audio codec (PCM passthrough)

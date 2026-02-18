@@ -251,6 +251,24 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Remove pairing for a device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if removal fails
+    pub async fn remove_pairing(&self, device_id: &str) -> Result<(), AirPlayError> {
+        if let Some(ref mut storage) = *self.pairing_storage.lock().await {
+            storage
+                .remove(device_id)
+                .await
+                .map_err(|e| AirPlayError::IoError {
+                    message: format!("Failed to remove pairing: {e}"),
+                    source: None,
+                })?;
+        }
+        Ok(())
+    }
+
     /// Send RTSP OPTIONS and process response
     async fn send_options(&self) -> Result<(), AirPlayError> {
         let request = {
