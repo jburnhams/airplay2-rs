@@ -36,7 +36,7 @@ async fn test_pcm_streamer_creation() {
     let connection = Arc::new(ConnectionManager::new(config));
     let format = AudioFormat::CD_QUALITY;
 
-    let streamer = PcmStreamer::new(connection, format);
+    let streamer = PcmStreamer::new(connection, format, 44100);
     assert_eq!(streamer.state().await, StreamerState::Idle);
 }
 
@@ -46,7 +46,7 @@ async fn test_streaming_loop() {
     let packets = sender.packets.clone();
 
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Create source
     // Increase size to ensure it doesn't finish before we check state
@@ -99,7 +99,7 @@ async fn benchmark_pcm_streaming_performance() {
 
     let sender = Arc::new(MockRtpSender::default());
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Create a large source
     // 352 frames * 4 bytes = 1408 bytes per packet
@@ -120,7 +120,7 @@ async fn benchmark_pcm_streaming_performance() {
 async fn test_finished_state() {
     let sender = Arc::new(MockRtpSender::default());
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Small source
     let data = vec![1u8; 1408 * 2]; // 2 packets
@@ -137,7 +137,7 @@ async fn test_alac_encoding_usage() {
     let packets = sender.packets.clone();
 
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Enable ALAC
     streamer.use_alac().await;
@@ -175,7 +175,7 @@ async fn test_resampling_integration() {
     let packets = sender.packets.clone();
 
     let target_format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, target_format);
+    let streamer = PcmStreamer::new(sender, target_format, 44100);
 
     // Source is 48kHz
     let source_format = AudioFormat {
