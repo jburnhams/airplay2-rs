@@ -1,10 +1,27 @@
 use crate::common::python_receiver::PythonReceiver;
 use airplay2::audio::{AudioFormat, ChannelConfig, SampleFormat, SampleRate};
 use airplay2::streaming::AudioSource;
-use airplay2::{AirPlayClient, AirPlayConfig};
+use airplay2::{AirPlayClient, AirPlayConfig, AirPlayDevice};
 use std::time::Duration;
 
 mod common;
+
+async fn setup_streaming_test(
+    buffer_frames: usize,
+) -> Result<(PythonReceiver, AirPlayClient, AirPlayDevice), Box<dyn std::error::Error>> {
+    let receiver = PythonReceiver::start().await?;
+
+    let mut config = AirPlayConfig::default();
+    config.discovery_timeout = Duration::from_secs(5);
+    config.connection_timeout = Duration::from_secs(5);
+    config.audio_buffer_frames = buffer_frames;
+
+    let client = AirPlayClient::new(config);
+    let device = receiver.device_config();
+    client.connect(&device).await?;
+
+    Ok((receiver, client, device))
+}
 
 struct FiniteSineWaveSource {
     phase: f64,
@@ -95,21 +112,11 @@ impl AudioSource for FiniteSineWaveSource {
 
 #[tokio::test]
 async fn test_streaming_with_small_buffer() {
-    let receiver = PythonReceiver::start()
-        .await
-        .expect("Failed to start receiver");
-
     // 100ms buffer (4410 frames at 44.1kHz)
     let buffer_frames = 4410;
-
-    let mut config = AirPlayConfig::default();
-    config.discovery_timeout = Duration::from_secs(5);
-    config.connection_timeout = Duration::from_secs(5);
-    config.audio_buffer_frames = buffer_frames;
-
-    let mut client = AirPlayClient::new(config);
-    let device = receiver.device_config();
-    client.connect(&device).await.expect("Failed to connect");
+    let (_receiver, mut client, _device) = setup_streaming_test(buffer_frames)
+        .await
+        .expect("Failed to setup test");
 
     // Stream for 2 seconds
     let source = FiniteSineWaveSource::new(440.0, 44100, 2, Duration::from_secs(2));
@@ -126,21 +133,11 @@ async fn test_streaming_with_small_buffer() {
 
 #[tokio::test]
 async fn test_streaming_with_large_buffer() {
-    let receiver = PythonReceiver::start()
-        .await
-        .expect("Failed to start receiver");
-
     // 2s buffer (88200 frames at 44.1kHz)
     let buffer_frames = 88200;
-
-    let mut config = AirPlayConfig::default();
-    config.discovery_timeout = Duration::from_secs(5);
-    config.connection_timeout = Duration::from_secs(5);
-    config.audio_buffer_frames = buffer_frames;
-
-    let mut client = AirPlayClient::new(config);
-    let device = receiver.device_config();
-    client.connect(&device).await.expect("Failed to connect");
+    let (_receiver, mut client, _device) = setup_streaming_test(buffer_frames)
+        .await
+        .expect("Failed to setup test");
 
     // Stream for 3 seconds (to ensure we fill buffer and stream)
     let source = FiniteSineWaveSource::new(880.0, 44100, 2, Duration::from_secs(3));
