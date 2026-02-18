@@ -15,7 +15,8 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting PTP Synchronization integration test");
 
     // 1. Start Receiver (default configuration enables PTP)
-    let receiver = PythonReceiver::start().await?;
+    // Use --fakemac to avoid potential issues with all-zero MACs on loopback in CI
+    let receiver = PythonReceiver::start_with_args(&["--fakemac"]).await?;
 
     // Give receiver time to start
     sleep(Duration::from_secs(2)).await;
