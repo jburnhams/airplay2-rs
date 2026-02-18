@@ -1344,6 +1344,7 @@ if __name__ == "__main__":
     mutexgroup = parser.add_mutually_exclusive_group()
 
     parser.add_argument("-fm", "--fakemac", help="Generate and use a random MAC for ethernet address.", action='store_true')
+    parser.add_argument("--mac", help="Specific MAC address to use (overrides detection)", default=None)
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-p", "--port", help="Port to bind to (default: 7000, use 0 for dynamic)", type=int, default=7000)
@@ -1454,7 +1455,9 @@ if __name__ == "__main__":
     DEVICE_ID = None
     IPV4 = None
     IPV6 = None
-    if ifen.get(ni.AF_LINK):
+    if args.mac:
+        DEVICE_ID = args.mac
+    elif ifen.get(ni.AF_LINK):
         if args.fakemac:
             DEVICE_ID = generate_fake_mac()
             while DEVICE_ID == ifen[ni.AF_LINK][0]["addr"]:

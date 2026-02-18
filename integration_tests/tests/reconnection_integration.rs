@@ -68,7 +68,8 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
     tracing::info!("Starting Automatic Reconnection test");
 
     // 1. Start Receiver
-    let receiver = PythonReceiver::start().await?;
+    // We must use a static MAC so the restarted receiver has the same ID.
+    let receiver = PythonReceiver::start_with_args(&["--mac", "00:11:22:33:44:55"]).await?;
     let device = receiver.device_config();
     let initial_id = device.id.clone();
     tracing::info!("Receiver started with ID: {}", initial_id);
@@ -117,7 +118,8 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
 
     // 5. Restart Receiver (simulating recovery)
     tracing::info!("Restarting receiver...");
-    let _receiver2 = PythonReceiver::start().await?;
+    // Must use same MAC
+    let _receiver2 = PythonReceiver::start_with_args(&["--mac", "00:11:22:33:44:55"]).await?;
     // Wait slightly for mDNS announcement
     sleep(Duration::from_secs(2)).await;
 
