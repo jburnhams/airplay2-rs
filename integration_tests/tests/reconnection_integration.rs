@@ -69,7 +69,7 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
 
     // Skip on macOS due to persistent [Errno 65] No route to host issues with zeroconf
     // during receiver restart in CI environment.
-    if std::env::consts::OS == "macos" {
+    if cfg!(target_os = "macos") {
         tracing::warn!("Skipping test_automatic_reconnection on macOS due to CI network issues");
         return Ok(());
     }

@@ -27,8 +27,28 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
         .build();
 
     let mut client = AirPlayClient::new(config);
-    if let Err(e) = client.connect(&device).await {
-        tracing::error!("Connection failed: {}", e);
+
+    // Add retry logic for connection (handling potential auth flakes)
+    let mut last_error = None;
+    let mut connected = false;
+    for attempt in 1..=3 {
+        tracing::info!("Connection attempt {}/3...", attempt);
+        match client.connect(&device).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                tracing::warn!("Connection attempt {} failed: {}", attempt, e);
+                last_error = Some(e);
+                sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
+
+    if !connected {
+        let e = last_error.unwrap();
+        tracing::error!("All connection attempts failed. Last error: {}", e);
         let output = receiver.stop().await?;
         if output.log_path.exists() {
             let logs = std::fs::read_to_string(&output.log_path)?;
