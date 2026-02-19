@@ -1,5 +1,6 @@
-use crate::receiver::ap2::encrypted_channel::EncryptedChannel;
 use proptest::prelude::*;
+
+use crate::receiver::ap2::encrypted_channel::EncryptedChannel;
 
 proptest! {
     // Roundtrip encryption/decryption with random keys and messages

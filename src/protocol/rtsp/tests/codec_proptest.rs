@@ -1,5 +1,6 @@
-use crate::protocol::rtsp::codec::RtspCodec;
 use proptest::prelude::*;
+
+use crate::protocol::rtsp::codec::RtspCodec;
 
 proptest! {
     // Fuzz with random byte sequences
