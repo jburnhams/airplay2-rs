@@ -2,9 +2,10 @@
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
+use std::time::Instant;
+
 use crate::protocol::ptp::clock::{PtpClock, PtpRole};
 use crate::protocol::ptp::timestamp::PtpTimestamp;
-use std::time::Instant;
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

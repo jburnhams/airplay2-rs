@@ -103,7 +103,7 @@ fn test_calculate_adjustment_large_drift() {
     // e.g. target = now - 2 seconds.
     let now_compact = PtpTimestamp::now().to_airplay_compact();
     // 2 seconds in compact units (1/65536) = 2 * 65536 = 131072
-    let target = now_compact.wrapping_sub(131072);
+    let target = now_compact.wrapping_sub(131_072);
     coord.set_target_time(target);
 
     let cmd = coord.calculate_adjustment();
@@ -114,7 +114,7 @@ fn test_calculate_adjustment_large_drift() {
     if let Some(PlaybackCommand::StartAt { timestamp }) = cmd {
         assert_eq!(timestamp, target);
     } else {
-        panic!("Expected StartAt command, got {:?}", cmd);
+        panic!("Expected StartAt command, got {cmd:?}");
     }
 }
 
@@ -147,7 +147,7 @@ fn test_calculate_adjustment_small_drift() {
         assert!(rate_ppm > 0);
         assert!(rate_ppm <= 500);
     } else {
-        panic!("Expected AdjustRate command, got {:?}", cmd);
+        panic!("Expected AdjustRate command, got {cmd:?}");
     }
 }
 
@@ -174,7 +174,7 @@ fn test_calculate_adjustment_with_offset() {
 
     // Check offset is calculated correctly (~5s)
     let offset_ms = coord.clock_offset_ms();
-    assert!((offset_ms - 5000.0).abs() < 1.0, "Offset was {}", offset_ms);
+    assert!((offset_ms - 5000.0).abs() < 1.0, "Offset was {offset_ms}");
 
     // Target time is "now" in Master domain.
     // Master = Slave - 5s.
@@ -185,7 +185,7 @@ fn test_calculate_adjustment_with_offset() {
     let now_compact = now_fresh.to_airplay_compact();
 
     // 5 seconds in compact units = 5 * 65536 = 327680.
-    let target = now_compact.wrapping_sub(327680);
+    let target = now_compact.wrapping_sub(327_680);
 
     coord.set_target_time(target);
 
@@ -194,6 +194,6 @@ fn test_calculate_adjustment_with_offset() {
     // Drift should be small (Master time derived from Slave time - Offset matches Target).
     // So should be in sync.
 
-    assert!(cmd.is_none(), "Expected no adjustment, got {:?}", cmd);
+    assert!(cmd.is_none(), "Expected no adjustment, got {cmd:?}");
     assert!(coord.is_in_sync());
 }
