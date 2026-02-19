@@ -58,7 +58,10 @@ impl NtpTimestamp {
         let fraction = ((u64::from(nanos) * 0x1_0000_0000_u64) / 1_000_000_000) as u32;
 
         Self {
-            #[allow(clippy::cast_possible_truncation, reason = "NTP timestamp overflow (Year 2036)")]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "NTP timestamp overflow (Year 2036)"
+            )]
             seconds: seconds as u32,
             fraction,
         }
@@ -156,7 +159,10 @@ impl ClockSync {
 
         // Update moving average
         let alpha = if self.exchange_count < 10 { 0.5 } else { 0.1 };
-        #[allow(clippy::cast_precision_loss, reason = "Precision loss acceptable for offset avg")]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "Precision loss acceptable for offset avg"
+        )]
         {
             self.offset_avg = (1.0 - alpha) * self.offset_avg + alpha * (receive_diff as f64);
         }

@@ -79,7 +79,10 @@ impl DmapEncoder {
         match value {
             DmapValue::String(s) => {
                 // Write length (4 bytes, big-endian)
-                #[allow(clippy::cast_possible_truncation, reason = "DMAP string length fits in u32")]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP string length fits in u32"
+                )]
                 let len = s.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 // Write string bytes
@@ -97,11 +100,17 @@ impl DmapEncoder {
                     self.buffer.push(*n as u8);
                 } else if i16::try_from(*n).is_ok() {
                     self.buffer.extend_from_slice(&2u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation, reason = "Value checked to fit in i16")]
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "Value checked to fit in i16"
+                    )]
                     self.buffer.extend_from_slice(&(*n as i16).to_be_bytes());
                 } else if i32::try_from(*n).is_ok() {
                     self.buffer.extend_from_slice(&4u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation, reason = "Value checked to fit in i32")]
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "Value checked to fit in i32"
+                    )]
                     self.buffer.extend_from_slice(&(*n as i32).to_be_bytes());
                 } else {
                     self.buffer.extend_from_slice(&8u32.to_be_bytes());
@@ -117,13 +126,19 @@ impl DmapEncoder {
                 let inner_data = inner.finish();
 
                 // Write length and contents
-                #[allow(clippy::cast_possible_truncation, reason = "DMAP container length fits in u32")]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP container length fits in u32"
+                )]
                 let len = inner_data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 self.buffer.extend_from_slice(&inner_data);
             }
             DmapValue::Raw(data) => {
-                #[allow(clippy::cast_possible_truncation, reason = "DMAP raw data length fits in u32")]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP raw data length fits in u32"
+                )]
                 let len = data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 self.buffer.extend_from_slice(data);
