@@ -51,11 +51,17 @@ impl NtpTimestamp {
         let seconds = now.as_secs() + NTP_EPOCH_OFFSET;
         let nanos = now.subsec_nanos();
         // Convert nanoseconds to NTP fraction (2^32 / 10^9)
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "NTP fraction calculation fits in u32"
+        )]
         let fraction = ((u64::from(nanos) * 0x1_0000_0000_u64) / 1_000_000_000) as u32;
 
         Self {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "NTP timestamp overflow (Year 2036)"
+            )]
             seconds: seconds as u32,
             fraction,
         }
@@ -65,9 +71,9 @@ impl NtpTimestamp {
     #[must_use]
     pub fn from_u64(value: u64) -> Self {
         Self {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "High 32 bits are seconds")]
             seconds: (value >> 32) as u32,
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Low 32 bits are fraction")]
             fraction: value as u32,
         }
     }
@@ -153,14 +159,20 @@ impl ClockSync {
 
         // Update moving average
         let alpha = if self.exchange_count < 10 { 0.5 } else { 0.1 };
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "Precision loss acceptable for offset avg"
+        )]
         {
             self.offset_avg = (1.0 - alpha) * self.offset_avg + alpha * (receive_diff as f64);
         }
 
         // Convert strict casting to avoid clippy warnings if needed, but here simple cast is fine
         // for now
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Truncating fractional microseconds is acceptable"
+        )]
         let offset = self.offset_avg as i64;
         self.offset_micros = offset;
 

@@ -99,7 +99,10 @@ fn test_buffer_overflow() {
 fn test_buffer_range() {
     let mut buffer = PacketBuffer::new(10);
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Test values in 0..5 fit in u8/u16"
+    )]
     for i in 0..5 {
         buffer.push(BufferedPacket {
             sequence: i,
