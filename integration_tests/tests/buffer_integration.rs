@@ -34,7 +34,10 @@ async fn setup_streaming_test(
                 if attempts >= 3 {
                     return Err(e.into());
                 }
-                eprintln!("Connection attempt {} failed: {:?}, retrying...", attempts, e);
+                eprintln!(
+                    "Connection attempt {} failed: {:?}, retrying...",
+                    attempts, e
+                );
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         }
