@@ -181,8 +181,10 @@ pub enum AudioCodec {
     Pcm,
     /// Apple Lossless Audio Codec
     Alac,
-    /// Advanced Audio Coding
+    /// Advanced Audio Coding (LC)
     Aac,
+    /// Advanced Audio Coding (ELD)
+    AacEld,
     /// Opus (for low-latency applications)
     Opus,
 }
@@ -222,4 +224,6 @@ pub enum AacProfile {
     He,
     /// High Efficiency v2 (SBR + PS)
     HeV2,
+    /// Enhanced Low Delay
+    Eld,
 }

@@ -47,6 +47,7 @@ impl AudioPipeline {
             AudioCodec::Aac => Some(AudioDecoder::Aac(AacDecoder)),
             AudioCodec::Pcm => Some(AudioDecoder::Pcm),
             AudioCodec::Opus => None, // Handle Opus or others
+            AudioCodec::AacEld => None, // TODO: Implement ELD decoder
         };
 
         Ok(Self {

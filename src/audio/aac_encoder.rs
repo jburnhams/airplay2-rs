@@ -1,6 +1,7 @@
 //! AAC audio encoder using fdk-aac
 
-use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
+use crate::audio::format::AacProfile;
+use fdk_aac::enc::{AudioObjectType, BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
 
 /// AAC encoder error
@@ -28,15 +29,28 @@ impl AacEncoder {
     /// * `sample_rate` - Sample rate in Hz (e.g. 44100)
     /// * `channels` - Number of channels (e.g. 2)
     /// * `bitrate` - Bitrate in bits per second (e.g. 64000)
+    /// * `profile` - AAC profile (e.g. LC, ELD)
     ///
     /// # Errors
     ///
     /// Returns error if encoder cannot be initialized
-    pub fn new(sample_rate: u32, channels: u32, bitrate: u32) -> Result<Self, AacEncoderError> {
+    pub fn new(
+        sample_rate: u32,
+        channels: u32,
+        bitrate: u32,
+        profile: AacProfile,
+    ) -> Result<Self, AacEncoderError> {
+        let audio_object_type = match profile {
+            AacProfile::Lc => AudioObjectType::Mpeg4LowComplexity,
+            AacProfile::He => AudioObjectType::Mpeg4HeAac,
+            AacProfile::HeV2 => AudioObjectType::Mpeg4HeAacV2,
+            AacProfile::Eld => AudioObjectType::Mpeg4EnhancedLowDelay,
+        };
+
         let params = EncoderParams {
             bit_rate: BitRate::Cbr(bitrate),
             transport: Transport::Raw, // Raw AAC frames for RTP
-            audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
+            audio_object_type,
             channels: match channels {
                 1 => ChannelMode::Mono,
                 2 => ChannelMode::Stereo,
@@ -77,5 +91,13 @@ impl AacEncoder {
         } else {
             Ok(Vec::new())
         }
+    }
+
+    /// Get frame length (samples per channel per frame)
+    #[must_use]
+    pub fn frame_length(&self) -> usize {
+        // fdk-aac crate exposes `info().frameLength`
+        // We use map/unwrap_or because info() returns Result
+        self.encoder.info().map(|i| i.frameLength as usize).unwrap_or(0)
     }
 }
