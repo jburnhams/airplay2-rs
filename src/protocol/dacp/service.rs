@@ -100,7 +100,10 @@ impl DacpService {
     /// # Errors
     ///
     /// Returns error if registration fails
-    #[allow(clippy::unused_async)]
+    #[allow(
+        clippy::unused_async,
+        reason = "Async interface reserved for future mDNS registration"
+    )]
     pub async fn register(&mut self) -> Result<(), DacpError> {
         // Use mdns-sd to register service
         // Implementation depends on mDNS library
@@ -114,7 +117,10 @@ impl DacpService {
     /// # Errors
     ///
     /// Returns error if unregistration fails
-    #[allow(clippy::unused_async)]
+    #[allow(
+        clippy::unused_async,
+        reason = "Async interface reserved for future mDNS registration"
+    )]
     pub async fn unregister(&mut self) -> Result<(), DacpError> {
         self.registered = false;
         Ok(())
