@@ -11,7 +11,8 @@ mod common;
 async fn setup_streaming_test(
     buffer_frames: usize,
 ) -> Result<(PythonReceiver, AirPlayClient, AirPlayDevice), Box<dyn std::error::Error>> {
-    let receiver = PythonReceiver::start().await?;
+    // Start with -nv to avoid ALSA errors
+    let receiver = PythonReceiver::start_with_args(&["-nv"]).await?;
 
     // Give receiver time to start
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -23,7 +24,27 @@ async fn setup_streaming_test(
 
     let client = AirPlayClient::new(config);
     let device = receiver.device_config();
-    client.connect(&device).await?;
+
+    // Retry connection logic
+    let mut connected = false;
+    let mut last_error = None;
+    for i in 1..=3 {
+        match client.connect(&device).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                eprintln!("Connection attempt {} failed: {}", i, e);
+                last_error = Some(e);
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
+
+    if !connected {
+        return Err(Box::new(last_error.unwrap()));
+    }
 
     Ok((receiver, client, device))
 }
