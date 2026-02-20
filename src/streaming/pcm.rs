@@ -239,6 +239,7 @@ impl PcmStreamer {
         let codec_type = *self.codec_type.read().await;
         let frames_per_packet = match codec_type {
             AudioCodec::Aac => 1024,
+            AudioCodec::AacEld => 512,
             _ => Self::FRAMES_PER_PACKET,
         };
 
@@ -351,7 +352,7 @@ impl PcmStreamer {
                                     Cow::Borrowed(&packet_data)
                                 }
                             }
-                            AudioCodec::Aac => {
+                            AudioCodec::Aac | AudioCodec::AacEld => {
                                 let mut encoder_guard = self.encoder_aac.lock().await;
                                 if let Some(encoder) = encoder_guard.as_mut() {
                                     // Convert bytes to i16 (Little Endian)
@@ -585,12 +586,33 @@ impl PcmStreamer {
             self.format.sample_rate.as_u32(),
             u32::from(self.format.channels.channels()),
             bitrate,
+            crate::audio::format::AacProfile::Lc,
         )
         .expect("Failed to initialize AAC encoder");
 
         *self.encoder_aac.lock().await = Some(encoder);
         *self.encoder.lock().await = None;
         *self.codec_type.write().await = AudioCodec::Aac;
+    }
+
+    /// Set codec to AAC-ELD
+    ///
+    /// # Panics
+    ///
+    /// Panics if the AAC-ELD encoder cannot be initialized.
+    pub async fn use_aac_eld(&self, bitrate: u32) {
+        // Standard AAC-ELD: 44100Hz, Stereo
+        let encoder = AacEncoder::new(
+            self.format.sample_rate.as_u32(),
+            u32::from(self.format.channels.channels()),
+            bitrate,
+            crate::audio::format::AacProfile::Eld,
+        )
+        .expect("Failed to initialize AAC-ELD encoder");
+
+        *self.encoder_aac.lock().await = Some(encoder);
+        *self.encoder.lock().await = None;
+        *self.codec_type.write().await = AudioCodec::AacEld;
     }
 
     /// Set codec to PCM (default)

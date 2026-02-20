@@ -82,8 +82,10 @@
   - ✅ **VERIFIED**: End-to-end test `aac_streaming` passes.
   - Confirmed 440Hz sine wave decoding.
   - Correctly negotiates `mpeg4-generic/44100/2` with `mode=AAC-hbr`.
-- [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
-  - *Status*: Pending.
+- [x] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
+  - ✅ **VERIFIED**: Implemented ELD support using `fdk-aac` (`Mpeg4EnhancedLowDelay`).
+  - Added `tests/aac_eld_streaming.rs` integration test which passes against Python receiver.
+  - Correctly negotiates `ct=0x8`, `spf=512`, `constantDuration=512`.
 
 ### Sample Rate and Bit Depth Support
 - [x] **Standard**: 16-bit/44.1 kHz stereo (minimum)
