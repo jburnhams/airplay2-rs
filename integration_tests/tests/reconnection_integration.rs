@@ -14,7 +14,8 @@ async fn test_disconnection_detection() -> Result<(), Box<dyn std::error::Error>
     common::init_logging();
     tracing::info!("Starting Disconnection Detection test");
 
-    let receiver = PythonReceiver::start().await?;
+    // Use --fakemac to ensure a valid non-zero MAC address
+    let receiver = PythonReceiver::start_with_args(&["--fakemac"]).await?;
     // Give receiver time to start
     sleep(Duration::from_secs(2)).await;
     let device = receiver.device_config();
@@ -177,7 +178,8 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
     common::init_logging();
     tracing::info!("Starting No-Reconnect on User Disconnect test");
 
-    let receiver = PythonReceiver::start().await?;
+    // Use --fakemac to ensure a valid non-zero MAC address
+    let receiver = PythonReceiver::start_with_args(&["--fakemac"]).await?;
     let device = receiver.device_config();
     sleep(Duration::from_secs(2)).await;
 

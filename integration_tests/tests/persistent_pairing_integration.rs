@@ -31,7 +31,8 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
 
     // 2. Start Receiver
     // Note: PythonReceiver::start() cleans up the receiver's pairings directory
-    let receiver = PythonReceiver::start().await?;
+    // Use --fakemac to ensure a valid non-zero MAC address, preventing SRP failures
+    let receiver = PythonReceiver::start_with_args(&["--fakemac"]).await?;
 
     // Give receiver time to start
     sleep(Duration::from_secs(2)).await;
