@@ -3,11 +3,11 @@ use crate::receiver::ap2::multi_room::{GroupRole, MultiRoomCoordinator, Playback
 
 #[test]
 fn test_group_join_leave() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
 
     assert!(coord.group_info().is_none());
 
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
     assert_eq!(coord.group_uuid(), Some("group-uuid"));
@@ -18,7 +18,7 @@ fn test_group_join_leave() {
 
 #[test]
 fn test_leader_role() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
     coord.join_group("group-uuid".into(), GroupRole::Leader, None);
 
     assert!(coord.is_leader());
@@ -27,8 +27,8 @@ fn test_leader_role() {
 
 #[test]
 fn test_calculate_adjustment_no_sync() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
 
     // Set target time
     let target = PtpTimestamp::now().to_airplay_compact();
@@ -40,8 +40,8 @@ fn test_calculate_adjustment_no_sync() {
 
 #[test]
 fn test_calculate_adjustment_synced() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
 
     // Simulate synchronization by processing timing measurements
     // We simulate a perfect network with 0 delay and 0 offset

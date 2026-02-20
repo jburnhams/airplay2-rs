@@ -2,8 +2,9 @@
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
-use crate::protocol::ptp::{PtpClock, PtpRole, PtpTimestamp};
 use std::time::Instant;
+
+use crate::protocol::ptp::{PtpClock, PtpRole, PtpTimestamp};
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,7 +169,10 @@ impl MultiRoomCoordinator {
         // We use i128 to prevent overflow during multiplication
         let drift_ns_i128 = (i128::from(drift_units) * 1_000_000_000) / 65536;
 
-        #[allow(clippy::cast_possible_truncation, reason = "Drift in ns fits in i64 unless extremely large")]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Drift in ns fits in i64 unless extremely large"
+        )]
         let drift_ns = drift_ns_i128 as i64;
         let drift_us = drift_ns / 1000;
 
@@ -188,10 +192,7 @@ impl MultiRoomCoordinator {
             Some(PlaybackCommand::StartAt { timestamp: target })
         } else {
             // Small drift - adjust rate
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Clamped value fits in i32"
-            )]
+            #[allow(clippy::cast_possible_truncation, reason = "Clamped value fits in i32")]
             let rate_ppm = i32::try_from((drift_us / 10).clamp(-500, 500)).unwrap_or(0);
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
