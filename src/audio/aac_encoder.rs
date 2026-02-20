@@ -98,6 +98,9 @@ impl AacEncoder {
     pub fn frame_length(&self) -> usize {
         // fdk-aac crate exposes `info().frameLength`
         // We use map/unwrap_or because info() returns Result
-        self.encoder.info().map(|i| i.frameLength as usize).unwrap_or(0)
+        self.encoder
+            .info()
+            .map(|i| i.frameLength as usize)
+            .unwrap_or(0)
     }
 }

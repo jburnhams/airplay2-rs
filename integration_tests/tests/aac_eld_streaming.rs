@@ -103,7 +103,9 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
         if logs.contains("AAC_ELD") {
             tracing::info!("✓ Receiver confirmed AAC-ELD format");
         } else {
-            tracing::warn!("Receiver did not explicitly confirm AAC-ELD in logs (might be normal if debug logging is off)");
+            tracing::warn!(
+                "Receiver did not explicitly confirm AAC-ELD in logs (might be normal if debug logging is off)"
+            );
         }
     }
 
