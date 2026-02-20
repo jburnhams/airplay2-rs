@@ -209,3 +209,39 @@ async fn test_resampling_integration() {
     // We can't easily verify the content is resampled without decoding,
     // but we verify it ran without error and produced output.
 }
+
+#[tokio::test]
+async fn test_pcm_streamer_padding_on_underrun() {
+    let sender = Arc::new(MockRtpSender::default());
+    let packets = sender.packets.clone();
+    let format = AudioFormat::CD_QUALITY;
+    let streamer = PcmStreamer::new(sender, format, 44100);
+
+    // Packet size = 352 * 4 = 1408 bytes
+    let packet_size = 352 * 4;
+    // Source data: 1.5 packets (1408 + 704 bytes)
+    // 1st packet: full.
+    // 2nd packet: 704 bytes data + 704 bytes padding.
+    let data_len = packet_size + packet_size / 2;
+    // Fill with 0xFF to distinguish from padding (0x00)
+    let data = vec![0xFFu8; data_len];
+    let source = SliceSource::new(data, format);
+
+    streamer.stream(source).await.unwrap();
+
+    let sent = packets.lock().unwrap();
+    assert_eq!(sent.len(), 2);
+
+    let p1 = &sent[0];
+    // RtpCodec adds header (12 bytes)
+    assert_eq!(p1.len(), 12 + packet_size);
+    // Verify payload is all 0xFF
+    assert!(p1[12..].iter().all(|&b| b == 0xFF));
+
+    let p2 = &sent[1];
+    assert_eq!(p2.len(), 12 + packet_size);
+    // Verify first half is 0xFF
+    assert!(p2[12..12 + packet_size / 2].iter().all(|&b| b == 0xFF));
+    // Verify second half is 0x00 (padding)
+    assert!(p2[12 + packet_size / 2..].iter().all(|&b| b == 0x00));
+}

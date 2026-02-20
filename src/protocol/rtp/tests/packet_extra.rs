@@ -103,3 +103,20 @@ fn test_payload_type_variants() {
         Some(PayloadType::AudioBuffered)
     ); // 0x61 | 0x80
 }
+
+#[test]
+fn test_audio_header_creation() {
+    let header_realtime = RtpHeader::new_audio(1, 1000, 12345, false);
+    assert_eq!(header_realtime.payload_type, PayloadType::AudioRealtime);
+
+    let header_buffered = RtpHeader::new_audio(2, 2000, 12345, true);
+    assert_eq!(header_buffered.payload_type, PayloadType::AudioBuffered);
+}
+
+#[test]
+fn test_audio_samples_empty() {
+    let payload = Vec::new();
+    let packet = RtpPacket::new(RtpHeader::new_audio(0, 0, 0, false), payload);
+    let samples: Vec<(i16, i16)> = packet.audio_samples().collect();
+    assert!(samples.is_empty());
+}

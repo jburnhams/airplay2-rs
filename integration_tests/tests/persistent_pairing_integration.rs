@@ -12,6 +12,26 @@ use airplay2::AirPlayClient;
 use airplay2::protocol::pairing::storage::FileStorage;
 use common::python_receiver::PythonReceiver;
 
+/// Helper to connect with retry logic
+async fn connect_with_retry(
+    client: &mut AirPlayClient,
+    device: &airplay2::AirPlayDevice,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut connected = false;
+    for i in 0..3 {
+        tracing::info!("Connection attempt {}/3...", i + 1);
+        if client.connect(device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+    if !connected {
+        return Err("Failed to connect to receiver after 3 attempts".into());
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::Error>> {
     common::init_logging();
@@ -47,9 +67,9 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
             .build();
 
         // We use with_pairing_storage to inject the storage instance
-        let client = AirPlayClient::new(config).with_pairing_storage(Box::new(storage));
+        let mut client = AirPlayClient::new(config).with_pairing_storage(Box::new(storage));
 
-        client.connect(&device).await?;
+        connect_with_retry(&mut client, &device).await?;
         assert!(client.is_connected().await, "Client A should be connected");
 
         // Wait a bit to ensure keys are saved and receiver flushes pairing to disk.
@@ -82,11 +102,11 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
             .pin("3939")
             .build();
 
-        let client = AirPlayClient::new(config).with_pairing_storage(Box::new(storage));
+        let mut client = AirPlayClient::new(config).with_pairing_storage(Box::new(storage));
 
         // This connect() call should use Pair-Verify because keys exist in storage
         // and the receiver should recognize us.
-        client.connect(&device).await?;
+        connect_with_retry(&mut client, &device).await?;
 
         assert!(
             client.is_connected().await,
