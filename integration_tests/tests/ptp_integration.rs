@@ -31,15 +31,34 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     let mut client = AirPlayClient::new(config);
-    if let Err(e) = client.connect(&device).await {
-        tracing::error!("Connection failed: {}", e);
+    let mut connected = false;
+
+    for i in 0..3 {
+        tracing::info!("Connection attempt {}/3...", i + 1);
+        match client.connect(&device).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                tracing::warn!("Connection failed (attempt {}): {}", i + 1, e);
+                if i < 2 {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+
+    if !connected {
+        tracing::error!("All connection attempts failed");
         let output = receiver.stop().await?;
         if output.log_path.exists() {
             let logs = std::fs::read_to_string(&output.log_path)?;
             println!("Receiver Logs (Connection Failed):\n{}", logs);
         }
-        return Err(e.into());
+        return Err("Connection failed after 3 attempts".into());
     }
+
     assert!(client.is_connected().await, "Client should be connected");
 
     // 3. Stream Audio for enough time to exchange PTP messages
