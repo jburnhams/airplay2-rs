@@ -1,8 +1,5 @@
 //! Sans-IO RTSP protocol implementation for `AirPlay`
 
-#![allow(unused_imports)]
-#![allow(dead_code)]
-
 pub mod codec;
 pub mod headers;
 pub mod request;
