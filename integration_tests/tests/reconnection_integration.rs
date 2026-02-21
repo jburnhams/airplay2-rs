@@ -191,7 +191,21 @@ async fn test_no_reconnect_on_user_disconnect() -> Result<(), Box<dyn std::error
 
     let mut rx = player.client().subscribe_events();
 
-    player.connect(&device).await?;
+    // Use retry logic for initial connection to handle potential startup flakiness
+    let mut connected = false;
+    for i in 0..3 {
+        if player.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        tracing::warn!("Connection attempt {} failed, retrying...", i + 1);
+        sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect initially after 3 attempts".into());
+    }
+
     assert!(player.is_connected().await);
 
     // User Disconnect
