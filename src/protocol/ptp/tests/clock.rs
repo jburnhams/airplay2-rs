@@ -292,10 +292,11 @@ fn test_local_to_remote_no_offset() {
 }
 
 #[test]
-fn test_remote_to_local_with_offset() {
+fn test_remote_to_local_with_offset_slave() {
     let mut clock = PtpClock::new(0, PtpRole::Slave);
 
     // Slave is 5 seconds ahead.
+    // Offset = Slave - Master = 5s.
     let t1 = PtpTimestamp::new(100, 0);
     let t2 = PtpTimestamp::new(105, 1_000_000);
     let t3 = PtpTimestamp::new(105, 2_000_000);
@@ -305,32 +306,83 @@ fn test_remote_to_local_with_offset() {
     let remote = PtpTimestamp::new(200, 0);
     let local = clock.remote_to_local(remote);
 
-    // local should be remote - offset ≈ 200 - 5 = 195
+    // Slave (local) = Master (remote) + Offset
+    // local = 200 + 5 = 205
     assert!(
-        local.seconds.abs_diff(195) <= 1,
-        "Expected ~195s, got {}",
+        local.seconds.abs_diff(205) <= 1,
+        "Expected ~205s, got {}",
         local.seconds
     );
 }
 
 #[test]
-fn test_local_to_remote_with_offset() {
+fn test_local_to_remote_with_offset_slave() {
     let mut clock = PtpClock::new(0, PtpRole::Slave);
 
     // Slave is 5 seconds ahead.
+    // Offset = 5s.
     let t1 = PtpTimestamp::new(100, 0);
     let t2 = PtpTimestamp::new(105, 1_000_000);
     let t3 = PtpTimestamp::new(105, 2_000_000);
     let t4 = PtpTimestamp::new(100, 3_000_000);
     clock.process_timing(t1, t2, t3, t4);
 
-    let local = PtpTimestamp::new(195, 0);
+    let local = PtpTimestamp::new(205, 0);
     let remote = clock.local_to_remote(local);
 
-    // remote should be local + offset ≈ 195 + 5 = 200
+    // Master (remote) = Slave (local) - Offset
+    // remote = 205 - 5 = 200
     assert!(
         remote.seconds.abs_diff(200) <= 1,
         "Expected ~200s, got {}",
+        remote.seconds
+    );
+}
+
+#[test]
+fn test_remote_to_local_with_offset_master() {
+    let mut clock = PtpClock::new(0, PtpRole::Master);
+
+    // Master (Local) is 5 seconds behind Slave (Remote).
+    // Or rather: Offset = Slave (Remote) - Master (Local).
+    // Let's say Offset = 5s (Remote is 5s ahead of Local).
+    let t1 = PtpTimestamp::new(100, 0); // Master Local
+    let t2 = PtpTimestamp::new(105, 1_000_000); // Slave Remote
+    let t3 = PtpTimestamp::new(105, 2_000_000); // Slave Remote
+    let t4 = PtpTimestamp::new(100, 3_000_000); // Master Local
+    clock.process_timing(t1, t2, t3, t4);
+
+    let remote = PtpTimestamp::new(205, 0); // Slave (Remote)
+    let local = clock.remote_to_local(remote);
+
+    // Master (Local) = Slave (Remote) - Offset
+    // Local = 205 - 5 = 200
+    assert!(
+        local.seconds.abs_diff(200) <= 1,
+        "Expected ~200s, got {}",
+        local.seconds
+    );
+}
+
+#[test]
+fn test_local_to_remote_with_offset_master() {
+    let mut clock = PtpClock::new(0, PtpRole::Master);
+
+    // Offset = 5s (Remote ahead).
+    let t1 = PtpTimestamp::new(100, 0);
+    let t2 = PtpTimestamp::new(105, 1_000_000);
+    let t3 = PtpTimestamp::new(105, 2_000_000);
+    let t4 = PtpTimestamp::new(100, 3_000_000);
+    clock.process_timing(t1, t2, t3, t4);
+
+    let local = PtpTimestamp::new(200, 0); // Master (Local)
+    let remote = clock.local_to_remote(local);
+
+    // Slave (Remote) = Master (Local) + Offset
+    // Remote = 200 + 5 = 205
+    assert!(
+        remote.seconds.abs_diff(205) <= 1,
+        "Expected ~205s, got {}",
         remote.seconds
     );
 }

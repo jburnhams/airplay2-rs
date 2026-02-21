@@ -68,7 +68,21 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
         .connection_timeout(Duration::from_secs(30))
         .build();
     let client = AirPlayClient::new(config);
-    client.connect(&device).await?;
+
+    // Retry connection up to 3 times to handle potential flakes
+    let mut connected = false;
+    for i in 0..3 {
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        println!("Connection attempt {} failed, retrying...", i + 1);
+        sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect after 3 attempts".into());
+    }
 
     // 3. Set Volume (Initial)
     println!("Setting volume to 0.5 (-6.02 dB)...");

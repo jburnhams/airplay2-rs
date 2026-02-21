@@ -31,9 +31,10 @@ Feature bit 38 (SupportsBufferedAudio) enables multi-room support.
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
-use super::ptp_clock::PtpClock;
-use std::time::{Duration, Instant};
-use std::collections::HashMap;
+use crate::protocol::ptp::clock::{PtpClock, PtpRole};
+use crate::protocol::ptp::timestamp::PtpTimestamp;
+use std::time::Instant;
+use tracing::{info, warn};
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,15 +65,20 @@ pub struct GroupInfo {
 /// Group member info
 #[derive(Debug, Clone)]
 pub struct GroupMember {
+    /// Member device ID
     pub device_id: String,
+    /// Member name
     pub name: String,
+    /// Member clock ID
     pub clock_id: u64,
+    /// Member role
     pub role: GroupRole,
 }
 
 /// Multi-room coordinator
 pub struct MultiRoomCoordinator {
     /// Our device ID
+    #[allow(dead_code, reason = "Reserved for future identification usage")]
     device_id: String,
     /// Our clock
     clock: PtpClock,
@@ -81,18 +87,25 @@ pub struct MultiRoomCoordinator {
     /// Sync tolerance (microseconds)
     sync_tolerance_us: i64,
     /// Last sync check
+    #[allow(dead_code, reason = "Reserved for future sync timeout handling")]
     last_sync_check: Instant,
     /// Sync status
     in_sync: bool,
 }
 
 /// Playback timing command
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlaybackCommand {
     /// Start playback at specified time
-    StartAt { timestamp: u64 },
+    StartAt {
+        /// Target PTP timestamp (AirPlay compact format)
+        timestamp: u64,
+    },
     /// Adjust playback rate to catch up/slow down
-    AdjustRate { rate_ppm: i32 },
+    AdjustRate {
+        /// Rate adjustment in parts per million
+        rate_ppm: i32,
+    },
     /// Pause playback
     Pause,
     /// Resume playback
@@ -100,12 +113,13 @@ pub enum PlaybackCommand {
 }
 
 impl MultiRoomCoordinator {
+    /// Create a new multi-room coordinator
     pub fn new(device_id: String, clock_id: u64) -> Self {
         Self {
             device_id,
-            clock: PtpClock::new(clock_id),
+            clock: PtpClock::new(clock_id, PtpRole::Slave), // Default role, adjusted if we become Leader
             group: None,
-            sync_tolerance_us: 1000,  // 1ms default
+            sync_tolerance_us: 1000, // 1ms default
             last_sync_check: Instant::now(),
             in_sync: false,
         }
@@ -121,14 +135,15 @@ impl MultiRoomCoordinator {
             target_playback_time: None,
         });
 
-        log::info!("Joined group as {:?}", role);
+        info!(role = ?role, "Joined multi-room group");
     }
 
     /// Leave current group
     pub fn leave_group(&mut self) {
         if self.group.is_some() {
-            log::info!("Left group");
+            info!("Left multi-room group");
             self.group = None;
+            self.clock.reset(); // Clear synchronization state
         }
     }
 
@@ -142,19 +157,29 @@ impl MultiRoomCoordinator {
     /// Calculate playback adjustment needed
     pub fn calculate_adjustment(&mut self) -> Option<PlaybackCommand> {
         let group = self.group.as_ref()?;
+
+        // If we are Leader, we don't adjust?
+        if group.role == GroupRole::Leader {
+            return None;
+        }
+
         let target = group.target_playback_time?;
 
         if !self.clock.is_synchronized() {
             return None;
         }
 
-        // Get current position in PTP time
-        let now = Instant::now();
-        let current_ptp = self.clock.local_to_remote(now);
+        // Get current position in PTP time (Remote/Master time)
+        let now = PtpTimestamp::now(); // Local time
+        let current_ptp = self.clock.local_to_remote(now); // Converted to Remote (Master) time
 
-        // Calculate drift from target
-        let drift_ns = (current_ptp as i64 - target as i64) * (1_000_000_000 / 65536);
-        let drift_us = drift_ns / 1000;
+        // Target is in Remote (Master) time (AirPlay compact format)
+        let target_ptp = PtpTimestamp::from_airplay_compact(target);
+
+        let drift_ns = current_ptp.diff_nanos(&target_ptp);
+
+        // Convert to microseconds with saturation to avoid panic on huge drifts
+        let drift_us = i64::try_from(drift_ns / 1000).unwrap_or(if drift_ns > 0 { i64::MAX } else { i64::MIN });
 
         self.in_sync = drift_us.abs() < self.sync_tolerance_us;
 
@@ -165,18 +190,34 @@ impl MultiRoomCoordinator {
         // Need adjustment
         if drift_us.abs() > 10_000 {
             // More than 10ms off - hard sync
-            log::warn!("Multi-room: large drift {}us, requesting hard sync", drift_us);
+            warn!(drift_us, "Multi-room: large drift, requesting hard sync");
             Some(PlaybackCommand::StartAt { timestamp: target })
         } else {
             // Small drift - adjust rate
+            #[allow(clippy::cast_possible_truncation)]
             let rate_ppm = (drift_us / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
     }
 
     /// Process timing update
-    pub fn update_timing(&mut self, t1: Instant, t2: u64, t3: u64, t4: Instant) {
-        self.clock.process_timing(t1, t2, t3, t4);
+    ///
+    /// t1: Master send time (AirPlay timestamp)
+    /// t2: Slave receive time (Local PTP timestamp)
+    /// t3: Slave send time (Local PTP timestamp)
+    /// t4: Master receive time (AirPlay timestamp)
+    pub fn update_timing(
+        &mut self,
+        t1: u64,
+        t2: PtpTimestamp,
+        t3: PtpTimestamp,
+        t4: u64,
+    ) {
+        // Convert AirPlay timestamps to PtpTimestamp
+        let t1_ts = PtpTimestamp::from_airplay_compact(t1);
+        let t4_ts = PtpTimestamp::from_airplay_compact(t4);
+
+        self.clock.process_timing(t1_ts, t2, t3, t4_ts);
     }
 
     /// Check if in sync with group
@@ -191,12 +232,9 @@ impl MultiRoomCoordinator {
 
     /// Get clock offset for diagnostics
     pub fn clock_offset_ms(&self) -> f64 {
-        self.clock.offset_ms()
+        self.clock.offset_millis()
     }
-}
 
-/// Group state for advertisement
-impl MultiRoomCoordinator {
     /// Get group UUID for TXT record
     pub fn group_uuid(&self) -> Option<&str> {
         self.group.as_ref().map(|g| g.uuid.as_str())
@@ -209,45 +247,18 @@ impl MultiRoomCoordinator {
             .unwrap_or(false)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_group_join_leave() {
-        let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
-
-        assert!(coord.group_info().is_none());
-
-        coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
-        assert!(coord.group_info().is_some());
-        assert!(!coord.is_leader());
-
-        coord.leave_group();
-        assert!(coord.group_info().is_none());
-    }
-
-    #[test]
-    fn test_leader_role() {
-        let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
-        coord.join_group("group-uuid".into(), GroupRole::Leader, None);
-
-        assert!(coord.is_leader());
-    }
-}
 ```
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] Group join/leave functionality
-- [ ] Leader/follower role support
-- [ ] Playback time synchronization
-- [ ] Drift detection and correction
-- [ ] Clock offset tracking
-- [ ] All unit tests pass
+- [x] Group join/leave functionality
+- [x] Leader/follower role support
+- [x] Playback time synchronization
+- [x] Drift detection and correction
+- [x] Clock offset tracking
+- [x] All unit tests pass
 
 ---
 

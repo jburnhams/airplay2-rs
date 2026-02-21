@@ -224,11 +224,18 @@ impl PtpClock {
     /// Convert a remote PTP timestamp to an equivalent local PTP timestamp.
     ///
     /// Adjusts for offset and drift.
+    ///
+    /// The offset is calculated as `Slave - Master`.
+    /// - If role is Master: Local=Master, Remote=Slave. Local = Remote - Offset.
+    /// - If role is Slave: Local=Slave, Remote=Master. Local = Remote + Offset.
     #[must_use]
     pub fn remote_to_local(&self, remote: PtpTimestamp) -> PtpTimestamp {
-        // local = remote - offset (since offset = slave - master)
         let remote_nanos = remote.to_nanos();
-        let local_nanos = remote_nanos - self.offset_ns;
+        let local_nanos = match self.role {
+            PtpRole::Master => remote_nanos - self.offset_ns,
+            PtpRole::Slave => remote_nanos + self.offset_ns,
+        };
+
         if local_nanos < 0 {
             return PtpTimestamp::ZERO;
         }
@@ -238,11 +245,18 @@ impl PtpClock {
     /// Convert a local PTP timestamp to an equivalent remote PTP timestamp.
     ///
     /// Adjusts for offset and drift.
+    ///
+    /// The offset is calculated as `Slave - Master`.
+    /// - If role is Master: Local=Master, Remote=Slave. Remote = Local + Offset.
+    /// - If role is Slave: Local=Slave, Remote=Master. Remote = Local - Offset.
     #[must_use]
     pub fn local_to_remote(&self, local: PtpTimestamp) -> PtpTimestamp {
-        // remote = local + offset
         let local_nanos = local.to_nanos();
-        let remote_nanos = local_nanos + self.offset_ns;
+        let remote_nanos = match self.role {
+            PtpRole::Master => local_nanos + self.offset_ns,
+            PtpRole::Slave => local_nanos - self.offset_ns,
+        };
+
         if remote_nanos < 0 {
             return PtpTimestamp::ZERO;
         }
