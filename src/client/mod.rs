@@ -665,6 +665,8 @@ impl AirPlayClient {
             streamer.use_alac().await;
         } else if self.config.audio_codec == AudioCodec::Aac {
             streamer.use_aac(self.config.aac_bitrate).await;
+        } else if self.config.audio_codec == AudioCodec::AacEld {
+            streamer.use_aac_eld(self.config.aac_bitrate).await;
         }
 
         // Configure encryption if available

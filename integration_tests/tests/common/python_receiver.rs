@@ -456,10 +456,13 @@ impl PythonReceiver {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
         }
 
+        let logs = self.log_buffer.lock().ok().map(|l| l.join("\n"));
+
         Ok(ReceiverOutput {
             audio_data,
             rtp_data,
             log_path,
+            logs,
         })
     }
 
@@ -506,6 +509,7 @@ pub struct ReceiverOutput {
     pub rtp_data: Option<Vec<u8>>,
     #[allow(dead_code)]
     pub log_path: PathBuf,
+    pub logs: Option<String>,
 }
 
 impl ReceiverOutput {
