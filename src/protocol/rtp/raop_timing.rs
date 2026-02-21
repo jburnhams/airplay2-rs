@@ -94,30 +94,14 @@ impl RaopTimingResponse {
     ///
     /// offset = ((T2 - T1) + (T3 - T4)) / 2
     #[must_use]
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "Timestamp values converted to microseconds fit within i64 for typical operation"
+    )]
     pub fn calculate_offset(&self, client_receive: NtpTimestamp) -> i64 {
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
         let t1 = self.reference_time.to_micros() as i64;
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
         let t2 = self.receive_time.to_micros() as i64;
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
         let t3 = self.send_time.to_micros() as i64;
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
         let t4 = client_receive.to_micros() as i64;
 
         ((t2 - t1) + (t3 - t4)) / 2

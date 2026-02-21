@@ -33,7 +33,7 @@ pub struct RtspSession {
     /// Our session ID (generated)
     client_session_id: String,
     /// Base URI for requests
-    base_uri: String,
+    _base_uri: String,
     /// User agent string
     user_agent: String,
 }
@@ -54,7 +54,7 @@ impl RtspSession {
             session_id: None,
             device_id: format!("{device_id:016X}"),
             client_session_id: format!("{session_id:016X}"),
-            base_uri: format!("rtsp://{device_address}:{port}"),
+            _base_uri: format!("rtsp://{device_address}:{port}"),
             user_agent: "AirPlay/540.31".to_string(),
         }
     }

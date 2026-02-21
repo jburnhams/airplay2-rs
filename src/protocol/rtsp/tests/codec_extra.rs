@@ -1,4 +1,4 @@
-use crate::protocol::rtsp::{RtspCodec, RtspCodecError, StatusCode};
+use crate::protocol::rtsp::{RtspCodec, RtspCodecError};
 
 #[test]
 fn test_decode_header_too_large() {

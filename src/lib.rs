@@ -43,7 +43,11 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
+#![allow(
+    clippy::module_name_repetitions,
+    reason = "Project structure often uses module names that are repeated in struct names (e.g. \
+              `rtsp::RtspSession`)"
+)]
 
 // Public modules
 /// Error types
