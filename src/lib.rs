@@ -45,7 +45,8 @@
 #![warn(clippy::pedantic)]
 #![allow(
     clippy::module_name_repetitions,
-    reason = "Project structure often uses module names that are repeated in struct names (e.g. `rtsp::RtspSession`)"
+    reason = "Project structure often uses module names that are repeated in struct names (e.g. \
+              `rtsp::RtspSession`)"
 )]
 
 // Public modules
