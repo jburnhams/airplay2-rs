@@ -3,6 +3,8 @@
 use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
 
+use super::format::AacProfile;
+
 /// AAC encoder error
 #[derive(Debug, Error)]
 pub enum AacEncoderError {
@@ -28,15 +30,28 @@ impl AacEncoder {
     /// * `sample_rate` - Sample rate in Hz (e.g. 44100)
     /// * `channels` - Number of channels (e.g. 2)
     /// * `bitrate` - Bitrate in bits per second (e.g. 64000)
+    /// * `profile` - AAC profile (e.g. LC, ELD)
     ///
     /// # Errors
     ///
     /// Returns error if encoder cannot be initialized
-    pub fn new(sample_rate: u32, channels: u32, bitrate: u32) -> Result<Self, AacEncoderError> {
+    pub fn new(
+        sample_rate: u32,
+        channels: u32,
+        bitrate: u32,
+        profile: AacProfile,
+    ) -> Result<Self, AacEncoderError> {
+        let audio_object_type = match profile {
+            AacProfile::Lc => fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
+            // AacProfile::He => fdk_aac::enc::AudioObjectType::Mpeg4HighEfficiency,
+            // AacProfile::HeV2 => fdk_aac::enc::AudioObjectType::Mpeg4HighEfficiencyV2,
+            AacProfile::Eld => fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
+        };
+
         let params = EncoderParams {
             bit_rate: BitRate::Cbr(bitrate),
             transport: Transport::Raw, // Raw AAC frames for RTP
-            audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
+            audio_object_type,
             channels: match channels {
                 1 => ChannelMode::Mono,
                 2 => ChannelMode::Stereo,
