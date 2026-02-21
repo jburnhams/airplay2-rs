@@ -69,6 +69,8 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+    /// History of received methods
+    received_methods: Vec<Method>,
 }
 
 /// A Mock `AirPlay` server.
@@ -103,6 +105,7 @@ impl MockServer {
                 volume: 0.0,
                 paired: false,
                 pairing_server,
+                received_methods: Vec::new(),
             })),
             shutdown: None,
             address: None,
@@ -190,6 +193,11 @@ impl MockServer {
     /// Checks if the server is currently streaming.
     pub async fn is_streaming(&self) -> bool {
         self.state.read().await.streaming
+    }
+
+    /// Returns the list of received methods.
+    pub async fn received_methods(&self) -> Vec<Method> {
+        self.state.read().await.received_methods.clone()
     }
 
     /// Handles a single client connection.
@@ -380,6 +388,9 @@ impl MockServer {
     ) -> Vec<u8> {
         let cseq = request.headers.cseq().unwrap_or(0);
 
+        // Record method
+        state.write().await.received_methods.push(request.method);
+
         match request.method {
             Method::Options => Self::response(
                 StatusCode::OK,
@@ -438,6 +449,7 @@ impl MockServer {
                 state.write().await.streaming = streaming;
                 Self::response(StatusCode::OK, cseq, None, None)
             }
+            Method::SetPeers => Self::response(StatusCode::OK, cseq, None, None),
             Method::Pause => {
                 state.write().await.streaming = false;
                 Self::response(StatusCode::OK, cseq, None, None)

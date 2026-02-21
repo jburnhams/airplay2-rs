@@ -73,3 +73,64 @@ fn test_audio_samples_iterator() {
     assert_eq!(samples.len(), 1);
     assert_eq!(samples[0], (258, 772));
 }
+
+#[test]
+fn test_payload_type_variants() {
+    assert_eq!(
+        PayloadType::from_byte(0x52),
+        Some(PayloadType::TimingRequest)
+    );
+    assert_eq!(
+        PayloadType::from_byte(0x53),
+        Some(PayloadType::TimingResponse)
+    );
+    assert_eq!(
+        PayloadType::from_byte(0x55),
+        Some(PayloadType::RetransmitRequest)
+    );
+    assert_eq!(
+        PayloadType::from_byte(0x61),
+        Some(PayloadType::AudioBuffered)
+    );
+}
+
+#[test]
+fn test_padding_bit() {
+    let mut header = RtpHeader::new_audio(0, 0, 0, false);
+    header.padding = true;
+    let encoded = header.encode();
+    assert_eq!(encoded[0] & 0x20, 0x20); // Check P bit
+
+    let decoded = RtpHeader::decode(&encoded).unwrap();
+    assert!(decoded.padding);
+}
+
+#[test]
+fn test_extension_bit() {
+    let mut header = RtpHeader::new_audio(0, 0, 0, false);
+    header.extension = true;
+    let encoded = header.encode();
+    assert_eq!(encoded[0] & 0x10, 0x10); // Check X bit
+
+    let decoded = RtpHeader::decode(&encoded).unwrap();
+    assert!(decoded.extension);
+}
+
+#[test]
+fn test_csrc_count() {
+    let mut header = RtpHeader::new_audio(0, 0, 0, false);
+    header.csrc_count = 3;
+    let encoded = header.encode();
+    assert_eq!(encoded[0] & 0x0F, 0x03); // Check CC bits
+
+    let decoded = RtpHeader::decode(&encoded).unwrap();
+    assert_eq!(decoded.csrc_count, 3);
+}
+
+#[test]
+fn test_sequence_wrapping() {
+    let header = RtpHeader::new_audio(65535, 0, 0, false);
+    let encoded = header.encode();
+    let decoded = RtpHeader::decode(&encoded).unwrap();
+    assert_eq!(decoded.sequence, 65535);
+}
