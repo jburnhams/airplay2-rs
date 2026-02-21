@@ -160,3 +160,57 @@ async fn test_client_connect_fails_without_device_ptp() {
     let result = client.connect(&device).await;
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn test_play_url_disconnected() {
+    let client = AirPlayClient::default_client();
+    let result = client.play_url("http://example.com/audio.mp3").await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_stop_disconnected() {
+    let client = AirPlayClient::default_client();
+    let result = client.stop().await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_set_shuffle_disconnected() {
+    let client = AirPlayClient::default_client();
+    let result = client.set_shuffle(true).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_set_repeat_disconnected() {
+    let client = AirPlayClient::default_client();
+    let result = client.set_repeat(crate::types::RepeatMode::One).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_set_metadata_disconnected() {
+    let client = AirPlayClient::default_client();
+    let metadata = crate::protocol::daap::TrackMetadata {
+        title: Some("Test".to_string()),
+        ..Default::default()
+    };
+    let result = client.set_metadata(metadata).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_set_progress_disconnected() {
+    let client = AirPlayClient::default_client();
+    let progress = crate::protocol::daap::DmapProgress::new(0, 0, 0);
+    let result = client.set_progress(progress).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_get_playback_info_disconnected() {
+    let client = AirPlayClient::default_client();
+    let result = client.get_playback_info().await;
+    assert!(result.is_err());
+}

@@ -38,12 +38,19 @@ fn test_method_as_str() {
     assert_eq!(Method::Options.as_str(), "OPTIONS");
     assert_eq!(Method::Setup.as_str(), "SETUP");
     assert_eq!(Method::SetParameter.as_str(), "SET_PARAMETER");
+    assert_eq!(Method::SetPeers.as_str(), "SETPEERS");
+    assert_eq!(Method::SetRateAnchorTime.as_str(), "SETRATEANCHORTIME");
 }
 
 #[test]
 fn test_method_from_str() {
     assert_eq!("OPTIONS".parse::<Method>(), Ok(Method::Options));
     assert_eq!("options".parse::<Method>(), Ok(Method::Options));
+    assert_eq!("SETPEERS".parse::<Method>(), Ok(Method::SetPeers));
+    assert_eq!(
+        "SETRATEANCHORTIME".parse::<Method>(),
+        Ok(Method::SetRateAnchorTime)
+    );
     assert!("INVALID".parse::<Method>().is_err());
 }
 
@@ -93,4 +100,39 @@ fn test_get_request_encode() {
 
     assert!(encoded_str.starts_with("GET /info RTSP/1.0\r\n"));
     assert!(encoded_str.contains("X-Apple-Device-ID: 00:11:22:33:44:55"));
+}
+
+#[test]
+fn test_set_peers_request_encode() {
+    let request = RtspRequest::builder(Method::SetPeers, "rtsp://192.168.1.10:7000/stream")
+        .cseq(1)
+        .content_type("application/x-apple-binary-plist")
+        .body(vec![0x00])
+        .build();
+
+    let encoded = request.encode();
+    let encoded_str = String::from_utf8_lossy(&encoded);
+
+    assert!(
+        encoded_str.starts_with("SETPEERS rtsp://192.168.1.10:7000/stream RTSP/1.0\r\n"),
+        "Encoded request: {encoded_str}"
+    );
+}
+
+#[test]
+fn test_set_rate_anchor_time_request_encode() {
+    let request =
+        RtspRequest::builder(Method::SetRateAnchorTime, "rtsp://192.168.1.10:7000/stream")
+            .cseq(1)
+            .content_type("application/x-apple-binary-plist")
+            .body(vec![0x00])
+            .build();
+
+    let encoded = request.encode();
+    let encoded_str = String::from_utf8_lossy(&encoded);
+
+    assert!(
+        encoded_str.starts_with("SETRATEANCHORTIME rtsp://192.168.1.10:7000/stream RTSP/1.0\r\n"),
+        "Encoded request: {encoded_str}"
+    );
 }
