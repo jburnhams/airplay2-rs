@@ -1,6 +1,5 @@
 import socket
 import multiprocessing
-import select
 import enum
 import threading
 import time
@@ -752,10 +751,7 @@ class AudioRealtime(Audio):
         try:
             while True:
 
-                # Monitor both the socket (for RTP) and the control pipe (for flush/progress)
-                rlist, _, _ = select.select([self.socket, rtspconn], [], [])
-
-                if rtspconn in rlist:
+                if rtspconn.poll(0):
                     message = rtspconn.recv()
                     if str.startswith(message, "flush_seq_rtptime"):
                         flush_seq, self.anchorRTPTimestamp = map(int, str.split(message, "-")[-2:])
@@ -765,25 +761,16 @@ class AudioRealtime(Audio):
                     elif str.startswith(message, "progress"):
                         startTS, currentTS, stopTS = map(int, str.split(message, "-")[-1:][0].split('/'))
 
-                if self.socket in rlist:
-                    try:
-                        data, address = self.socket.recvfrom(2048)
-                        if data:
-                            # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
-                            if SAVE_RAW_RTP:
-                                with open("rtp_packets.bin", "ab") as f:
-                                    f.write(data)
-                            pkt = RTP_REALTIME(data)
-                            lastRecvdSeqNo = pkt.sequence_no
-                            self.log(pkt)
-                            self.rtp_buffer.append(pkt)
-                    except OSError as e:
-                        # If the socket is closed (EBADF), break the loop.
-                        # Otherwise (e.g. ConnectionRefused from ICMP), log and continue.
-                        if e.errno == 9:  # EBADF
-                            self.audio_screen_logger.error(f"Socket closed (EBADF), stopping audio thread: {e}")
-                            break
-                        self.audio_screen_logger.error(f"Error receiving audio packet (ignoring): {e}")
+                data, address = self.socket.recvfrom(2048)
+                if data:
+                    # Save raw RTP packet for debugging (configurable via AIRPLAY_SAVE_RTP=1)
+                    if SAVE_RAW_RTP:
+                        with open("rtp_packets.bin", "ab") as f:
+                            f.write(data)
+                    pkt = RTP_REALTIME(data)
+                    lastRecvdSeqNo = pkt.sequence_no
+                    self.log(pkt)
+                    self.rtp_buffer.append(pkt)
                 """ realtime can get crunchy. Let it fill. """
                 if (
                     self.rtp_buffer.is_full()  # or amount() > 0.x
@@ -816,7 +803,7 @@ class AudioRealtime(Audio):
                                         time.sleep((delay - 2) * 1e-3)
 
                                     if rtp.sequence_no % 20 == 0:
-                                        self.audio_screen_logger.debug('playout offset: %+3.2f msec (relative to self)', delay)
+                                        print(f'playout offset: {delay:+3.2} msec (relative to self)     ', end='\r', flush=False)
 
                                 audio = self.process(rtp)
 
@@ -949,7 +936,7 @@ class AudioBuffered(Audio):
                             self.audio_screen_logger.info(f"playback: offset is {msec_to_playout:+3.2} msec")
 
                         if i % 20 == 0:
-                            self.audio_screen_logger.debug('playout offset: %+3.2f msec (relative to self)', msec_to_playout)
+                            print(f'playout offset: {msec_to_playout:+3.2} msec (relative to self)     ', end='\r', flush=False)
 
                         if msec_to_playout > 0:
                             time.sleep((msec_to_playout) * 10**-3)

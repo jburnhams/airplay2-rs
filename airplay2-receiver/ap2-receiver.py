@@ -1011,15 +1011,10 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
 
         if not self.hap:
             self.hap = Hap(PI, DEBUG)
-        try:
-            if op == 'verify':
-                res = self.hap.pair_verify(body)
-            elif op == 'setup':
-                res = self.hap.pair_setup(body, DEV_PROPS.getDevicePassword())
-        except Exception as e:
-            self.logger.error(f"Pairing {op} failed: {e}")
-            self.send_error(403)
-            return
+        if op == 'verify':
+            res = self.hap.pair_verify(body)
+        elif op == 'setup':
+            res = self.hap.pair_setup(body, DEV_PROPS.getDevicePassword())
 
         self.send_response(200)
         self.send_header("Content-Length", len(res))
