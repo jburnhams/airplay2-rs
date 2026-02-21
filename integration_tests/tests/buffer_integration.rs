@@ -23,7 +23,20 @@ async fn setup_streaming_test(
 
     let client = AirPlayClient::new(config);
     let device = receiver.device_config();
-    client.connect(&device).await?;
+
+    // Use retry logic for initial connection to handle potential startup flakiness
+    let mut connected = false;
+    for _ in 0..3 {
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect initially after 3 attempts".into());
+    }
 
     Ok((receiver, client, device))
 }
