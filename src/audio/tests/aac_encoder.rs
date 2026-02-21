@@ -34,7 +34,8 @@ fn test_aac_encoding() {
 #[test]
 fn test_encoder_configurations() {
     // Mono
-    let mut encoder = AacEncoder::new(44100, 1, 64000, AacProfile::Lc).expect("Mono encoder failed");
+    let mut encoder =
+        AacEncoder::new(44100, 1, 64000, AacProfile::Lc).expect("Mono encoder failed");
     let input = vec![0i16; 1024]; // 1 channel
     let output = encoder.encode(&input).expect("Encoding failed");
 

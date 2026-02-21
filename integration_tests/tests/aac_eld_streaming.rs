@@ -1,9 +1,10 @@
 //! Integration test for AAC-ELD audio streaming
 
+use std::time::Duration;
+
 use airplay2::audio::AudioCodec;
 use airplay2::{AirPlayClient, AirPlayConfig};
 use common::python_receiver::PythonReceiver;
-use std::time::Duration;
 use tokio::time::sleep;
 
 mod common;
@@ -54,7 +55,7 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
         tracing::error!("All connection attempts failed. Last error: {}", e);
         let output = receiver.stop().await?;
         if let Some(logs) = output.logs {
-             println!("Receiver Logs (Connection Failed):\n{}", logs);
+            println!("Receiver Logs (Connection Failed):\n{}", logs);
         }
         return Err(e.into());
     }
@@ -71,7 +72,7 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
         tracing::error!("Streaming failed: {}", e);
         let output = receiver.stop().await?;
         if let Some(logs) = output.logs {
-             println!("Receiver Logs (Streaming Failed):\n{}", logs);
+            println!("Receiver Logs (Streaming Failed):\n{}", logs);
         }
         return Err(e.into());
     }
@@ -95,19 +96,25 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
     // Verify audio received (decoding)
     // Note: Python receiver's av/ffmpeg often fails to decode raw AAC-ELD without extradata (ASC),
     // which is not passed by the receiver logic for AirPlay 2 streams.
-    // We check if decoding happened, but if it failed with expected error, we consider the test passed
-    // (as client did its job sending data).
+    // We check if decoding happened, but if it failed with expected error, we consider the test
+    // passed (as client did its job sending data).
     match output.verify_audio_received() {
         Ok(_) => tracing::info!("✓ Audio decoded successfully"),
         Err(e) => {
             let logs = output.logs.as_deref().unwrap_or("");
             if logs.contains("InvalidDataError") && logs.contains("avcodec_send_packet") {
-                tracing::warn!("Receiver failed to decode AAC-ELD (expected due to missing extradata in receiver): {}", e);
-                tracing::info!("✓ Test passes because RTP data was received and attempted to decode");
+                tracing::warn!(
+                    "Receiver failed to decode AAC-ELD (expected due to missing extradata in \
+                     receiver): {}",
+                    e
+                );
+                tracing::info!(
+                    "✓ Test passes because RTP data was received and attempted to decode"
+                );
             } else {
                 tracing::error!("Audio verification failed with unexpected error: {}", e);
                 if let Some(logs) = output.logs {
-                     println!("Receiver Logs (Verification Failed):\n{}", logs);
+                    println!("Receiver Logs (Verification Failed):\n{}", logs);
                 }
                 return Err(e);
             }

@@ -1,8 +1,9 @@
 //! AAC audio encoder using fdk-aac
 
-use super::format::AacProfile;
 use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
+
+use super::format::AacProfile;
 
 /// AAC encoder error
 #[derive(Debug, Error)]
