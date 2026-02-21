@@ -3,19 +3,19 @@ use crate::receiver::ap2::multi_room::{GroupRole, MultiRoomCoordinator, Playback
 
 #[test]
 fn test_group_join_leave() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
 
     assert!(coord.group_info().is_none());
     assert!(!coord.is_leader());
 
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
     assert_eq!(coord.group_uuid(), Some("group-uuid"));
 
     let info = coord.group_info().unwrap();
     assert_eq!(info.role, GroupRole::Follower);
-    assert_eq!(info.leader_clock_id, Some(0x654321));
+    assert_eq!(info.leader_clock_id, Some(0x0065_4321));
 
     coord.leave_group();
     assert!(coord.group_info().is_none());
@@ -23,7 +23,7 @@ fn test_group_join_leave() {
 
 #[test]
 fn test_leader_role() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
     coord.join_group("group-uuid".into(), GroupRole::Leader, None);
 
     assert!(coord.is_leader());
@@ -54,9 +54,9 @@ fn test_timing_update_and_sync() {
     let _ = t1_base.to_airplay_compact();
     let _ = PtpTimestamp::new(100, 3_000_000).to_airplay_compact();
 
-    for i in 0..10 {
+    for i in 0u32..10 {
         // Shift timestamps slightly to simulate progression
-        let shift = (i * 1_000_000) as u32; // 1ms steps
+        let shift = i * 1_000_000; // 1ms steps
         let t1 = PtpTimestamp::new(100, shift).to_airplay_compact();
         let t2 = PtpTimestamp::new(105, 1_000_000 + shift);
         let t3 = PtpTimestamp::new(105, 2_000_000 + shift);
@@ -76,8 +76,8 @@ fn test_adjustment_calculation_small_drift() {
     coord.join_group("group".into(), GroupRole::Follower, Some(0x5678));
 
     // Sync the clock with 0 offset for simplicity
-    for i in 0..10 {
-        let shift = (i * 1_000_000) as u32;
+    for i in 0u32..10 {
+        let shift = i * 1_000_000;
         let t1 = PtpTimestamp::new(100, shift).to_airplay_compact();
         let t2 = PtpTimestamp::new(100, 1_000_000 + shift); // Offset 0 (approx 0.5ms delay one way)
         let t3 = PtpTimestamp::new(100, 2_000_000 + shift);
@@ -134,7 +134,7 @@ fn test_adjustment_calculation_small_drift() {
                 "Rate ppm {rate_ppm} not in range"
             );
         }
-        _ => panic!("Expected AdjustRate, got {:?}", adj),
+        _ => panic!("Expected AdjustRate, got {adj:?}"),
     }
 }
 
@@ -144,8 +144,8 @@ fn test_adjustment_calculation_large_drift() {
     coord.join_group("group".into(), GroupRole::Follower, Some(0x5678));
 
     // Sync clock (offset 0)
-    for i in 0..10 {
-        let shift = (i * 1_000_000) as u32;
+    for i in 0u32..10 {
+        let shift = i * 1_000_000;
         let t1 = PtpTimestamp::new(100, shift).to_airplay_compact();
         let t2 = PtpTimestamp::new(100, 1_000_000 + shift);
         let t3 = PtpTimestamp::new(100, 2_000_000 + shift);
@@ -168,6 +168,6 @@ fn test_adjustment_calculation_large_drift() {
         Some(PlaybackCommand::StartAt { timestamp }) => {
             assert_eq!(timestamp, target_ts.to_airplay_compact());
         }
-        _ => panic!("Expected StartAt, got {:?}", adj),
+        _ => panic!("Expected StartAt, got {adj:?}"),
     }
 }
