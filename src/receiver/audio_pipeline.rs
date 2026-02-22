@@ -46,7 +46,8 @@ impl AudioPipeline {
             AudioCodec::Alac => Some(AudioDecoder::Alac(AlacDecoder)),
             AudioCodec::Aac => Some(AudioDecoder::Aac(AacDecoder)),
             AudioCodec::Pcm => Some(AudioDecoder::Pcm),
-            AudioCodec::Opus => None, // Handle Opus or others
+            AudioCodec::Opus => None,   // Handle Opus or others
+            AudioCodec::AacEld => None, // Handle AacEld
         };
 
         Ok(Self {
