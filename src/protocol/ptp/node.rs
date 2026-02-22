@@ -199,7 +199,8 @@ impl PtpNode {
     /// Returns `std::io::Error` if socket operations fail.
     #[allow(
         clippy::too_many_lines,
-        reason = "Event loop handles multiple socket selectors and timer events in a unified manner"
+        reason = "Event loop handles multiple socket selectors and timer events in a unified \
+                  manner"
     )]
     pub async fn run(
         &mut self,
