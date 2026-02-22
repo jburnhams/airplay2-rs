@@ -143,10 +143,7 @@ fn test_chacha_packet_structure() {
     encoder.encode_audio(&original, &mut packet).unwrap();
 
     // Check size: Header (12) + Payload + Tag (16) + Nonce (8)
-    assert_eq!(
-        packet.len(),
-        RtpHeader::SIZE + original.len() + 16 + 8
-    );
+    assert_eq!(packet.len(), RtpHeader::SIZE + original.len() + 16 + 8);
 
     // Verify nonce is at the end
     let nonce_bytes = &packet[packet.len() - 8..];

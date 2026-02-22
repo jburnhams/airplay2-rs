@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::protocol::raop::RaopSessionKeys;
-    use crate::streaming::{RaopStreamConfig, RaopStreamer};
     use crate::protocol::rtp::raop::RaopAudioPacket;
+    use crate::streaming::{RaopStreamConfig, RaopStreamer};
 
     #[test]
     fn test_reproduce_keystream_reuse() {
@@ -28,6 +28,10 @@ mod tests {
         // Verification
         // If they are equal, the keystream was reused (BUG)
         // If they are different, the keystream advanced (CORRECT)
-        assert_ne!(payload1, payload2, "Critical security flaw: Keystream reuse detected! Consecutive packets encrypted with same keystream.");
+        assert_ne!(
+            payload1, payload2,
+            "Critical security flaw: Keystream reuse detected! Consecutive packets encrypted with \
+             same keystream."
+        );
     }
 }
