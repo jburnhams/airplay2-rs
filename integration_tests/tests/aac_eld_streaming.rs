@@ -1,5 +1,5 @@
-use airplay2::audio::AudioCodec;
 use airplay2::AirPlayClient;
+use airplay2::audio::AudioCodec;
 use airplay2::types::AirPlayConfig;
 use std::time::Duration;
 
@@ -53,19 +53,26 @@ async fn test_aac_eld_streaming() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(logs) = &receiver_output.log_path.to_str() {
         if std::path::Path::new(logs).exists() {
-             let log_content = std::fs::read_to_string(logs)?;
-             tracing::info!("Receiver logs:\n{}", log_content);
+            let log_content = std::fs::read_to_string(logs)?;
+            tracing::info!("Receiver logs:\n{}", log_content);
 
-             // Check if PyAV complained about data (which means it received data but couldn't decode)
-             // "Invalid data found when processing input" is common for missing ASC
-             let received_data = log_content.contains("Invalid data found") || log_content.contains("Error decoding audio");
-             let received_rtp = receiver_output.rtp_data.as_ref().map(|v| !v.is_empty()).unwrap_or(false);
+            // Check if PyAV complained about data (which means it received data but couldn't decode)
+            // "Invalid data found when processing input" is common for missing ASC
+            let received_data = log_content.contains("Invalid data found")
+                || log_content.contains("Error decoding audio");
+            let received_rtp = receiver_output
+                .rtp_data
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
 
-             if received_data {
-                 tracing::info!("Receiver received data but failed to decode (expected without ASC)");
-             }
+            if received_data {
+                tracing::info!(
+                    "Receiver received data but failed to decode (expected without ASC)"
+                );
+            }
 
-             assert!(received_rtp, "RTP data should have been received");
+            assert!(received_rtp, "RTP data should have been received");
         }
     }
 

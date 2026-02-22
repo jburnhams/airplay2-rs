@@ -4,7 +4,8 @@ use crate::audio::format::AacProfile;
 #[test]
 fn test_aac_encoding() {
     // 44.1kHz, Stereo, 64kbps
-    let mut encoder = AacEncoder::new(44100, 2, 64000, AacProfile::Lc).expect("Failed to create encoder");
+    let mut encoder =
+        AacEncoder::new(44100, 2, 64000, AacProfile::Lc).expect("Failed to create encoder");
 
     // 1024 samples (AAC frame size usually) * 2 channels
     let input = vec![0i16; 1024 * 2];
@@ -33,7 +34,8 @@ fn test_aac_encoding() {
 #[test]
 fn test_encoder_configurations() {
     // Mono
-    let mut encoder = AacEncoder::new(44100, 1, 64000, AacProfile::Lc).expect("Mono encoder failed");
+    let mut encoder =
+        AacEncoder::new(44100, 1, 64000, AacProfile::Lc).expect("Mono encoder failed");
     let input = vec![0i16; 1024]; // 1 channel
     let output = encoder.encode(&input).expect("Encoding failed");
 
@@ -50,7 +52,8 @@ fn test_encoder_configurations() {
     );
 
     // Stereo, higher bitrate
-    let mut encoder = AacEncoder::new(48000, 2, 128_000, AacProfile::Lc).expect("Stereo encoder failed");
+    let mut encoder =
+        AacEncoder::new(48000, 2, 128_000, AacProfile::Lc).expect("Stereo encoder failed");
     let input = vec![0i16; 2048]; // 2 channels
     let output = encoder.encode(&input).expect("Encoding failed");
 
