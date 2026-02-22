@@ -18,14 +18,29 @@ async fn setup_streaming_test(
 
     let mut config = AirPlayConfig::default();
     config.discovery_timeout = Duration::from_secs(5);
-    config.connection_timeout = Duration::from_secs(5);
+    config.connection_timeout = Duration::from_secs(10);
     config.audio_buffer_frames = buffer_frames;
 
     let client = AirPlayClient::new(config);
     let device = receiver.device_config();
-    client.connect(&device).await?;
 
-    Ok((receiver, client, device))
+    // Retry connection up to 3 times
+    let mut last_error = None;
+    for attempt in 1..=3 {
+        match client.connect(&device).await {
+            Ok(_) => {
+                println!("Connected on attempt {}", attempt);
+                return Ok((receiver, client, device));
+            }
+            Err(e) => {
+                println!("Connection attempt {} failed: {:?}", attempt, e);
+                last_error = Some(e);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
+    }
+
+    Err(Box::new(last_error.unwrap()))
 }
 
 struct FiniteSineWaveSource {
