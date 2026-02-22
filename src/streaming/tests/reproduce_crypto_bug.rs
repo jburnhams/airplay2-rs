@@ -9,7 +9,7 @@ mod tests {
         // Setup
         let keys = RaopSessionKeys::generate().unwrap();
         let config = RaopStreamConfig::default();
-        let mut streamer = RaopStreamer::new(keys, config);
+        let mut streamer = RaopStreamer::new(&keys, config);
 
         // Encode two identical frames
         // In a proper CTR mode with continuous keystream, C1 and C2 should be different
@@ -28,8 +28,6 @@ mod tests {
         // Verification
         // If they are equal, the keystream was reused (BUG)
         // If they are different, the keystream advanced (CORRECT)
-        if payload1 == payload2 {
-            panic!("Critical security flaw: Keystream reuse detected! Consecutive packets encrypted with same keystream.");
-        }
+        assert_ne!(payload1, payload2, "Critical security flaw: Keystream reuse detected! Consecutive packets encrypted with same keystream.");
     }
 }

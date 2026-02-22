@@ -105,3 +105,119 @@ fn test_packet_builder() {
 
     assert_eq!(packets.len(), 1);
 }
+
+#[test]
+fn test_chacha_encrypt_decrypt_roundtrip() {
+    let key = [0x42u8; 32];
+    let mut encoder = RtpCodec::new(0x1234_5678);
+    encoder.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let original = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
+
+    encoder.encode_audio(&original, &mut packet).unwrap();
+
+    let mut decoder = RtpCodec::new(0);
+    decoder.set_chacha_encryption(key);
+
+    let packet_decoded = decoder.decode_audio(&packet).unwrap();
+    assert_eq!(packet_decoded.payload, original);
+    assert_eq!(packet_decoded.header.sequence, 0);
+    assert_eq!(packet_decoded.header.timestamp, 0);
+    assert_eq!(packet_decoded.header.ssrc, 0x1234_5678);
+}
+
+#[test]
+fn test_chacha_packet_structure() {
+    use crate::protocol::rtp::RtpHeader;
+
+    let key = [0x42u8; 32];
+    let mut encoder = RtpCodec::new(0x1234_5678);
+    encoder.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let original = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
+
+    encoder.encode_audio(&original, &mut packet).unwrap();
+
+    // Check size: Header (12) + Payload + Tag (16) + Nonce (8)
+    assert_eq!(
+        packet.len(),
+        RtpHeader::SIZE + original.len() + 16 + 8
+    );
+
+    // Verify nonce is at the end
+    let nonce_bytes = &packet[packet.len() - 8..];
+    assert_eq!(nonce_bytes, &[0, 0, 0, 0, 0, 0, 0, 0]); // First nonce is 0
+}
+
+#[test]
+fn test_chacha_nonce_increment() {
+    let key = [0x42u8; 32];
+    let mut encoder = RtpCodec::new(0x1234_5678);
+    encoder.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let original = vec![0xAA; frame_size];
+
+    // Packet 1
+    let mut packet1 = Vec::new();
+    encoder.encode_audio(&original, &mut packet1).unwrap();
+    let nonce1 = &packet1[packet1.len() - 8..];
+    assert_eq!(nonce1, &[0, 0, 0, 0, 0, 0, 0, 0]);
+
+    // Packet 2
+    let mut packet2 = Vec::new();
+    encoder.encode_audio(&original, &mut packet2).unwrap();
+    let nonce2 = &packet2[packet2.len() - 8..];
+    assert_eq!(nonce2, &[1, 0, 0, 0, 0, 0, 0, 0]);
+}
+
+#[test]
+fn test_chacha_tamper_tag() {
+    let key = [0x42u8; 32];
+    let mut encoder = RtpCodec::new(0x1234_5678);
+    encoder.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let original = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
+
+    encoder.encode_audio(&original, &mut packet).unwrap();
+
+    // Tamper with tag (last 8 bytes is nonce, 16 bytes before that is tag)
+    let tag_offset = packet.len() - 8 - 16;
+    packet[tag_offset] ^= 0xFF;
+
+    let mut decoder = RtpCodec::new(0);
+    decoder.set_chacha_encryption(key);
+
+    let result = decoder.decode_audio(&packet);
+    assert!(matches!(result, Err(RtpCodecError::DecryptionFailed(_))));
+}
+
+#[test]
+fn test_chacha_tamper_payload() {
+    use crate::protocol::rtp::RtpHeader;
+
+    let key = [0x42u8; 32];
+    let mut encoder = RtpCodec::new(0x1234_5678);
+    encoder.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let original = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
+
+    encoder.encode_audio(&original, &mut packet).unwrap();
+
+    // Tamper with payload
+    packet[RtpHeader::SIZE] ^= 0xFF;
+
+    let mut decoder = RtpCodec::new(0);
+    decoder.set_chacha_encryption(key);
+
+    let result = decoder.decode_audio(&packet);
+    assert!(matches!(result, Err(RtpCodecError::DecryptionFailed(_))));
+}
