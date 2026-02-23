@@ -305,10 +305,10 @@ fn test_remote_to_local_with_offset() {
     let remote = PtpTimestamp::new(200, 0);
     let local = clock.remote_to_local(remote);
 
-    // local should be remote - offset ≈ 200 - 5 = 195
+    // local should be remote + offset ≈ 200 + 5 = 205 (Slave is ahead)
     assert!(
-        local.seconds.abs_diff(195) <= 1,
-        "Expected ~195s, got {}",
+        local.seconds.abs_diff(205) <= 1,
+        "Expected ~205s, got {}",
         local.seconds
     );
 }
@@ -327,10 +327,10 @@ fn test_local_to_remote_with_offset() {
     let local = PtpTimestamp::new(195, 0);
     let remote = clock.local_to_remote(local);
 
-    // remote should be local + offset ≈ 195 + 5 = 200
+    // remote should be local - offset ≈ 195 - 5 = 190 (Slave is ahead, so Master is behind)
     assert!(
-        remote.seconds.abs_diff(200) <= 1,
-        "Expected ~200s, got {}",
+        remote.seconds.abs_diff(190) <= 1,
+        "Expected ~190s, got {}",
         remote.seconds
     );
 }
@@ -545,4 +545,53 @@ fn test_measurements_iterator() {
 
     let count = clock.measurements().count();
     assert_eq!(count, 2);
+}
+
+#[test]
+fn test_role_based_conversion() {
+    // Setup a scenario where Slave is ahead of Master by 1000ns.
+    // Offset = Slave - Master = 1000.
+
+    let t1 = PtpTimestamp::new(0, 1000);
+    let t2 = PtpTimestamp::new(0, 2500);
+    let t3 = PtpTimestamp::new(0, 3500);
+    let t4 = PtpTimestamp::new(0, 3000);
+
+    // Case 1: Slave Role
+    let mut slave_clock = PtpClock::new(1, PtpRole::Slave);
+    slave_clock.process_timing(t1, t2, t3, t4);
+
+    assert_eq!(slave_clock.offset_nanos(), 1000);
+
+    // Slave Local to Remote (Master)
+    // Local=3500. Remote should be 2500.
+    let local = PtpTimestamp::new(0, 3500);
+    let remote = slave_clock.local_to_remote(local);
+    assert_eq!(remote.nanoseconds, 2500);
+
+    // Slave Remote to Local
+    // Remote=2500. Local should be 3500.
+    let remote = PtpTimestamp::new(0, 2500);
+    let local = slave_clock.remote_to_local(remote);
+    assert_eq!(local.nanoseconds, 3500);
+
+    // Case 2: Master Role (measuring a Slave)
+    // If we are Master, and we measure the same timestamps (assuming we somehow got t2,t3).
+    // Offset = Slave - Master = 1000.
+    let mut master_clock = PtpClock::new(2, PtpRole::Master);
+    master_clock.process_timing(t1, t2, t3, t4);
+
+    assert_eq!(master_clock.offset_nanos(), 1000);
+
+    // Master Local to Remote (Slave)
+    // Local=Master=2500. Remote=Slave should be 3500.
+    let local = PtpTimestamp::new(0, 2500);
+    let remote = master_clock.local_to_remote(local);
+    assert_eq!(remote.nanoseconds, 3500);
+
+    // Master Remote to Local
+    // Remote=Slave=3500. Local=Master should be 2500.
+    let remote = PtpTimestamp::new(0, 3500);
+    let local = master_clock.remote_to_local(remote);
+    assert_eq!(local.nanoseconds, 2500);
 }

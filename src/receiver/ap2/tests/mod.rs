@@ -16,3 +16,4 @@ mod rtp_decryptor;
 mod rtp_receiver;
 mod session_state;
 mod setup_handler;
+mod multi_room;
