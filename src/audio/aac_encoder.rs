@@ -1,6 +1,7 @@
 //! AAC audio encoder using fdk-aac
 
-use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
+use crate::audio::format::AacProfile;
+use fdk_aac::enc::{AudioObjectType, BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
 
 /// AAC encoder error
@@ -32,11 +33,24 @@ impl AacEncoder {
     /// # Errors
     ///
     /// Returns error if encoder cannot be initialized
-    pub fn new(sample_rate: u32, channels: u32, bitrate: u32) -> Result<Self, AacEncoderError> {
+    pub fn new(
+        sample_rate: u32,
+        channels: u32,
+        bitrate: u32,
+        profile: AacProfile,
+    ) -> Result<Self, AacEncoderError> {
+        let audio_object_type = match profile {
+            AacProfile::Lc | AacProfile::He | AacProfile::HeV2 => {
+                // Fallback for HE profiles if not available in fdk-aac crate version
+                AudioObjectType::Mpeg4LowComplexity
+            }
+            AacProfile::Eld => AudioObjectType::Mpeg4EnhancedLowDelay,
+        };
+
         let params = EncoderParams {
             bit_rate: BitRate::Cbr(bitrate),
             transport: Transport::Raw, // Raw AAC frames for RTP
-            audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
+            audio_object_type,
             channels: match channels {
                 1 => ChannelMode::Mono,
                 2 => ChannelMode::Stereo,
@@ -77,5 +91,15 @@ impl AacEncoder {
         } else {
             Ok(Vec::new())
         }
+    }
+
+    /// Get Audio Specific Config (ASC)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if encoder info cannot be retrieved.
+    pub fn get_asc(&self) -> Result<Vec<u8>, AacEncoderError> {
+        let info = self.encoder.info().map_err(|_| AacEncoderError::Encoding)?;
+        Ok(info.confBuf.to_vec())
     }
 }

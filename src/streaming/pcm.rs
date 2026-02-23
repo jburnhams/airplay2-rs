@@ -10,7 +10,7 @@ use tokio::sync::{Mutex, RwLock, mpsc};
 use super::ResamplingSource;
 use super::source::AudioSource;
 use crate::audio::aac_encoder::AacEncoder;
-use crate::audio::{AudioFormat, AudioRingBuffer};
+use crate::audio::{AacProfile, AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::rtp::RtpCodec;
@@ -239,6 +239,7 @@ impl PcmStreamer {
         let codec_type = *self.codec_type.read().await;
         let frames_per_packet = match codec_type {
             AudioCodec::Aac => 1024,
+            AudioCodec::AacEld => 512,
             _ => Self::FRAMES_PER_PACKET,
         };
 
@@ -351,7 +352,7 @@ impl PcmStreamer {
                                     Cow::Borrowed(&packet_data)
                                 }
                             }
-                            AudioCodec::Aac => {
+                            AudioCodec::Aac | AudioCodec::AacEld => {
                                 let mut encoder_guard = self.encoder_aac.lock().await;
                                 if let Some(encoder) = encoder_guard.as_mut() {
                                     // Convert bytes to i16 (Little Endian)
@@ -574,7 +575,7 @@ impl PcmStreamer {
         *self.codec_type.write().await = AudioCodec::Alac;
     }
 
-    /// Set codec to AAC
+    /// Set codec to AAC (LC)
     ///
     /// # Panics
     ///
@@ -585,12 +586,39 @@ impl PcmStreamer {
             self.format.sample_rate.as_u32(),
             u32::from(self.format.channels.channels()),
             bitrate,
+            AacProfile::Lc,
         )
         .expect("Failed to initialize AAC encoder");
 
         *self.encoder_aac.lock().await = Some(encoder);
         *self.encoder.lock().await = None;
         *self.codec_type.write().await = AudioCodec::Aac;
+    }
+
+    /// Set codec to AAC-ELD
+    ///
+    /// # Panics
+    ///
+    /// Panics if the AAC encoder cannot be initialized (e.g. invalid parameters).
+    pub async fn use_aac_eld(&self, bitrate: u32) {
+        // AAC-ELD: 44100Hz, Stereo, ELD Profile
+        let encoder = AacEncoder::new(
+            self.format.sample_rate.as_u32(),
+            u32::from(self.format.channels.channels()),
+            bitrate,
+            AacProfile::Eld,
+        )
+        .expect("Failed to initialize AAC-ELD encoder");
+
+        if let Ok(asc) = encoder.get_asc() {
+            tracing::info!("AAC-ELD ASC: {:02X?}", asc);
+        } else {
+            tracing::warn!("Failed to get AAC-ELD ASC");
+        }
+
+        *self.encoder_aac.lock().await = Some(encoder);
+        *self.encoder.lock().await = None;
+        *self.codec_type.write().await = AudioCodec::AacEld;
     }
 
     /// Set codec to PCM (default)
