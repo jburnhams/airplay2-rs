@@ -226,7 +226,10 @@ impl<'a> Decoder<'a> {
         let int_bytes = &self.data[pos..pos + bytes_len];
 
         match bytes_len {
-            #[allow(clippy::cast_possible_wrap, reason = "Interpret byte as signed integer")]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "Interpret byte as signed integer"
+            )]
             1 => Ok(PlistValue::Integer(i64::from(int_bytes[0] as i8))),
             2 => Ok(PlistValue::Integer(i64::from(i16::from_be_bytes(
                 int_bytes.try_into().unwrap(),

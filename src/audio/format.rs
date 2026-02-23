@@ -147,7 +147,10 @@ impl AudioFormat {
     }
 
     /// Calculate duration for given number of frames
-    #[allow(clippy::cast_precision_loss, reason = "Audio duration logic uses f64 for convenience")]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Audio duration logic uses f64 for convenience"
+    )]
     #[must_use]
     pub fn frames_to_duration(self, frames: usize) -> std::time::Duration {
         std::time::Duration::from_secs_f64(frames as f64 / f64::from(self.sample_rate.as_u32()))
