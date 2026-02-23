@@ -45,7 +45,7 @@ impl<H: DacpHandler + 'static> DacpServer<H> {
     /// # Errors
     ///
     /// Returns error if server fails to start
-    #[allow(clippy::unused_async)]
+    #[allow(clippy::unused_async, reason = "Future implementation will be async")]
     pub async fn start(&mut self) -> Result<(), DacpError> {
         // HTTP server implementation using hyper or similar
         // Listen for GET requests on /ctrl-int/1/*
@@ -72,7 +72,7 @@ impl<H: DacpHandler + 'static> DacpServer<H> {
     }
 
     /// Stop the server
-    #[allow(clippy::unused_async)]
+    #[allow(clippy::unused_async, reason = "Future implementation will be async")]
     pub async fn stop(&mut self) {
         self.running = false;
     }

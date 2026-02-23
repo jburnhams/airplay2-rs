@@ -147,15 +147,21 @@ impl AudioFormat {
     }
 
     /// Calculate duration for given number of frames
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Audio duration logic uses f64 for convenience"
+    )]
     #[must_use]
     pub fn frames_to_duration(self, frames: usize) -> std::time::Duration {
         std::time::Duration::from_secs_f64(frames as f64 / f64::from(self.sample_rate.as_u32()))
     }
 
     /// Calculate frames for given duration
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Audio duration logic uses f64 for convenience"
+    )]
     #[must_use]
     pub fn duration_to_frames(self, duration: std::time::Duration) -> usize {
         (duration.as_secs_f64() * f64::from(self.sample_rate.as_u32())) as usize
