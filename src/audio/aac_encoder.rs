@@ -1,8 +1,9 @@
 //! AAC audio encoder using fdk-aac
 
-use crate::audio::format::AacProfile;
 use fdk_aac::enc::{AudioObjectType, BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
+
+use crate::audio::format::AacProfile;
 
 /// AAC encoder error
 #[derive(Debug, Error)]

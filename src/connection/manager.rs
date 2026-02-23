@@ -771,10 +771,10 @@ impl ConnectionManager {
                                     constantDuration=1024\r\n"
                     .to_string(),
                 AudioCodec::AacEld => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                    mpeg4-generic/44100/2\r\na=fmtp:96 \
-                                    mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
-                                    constantDuration=512\r\n"
+                                       0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                                       mpeg4-generic/44100/2\r\na=fmtp:96 \
+                                       mode=AAC-hbr;sizelength=13;indexlength=3;\
+                                       indexdeltalength=3;constantDuration=512\r\n"
                     .to_string(),
                 AudioCodec::Opus => {
                     return Err(AirPlayError::InvalidParameter {

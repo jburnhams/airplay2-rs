@@ -100,7 +100,8 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
             tracing::info!("✓ Receiver confirmed AAC/AAC-ELD format");
         } else if logs.contains("InvalidDataError") {
             tracing::info!(
-                "✓ Receiver attempted decoding (confirmed by InvalidDataError) - Codec negotiation successful"
+                "✓ Receiver attempted decoding (confirmed by InvalidDataError) - Codec \
+                 negotiation successful"
             );
         } else {
             tracing::warn!("Receiver did not explicitly confirm AAC in logs");
