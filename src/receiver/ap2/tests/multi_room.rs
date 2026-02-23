@@ -1,14 +1,19 @@
-use crate::protocol::ptp::timestamp::PtpTimestamp;
-use crate::receiver::ap2::multi_room::{MultiRoomCoordinator, GroupRole, PlaybackCommand};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use crate::protocol::ptp::timestamp::PtpTimestamp;
+use crate::receiver::ap2::multi_room::{GroupRole, MultiRoomCoordinator, PlaybackCommand};
 
 #[test]
 fn test_group_join_leave() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
 
     assert!(coord.group_info().is_none());
 
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    coord.join_group(
+        "group-uuid".into(),
+        GroupRole::Follower,
+        Some(0x0065_4321),
+    );
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
 
@@ -18,7 +23,7 @@ fn test_group_join_leave() {
 
 #[test]
 fn test_leader_role() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
     coord.join_group("group-uuid".into(), GroupRole::Leader, None);
 
     assert!(coord.is_leader());
@@ -73,7 +78,7 @@ fn test_timing_update_and_sync() {
             PlaybackCommand::StartAt { timestamp } => {
                 assert_eq!(timestamp, target_ptp.to_airplay_compact());
             }
-            _ => panic!("Expected StartAt due to large drift, got {:?}", c),
+            _ => panic!("Expected StartAt due to large drift, got {c:?}"),
         }
     }
 }

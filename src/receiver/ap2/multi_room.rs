@@ -1,11 +1,13 @@
-//! Multi-Room Coordination for AirPlay 2
+//! Multi-Room Coordination for `AirPlay` 2
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
+use std::time::Instant;
+
+use tracing::{info, warn};
+
 use crate::protocol::ptp::clock::{PtpClock, PtpRole};
 use crate::protocol::ptp::timestamp::PtpTimestamp;
-use std::time::{Instant};
-use tracing::{info, warn};
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +53,7 @@ pub struct GroupMember {
 pub enum PlaybackCommand {
     /// Start playback at specified time
     StartAt {
-        /// Target PTP timestamp (AirPlay compact format)
+        /// Target PTP timestamp (`AirPlay` compact format)
         timestamp: u64,
     },
     /// Adjust playback rate to catch up/slow down
@@ -80,20 +82,21 @@ pub struct MultiRoomCoordinator {
     last_sync_check: Instant,
     /// Sync status
     in_sync: bool,
-    /// Anchor for converting Instant to PtpTimestamp
-    /// (Instant, PtpTimestamp)
+    /// Anchor for converting Instant to `PtpTimestamp`
+    /// (Instant, `PtpTimestamp`)
     anchor: (Instant, PtpTimestamp),
 }
 
 impl MultiRoomCoordinator {
     /// Create a new multi-room coordinator
+    #[must_use]
     pub fn new(device_id: String, clock_id: u64) -> Self {
         Self {
             device_id,
             // Default to Master role initially (self-clocked)
             clock: PtpClock::new(clock_id, PtpRole::Master),
             group: None,
-            sync_tolerance_us: 1000,  // 1ms default
+            sync_tolerance_us: 1000, // 1ms default
             last_sync_check: Instant::now(),
             in_sync: false,
             anchor: (Instant::now(), PtpTimestamp::now()),
@@ -101,6 +104,7 @@ impl MultiRoomCoordinator {
     }
 
     /// Get our device ID
+    #[must_use]
     pub fn device_id(&self) -> &str {
         &self.device_id
     }
@@ -108,9 +112,8 @@ impl MultiRoomCoordinator {
     /// Join a group
     pub fn join_group(&mut self, uuid: String, role: GroupRole, leader_clock_id: Option<u64>) {
         let ptp_role = match role {
-            GroupRole::Leader => PtpRole::Master,
+            GroupRole::Leader | GroupRole::None => PtpRole::Master,
             GroupRole::Follower => PtpRole::Slave,
-            GroupRole::None => PtpRole::Master,
         };
 
         // Re-initialize clock if role changes to ensure clean slate
@@ -138,8 +141,8 @@ impl MultiRoomCoordinator {
             self.group = None;
             // Revert to Master role (self-clocked)
             if self.clock.role() != PtpRole::Master {
-                 let my_clock_id = self.clock.clock_id();
-                 self.clock = PtpClock::new(my_clock_id, PtpRole::Master);
+                let my_clock_id = self.clock.clock_id();
+                self.clock = PtpClock::new(my_clock_id, PtpRole::Master);
             }
         }
     }
@@ -174,29 +177,36 @@ impl MultiRoomCoordinator {
 
         // Calculate drift from target
         // (current - target) * (1e9 / 65536) converts 1/65536 units to nanoseconds.
-        let diff = current_compact as i128 - target as i128;
+        let diff = i128::from(current_compact) - i128::from(target);
         let drift_ns = diff * 1_000_000_000 / 65536;
         #[allow(
             clippy::cast_possible_truncation,
             reason = "Drift in microseconds fits in i64 unless > 290,000 years"
         )]
-        let drift_us = (drift_ns / 1000) as i64;
+        let drift_micros = (drift_ns / 1000) as i64;
 
-        self.in_sync = drift_us.abs() < self.sync_tolerance_us;
+        self.in_sync = drift_micros.abs() < self.sync_tolerance_us;
 
         if self.in_sync {
             return None;
         }
 
         // Need adjustment
-        if drift_us.abs() > 10_000 {
+        if drift_micros.abs() > 10_000 {
             // More than 10ms off - hard sync
-            warn!("Multi-room: large drift {}us, requesting hard sync", drift_us);
+            warn!(
+                "Multi-room: large drift {}us, requesting hard sync",
+                drift_micros
+            );
             Some(PlaybackCommand::StartAt { timestamp: target })
         } else {
             // Small drift - adjust rate
             // Clamp rate adjustment to +/- 500 ppm
-            let rate_ppm = (drift_us / 10).clamp(-500, 500) as i32;
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Clamped value fits in i32"
+            )]
+            let rate_ppm = (drift_micros / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
     }
@@ -227,36 +237,39 @@ impl MultiRoomCoordinator {
     }
 
     /// Check if in sync with group
+    #[must_use]
     pub fn is_in_sync(&self) -> bool {
         self.in_sync
     }
 
     /// Get current group info
+    #[must_use]
     pub fn group_info(&self) -> Option<&GroupInfo> {
         self.group.as_ref()
     }
 
     /// Get clock offset for diagnostics
+    #[must_use]
     pub fn clock_offset_ms(&self) -> f64 {
         self.clock.offset_millis()
     }
 
-    /// Helper to convert Instant to PtpTimestamp using anchor
+    /// Helper to convert Instant to `PtpTimestamp` using anchor
     fn instant_to_ptp(&self, inst: Instant) -> PtpTimestamp {
         let (anchor_inst, anchor_ptp) = self.anchor;
         if inst >= anchor_inst {
             let dur = inst.duration_since(anchor_inst);
             anchor_ptp.add_duration(dur)
         } else {
-             // Handle case where inst is before anchor
-             let dur = anchor_inst.duration_since(inst);
-             #[allow(clippy::cast_possible_wrap)]
-             let nanos = anchor_ptp.to_nanos() - dur.as_nanos() as i128;
-             if nanos < 0 {
-                 PtpTimestamp::ZERO
-             } else {
-                 PtpTimestamp::from_nanos(nanos)
-             }
+            // Handle case where inst is before anchor
+            let dur = anchor_inst.duration_since(inst);
+            #[allow(clippy::cast_possible_wrap)]
+            let nanos = anchor_ptp.to_nanos() - dur.as_nanos() as i128;
+            if nanos < 0 {
+                PtpTimestamp::ZERO
+            } else {
+                PtpTimestamp::from_nanos(nanos)
+            }
         }
     }
 }
@@ -264,14 +277,16 @@ impl MultiRoomCoordinator {
 /// Group state for advertisement
 impl MultiRoomCoordinator {
     /// Get group UUID for TXT record
+    #[must_use]
     pub fn group_uuid(&self) -> Option<&str> {
         self.group.as_ref().map(|g| g.uuid.as_str())
     }
 
     /// Check if we're the group leader
+    #[must_use]
     pub fn is_leader(&self) -> bool {
-        self.group.as_ref()
-            .map(|g| g.role == GroupRole::Leader)
-            .unwrap_or(false)
+        self.group
+            .as_ref()
+            .is_some_and(|g| g.role == GroupRole::Leader)
     }
 }
