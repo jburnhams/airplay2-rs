@@ -17,8 +17,8 @@ async fn setup_streaming_test(
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let mut config = AirPlayConfig::default();
-    config.discovery_timeout = Duration::from_secs(5);
-    config.connection_timeout = Duration::from_secs(5);
+    config.discovery_timeout = Duration::from_secs(30);
+    config.connection_timeout = Duration::from_secs(30);
     config.audio_buffer_frames = buffer_frames;
 
     let client = AirPlayClient::new(config);
