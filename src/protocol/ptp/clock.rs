@@ -228,10 +228,8 @@ impl PtpClock {
     pub fn remote_to_local(&self, remote: PtpTimestamp) -> PtpTimestamp {
         let remote_nanos = remote.to_nanos();
         let local_nanos = match self.role {
-            PtpRole::Master => remote_nanos - self.offset_ns, /* Local(Master) = Remote(Slave) -
-                                                               * Offset */
-            PtpRole::Slave => remote_nanos + self.offset_ns, /* Local(Slave) = Remote(Master) +
-                                                              * Offset */
+            PtpRole::Master => remote_nanos - self.offset_ns, // Local(Master) = Remote(Slave) - Offset
+            PtpRole::Slave => remote_nanos + self.offset_ns,  // Local(Slave) = Remote(Master) + Offset
         };
 
         if local_nanos < 0 {
@@ -247,10 +245,8 @@ impl PtpClock {
     pub fn local_to_remote(&self, local: PtpTimestamp) -> PtpTimestamp {
         let local_nanos = local.to_nanos();
         let remote_nanos = match self.role {
-            PtpRole::Master => local_nanos + self.offset_ns, /* Remote(Slave) = Local(Master) +
-                                                              * Offset */
-            PtpRole::Slave => local_nanos - self.offset_ns, /* Remote(Master) = Local(Slave) -
-                                                             * Offset */
+            PtpRole::Master => local_nanos + self.offset_ns, // Remote(Slave) = Local(Master) + Offset
+            PtpRole::Slave => local_nanos - self.offset_ns,  // Remote(Master) = Local(Slave) - Offset
         };
 
         if remote_nanos < 0 {

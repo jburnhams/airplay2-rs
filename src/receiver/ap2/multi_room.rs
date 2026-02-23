@@ -202,10 +202,7 @@ impl MultiRoomCoordinator {
         } else {
             // Small drift - adjust rate
             // Clamp rate adjustment to +/- 500 ppm
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Clamped value fits in i32"
-            )]
+            #[allow(clippy::cast_possible_truncation, reason = "Clamped value fits in i32")]
             let rate_ppm = (drift_micros / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }

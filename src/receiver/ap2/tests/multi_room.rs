@@ -9,11 +9,7 @@ fn test_group_join_leave() {
 
     assert!(coord.group_info().is_none());
 
-    coord.join_group(
-        "group-uuid".into(),
-        GroupRole::Follower,
-        Some(0x0065_4321),
-    );
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
 
