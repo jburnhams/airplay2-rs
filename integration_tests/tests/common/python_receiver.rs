@@ -25,6 +25,8 @@ pub struct PythonReceiver {
     mac: Option<String>,
     // Flag to ensure logs are written once
     logs_written: bool,
+    // Path where logs were written
+    log_path: Option<PathBuf>,
     // Unique name for this receiver
     name: String,
 }
@@ -282,6 +284,7 @@ impl PythonReceiver {
             port: actual_port,
             mac: actual_mac,
             logs_written: false,
+            log_path: None,
             name,
         })
     }
@@ -386,6 +389,7 @@ impl PythonReceiver {
                 tracing::info!("Wrote integration test logs to: {:?}", log_path);
             }
         }
+        self.log_path = Some(log_path);
         self.logs_written = true;
     }
 
@@ -428,29 +432,7 @@ impl PythonReceiver {
 
         self.write_logs();
 
-        // Return log path relative to where we think it is?
-        // We constructed it in write_logs but didn't store it.
-        // Reconstruct for return.
-        let mut target_dir = match std::env::current_dir() {
-            Ok(pb) => pb,
-            Err(_) => PathBuf::from("."),
-        };
-        if !target_dir.join("target").exists()
-            && target_dir
-                .parent()
-                .map(|p| p.join("target").exists())
-                .unwrap_or(false)
-        {
-            target_dir = target_dir.parent().unwrap().to_path_buf();
-        }
-        let log_path = target_dir.join("target").join(format!(
-            "integration-test-{}.log",
-            // Note: timestamp will be slightly different if we call now() again.
-            // Ideally we should store the path in self.
-            // But for now, we just want logs written.
-            // The return value is used for manual inspection.
-            "UNKNOWN"
-        ));
+        let log_path = self.log_path.clone().unwrap_or_default();
 
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
