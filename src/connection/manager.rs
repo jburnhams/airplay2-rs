@@ -1136,8 +1136,10 @@ impl ConnectionManager {
                         transport.control_port,
                         transport.timing_port,
                     ) {
-                        let ep = server_event_port.unwrap_or(0);
-                        server_ports = Some((sp, cp, ep, tp));
+                        if sp > 0 {
+                            let ep = server_event_port.unwrap_or(0);
+                            server_ports = Some((sp, cp, ep, tp));
+                        }
                     }
                 }
             }

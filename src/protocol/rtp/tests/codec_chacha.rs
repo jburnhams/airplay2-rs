@@ -15,8 +15,8 @@ fn test_chacha_roundtrip() {
 
     encoder.encode_audio(&audio, &mut packet).unwrap();
 
-    let decoded = decoder.decode_audio(&packet).unwrap();
-    assert_eq!(decoded.payload, audio);
+    let decoded_packet = decoder.decode_audio(&packet).unwrap();
+    assert_eq!(decoded_packet.payload, audio);
 }
 
 #[test]
