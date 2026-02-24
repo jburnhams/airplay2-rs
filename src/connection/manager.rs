@@ -8,9 +8,9 @@ use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
+use crate::audio::AudioCodec;
 use crate::audio::aac_encoder::AacEncoder;
 use crate::audio::format::AacProfile;
-use crate::audio::AudioCodec;
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::storage::StorageError;
@@ -773,19 +773,22 @@ impl ConnectionManager {
                         AacProfile::Lc
                     };
 
-                    let constant_duration = if profile == AacProfile::Eld { 512 } else { 1024 };
+                    let constant_duration = if profile == AacProfile::Eld {
+                        512
+                    } else {
+                        1024
+                    };
 
                     let config_str = AacEncoder::new(44100, 2, self.config.aac_bitrate, profile)
                         .ok()
                         .and_then(|e| e.get_asc().ok())
                         .map(|asc| {
-                            format!(
-                                ";config={}",
-                                asc.iter()
-                                    .map(|b| format!("{b:02X}"))
-                                    .collect::<Vec<_>>()
-                                    .join("")
-                            )
+                            use std::fmt::Write;
+                            let mut s = String::with_capacity(asc.len() * 2);
+                            for b in asc {
+                                let _ = write!(s, "{b:02X}");
+                            }
+                            format!(";config={s}")
                         })
                         .unwrap_or_default();
 

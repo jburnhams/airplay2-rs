@@ -96,7 +96,9 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
         if has_time_announce {
             tracing::info!("✓ Receiver logs contain 'TIME_ANNOUNCE_PTP'");
         } else {
-            tracing::warn!("Receiver logs DO NOT contain 'TIME_ANNOUNCE_PTP' (might require higher debug level or packets not received yet)");
+            tracing::warn!(
+                "Receiver logs DO NOT contain 'TIME_ANNOUNCE_PTP' (might require higher debug level or packets not received yet)"
+            );
         }
 
         // Assert that we at least tried to use PTP
