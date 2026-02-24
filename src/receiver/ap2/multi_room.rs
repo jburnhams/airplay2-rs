@@ -2,9 +2,10 @@
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
+use std::time::Instant;
+
 use crate::protocol::ptp::clock::{PtpClock, PtpRole};
 use crate::protocol::ptp::timestamp::PtpTimestamp;
-use std::time::Instant;
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,12 +166,12 @@ impl MultiRoomCoordinator {
             Some(PlaybackCommand::StartAt { timestamp: target })
         } else {
             // Small drift - adjust rate
-            // rate_ppm = (drift_us / 10) clamped to +/- 500
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Clamped value fits in i32"
-            )]
-            let rate_ppm = (drift_micros / 10).clamp(-500, 500) as i32;
+            // If drift is positive (we are ahead), we want to slow down (negative rate).
+            // If drift is negative (we are behind), we want to speed up (positive rate).
+            // So rate should be proportional to -drift.
+            // rate_ppm = -(drift_us / 10) clamped to +/- 500
+            #[allow(clippy::cast_possible_truncation, reason = "Clamped value fits in i32")]
+            let rate_ppm = (-drift_micros / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
     }
@@ -240,8 +241,9 @@ impl MultiRoomCoordinator {
             // PtpTimestamp doesn't have sub_duration, so calculate manually
             // Avoid negative timestamp panic by clamping to zero if somehow wrapped
             let sys_nanos = sys_now.to_nanos();
-            #[allow(clippy::cast_possible_wrap, reason = "Duration fits in i128")]
-            let diff_nanos = diff.as_nanos() as i128;
+            // Try to convert diff to i128 nanoseconds
+            let diff_nanos = i128::try_from(diff.as_nanos()).unwrap_or(i128::MAX);
+
             if diff_nanos > sys_nanos {
                 PtpTimestamp::ZERO
             } else {

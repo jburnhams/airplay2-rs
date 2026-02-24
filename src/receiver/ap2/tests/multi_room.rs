@@ -1,14 +1,19 @@
+use std::time::{Duration, Instant};
+
 use crate::protocol::ptp::timestamp::PtpTimestamp;
 use crate::receiver::ap2::multi_room::{GroupRole, MultiRoomCoordinator, PlaybackCommand};
-use std::time::{Duration, Instant};
 
 #[test]
 fn test_group_join_leave() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
 
     assert!(coord.group_info().is_none());
 
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    coord.join_group(
+        "group-uuid".into(),
+        GroupRole::Follower,
+        Some(0x0065_4321),
+    );
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
 
@@ -18,15 +23,16 @@ fn test_group_join_leave() {
 
 #[test]
 fn test_leader_role() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
     coord.join_group("group-uuid".into(), GroupRole::Leader, None);
 
     assert!(coord.is_leader());
 }
 
 #[test]
+#[allow(clippy::similar_names)]
 fn test_timing_update_and_offset() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
 
     // Simulate PTP exchange where Remote is ahead of Local by 1 second (1_000_000 micros).
     // RTT = 0 for simplicity.
@@ -44,7 +50,8 @@ fn test_timing_update_and_offset() {
     // t1_remote_tx needs to be 1 second ahead of t1_local_rx.
     // First, map t1_local_rx to PTP timestamp using the coordinator's anchor logic
     // But instant_to_ptp is private.
-    // We can just create arbitrary PTP timestamp for remote, and expect the offset to reflect the difference.
+    // We can just create arbitrary PTP timestamp for remote, and expect the offset to reflect the
+    // difference.
 
     // Let's assume Local corresponds to PtpTimestamp X.
     // Remote corresponds to PtpTimestamp X + 1s.
@@ -72,15 +79,18 @@ fn test_timing_update_and_offset() {
     let offset = coord.clock_offset_ms();
     assert!(
         (offset - 1000.0).abs() < 50.0,
-        "Offset should be approx 1000ms, got {}ms",
-        offset
+        "Offset should be approx 1000ms, got {offset}ms"
     );
 }
 
 #[test]
 fn test_calculate_adjustment() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
+    coord.join_group(
+        "group-uuid".into(),
+        GroupRole::Follower,
+        Some(0x0065_4321),
+    );
 
     // 1. Establish synchronization
     // Let's say Remote is ahead by 1s.
@@ -111,8 +121,8 @@ fn test_calculate_adjustment() {
     coord.set_target_time(target_time);
 
     // Calculate adjustment. Should be None or small rate adjustment (noise).
-    // Since we just synced with `now`, calling calculate_adjustment immediately with `target = remote_ahead`
-    // means `current_ptp` should match `target`.
+    // Since we just synced with `now`, calling calculate_adjustment immediately with `target =
+    // remote_ahead` means `current_ptp` should match `target`.
 
     // However, slight time passed between `update_timing` and `calculate_adjustment`.
     // So `current_ptp` might be slightly larger than `target_time`.
@@ -147,7 +157,7 @@ fn test_calculate_adjustment() {
         Some(PlaybackCommand::StartAt { timestamp }) => {
             assert_eq!(timestamp, past_target);
         }
-        _ => panic!("Expected StartAt, got {:?}", cmd),
+        _ => panic!("Expected StartAt, got {cmd:?}"),
     }
 
     // 4. Test Rate Adjustment
@@ -155,7 +165,7 @@ fn test_calculate_adjustment() {
     // If Target is 5ms ahead of Current.
     // Drift = Current - Target = -5ms = -5000 us.
     // Abs(5000) < 10000.
-    // Rate = -5000 / 10 = -500 ppm.
+    // Rate = -(-5000) / 10 = +500 ppm.
 
     // We need `current_ptp` approx `remote_ahead`.
     // Let's set target = remote_ahead + 5ms.
@@ -163,37 +173,16 @@ fn test_calculate_adjustment() {
     let future_target = future_target_ptp.to_airplay_compact();
     coord.set_target_time(future_target);
 
-    // We need to account for time elapsed since `update_timing`.
-    // We can cheat by calling `update_timing` again right before.
-    // let now2 = Instant::now();
-    // We assume offset is still valid (1s).
-    // So local `now2` corresponds to `remote` approx `remote_ahead + (now2 - now)`.
-    // We want `remote` to be exactly `remote_ahead`.
-    // This is hard with real time.
-
-    // Instead, let's just check relative behavior.
-    // We set target to be significantly in future (e.g. +1 hour) -> Large negative drift -> Hard sync?
-    // +1 hour -> Drift = -Large. Abs > 10000. StartAt.
-
-    // Let's try +5ms.
-    // Drift approx -5ms.
-    // Rate approx -500.
-
-    // We can't guarantee exact values due to execution time, but sign should be correct.
-    // If Target > Current, Drift < 0. Rate < 0.
-
     let cmd = coord.calculate_adjustment();
+    #[allow(clippy::match_same_arms)]
     match cmd {
-        Some(PlaybackCommand::AdjustRate { rate_ppm: _ }) => {
-            // We expect negative rate (slow down? or wait?)
-            // Actually if Rate < 0, it means play SLOWER?
-            // If we are EARLY (Current < Target), we want to wait. Playing slower effectively waits?
-            // Yes.
-            // So rate should be negative.
-            // assert!(rate_ppm < 0); // Might be flaky if execution takes > 5ms.
-
-            // If execution took > 5ms, Current > Target. Drift > 0. Rate > 0.
-            // So hard to test exact sign without mocking time.
+        Some(PlaybackCommand::AdjustRate { rate_ppm }) => {
+            // We expect positive rate (speed up to catch up to future target)
+            // If Target > Current, Drift < 0. Rate = -Drift/10 > 0.
+            // Since we just called calculate_adjustment, Current should be slightly > previous sync point,
+            // but Target is +5ms.
+            // Assuming execution < 5ms, Drift is negative. Rate should be positive.
+            assert!(rate_ppm > 0, "Expected positive rate to catch up, got {rate_ppm}");
         }
         Some(PlaybackCommand::StartAt { .. }) => {
             // Maybe we took too long or drift logic is different?
