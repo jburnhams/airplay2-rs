@@ -77,7 +77,8 @@ impl PtpTimestamp {
     #[must_use]
     #[allow(
         clippy::cast_possible_wrap,
-        reason = "PTP timestamps are within the range of representable dates for i64 microseconds (approx +/- 292,000 years)"
+        reason = "PTP timestamps are within the range of representable dates for i64 microseconds \
+                  (approx +/- 292,000 years)"
     )]
     pub fn to_micros(&self) -> i64 {
         (self.seconds as i64 * 1_000_000) + (i64::from(self.nanoseconds) / 1_000)

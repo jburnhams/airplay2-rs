@@ -85,7 +85,8 @@ impl DmapEncoder {
                 // Write length (4 bytes, big-endian)
                 #[allow(
                     clippy::cast_possible_truncation,
-                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not supported"
+                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not \
+                              supported"
                 )]
                 let len = s.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
@@ -121,7 +122,8 @@ impl DmapEncoder {
                 // Write length and contents
                 #[allow(
                     clippy::cast_possible_truncation,
-                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not supported"
+                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not \
+                              supported"
                 )]
                 let len = inner_data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
@@ -130,7 +132,8 @@ impl DmapEncoder {
             DmapValue::Raw(data) => {
                 #[allow(
                     clippy::cast_possible_truncation,
-                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not supported"
+                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not \
+                              supported"
                 )]
                 let len = data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
