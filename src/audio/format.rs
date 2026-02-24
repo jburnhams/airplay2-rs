@@ -183,6 +183,8 @@ pub enum AudioCodec {
     Alac,
     /// Advanced Audio Coding
     Aac,
+    /// Advanced Audio Coding - Enhanced Low Delay
+    AacEld,
     /// Opus (for low-latency applications)
     Opus,
 }
@@ -222,4 +224,6 @@ pub enum AacProfile {
     He,
     /// High Efficiency v2 (SBR + PS)
     HeV2,
+    /// Enhanced Low Delay
+    Eld,
 }

@@ -7,6 +7,13 @@ from .stream_connection import StreamConnection
 from ap2.utils import get_free_socket
 
 
+class RawAudioSetup:
+    def __init__(self, data):
+        self.data = data
+    def get_extra_data(self):
+        return self.data
+
+
 class Stream:
     REALTIME = 96
     BUFFERED = 103
@@ -115,6 +122,9 @@ class Stream:
             self.spf = stream["spf"]
             self.buff_size = buff_size
 
+            if not aud_params and "audioSpecificConfig" in stream:
+                aud_params = RawAudioSetup(stream["audioSpecificConfig"])
+
         if self.streamtype == Stream.REALTIME:
             self.session_iv = stream["shiv"] if "shiv" in stream else None
             self.server_control = (
@@ -138,7 +148,7 @@ class Stream:
                 self.streamtype,
                 control_conns=self.control_conns,
                 isDebug=self.isDebug,
-                aud_params=None,
+                aud_params=aud_params,
             )
             self.descriptor = {
                 "type": self.streamtype,
@@ -163,7 +173,7 @@ class Stream:
                 self.streamtype,
                 control_conns=self.control_conns,
                 isDebug=self.isDebug,
-                aud_params=None,
+                aud_params=aud_params,
             )
             self.descriptor = {
                 "type": self.streamtype,

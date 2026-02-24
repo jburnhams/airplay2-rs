@@ -82,8 +82,12 @@
   - ✅ **VERIFIED**: End-to-end test `aac_streaming` passes.
   - Confirmed 440Hz sine wave decoding.
   - Correctly negotiates `mpeg4-generic/44100/2` with `mode=AAC-hbr`.
-- [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
-  - *Status*: Pending.
+- [x] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
+  - ✅ **VERIFIED**: Implemented `AudioCodec::AacEld` and `AacProfile::Eld`.
+  - Added `integration_tests/tests/aac_eld_streaming.rs` verifying ELD streaming.
+  - Updated `PcmStreamer` to use 512-sample frames for ELD.
+  - Updated `ConnectionManager` to negotiate `ct=0x8` and pass `audioSpecificConfig`.
+  - Patched `python-ap2` (receiver) to correctly decode ELD using provided config.
 
 ### Sample Rate and Bit Depth Support
 - [x] **Standard**: 16-bit/44.1 kHz stereo (minimum)
