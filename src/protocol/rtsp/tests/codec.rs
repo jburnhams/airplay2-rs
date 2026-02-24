@@ -233,3 +233,23 @@ fn test_decode_empty_header_name() {
     let response = codec.decode().unwrap().unwrap();
     assert_eq!(response.headers.get(""), Some("EmptyName"));
 }
+
+#[test]
+fn test_max_size_exact_limit() {
+    let mut codec = RtspCodec::new().with_max_size(10);
+
+    // Feed 10 bytes: should succeed
+    let result = codec.feed(&[0u8; 10]);
+    assert!(result.is_ok());
+    assert_eq!(codec.buffered_len(), 10);
+
+    // Reset
+    codec.reset();
+
+    // Feed 11 bytes: should fail
+    let result = codec.feed(&[0u8; 11]);
+    assert!(matches!(
+        result,
+        Err(RtspCodecError::ResponseTooLarge { .. })
+    ));
+}

@@ -70,6 +70,7 @@ jobs:
           python -c "import av; print('PyAV OK')"
           python -c "from Crypto.Cipher import ChaCha20_Poly1305; print('PyCrypto OK')"
           python -c "import zeroconf; print('zeroconf OK')"
+          python -c "import netifaces; print('netifaces OK')"
           python -c "from ap2.connections.audio import Audio; print('ap2 modules OK')"
           echo "✓ All Python receiver dependencies verified"
 
@@ -106,6 +107,8 @@ jobs:
           RUST_LOG: info
           # Loopback interface (lo0 for macOS, lo for Linux)
           AIRPLAY_TEST_INTERFACE: ${{ runner.os == 'macOS' && 'lo0' || 'lo' }}
+          # Ensure we use the python environment with installed dependencies
+          PYTHON_EXECUTABLE: python
         timeout-minutes: 15
 
       - name: Upload test artifacts on failure

@@ -94,3 +94,31 @@ fn test_get_request_encode() {
     assert!(encoded_str.starts_with("GET /info RTSP/1.0\r\n"));
     assert!(encoded_str.contains("X-Apple-Device-ID: 00:11:22:33:44:55"));
 }
+
+#[test]
+fn test_request_builder_case_insensitive_headers() {
+    let request = RtspRequest::builder(Method::Options, "*")
+        .header("content-type", "application/json")
+        .build();
+
+    // Should find it even with different case
+    assert_eq!(
+        request.headers.get("CONTENT-TYPE"),
+        Some("application/json")
+    );
+    assert_eq!(
+        request.headers.get("Content-Type"),
+        Some("application/json")
+    );
+}
+
+#[test]
+fn test_large_body() {
+    let body = vec![0u8; 1024 * 1024]; // 1MB
+    let request = RtspRequest::builder(Method::Post, "/upload")
+        .body(body.clone())
+        .build();
+
+    assert_eq!(request.body.len(), 1024 * 1024);
+    assert_eq!(request.headers.get("Content-Length"), Some("1048576"));
+}

@@ -23,10 +23,12 @@ async fn test_forget_device() {
     let dir = tempdir().expect("Failed to create temp dir");
     let storage_path = dir.path().join("pairings.json");
 
-    let mut config = AirPlayConfig::default();
-    config.discovery_timeout = Duration::from_secs(5);
-    config.connection_timeout = Duration::from_secs(5);
-    config.pin = Some("3939".to_string());
+    let config = AirPlayConfig {
+        discovery_timeout: Duration::from_secs(5),
+        connection_timeout: Duration::from_secs(5),
+        pin: Some("3939".to_string()),
+        ..Default::default()
+    };
     // Note: setting config.pairing_storage_path is not enough because AirPlayClient::new(config)
     // initializes with NO storage (MemoryStorage).
     // We MUST use with_pairing_storage().

@@ -105,3 +105,52 @@ fn test_packet_builder() {
 
     assert_eq!(packets.len(), 1);
 }
+
+#[test]
+fn test_codec_chacha_encryption() {
+    let mut codec = RtpCodec::new(0x1234_5678);
+    let key = [0x42u8; 32];
+    codec.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let audio = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
+
+    codec.encode_audio(&audio, &mut packet).unwrap();
+
+    // Encrypted payload should differ from original
+    // The packet structure is different for ChaCha20Poly1305, so simple decode might fail
+    // or return weird payload if it misinterprets header/payload boundary.
+    // RtpPacket::decode assumes standard RTP.
+    // But RtpCodec::encode_audio with ChaCha produces: [Header][Ciphertext][Tag][Nonce]
+    // RtpPacket::decode(packet) will parse header, and rest as payload.
+    // The payload size will include tag and nonce.
+    let decoded = RtpPacket::decode(&packet).unwrap();
+
+    // Check total size: Header(12) + Payload + Tag(16) + Nonce(8)
+    assert_eq!(packet.len(), 12 + frame_size + 16 + 8);
+
+    // Payload part in RtpPacket will include tag+nonce, so definitely != audio
+    assert_ne!(decoded.payload, audio);
+}
+
+#[test]
+fn test_codec_chacha_roundtrip() {
+    let key = [0x42u8; 32];
+
+    let mut encoder = RtpCodec::new(0x1234_5678);
+    encoder.set_chacha_encryption(key);
+
+    let mut decoder = RtpCodec::new(0); // SSRC doesn't matter for decoder context here?
+    decoder.set_chacha_encryption(key);
+
+    let frame_size = RtpCodec::FRAMES_PER_PACKET as usize * 4;
+    let original = vec![0xAA; frame_size];
+    let mut packet = Vec::new();
+
+    encoder.encode_audio(&original, &mut packet).unwrap();
+
+    let decoded_packet = decoder.decode_audio(&packet).unwrap();
+
+    assert_eq!(decoded_packet.payload, original);
+}
