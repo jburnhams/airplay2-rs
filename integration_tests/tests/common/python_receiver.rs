@@ -335,26 +335,17 @@ impl PythonReceiver {
         }
     }
 
-    fn write_logs(&mut self) {
+    fn write_logs(&mut self) -> PathBuf {
         if self.logs_written {
-            return;
+            return PathBuf::new(); // Already written, path lost?
         }
 
         // Write to root/target/integration-test-TIMESTAMP.log
-        // If we are in integration_tests crate, root is ../
-        // But the current dir is usually where we ran cargo test from.
-        // If run from workspace root, current_dir is root.
-        // If run from integration_tests, current_dir is integration_tests.
-
         let mut target_dir = match std::env::current_dir() {
             Ok(pb) => pb,
             Err(_) => PathBuf::from("."),
         };
 
-        // If we are in integration_tests, go up one level?
-        // But workspace target dir is usually shared.
-        // If running `cargo test -p integration_tests`, it might put artifacts in `target`.
-        // Let's try to find the `target` directory.
         if !target_dir.join("target").exists()
             && target_dir
                 .parent()
@@ -365,7 +356,6 @@ impl PythonReceiver {
         }
 
         let log_dir = target_dir.join("target");
-        // Ensure log dir exists
         if !log_dir.exists() {
             let _ = fs::create_dir_all(&log_dir);
         }
@@ -387,6 +377,7 @@ impl PythonReceiver {
             }
         }
         self.logs_written = true;
+        log_path
     }
 
     /// Stop the receiver and read output
@@ -426,31 +417,7 @@ impl PythonReceiver {
         let audio_data = fs::read(&audio_path).ok();
         let rtp_data = fs::read(&rtp_path).ok();
 
-        self.write_logs();
-
-        // Return log path relative to where we think it is?
-        // We constructed it in write_logs but didn't store it.
-        // Reconstruct for return.
-        let mut target_dir = match std::env::current_dir() {
-            Ok(pb) => pb,
-            Err(_) => PathBuf::from("."),
-        };
-        if !target_dir.join("target").exists()
-            && target_dir
-                .parent()
-                .map(|p| p.join("target").exists())
-                .unwrap_or(false)
-        {
-            target_dir = target_dir.parent().unwrap().to_path_buf();
-        }
-        let log_path = target_dir.join("target").join(format!(
-            "integration-test-{}.log",
-            // Note: timestamp will be slightly different if we call now() again.
-            // Ideally we should store the path in self.
-            // But for now, we just want logs written.
-            // The return value is used for manual inspection.
-            "UNKNOWN"
-        ));
+        let log_path = self.write_logs();
 
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());

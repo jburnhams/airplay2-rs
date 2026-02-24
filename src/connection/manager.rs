@@ -8,6 +8,8 @@ use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
+use crate::audio::aac_encoder::AacEncoder;
+use crate::audio::format::AacProfile;
 use crate::audio::AudioCodec;
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
@@ -764,12 +766,37 @@ impl ConnectionManager {
                                     0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
                                     L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n"
                     .to_string(),
-                AudioCodec::Aac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                    mpeg4-generic/44100/2\r\na=fmtp:96 \
-                                    mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
-                                    constantDuration=1024\r\n"
-                    .to_string(),
+                AudioCodec::Aac | AudioCodec::AacEld => {
+                    let profile = if self.config.audio_codec == AudioCodec::AacEld {
+                        AacProfile::Eld
+                    } else {
+                        AacProfile::Lc
+                    };
+
+                    let constant_duration = if profile == AacProfile::Eld { 512 } else { 1024 };
+
+                    let config_str = AacEncoder::new(44100, 2, self.config.aac_bitrate, profile)
+                        .ok()
+                        .and_then(|e| e.get_asc().ok())
+                        .map(|asc| {
+                            format!(
+                                ";config={}",
+                                asc.iter()
+                                    .map(|b| format!("{b:02X}"))
+                                    .collect::<Vec<_>>()
+                                    .join("")
+                            )
+                        })
+                        .unwrap_or_default();
+
+                    format!(
+                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                         0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                         mpeg4-generic/44100/2\r\na=fmtp:96 \
+                         mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
+                         constantDuration={constant_duration}{config_str}\r\n"
+                    )
+                }
                 AudioCodec::Opus => {
                     return Err(AirPlayError::InvalidParameter {
                         name: "audio_codec".to_string(),
@@ -973,6 +1000,7 @@ impl ConnectionManager {
             AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
             AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
             AudioCodec::Aac => (0x4, 1024, 1 << 22), // AAC_LC_44100_2
+            AudioCodec::AacEld => (0x8, 512, 1 << 24), // AAC_ELD_44100_2
             AudioCodec::Opus => (0x0, 480, 0),      // Not supported by standard receivers usually
         };
 
@@ -988,7 +1016,24 @@ impl ConnectionManager {
         // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output
         // format?
 
-        let stream_entry = DictBuilder::new()
+        // Prepare ASC for AAC if needed
+        let mut asc = Vec::new();
+        if self.config.audio_codec == AudioCodec::Aac
+            || self.config.audio_codec == AudioCodec::AacEld
+        {
+            let profile = if self.config.audio_codec == AudioCodec::AacEld {
+                AacProfile::Eld
+            } else {
+                AacProfile::Lc
+            };
+            if let Ok(enc) = AacEncoder::new(44100, 2, self.config.aac_bitrate, profile) {
+                if let Ok(config) = enc.get_asc() {
+                    asc = config;
+                }
+            }
+        }
+
+        let mut stream_builder = DictBuilder::new()
             .insert("type", stream_type)
             .insert("ct", ct)
             .insert("audioFormat", audio_format)
@@ -999,8 +1044,15 @@ impl ConnectionManager {
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
             .insert("latencyMin", 11025) // 250ms in samples
-            .insert("latencyMax", 88200) // 2s in samples
-            .build();
+            .insert("latencyMax", 88200); // 2s in samples
+
+        if !asc.is_empty() {
+            // Some devices might expect "audioSpecificConfig" or "config"
+            // We'll try "audioSpecificConfig" which is common in other contexts
+            stream_builder = stream_builder.insert("audioSpecificConfig", asc);
+        }
+
+        let stream_entry = stream_builder.build();
 
         let setup_plist_step2 = DictBuilder::new()
             .insert("streams", vec![stream_entry])
