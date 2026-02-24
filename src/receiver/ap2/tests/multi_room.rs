@@ -9,11 +9,7 @@ fn test_group_join_leave() {
 
     assert!(coord.group_info().is_none());
 
-    coord.join_group(
-        "group-uuid".into(),
-        GroupRole::Follower,
-        Some(0x0065_4321),
-    );
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
 
@@ -86,11 +82,7 @@ fn test_timing_update_and_offset() {
 #[test]
 fn test_calculate_adjustment() {
     let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
-    coord.join_group(
-        "group-uuid".into(),
-        GroupRole::Follower,
-        Some(0x0065_4321),
-    );
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
 
     // 1. Establish synchronization
     // Let's say Remote is ahead by 1s.
@@ -179,10 +171,13 @@ fn test_calculate_adjustment() {
         Some(PlaybackCommand::AdjustRate { rate_ppm }) => {
             // We expect positive rate (speed up to catch up to future target)
             // If Target > Current, Drift < 0. Rate = -Drift/10 > 0.
-            // Since we just called calculate_adjustment, Current should be slightly > previous sync point,
-            // but Target is +5ms.
+            // Since we just called calculate_adjustment, Current should be slightly > previous sync
+            // point, but Target is +5ms.
             // Assuming execution < 5ms, Drift is negative. Rate should be positive.
-            assert!(rate_ppm > 0, "Expected positive rate to catch up, got {rate_ppm}");
+            assert!(
+                rate_ppm > 0,
+                "Expected positive rate to catch up, got {rate_ppm}"
+            );
         }
         Some(PlaybackCommand::StartAt { .. }) => {
             // Maybe we took too long or drift logic is different?

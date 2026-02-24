@@ -12,7 +12,6 @@ pub mod encrypted_channel;
 pub mod encrypted_rtsp;
 pub mod features;
 pub mod info_endpoint;
-pub mod multi_room;
 pub mod pairing_handlers;
 pub mod pairing_server;
 pub mod password_auth;
@@ -29,6 +28,7 @@ pub mod stream;
 // pub mod ptp_clock;
 // pub mod command_handler;
 // pub mod feedback_handler;
+// pub mod multi_room;
 
 #[cfg(test)]
 mod tests;

@@ -242,12 +242,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [x] Group join/leave functionality
-- [x] Leader/follower role support
-- [x] Playback time synchronization
-- [x] Drift detection and correction
-- [x] Clock offset tracking
-- [x] All unit tests pass
+- [ ] Group join/leave functionality
+- [ ] Leader/follower role support
+- [ ] Playback time synchronization
+- [ ] Drift detection and correction
+- [ ] Clock offset tracking
+- [ ] All unit tests pass
 
 ---
 
