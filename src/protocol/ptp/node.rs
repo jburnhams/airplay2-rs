@@ -197,7 +197,11 @@ impl PtpNode {
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Central event loop handling multiple sockets and timers; splitting would \
+                  obscure control flow"
+    )]
     pub async fn run(
         &mut self,
         mut shutdown: tokio::sync::watch::Receiver<bool>,

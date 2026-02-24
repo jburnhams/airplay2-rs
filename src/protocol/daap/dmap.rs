@@ -72,6 +72,10 @@ impl DmapEncoder {
     }
 
     /// Encode a tag-value pair
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "Unwraps are safe due to preceding range checks"
+    )]
     pub fn encode_tag(&mut self, tag: DmapTag, value: &DmapValue) {
         // Write 4-byte tag code
         self.buffer.extend_from_slice(tag.code());
@@ -79,7 +83,11 @@ impl DmapEncoder {
         match value {
             DmapValue::String(s) => {
                 // Write length (4 bytes, big-endian)
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not \
+                              supported"
+                )]
                 let len = s.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 // Write string bytes
@@ -89,17 +97,15 @@ impl DmapEncoder {
                 // Determine appropriate size
                 if *n >= 0 && *n <= 255 {
                     self.buffer.extend_from_slice(&1u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation)]
-                    #[allow(clippy::cast_sign_loss)]
-                    self.buffer.push(*n as u8);
+                    self.buffer.push(u8::try_from(*n).unwrap());
                 } else if i16::try_from(*n).is_ok() {
                     self.buffer.extend_from_slice(&2u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation)]
-                    self.buffer.extend_from_slice(&(*n as i16).to_be_bytes());
+                    self.buffer
+                        .extend_from_slice(&i16::try_from(*n).unwrap().to_be_bytes());
                 } else if i32::try_from(*n).is_ok() {
                     self.buffer.extend_from_slice(&4u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation)]
-                    self.buffer.extend_from_slice(&(*n as i32).to_be_bytes());
+                    self.buffer
+                        .extend_from_slice(&i32::try_from(*n).unwrap().to_be_bytes());
                 } else {
                     self.buffer.extend_from_slice(&8u32.to_be_bytes());
                     self.buffer.extend_from_slice(&n.to_be_bytes());
@@ -114,13 +120,21 @@ impl DmapEncoder {
                 let inner_data = inner.finish();
 
                 // Write length and contents
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not \
+                              supported"
+                )]
                 let len = inner_data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 self.buffer.extend_from_slice(&inner_data);
             }
             DmapValue::Raw(data) => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP length fields are 32-bit; content exceeding 4GB is not \
+                              supported"
+                )]
                 let len = data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 self.buffer.extend_from_slice(data);
