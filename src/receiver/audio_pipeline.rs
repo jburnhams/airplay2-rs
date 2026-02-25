@@ -44,7 +44,7 @@ impl AudioPipeline {
     ) -> Result<Self, AudioOutputError> {
         let decoder = match codec {
             AudioCodec::Alac => Some(AudioDecoder::Alac(AlacDecoder)),
-            AudioCodec::Aac => Some(AudioDecoder::Aac(AacDecoder)),
+            AudioCodec::Aac | AudioCodec::AacEld => Some(AudioDecoder::Aac(AacDecoder)),
             AudioCodec::Pcm => Some(AudioDecoder::Pcm),
             AudioCodec::Opus => None, // Handle Opus or others
         };

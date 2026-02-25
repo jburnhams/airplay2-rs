@@ -1,5 +1,13 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 8):**
+- **AAC-ELD Support**:
+  - ✅ **VERIFIED**: `aac_eld_streaming` integration test passes.
+  - Implemented `AacEncoder` support for `Mpeg4EnhancedLowDelay` profile and `get_asc()` method.
+  - Updated `ConnectionManager` to generate correct SDP/SETUP for ELD (including `fmtp` with `config=<HEX_ASC>`).
+  - Updated `PcmStreamer` to support ELD encoding (512 samples/frame).
+  - Patched Python receiver (`airplay2-receiver`) to parse `fmtp` and extract `config` (ASC) for proper decoding.
+
 **Work Done (Session 7):**
 - **Buffer Management**:
   - ✅ **VERIFIED**: Implemented configurable audio buffer size in `PcmStreamer` and `AirPlayClient`.
@@ -82,8 +90,11 @@
   - ✅ **VERIFIED**: End-to-end test `aac_streaming` passes.
   - Confirmed 440Hz sine wave decoding.
   - Correctly negotiates `mpeg4-generic/44100/2` with `mode=AAC-hbr`.
-- [ ] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
-  - *Status*: Pending.
+- [x] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
+  - ✅ **VERIFIED**: End-to-end test `aac_eld_streaming` passes.
+  - Implemented `AacEncoder` support for ELD profile and ASC extraction.
+  - Updated `ConnectionManager` to negotiate ELD (sending ASC via `fmtp`).
+  - Patched Python receiver to support ASC via `fmtp`.
 
 ### Sample Rate and Bit Depth Support
 - [x] **Standard**: 16-bit/44.1 kHz stereo (minimum)

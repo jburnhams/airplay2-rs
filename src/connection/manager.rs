@@ -8,7 +8,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, broadcast};
 
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
-use crate::audio::AudioCodec;
+use crate::audio::{AacEncoder, AudioCodec};
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
 use crate::protocol::pairing::storage::StorageError;
@@ -770,6 +770,33 @@ impl ConnectionManager {
                                     mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
                                     constantDuration=1024\r\n"
                     .to_string(),
+                AudioCodec::AacEld => {
+                    let bitrate = self.config.aac_bitrate;
+                    let encoder = AacEncoder::new_with_type(
+                        44100,
+                        2,
+                        bitrate,
+                        fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
+                    )
+                    .map_err(|_| AirPlayError::InternalError {
+                        message: "Failed to init AAC-ELD encoder for ASC".to_string(),
+                    })?;
+                    let asc = encoder.get_asc().map_err(|_| AirPlayError::InternalError {
+                        message: "Failed to get ASC".to_string(),
+                    })?;
+                    let asc_hex = asc
+                        .iter()
+                        .map(|b| format!("{b:02X}"))
+                        .collect::<String>();
+
+                    format!(
+                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                         0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                         mpeg4-generic/44100/2\r\na=fmtp:96 \
+                         mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
+                         constantDuration=512;config={asc_hex}\r\n"
+                    )
+                }
                 AudioCodec::Opus => {
                     return Err(AirPlayError::InvalidParameter {
                         name: "audio_codec".to_string(),
@@ -969,11 +996,36 @@ impl ConnectionManager {
 
         // Determine ct (compression type) and audioFormat
         // ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD
-        let (ct, spf, audio_format) = match self.config.audio_codec {
-            AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
-            AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
-            AudioCodec::Aac => (0x4, 1024, 1 << 22), // AAC_LC_44100_2
-            AudioCodec::Opus => (0x0, 480, 0),      // Not supported by standard receivers usually
+        let (ct, spf, audio_format, fmtp) = match self.config.audio_codec {
+            AudioCodec::Pcm => (0x1, 352, 1 << 11, None), // PCM 44100/16/2 = 2048
+            AudioCodec::Alac => (0x2, 352, 0x40000, None), // ALAC
+            AudioCodec::Aac => (0x4, 1024, 1 << 22, None), // AAC_LC_44100_2
+            AudioCodec::AacEld => {
+                let bitrate = self.config.aac_bitrate;
+                let encoder = AacEncoder::new_with_type(
+                    44100,
+                    2,
+                    bitrate,
+                    fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
+                )
+                .map_err(|_| AirPlayError::InternalError {
+                    message: "Failed to init AAC-ELD encoder for ASC".to_string(),
+                })?;
+                let asc = encoder.get_asc().map_err(|_| AirPlayError::InternalError {
+                    message: "Failed to get ASC".to_string(),
+                })?;
+                let asc_hex = asc
+                    .iter()
+                    .map(|b| format!("{b:02X}"))
+                    .collect::<String>();
+
+                let fmtp = format!(
+                    "mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=512;\
+                     config={asc_hex}"
+                );
+                (0x8, 512, 1 << 24, Some(fmtp))
+            }
+            AudioCodec::Opus => (0x0, 480, 0, None),      // Not supported by standard receivers usually
         };
 
         // Note: audioFormat values are bitmasks or specific IDs.
@@ -988,12 +1040,18 @@ impl ConnectionManager {
         // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output
         // format?
 
-        let stream_entry = DictBuilder::new()
+        let mut stream_entry_builder = DictBuilder::new()
             .insert("type", stream_type)
             .insert("ct", ct)
             .insert("audioFormat", audio_format)
             .insert("spf", spf)
-            .insert("audioType", "default")
+            .insert("audioType", "default");
+
+        if let Some(f) = fmtp {
+            stream_entry_builder = stream_entry_builder.insert("fmtp", f);
+        }
+
+        let stream_entry = stream_entry_builder
             .insert("shk", ek.to_vec())
             .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
             .insert("controlPort", u64::from(ctrl_port))
