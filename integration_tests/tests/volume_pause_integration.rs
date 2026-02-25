@@ -58,6 +58,8 @@ impl AudioSource for SineSource {
 async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Start Receiver
     let receiver = PythonReceiver::start().await?;
+    // Give receiver time to start
+    sleep(Duration::from_secs(2)).await;
     let device = receiver.device_config();
 
     // 2. Connect
@@ -67,8 +69,29 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     let config = AirPlayConfig::builder()
         .connection_timeout(Duration::from_secs(30))
         .build();
-    let client = AirPlayClient::new(config);
-    client.connect(&device).await?;
+
+    let mut client = AirPlayClient::new(config.clone());
+    let mut connected = false;
+    for i in 1..=3 {
+        match client.connect(&device).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                eprintln!("Connection attempt {}/3 failed: {}", i, e);
+                if i < 3 {
+                    sleep(Duration::from_secs(2)).await;
+                    // Re-create client to ensure clean state
+                    client = AirPlayClient::new(config.clone());
+                }
+            }
+        }
+    }
+
+    if !connected {
+        return Err("Failed to connect to receiver after 3 attempts".into());
+    }
 
     // 3. Set Volume (Initial)
     println!("Setting volume to 0.5 (-6.02 dB)...");
