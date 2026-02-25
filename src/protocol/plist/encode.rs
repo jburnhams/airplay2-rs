@@ -194,16 +194,28 @@ impl Encoder {
         if value >= 0 {
             if value <= 127 {
                 self.objects.push(0x10);
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "Value checked to fit in u8"
+                )]
                 self.objects.push(value as u8);
             } else if value <= 32767 {
                 self.objects.push(0x11);
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "Value checked to fit in u16"
+                )]
                 self.objects
                     .extend_from_slice(&(value as u16).to_be_bytes());
             } else if value <= 2_147_483_647 {
                 self.objects.push(0x12);
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "Value checked to fit in u32"
+                )]
                 self.objects
                     .extend_from_slice(&(value as u32).to_be_bytes());
             } else {
@@ -219,7 +231,10 @@ impl Encoder {
 
     fn encode_unsigned(&mut self, value: u64) {
         // If it fits in i64, encode as standard integer
-        #[allow(clippy::cast_possible_wrap)]
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "Value fits in i64 positive range"
+        )]
         if value <= i64::MAX as u64 {
             self.encode_integer(value as i64);
         } else {
@@ -274,7 +289,11 @@ impl Encoder {
         };
 
         // We know bytes is small, safe cast
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "bytes (1, 2, 4, 8) fits in u8"
+        )]
         let marker = 0x80 | (bytes - 1) as u8;
         self.objects.push(marker);
         match bytes {
@@ -323,7 +342,10 @@ impl Encoder {
     fn write_header_to(output: &mut Vec<u8>, kind: u8, len: usize) {
         if len < 15 {
             // len < 15 fits in u8
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Length checked to be less than 15"
+            )]
             output.push((kind << 4) | len as u8);
         } else {
             output.push((kind << 4) | 0xF);
@@ -337,17 +359,26 @@ impl Encoder {
         if value <= 0xFF {
             output.push(0x10);
             // value <= 0xFF fits in u8
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Value checked to fit in u8"
+            )]
             output.push(value as u8);
         } else if value <= 0xFFFF {
             output.push(0x11);
             // value <= 0xFFFF fits in u16
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Value checked to fit in u16"
+            )]
             output.extend_from_slice(&(value as u16).to_be_bytes());
         } else if value <= 0xFFFF_FFFF {
             output.push(0x12);
             // value <= 0xFFFFFFFF fits in u32
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Value checked to fit in u32"
+            )]
             output.extend_from_slice(&(value as u32).to_be_bytes());
         } else {
             output.push(0x13);
@@ -362,11 +393,17 @@ impl Encoder {
             // self.ref_size is fixed to 2.
             // But we checked number of objects <= 65535 in encode().
             1 => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Index fits in u8 (checked)"
+                )]
                 output.push(index as u8);
             }
             2 => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Index fits in u16 (checked)"
+                )]
                 output.extend_from_slice(&(index as u16).to_be_bytes());
             }
             _ => return Err(PlistEncodeError::ValueTooLarge), // Not supporting > 65535 yet
@@ -377,15 +414,24 @@ impl Encoder {
     fn write_sized_int(output: &mut Vec<u8>, value: u64, size: u8) {
         match size {
             1 => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Caller ensures value fits in 1 byte"
+                )]
                 output.push(value as u8);
             }
             2 => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Caller ensures value fits in 2 bytes"
+                )]
                 output.extend_from_slice(&(value as u16).to_be_bytes());
             }
             4 => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Caller ensures value fits in 4 bytes"
+                )]
                 output.extend_from_slice(&(value as u32).to_be_bytes());
             }
             8 => output.extend_from_slice(&value.to_be_bytes()),
