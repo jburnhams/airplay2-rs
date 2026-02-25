@@ -1020,8 +1020,8 @@ impl ConnectionManager {
                 });
 
                 let fmtp = format!(
-                    "mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=512;\
-                     config={asc_hex}"
+                    "mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
+                     constantDuration=512;config={asc_hex}"
                 );
                 (0x8, 512, 1 << 24, Some(fmtp))
             }
