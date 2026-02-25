@@ -38,10 +38,23 @@ impl PacketBuffer {
 
     /// Add a packet to the buffer
     pub fn push(&mut self, packet: BufferedPacket) {
-        if self.packets.len() >= self.max_size {
+        // Find insertion point to keep sorted by sequence number
+        // We use wrapping logic: diff(a, b) >= 0x8000 means a < b
+        let mut index = self.packets.len();
+        for (i, p) in self.packets.iter().enumerate() {
+            let diff = packet.sequence.wrapping_sub(p.sequence);
+            if diff >= 0x8000 {
+                index = i;
+                break;
+            }
+        }
+
+        self.packets.insert(index, packet);
+
+        // If buffer exceeds size, remove oldest (front)
+        while self.packets.len() > self.max_size {
             self.packets.pop_front();
         }
-        self.packets.push_back(packet);
     }
 
     /// Get a packet by sequence number
