@@ -75,7 +75,11 @@ impl PtpTimestamp {
 
     /// Convert to total microseconds since epoch.
     #[must_use]
-    #[allow(clippy::cast_possible_wrap)]
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "Timestamps are assumed to be within the range of i64 microseconds (approx \
+                  292,000 years)"
+    )]
     pub fn to_micros(&self) -> i64 {
         (self.seconds as i64 * 1_000_000) + (i64::from(self.nanoseconds) / 1_000)
     }
@@ -126,7 +130,10 @@ impl PtpTimestamp {
     ///
     /// Upper 48 bits = seconds, lower 16 bits = fraction (1/65536 seconds).
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Fractional part calculation is guaranteed to fit in u16"
+    )]
     pub fn to_airplay_compact(&self) -> u64 {
         let fraction =
             (u64::from(self.nanoseconds) * 65536 / u64::from(Self::NANOS_PER_SEC)) as u16;

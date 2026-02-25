@@ -79,7 +79,10 @@ impl DmapEncoder {
         match value {
             DmapValue::String(s) => {
                 // Write length (4 bytes, big-endian)
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP strings are limited to u32 length"
+                )]
                 let len = s.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 // Write string bytes
@@ -89,16 +92,25 @@ impl DmapEncoder {
                 // Determine appropriate size
                 if *n >= 0 && *n <= 255 {
                     self.buffer.extend_from_slice(&1u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation)]
-                    #[allow(clippy::cast_sign_loss)]
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        reason = "Value checked to be within u8 range"
+                    )]
                     self.buffer.push(*n as u8);
                 } else if i16::try_from(*n).is_ok() {
                     self.buffer.extend_from_slice(&2u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "Value checked to fit in i16"
+                    )]
                     self.buffer.extend_from_slice(&(*n as i16).to_be_bytes());
                 } else if i32::try_from(*n).is_ok() {
                     self.buffer.extend_from_slice(&4u32.to_be_bytes());
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "Value checked to fit in i32"
+                    )]
                     self.buffer.extend_from_slice(&(*n as i32).to_be_bytes());
                 } else {
                     self.buffer.extend_from_slice(&8u32.to_be_bytes());
@@ -114,13 +126,19 @@ impl DmapEncoder {
                 let inner_data = inner.finish();
 
                 // Write length and contents
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP container length limited to u32"
+                )]
                 let len = inner_data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 self.buffer.extend_from_slice(&inner_data);
             }
             DmapValue::Raw(data) => {
-                #[allow(clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "DMAP raw data length limited to u32"
+                )]
                 let len = data.len() as u32;
                 self.buffer.extend_from_slice(&len.to_be_bytes());
                 self.buffer.extend_from_slice(data);
@@ -156,7 +174,7 @@ impl Default for DmapEncoder {
 /// # Errors
 ///
 /// Returns `DmapDecodeError` if data is invalid.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Helper function for testing and debugging")]
 pub fn decode_dmap(data: &[u8]) -> Result<Vec<(String, String)>, DmapDecodeError> {
     let mut result = Vec::new();
     let mut pos = 0;
@@ -186,7 +204,7 @@ pub fn decode_dmap(data: &[u8]) -> Result<Vec<(String, String)>, DmapDecodeError
 }
 
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Helper function for testing and debugging")]
 pub enum DmapDecodeError {
     #[error("invalid tag")]
     InvalidTag,
