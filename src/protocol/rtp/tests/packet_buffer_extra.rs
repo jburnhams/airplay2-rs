@@ -1,5 +1,6 @@
-use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use bytes::Bytes;
+
+use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 
 #[test]
 fn test_packet_buffer_out_of_order() {
