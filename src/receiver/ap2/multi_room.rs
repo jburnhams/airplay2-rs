@@ -2,8 +2,9 @@
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
-use crate::protocol::ptp::{PtpClock, PtpRole, PtpTimestamp};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use crate::protocol::ptp::{PtpClock, PtpRole, PtpTimestamp};
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -173,10 +174,7 @@ impl MultiRoomCoordinator {
             Some(PlaybackCommand::StartAt { timestamp: target })
         } else {
             // Safe because we clamp to -500..500
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Clamped to i32 range"
-            )]
+            #[allow(clippy::cast_possible_truncation, reason = "Clamped to i32 range")]
             let rate_ppm = (drift_micros_i64 / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
