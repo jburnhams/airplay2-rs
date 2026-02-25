@@ -3,6 +3,7 @@ mod control;
 mod extra_packet;
 mod packet;
 mod packet_buffer;
+mod packet_buffer_extra;
 mod packet_extra;
 mod packet_proptest;
 mod raop;
