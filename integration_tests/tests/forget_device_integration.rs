@@ -68,7 +68,10 @@ async fn test_forget_device() {
         }
     }
 
-    let client = final_client.expect(&format!("Failed to connect after 5 attempts. Last error: {:?}", last_error));
+    let client = final_client.expect(&format!(
+        "Failed to connect after 5 attempts. Last error: {:?}",
+        last_error
+    ));
 
     // Verify keys are stored
     // We can't access client's storage directly easily.
