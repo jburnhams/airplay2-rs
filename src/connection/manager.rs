@@ -784,10 +784,10 @@ impl ConnectionManager {
                     let asc = encoder.get_asc().map_err(|_| AirPlayError::InternalError {
                         message: "Failed to get ASC".to_string(),
                     })?;
-                    let asc_hex = asc
-                        .iter()
-                        .map(|b| format!("{b:02X}"))
-                        .collect::<String>();
+                    let asc_hex = asc.iter().fold(String::new(), |mut output, b| {
+                        let _ = write!(output, "{b:02X}");
+                        output
+                    });
 
                     format!(
                         "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
@@ -1014,10 +1014,10 @@ impl ConnectionManager {
                 let asc = encoder.get_asc().map_err(|_| AirPlayError::InternalError {
                     message: "Failed to get ASC".to_string(),
                 })?;
-                let asc_hex = asc
-                    .iter()
-                    .map(|b| format!("{b:02X}"))
-                    .collect::<String>();
+                let asc_hex = asc.iter().fold(String::new(), |mut output, b| {
+                    let _ = write!(output, "{b:02X}");
+                    output
+                });
 
                 let fmtp = format!(
                     "mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=512;\
@@ -1025,7 +1025,7 @@ impl ConnectionManager {
                 );
                 (0x8, 512, 1 << 24, Some(fmtp))
             }
-            AudioCodec::Opus => (0x0, 480, 0, None),      // Not supported by standard receivers usually
+            AudioCodec::Opus => (0x0, 480, 0, None), // Not supported by standard receivers usually
         };
 
         // Note: audioFormat values are bitmasks or specific IDs.

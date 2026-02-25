@@ -89,7 +89,9 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
         if logs.contains("Found config in fmtp:") {
             tracing::info!("✓ Receiver found config in fmtp");
         } else {
-            tracing::warn!("Receiver did not confirm config in fmtp (might be logging level issue)");
+            tracing::warn!(
+                "Receiver did not confirm config in fmtp (might be logging level issue)"
+            );
         }
     }
 
