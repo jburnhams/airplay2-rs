@@ -143,7 +143,7 @@ impl JitterBuffer {
 
         // Check if packet is too old (behind playback point)
         if let Some(next_seq) = self.next_play_seq {
-            #[allow(clippy::cast_possible_wrap)]
+            #[allow(clippy::cast_possible_wrap, reason = "Standard sequence number difference calculation")]
             let diff = seq.wrapping_sub(next_seq) as i16;
             if diff < 0 {
                 // Packet is late
@@ -351,7 +351,7 @@ impl JitterBuffer {
 
     /// Get fill percentage (0.0 to 1.0)
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss, reason = "Buffer depth is small enough to fit in f64")]
     pub fn fill_ratio(&self) -> f64 {
         self.packets.len() as f64 / self.config.target_depth as f64
     }
@@ -365,7 +365,7 @@ impl JitterBuffer {
 
     /// Get estimated latency based on buffer depth
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss, reason = "Buffer depth is small enough to fit in f64")]
     pub fn estimated_latency(&self) -> Duration {
         let packets = self.packets.len() as f64;
         Duration::from_secs_f64(packets / self.config.packets_per_second)
@@ -373,7 +373,7 @@ impl JitterBuffer {
 
     /// Calculate packet loss rate
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_precision_loss, reason = "Packet count unlikely to exceed 2^53")]
     pub fn loss_rate(&self) -> f64 {
         let total = self.stats.packets_received + self.stats.packets_concealed;
         if total == 0 {
