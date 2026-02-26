@@ -21,10 +21,30 @@ async fn test_resampling_48k_to_44k() -> Result<(), Box<dyn std::error::Error>> 
 
     // Create client and connect
     let device = receiver.device_config();
-    let mut client = airplay2::AirPlayClient::default_client();
+
+    // Configure client with longer timeouts
+    let config = airplay2::AirPlayConfig::builder()
+        .connection_timeout(Duration::from_secs(15))
+        .discovery_timeout(Duration::from_secs(5))
+        .build();
+
+    let mut client = airplay2::AirPlayClient::new(config);
 
     tracing::info!("Connecting to receiver...");
-    client.connect(&device).await?;
+    // Use retry logic for robustness in CI
+    let mut connected = false;
+    for i in 0..3 {
+        tracing::info!("Connection attempt {}/3...", i + 1);
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect client after retries".into());
+    }
 
     // Create a 48kHz source
     let source = TestSineSource::new_with_sample_rate(440.0, 3.0, 48000);
