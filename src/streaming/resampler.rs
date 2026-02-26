@@ -1,8 +1,10 @@
 //! Audio resampling source using linear interpolation
 
-use crate::audio::{AudioFormat, SampleFormat, convert::convert_channels_into};
-use crate::streaming::source::AudioSource;
 use std::io;
+
+use crate::audio::convert::convert_channels_into;
+use crate::audio::{AudioFormat, SampleFormat};
+use crate::streaming::source::AudioSource;
 
 /// Audio source that performs sample rate conversion
 pub struct ResamplingSource {

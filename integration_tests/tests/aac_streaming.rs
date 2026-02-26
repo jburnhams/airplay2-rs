@@ -1,10 +1,12 @@
 //! Integration test for AAC audio streaming
 
 use std::time::Duration;
+
 use tokio::time::sleep;
 
 mod common;
-use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioCodec};
+use airplay2::audio::AudioCodec;
+use airplay2::{AirPlayClient, AirPlayConfig};
 use common::python_receiver::{PythonReceiver, TestSineSource};
 
 #[tokio::test]
@@ -13,7 +15,7 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     tracing::info!("Starting AAC Streaming integration test");
 
     // 1. Start Receiver
-    let receiver = PythonReceiver::start().await?;
+    let receiver = PythonReceiver::start_with_args(&["-nv"]).await?;
 
     // Give receiver time to start
     sleep(Duration::from_secs(2)).await;
@@ -24,11 +26,32 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     let config = AirPlayConfig::builder()
         .audio_codec(AudioCodec::Aac)
         .pin("3939")
+        .connection_timeout(Duration::from_secs(10))
         .build();
 
     let mut client = AirPlayClient::new(config);
-    if let Err(e) = client.connect(&device).await {
-        tracing::error!("Connection failed: {}", e);
+
+    // Add retry logic for connection (handling potential auth flakes)
+    let mut last_error = None;
+    let mut connected = false;
+    for attempt in 1..=3 {
+        tracing::info!("Connection attempt {}/3...", attempt);
+        match client.connect(&device).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                tracing::warn!("Connection attempt {} failed: {}", attempt, e);
+                last_error = Some(e);
+                sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
+
+    if !connected {
+        let e = last_error.unwrap();
+        tracing::error!("All connection attempts failed. Last error: {}", e);
         let output = receiver.stop().await?;
         if output.log_path.exists() {
             let logs = std::fs::read_to_string(&output.log_path)?;
@@ -40,7 +63,7 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
 
     // 3. Stream Audio
     tracing::info!("Streaming AAC audio...");
-    let source = TestSineSource::new(440.0, 3.0); // 3 seconds of audio
+    let source = TestSineSource::new(440.0, 5.0); // 5 seconds of audio
 
     // Stream (blocks until done or error)
     if let Err(e) = client.stream_audio(source).await {

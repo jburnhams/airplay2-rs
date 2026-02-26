@@ -4,6 +4,7 @@
 //! without needing to Pair-Setup again.
 
 use std::time::Duration;
+
 use tokio::time::sleep;
 
 mod common;
@@ -66,8 +67,9 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     let content = std::fs::read_to_string(&storage_path)?;
     tracing::info!("Storage content: {}", content);
     assert!(
-        content.contains("Integration-Test-Receiver"),
-        "Storage should contain device ID"
+        content.contains(&device.id),
+        "Storage should contain device ID '{}'",
+        device.id
     );
 
     // 5. Connect Client B (Reconnect with Pair-Verify)

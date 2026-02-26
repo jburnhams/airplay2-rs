@@ -1,7 +1,8 @@
 //! Connection state management
 
-use crate::types::AirPlayDevice;
 use std::time::Instant;
+
+use crate::types::AirPlayDevice;
 
 /// Connection state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

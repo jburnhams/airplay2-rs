@@ -3,12 +3,10 @@
 //! These tests verify that advertised services can be discovered
 //! by the existing browser functionality.
 
-use airplay2::discovery::{
-    DiscoveryOptions,
-    advertiser::{AdvertiserConfig, AsyncRaopAdvertiser, ReceiverStatusFlags},
-    scan_with_options,
-};
 use std::time::Duration;
+
+use airplay2::discovery::advertiser::{AdvertiserConfig, AsyncRaopAdvertiser, ReceiverStatusFlags};
+use airplay2::discovery::{DiscoveryOptions, scan_with_options};
 
 fn init_tracing() {
     let _ = tracing_subscriber::fmt()
@@ -50,8 +48,8 @@ async fn test_advertise_and_discover() {
     assert!(found.is_some(), "Service should be discoverable");
 
     let service = found.unwrap();
-    // Note: AirPlayDevice port might be the main port, which for RAOP-only devices is the RAOP port.
-    // The browser logic sets device.port = info.get_port() if only RAOP.
+    // Note: AirPlayDevice port might be the main port, which for RAOP-only devices is the RAOP
+    // port. The browser logic sets device.port = info.get_port() if only RAOP.
     assert_eq!(service.port, 15000);
 
     // Cleanup
@@ -94,6 +92,8 @@ async fn test_status_update_reflected_in_txt() {
     let services = scan_with_options(options).await.unwrap();
 
     let found = services.iter().find(|s| s.name.contains("Status Test"));
+    assert!(found.is_some(), "Service should be discoverable");
+
     if let Some(service) = found {
         let sf = service
             .txt_records

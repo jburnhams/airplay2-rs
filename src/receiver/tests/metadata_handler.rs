@@ -28,15 +28,18 @@ mod tests {
     #[test]
     fn test_parse_overflow_length() {
         // This test simulates a potential overflow scenario.
-        // On a 64-bit system, usize::MAX is huge, so we can't easily allocate a buffer that big to trigger "real" OOB
-        // if we just used `offset + length`.
+        // On a 64-bit system, usize::MAX is huge, so we can't easily allocate a buffer that big to
+        // trigger "real" OOB if we just used `offset + length`.
         // However, if we were on a 32-bit system, `length = u32::MAX` could wrap.
-        // The fix uses `checked_add`, so we want to ensure that if `offset + length` overflows `usize`, it fails gracefully.
+        // The fix uses `checked_add`, so we want to ensure that if `offset + length` overflows
+        // `usize`, it fails gracefully.
 
         // On 64-bit, u32::MAX + small_offset won't overflow usize (u64).
-        // So this test mainly verifies that *if* it were to overflow (e.g. if we had a hypothetical 32-bit test env), it handles it.
-        // But importantly, we can test that HUGE lengths that *would* be valid `usize` but are clearly OOB of the slice are caught by the `end_offset > data.len()` check.
-        // The `checked_add` protects against the wrap-around case which would bypass the length check.
+        // So this test mainly verifies that *if* it were to overflow (e.g. if we had a hypothetical
+        // 32-bit test env), it handles it. But importantly, we can test that HUGE lengths
+        // that *would* be valid `usize` but are clearly OOB of the slice are caught by the
+        // `end_offset > data.len()` check. The `checked_add` protects against the
+        // wrap-around case which would bypass the length check.
 
         let mut data = Vec::new();
         data.extend_from_slice(dmap_tags::ITEM_NAME);
@@ -52,8 +55,8 @@ mod tests {
         // 7 > data.len() (13) is FALSE.
         // Slice &data[8..7] -> Panic!
 
-        // Since we are likely running on 64-bit in this env, we can't easily reproduce the 32-bit overflow panic
-        // without mocking `usize` or using a 32-bit target.
+        // Since we are likely running on 64-bit in this env, we can't easily reproduce the 32-bit
+        // overflow panic without mocking `usize` or using a 32-bit target.
         // However, we CAN verify that the logic remains sound for normal "too big" values.
 
         let result = parse_dmap_metadata(&data);

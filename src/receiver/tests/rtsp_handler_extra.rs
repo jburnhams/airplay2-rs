@@ -1,8 +1,9 @@
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
 use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
 use crate::receiver::rtsp_handler::*;
 use crate::receiver::session::{ReceiverSession, SessionState};
 use crate::receiver::set_parameter_handler::ParameterUpdate;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 fn test_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345)
@@ -120,14 +121,14 @@ fn test_unsupported_method() {
     // But we can check Method::Get behavior which is basic
     let session = ReceiverSession::new(test_addr());
     let request = create_request(Method::Get);
-    // GET might be allowed or not depending on state, but handle_request might treat it as default/unknown
-    // Let's check handle_request impl.
+    // GET might be allowed or not depending on state, but handle_request might treat it as
+    // default/unknown Let's check handle_request impl.
     // match request.method { ... _ => handle_unknown(cseq) }
     // GET is explicitly handled? No, it falls to handle_unknown if not in the match arms.
     // Looking at `handle_request`:
     // match request.method {
-    //     Options => ..., Announce => ..., Setup => ..., Record => ..., Pause => ..., Flush => ..., Teardown => ...,
-    //     GetParameter => ..., SetParameter => ..., Post => ...,
+    //     Options => ..., Announce => ..., Setup => ..., Record => ..., Pause => ..., Flush => ...,
+    // Teardown => ...,     GetParameter => ..., SetParameter => ..., Post => ...,
     //     _ => handle_unknown(cseq),
     // }
     // GET is NOT in the list, so it should be Method Not Allowed

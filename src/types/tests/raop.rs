@@ -1,5 +1,6 @@
-use crate::types::raop::*;
 use std::collections::HashMap;
+
+use crate::types::raop::*;
 
 #[test]
 fn test_parse_capabilities_basic() {

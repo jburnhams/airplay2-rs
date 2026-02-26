@@ -27,9 +27,10 @@ fn test_connection_stats() {
 
 #[cfg(test)]
 mod ptp_integration_tests {
+    use std::collections::HashMap;
+
     use crate::connection::ConnectionManager;
     use crate::types::{AirPlayConfig, AirPlayDevice, DeviceCapabilities, TimingProtocol};
-    use std::collections::HashMap;
 
     fn make_device(supports_ptp: bool, airplay2: bool) -> AirPlayDevice {
         AirPlayDevice {
@@ -131,9 +132,9 @@ mod ptp_integration_tests {
 mod parsing_tests {
     #[test]
     fn test_transport_parsing() {
-        // This logic is internal to setup_session but we can test the parsing logic if we extract it.
-        // For now, since we cannot easily test private async methods without refactoring,
-        // we will verify the logic via inspection or integration tests.
+        // This logic is internal to setup_session but we can test the parsing logic if we extract
+        // it. For now, since we cannot easily test private async methods without
+        // refactoring, we will verify the logic via inspection or integration tests.
         // However, I can create a small test that mimics the parsing logic here to ensure it works.
 
         let transport_header =

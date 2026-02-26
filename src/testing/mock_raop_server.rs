@@ -3,15 +3,17 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_errors_doc)]
 
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+
+use tokio::net::{TcpListener, UdpSocket};
+use tokio::sync::broadcast;
+
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 #[cfg(feature = "raop")]
 use crate::protocol::crypto::RaopRsaPrivateKey;
 use crate::protocol::rtsp::{Headers, Method, RtspRequest};
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use tokio::net::{TcpListener, UdpSocket};
-use tokio::sync::broadcast;
 
 /// Mock RAOP server state
 #[derive(Debug, Clone, Default)]
@@ -445,7 +447,11 @@ impl MockRaopServer {
 
         let mut headers = Headers::new();
         headers.insert("CSeq", request.headers.cseq().unwrap_or(0).to_string());
-        headers.insert("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER");
+        headers.insert(
+            "Public",
+            "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, \
+             SET_PARAMETER",
+        );
 
         // Handle Apple-Challenge if present
         if config.require_challenge {
@@ -517,8 +523,9 @@ impl MockRaopServer {
         state: &Arc<Mutex<MockRaopState>>,
         config: &MockRaopConfig,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
         use rand::Rng;
+
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
         let session_id = format!("{:016X}", rand::thread_rng().r#gen::<u64>());
 

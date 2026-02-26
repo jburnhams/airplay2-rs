@@ -16,12 +16,8 @@ fn test_parse_options_request() {
 fn test_parse_announce_with_sdp() {
     let sdp = "v=0\r\no=- 0 0 IN IP4 192.168.1.100\r\ns=AirTunes\r\n";
     let request_str = format!(
-        "ANNOUNCE rtsp://192.168.1.1/1234 RTSP/1.0\r\n\
-         CSeq: 2\r\n\
-         Content-Type: application/sdp\r\n\
-         Content-Length: {}\r\n\
-         \r\n\
-         {}",
+        "ANNOUNCE rtsp://192.168.1.1/1234 RTSP/1.0\r\nCSeq: 2\r\nContent-Type: \
+         application/sdp\r\nContent-Length: {}\r\n\r\n{}",
         sdp.len(),
         sdp
     );
@@ -154,8 +150,7 @@ fn test_body_too_large() {
     // MAX_BODY_SIZE is 16MB
     let content_length = 16 * 1024 * 1024 + 1;
     let request = format!(
-        "SET_PARAMETER rtsp://example.com RTSP/1.0\r\n\
-         Content-Length: {content_length}\r\n\r\n"
+        "SET_PARAMETER rtsp://example.com RTSP/1.0\r\nContent-Length: {content_length}\r\n\r\n"
     );
     codec.feed(request.as_bytes());
 
@@ -173,8 +168,8 @@ fn test_body_too_large() {
 #[test]
 fn test_invalid_content_length() {
     let mut codec = RtspServerCodec::new();
-    let request = "SET_PARAMETER rtsp://example.com RTSP/1.0\r\n\
-                   Content-Length: not_a_number\r\n\r\n";
+    let request =
+        "SET_PARAMETER rtsp://example.com RTSP/1.0\r\nContent-Length: not_a_number\r\n\r\n";
     codec.feed(request.as_bytes());
 
     let result = codec.decode();
@@ -263,10 +258,10 @@ fn test_feed_splitting() {
 #[test]
 fn test_unsupported_chunked_encoding() {
     let mut codec = RtspServerCodec::new();
-    // Assuming implementation doesn't support chunked, it might treat it as 0 length body if Content-Length is missing
-    let request = "SET_PARAMETER * RTSP/1.0\r\n\
-                   Transfer-Encoding: chunked\r\n\r\n\
-                   5\r\nhello\r\n0\r\n\r\n";
+    // Assuming implementation doesn't support chunked, it might treat it as 0 length body if
+    // Content-Length is missing
+    let request =
+        "SET_PARAMETER * RTSP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
     codec.feed(request.as_bytes());
 
     let decoded = codec.decode().unwrap().unwrap();

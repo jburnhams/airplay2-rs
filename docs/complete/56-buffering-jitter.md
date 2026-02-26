@@ -312,14 +312,14 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Frames buffered by RTP timestamp
-- [ ] Smooth transition from buffering to playing
-- [ ] Loss concealment for missing frames
-- [ ] Overflow handling with oldest frame removal
-- [ ] Underrun detection
-- [ ] Flush support for seek/stop
-- [ ] Statistics tracking
-- [ ] All unit tests pass
+- [x] Frames buffered by RTP timestamp
+- [x] Smooth transition from buffering to playing
+- [x] Loss concealment for missing frames
+- [x] Overflow handling with oldest frame removal
+- [x] Underrun detection
+- [x] Flush support for seek/stop
+- [x] Statistics tracking
+- [x] All unit tests pass
 
 ---
 

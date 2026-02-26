@@ -1,5 +1,12 @@
 //! PCM audio streaming to `AirPlay` devices
 
+use std::borrow::Cow;
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use tokio::sync::{Mutex, RwLock, mpsc};
+
 use super::ResamplingSource;
 use super::source::AudioSource;
 use crate::audio::aac_encoder::AacEncoder;
@@ -7,12 +14,6 @@ use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::rtp::RtpCodec;
-
-use async_trait::async_trait;
-use std::borrow::Cow;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// RTP packet sender trait
 #[async_trait]
@@ -106,11 +107,15 @@ impl PcmStreamer {
 
     /// Create a new PCM streamer
     #[must_use]
-    pub fn new<C: RtpSender + 'static>(connection: Arc<C>, format: AudioFormat) -> Self {
+    pub fn new<C: RtpSender + 'static>(
+        connection: Arc<C>,
+        format: AudioFormat,
+        buffer_frames: usize,
+    ) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
 
-        // Buffer for ~500ms of audio
-        let buffer_size = format.duration_to_bytes(Duration::from_millis(500));
+        // Buffer size in bytes based on frame count
+        let buffer_size = buffer_frames * format.bytes_per_frame();
         let buffer = Arc::new(AudioRingBuffer::new(buffer_size));
 
         // SSRC for RTP

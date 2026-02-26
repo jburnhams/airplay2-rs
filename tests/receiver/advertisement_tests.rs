@@ -1,8 +1,9 @@
 //! Integration tests for AirPlay 2 service advertisement
 
+use std::time::Duration;
+
 use airplay2::discovery;
 use airplay2::receiver::ap2::{Ap2Config, Ap2ServiceAdvertiser};
-use std::time::Duration;
 
 /// Test that we can advertise and discover our own service
 #[tokio::test]

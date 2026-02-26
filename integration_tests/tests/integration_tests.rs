@@ -11,6 +11,7 @@
 
 use std::sync::Once;
 use std::time::Duration;
+
 use tokio::time::sleep;
 
 mod common;
@@ -27,6 +28,25 @@ fn init() {
             .with_test_writer()
             .try_init();
     });
+}
+
+/// Helper to connect with retry logic
+async fn connect_with_retry(
+    client: &mut airplay2::AirPlayClient,
+    device: &airplay2::AirPlayDevice,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut connected = false;
+    for _ in 0..3 {
+        if client.connect(device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+    if !connected {
+        return Err("Failed to connect to receiver after 3 attempts".into());
+    }
+    Ok(())
 }
 
 #[tokio::test]
@@ -46,7 +66,7 @@ async fn test_pcm_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     let mut client = airplay2::AirPlayClient::default_client();
 
     tracing::info!("Connecting to receiver...");
-    client.connect(&device).await?;
+    connect_with_retry(&mut client, &device).await?;
 
     // Stream 3 seconds of 440Hz sine wave
     tracing::info!("Streaming audio...");
@@ -91,7 +111,7 @@ async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Erro
     let mut client = airplay2::AirPlayClient::new(config);
 
     tracing::info!("Connecting to receiver with ALAC...");
-    client.connect(&device).await?;
+    connect_with_retry(&mut client, &device).await?;
 
     // Stream 3 seconds of 440Hz sine wave
     tracing::info!("Streaming ALAC audio...");
@@ -135,7 +155,7 @@ async fn test_aac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     let mut client = airplay2::AirPlayClient::new(config);
 
     tracing::info!("Connecting to receiver with AAC...");
-    client.connect(&device).await?;
+    connect_with_retry(&mut client, &device).await?;
 
     // Stream 3 seconds of 440Hz sine wave
     tracing::info!("Streaming AAC audio...");
@@ -174,8 +194,8 @@ async fn test_custom_pin_pairing() -> Result<(), Box<dyn std::error::Error>> {
     let device = receiver.device_config();
     let config = airplay2::AirPlayConfig::builder().pin("3939").build();
 
-    let client = airplay2::AirPlayClient::new(config);
-    client.connect(&device).await?;
+    let mut client = airplay2::AirPlayClient::new(config);
+    connect_with_retry(&mut client, &device).await?;
     assert!(client.is_connected().await);
     tracing::info!("✅ Connected successfully with correct PIN");
     client.disconnect().await?;

@@ -2,8 +2,9 @@
 //!
 //! Run with: `cargo run --example play_mp3 --features decoders`
 
-use airplay2::AirPlayPlayer;
 use std::time::Duration;
+
+use airplay2::AirPlayPlayer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

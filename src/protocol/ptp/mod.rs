@@ -31,6 +31,7 @@
 pub mod clock;
 pub mod handler;
 pub mod message;
+pub mod node;
 pub mod timestamp;
 
 #[cfg(test)]
@@ -46,4 +47,5 @@ pub use message::{
     AirPlayTimingPacket, PtpHeader, PtpMessage, PtpMessageBody, PtpMessageType, PtpParseError,
     PtpPortIdentity,
 };
+pub use node::{EffectiveRole, PtpNode, PtpNodeConfig, create_client_node};
 pub use timestamp::PtpTimestamp;

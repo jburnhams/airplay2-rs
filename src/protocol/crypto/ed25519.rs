@@ -1,5 +1,6 @@
-use super::{CryptoError, lengths};
 use ed25519_dalek::{Signer, Verifier};
+
+use super::{CryptoError, lengths};
 
 /// Ed25519 key pair for signing
 pub struct Ed25519KeyPair {

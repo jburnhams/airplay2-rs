@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -20,8 +21,12 @@ pub struct PythonReceiver {
     _temp_dir: Option<TempDir>,
     // Detected port
     port: u16,
+    // detected MAC address
+    mac: Option<String>,
     // Flag to ensure logs are written once
     logs_written: bool,
+    // Unique name for this receiver
+    name: String,
 }
 
 impl PythonReceiver {
@@ -32,9 +37,16 @@ impl PythonReceiver {
 
     /// Start the Python receiver with additional arguments
     pub async fn start_with_args(args: &[&str]) -> Result<Self, Box<dyn std::error::Error>> {
+        // Generate unique name
+        let random_id: u32 = rand::random();
+        let name = format!("Receiver-{}", random_id);
+
         // Locate source directory
         let mut source_dir = std::env::current_dir()?.join("airplay2-receiver");
-        #[allow(clippy::collapsible_if)]
+        #[allow(
+            clippy::collapsible_if,
+            reason = "Nested if-let needed to check parent directory"
+        )]
         if !source_dir.exists() {
             if let Some(parent) = std::env::current_dir()?.parent() {
                 let parent_dir = parent.join("airplay2-receiver");
@@ -74,7 +86,11 @@ impl PythonReceiver {
         // Restore .gitignore to keep repo clean (though irrelevant in temp, good practice)
         fs::write(pairings_dir.join(".gitignore"), "*\n!.gitignore\n")?;
 
-        tracing::info!("Starting Python receiver on interface: {}", interface);
+        tracing::info!(
+            "Starting Python receiver '{}' on interface: {}",
+            name,
+            interface
+        );
         tracing::debug!("Source dir: {:?}", source_dir);
         tracing::debug!("Output/Temp dir: {:?}", output_dir);
         tracing::debug!("Script path: {:?}", output_dir.join("ap2-receiver.py"));
@@ -91,7 +107,9 @@ impl PythonReceiver {
         command
             .arg("ap2-receiver.py")
             .arg("--netiface")
-            .arg(&interface);
+            .arg(&interface)
+            .arg("-m")
+            .arg(&name);
 
         // Check if port is already in args
         if !args.contains(&"-p") && !args.contains(&"--port") {
@@ -128,6 +146,7 @@ impl PythonReceiver {
         #[allow(unused_assignments)]
         let mut found_serving = false;
         let mut actual_port = 7000; // Default fallback
+        let mut actual_mac = None;
 
         loop {
             if start.elapsed() > timeout {
@@ -156,15 +175,22 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDOUT: {}", line));
                             }
+                            if line.contains("[Receiver]: Mac:")
+                                && let Some(mac) = line.split("Mac:").nth(1) {
+                                    let mac = mac.trim().to_string();
+                                    tracing::info!("Detected receiver MAC: {}", mac);
+                                    actual_mac = Some(mac);
+                                }
                             if line.contains("serving on") {
                                 tracing::info!("✓ Python receiver started: {}", line.trim());
                                 found_serving = true;
-                                #[allow(clippy::collapsible_if)]
-                                if let Some(port_str) = line.split(':').next_back() {
-                                    if let Ok(p) = port_str.trim().parse::<u16>() {
-                                        actual_port = p;
-                                        tracing::info!("Detected receiver port: {}", actual_port);
-                                    }
+                                if let Some(p) = line
+                                    .split(':')
+                                    .next_back()
+                                    .and_then(|s| s.trim().parse::<u16>().ok())
+                                {
+                                    actual_port = p;
+                                    tracing::info!("Detected receiver port: {}", actual_port);
                                 }
                                 break;
                             }
@@ -180,6 +206,12 @@ impl PythonReceiver {
                             if let Ok(mut logs) = log_buffer.lock() {
                                 logs.push(format!("STDERR: {}", line));
                             }
+                            if line.contains("[Receiver]: Mac:")
+                                && let Some(mac) = line.split("Mac:").nth(1) {
+                                    let mac = mac.trim().to_string();
+                                    tracing::info!("Detected receiver MAC: {}", mac);
+                                    actual_mac = Some(mac);
+                                }
                             if line.contains("serving on") {
                                 tracing::info!(
                                     "✓ Python receiver started (detected in stderr): {}",
@@ -248,7 +280,9 @@ impl PythonReceiver {
             log_buffer,
             _temp_dir: Some(temp_dir),
             port: actual_port,
+            mac: actual_mac,
             logs_written: false,
+            name,
         })
     }
 
@@ -289,11 +323,12 @@ impl PythonReceiver {
                 return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
             }
 
-            #[allow(clippy::collapsible_if)]
-            if let Ok(guard) = self.log_buffer.lock() {
-                if guard.iter().any(|line| line.contains(pattern)) {
-                    return Ok(());
-                }
+            if self
+                .log_buffer
+                .lock()
+                .is_ok_and(|guard| guard.iter().any(|line| line.contains(pattern)))
+            {
+                return Ok(());
             }
 
             sleep(Duration::from_millis(100)).await;
@@ -365,7 +400,7 @@ impl PythonReceiver {
             use nix::unistd::Pid;
             if let Some(id) = self.process.id() {
                 let pid = Pid::from_raw(id as i32);
-                let _ = kill(pid, Signal::SIGTERM);
+                let _ = kill(pid, Signal::SIGINT);
             }
         }
 
@@ -432,9 +467,14 @@ impl PythonReceiver {
     pub fn device_config(&self) -> airplay2::AirPlayDevice {
         use std::collections::HashMap;
 
+        let id = self
+            .mac
+            .clone()
+            .unwrap_or_else(|| "Integration-Test-Receiver".to_string());
+
         airplay2::AirPlayDevice {
-            id: "Integration-Test-Receiver".to_string(),
-            name: "Integration-Test-Receiver".to_string(),
+            id: id.clone(),
+            name: id,
             model: Some("AirPlay2-Receiver".to_string()),
             addresses: vec!["127.0.0.1".parse().unwrap()],
             port: self.port, // Use detected port
@@ -570,7 +610,8 @@ impl ReceiverOutput {
         let frequency_tolerance = expected_frequency * 0.05; // 5% tolerance
 
         tracing::info!(
-            "Frequency analysis - expected: {}Hz, estimated: {:.1}Hz, error: {:.1}Hz, tolerance: {:.1}Hz",
+            "Frequency analysis - expected: {}Hz, estimated: {:.1}Hz, error: {:.1}Hz, tolerance: \
+             {:.1}Hz",
             expected_frequency,
             estimated_frequency,
             frequency_error,
@@ -579,12 +620,11 @@ impl ReceiverOutput {
 
         if check_frequency && frequency_error > frequency_tolerance {
             return Err(format!(
-                "Frequency mismatch: expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz tolerance)",
-                expected_frequency,
-                estimated_frequency,
-                frequency_error,
-                frequency_tolerance
-            ).into());
+                "Frequency mismatch: expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz \
+                 tolerance)",
+                expected_frequency, estimated_frequency, frequency_error, frequency_tolerance
+            )
+            .into());
         }
 
         // 4. Check for continuity (shouldn't have long runs of zeros)

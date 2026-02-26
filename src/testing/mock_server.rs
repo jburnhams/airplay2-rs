@@ -4,18 +4,20 @@
 //! to test the client functionality without requiring real hardware. It supports
 //! basic RTSP negotiation, audio data reception (stub), and control commands.
 
-use crate::net::{AsyncReadExt, AsyncWriteExt};
-use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
-use crate::protocol::rtp::RtpPacket;
-use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
-
 use std::fmt::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{RwLock, mpsc};
+
+use crate::net::{AsyncReadExt, AsyncWriteExt};
+use crate::protocol::crypto::Ed25519KeyPair;
+use crate::protocol::rtp::RtpPacket;
+use crate::protocol::rtsp::{Headers, Method, RtspRequest, StatusCode};
+use crate::receiver::ap2::PairingServer;
 
 /// Configuration for the Mock `AirPlay` Server.
 #[derive(Debug, Clone)]
@@ -54,7 +56,6 @@ impl Default for MockServerConfig {
 }
 
 /// Internal state of the Mock Server.
-#[derive(Debug, Default)]
 struct ServerState {
     /// Whether the server is currently in a streaming state.
     streaming: bool,
@@ -66,8 +67,8 @@ struct ServerState {
     volume: f32,
     /// Whether the client is paired.
     paired: bool,
-    /// Current state of the pairing process.
-    pairing_state: u8,
+    /// Pairing server instance
+    pairing_server: PairingServer,
 }
 
 /// A Mock `AirPlay` server.
@@ -89,9 +90,20 @@ impl MockServer {
     /// Creates a new `MockServer` with the specified configuration.
     #[must_use]
     pub fn new(config: MockServerConfig) -> Self {
+        let identity = Ed25519KeyPair::generate();
+        let mut pairing_server = PairingServer::new(identity);
+        pairing_server.set_password("3939");
+
         Self {
             config,
-            state: Arc::new(RwLock::new(ServerState::default())),
+            state: Arc::new(RwLock::new(ServerState {
+                streaming: false,
+                session_id: None,
+                audio_packets: Vec::new(),
+                volume: 0.0,
+                paired: false,
+                pairing_server,
+            })),
             shutdown: None,
             address: None,
         }
@@ -186,17 +198,64 @@ impl MockServer {
         state: Arc<RwLock<ServerState>>,
         config: MockServerConfig,
     ) {
+        use byteorder::{ByteOrder, LittleEndian};
+
+        use crate::net::secure::HapSecureSession;
+
         let mut buffer = Vec::new();
+        let mut raw_buffer = Vec::new();
         let mut temp_buf = vec![0u8; 4096];
+        let mut secure_session: Option<HapSecureSession> = None;
 
         loop {
+            // Check for keys to enable encryption (only if not already enabled)
+            if secure_session.is_none() {
+                let state_guard = state.read().await;
+                if let Some(keys) = state_guard.pairing_server.encryption_keys() {
+                    // Keys in PairingServer are named from Client perspective (or derivation
+                    // strings perspective): encrypt_key =
+                    // Control-Write-Encryption-Key (Client Encrypts, Server Decrypts)
+                    // decrypt_key = Control-Read-Encryption-Key (Client Decrypts, Server Encrypts)
+                    //
+                    // HapSecureSession::new(encrypt_key, decrypt_key)
+                    // We are the Server. We encrypt with "Control-Read" and decrypt with
+                    // "Control-Write".
+                    secure_session =
+                        Some(HapSecureSession::new(&keys.decrypt_key, &keys.encrypt_key));
+                }
+            }
+
             // Read data from the stream
             let n = match stream.read(&mut temp_buf).await {
                 Ok(0) | Err(_) => break, // Connection closed or Error
                 Ok(n) => n,
             };
 
-            buffer.extend_from_slice(&temp_buf[..n]);
+            if let Some(session) = &mut secure_session {
+                raw_buffer.extend_from_slice(&temp_buf[..n]);
+                // Decrypt loop
+                while raw_buffer.len() > 2 {
+                    let length = LittleEndian::read_u16(&raw_buffer[0..2]) as usize;
+                    let total_len = 2 + length + 16;
+
+                    if raw_buffer.len() >= total_len {
+                        let block = raw_buffer.drain(..total_len).collect::<Vec<_>>();
+                        match session.decrypt_block(&block) {
+                            Ok((plaintext, _)) => {
+                                buffer.extend_from_slice(&plaintext);
+                            }
+                            Err(e) => {
+                                tracing::error!("Decryption failed: {}", e);
+                                return;
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                buffer.extend_from_slice(&temp_buf[..n]);
+            }
 
             // Try to parse requests loop (in case multiple requests are buffered)
             loop {
@@ -211,10 +270,28 @@ impl MockServer {
                                 .await;
                         }
 
+                        // Determine if we should encrypt response based on CURRENT session state
+                        // (before processing which might update keys)
+                        // Actually, if secure_session is set, we encrypt.
+                        let was_encrypted = secure_session.is_some();
+
                         let response = Self::handle_request(&request, &state, &config).await;
 
-                        // Write the response back to the stream
-                        if stream.write_all(&response).await.is_err() {
+                        if was_encrypted {
+                            if let Some(session) = &mut secure_session {
+                                match session.encrypt(&response) {
+                                    Ok(encrypted) => {
+                                        if stream.write_all(&encrypted).await.is_err() {
+                                            return;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Encryption failed: {}", e);
+                                        return;
+                                    }
+                                }
+                            }
+                        } else if stream.write_all(&response).await.is_err() {
                             return;
                         }
                     }
@@ -222,11 +299,16 @@ impl MockServer {
                     Err(()) => {
                         // Parse error, clear buffer or disconnect?
                         // For now disconnect
+                        // Reset pairing state on disconnect to allow new connections to start fresh
+                        state.write().await.pairing_server.reset();
                         return;
                     }
                 }
             }
         }
+
+        // Connection closed cleanly
+        state.write().await.pairing_server.reset();
     }
 
     /// Tries to parse an RTSP request from the buffer.
@@ -290,6 +372,7 @@ impl MockServer {
     }
 
     /// Processes a request and generates a response.
+    #[allow(clippy::too_many_lines)]
     async fn handle_request(
         request: &RtspRequest,
         state: &Arc<RwLock<ServerState>>,
@@ -303,7 +386,8 @@ impl MockServer {
                 cseq,
                 None,
                 Some(
-                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, GET_PARAMETER, POST, PLAY",
+                    "Public: SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, SET_PARAMETER, \
+                     GET_PARAMETER, POST, PLAY",
                 ),
             ),
             Method::Setup => {
@@ -322,17 +406,36 @@ impl MockServer {
                 let session_id = state.session_id.clone().unwrap();
 
                 let response = format!(
-                    "RTSP/1.0 200 OK\r\n\
-                     CSeq: {cseq}\r\n\
-                     Session: {session_id}\r\n\
-                     Transport: {transport}\r\n\
-                     \r\n",
+                    "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: {session_id}\r\nTransport: \
+                     {transport}\r\n\r\n",
                 );
 
                 response.into_bytes()
             }
             Method::Record | Method::Play => {
                 state.write().await.streaming = true;
+                Self::response(StatusCode::OK, cseq, None, None)
+            }
+            Method::SetRateAnchorTime => {
+                // Parse body to check rate
+                let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
+                    if let Some(dict) = plist.as_dict() {
+                        if let Some(rate) = dict
+                            .get("rate")
+                            .and_then(crate::protocol::plist::PlistValue::as_f64)
+                        {
+                            rate.abs() > f64::EPSILON
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+
+                state.write().await.streaming = streaming;
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {
@@ -358,16 +461,70 @@ impl MockServer {
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::GetParameter => {
-                let volume = state.read().await.volume;
-                let body = format!("volume: {volume:.6}\r\n");
-                Self::response(StatusCode::OK, cseq, None, Some(&body))
+                if request.uri.ends_with("/info") {
+                    use std::collections::HashMap;
+
+                    use crate::protocol::plist::{PlistValue, encode};
+
+                    let mut dict = HashMap::new();
+                    dict.insert(
+                        "manufacturer".to_string(),
+                        PlistValue::String("OpenAirplay".to_string()),
+                    );
+                    dict.insert(
+                        "model".to_string(),
+                        PlistValue::String("MockServer".to_string()),
+                    );
+                    dict.insert(
+                        "name".to_string(),
+                        PlistValue::String("Mock Device".to_string()),
+                    );
+                    // Add supported features (AirPlay 2, Audio, etc.)
+                    // Bit 48 (AirPlay 2), Bit 9 (Audio) -> 1<<48 | 1<<9
+                    let features: u64 = (1 << 48) | (1 << 9) | (1 << 40); // + PTP
+                    dict.insert(
+                        "features".to_string(),
+                        PlistValue::UnsignedInteger(features),
+                    );
+
+                    let body = encode(&PlistValue::Dictionary(dict)).unwrap_or_default();
+                    Self::response_binary(
+                        StatusCode::OK,
+                        cseq,
+                        None,
+                        Some(&body),
+                        Some("application/x-apple-binary-plist"),
+                    )
+                } else {
+                    let volume = state.read().await.volume;
+                    let body = format!("volume: {volume:.6}\r\n");
+                    Self::response(StatusCode::OK, cseq, None, Some(&body))
+                }
             }
             Method::Post => {
-                // Handle pairing
-                if config.accept_pairing {
-                    Self::handle_pairing(request, state).await
+                if request.uri.ends_with("/auth-setup") {
+                    // Just accept auth-setup with OK
+                    // Use binary 32 bytes (curve25519 public key stub)
+                    let body = [0u8; 32];
+                    Self::response_binary(
+                        StatusCode::OK,
+                        cseq,
+                        None,
+                        Some(&body),
+                        Some("application/octet-stream"),
+                    )
+                } else if request.uri.ends_with("/pair-setup")
+                    || request.uri.ends_with("/pair-verify")
+                {
+                    if config.accept_pairing {
+                        Self::handle_pairing(request, state).await
+                    } else {
+                        Self::response(StatusCode::UNAUTHORIZED, cseq, None, None)
+                    }
                 } else {
-                    Self::response(StatusCode::UNAUTHORIZED, cseq, None, None)
+                    // Generic POST command (like /next, /prev, /ctrl-int/1/nextitem)
+                    // Just accept it for mock
+                    Self::response(StatusCode::OK, cseq, None, None)
                 }
             }
             _ => Self::response(StatusCode::NOT_IMPLEMENTED, cseq, None, None),
@@ -377,43 +534,32 @@ impl MockServer {
     /// Handles pairing requests (POST).
     async fn handle_pairing(request: &RtspRequest, state: &Arc<RwLock<ServerState>>) -> Vec<u8> {
         let cseq = request.headers.cseq().unwrap_or(0);
+        let mut state_guard = state.write().await;
 
-        // Parse TLV from body
-        let Ok(tlv) = TlvDecoder::decode(&request.body) else {
-            return Self::response(StatusCode::NOT_ACCEPTABLE, cseq, None, None);
+        let result = if request.uri.ends_with("/pair-setup") {
+            state_guard.pairing_server.process_pair_setup(&request.body)
+        } else if request.uri.ends_with("/pair-verify") {
+            state_guard
+                .pairing_server
+                .process_pair_verify(&request.body)
+        } else {
+            return Self::response(StatusCode::NOT_FOUND, cseq, None, None);
         };
 
-        let request_state = tlv.get_state().unwrap_or(0);
-
-        let response_body = match request_state {
-            1 => {
-                // M1 -> M2: Send public key
-                state.write().await.pairing_state = 2;
-                TlvEncoder::new()
-                    .add_state(2)
-                    .add(TlvType::PublicKey, &[0u8; 32]) // Dummy key
-                    .build()
-            }
-            3 => {
-                // M3 -> M4: Accept and complete
-                state.write().await.pairing_state = 4;
-                state.write().await.paired = true;
-                TlvEncoder::new().add_state(4).build()
-            }
-            _ => {
-                return Self::response(StatusCode::NOT_ACCEPTABLE, cseq, None, None);
-            }
-        };
+        if result.complete {
+            state_guard.paired = true;
+        }
 
         // Re-generate response
         let mut response_vec = format!(
-            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: {}\r\n\r\n",
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: {}\r\nContent-Type: \
+             application/pairing+tlv8\r\n\r\n",
             cseq,
-            response_body.len()
+            result.response.len()
         )
         .into_bytes();
 
-        response_vec.extend_from_slice(&response_body);
+        response_vec.extend_from_slice(&result.response);
         response_vec
     }
 
@@ -423,6 +569,23 @@ impl MockServer {
         cseq: u32,
         session: Option<&str>,
         body: Option<&str>,
+    ) -> Vec<u8> {
+        Self::response_binary(
+            status,
+            cseq,
+            session,
+            body.map(str::as_bytes),
+            Some("text/parameters"),
+        )
+    }
+
+    /// Helper to build an RTSP response with binary body.
+    fn response_binary(
+        status: StatusCode,
+        cseq: u32,
+        session: Option<&str>,
+        body: Option<&[u8]>,
+        content_type: Option<&str>,
     ) -> Vec<u8> {
         let reason = match status.0 {
             200 => "OK",
@@ -441,13 +604,19 @@ impl MockServer {
             let _ = write!(response, "Session: {session}\r\n");
         }
 
-        if let Some(body) = body {
-            let _ = write!(response, "Content-Length: {}\r\n\r\n{body}", body.len());
-        } else {
-            response.push_str("\r\n");
+        if let Some(ct) = content_type {
+            let _ = write!(response, "Content-Type: {ct}\r\n");
         }
 
-        response.into_bytes()
+        if let Some(body) = body {
+            let _ = write!(response, "Content-Length: {}\r\n\r\n", body.len());
+            let mut v = response.into_bytes();
+            v.extend_from_slice(body);
+            v
+        } else {
+            response.push_str("\r\n");
+            response.into_bytes()
+        }
     }
 }
 

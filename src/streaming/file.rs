@@ -2,12 +2,11 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-
 use symphonia::core::audio::{AudioBufferRef, Signal};
 use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
 use symphonia::core::conv::IntoSample;
 use symphonia::core::formats::{FormatOptions, FormatReader};
+use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 
 use super::source::AudioSource;

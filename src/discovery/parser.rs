@@ -1,7 +1,8 @@
 //! Parser for `AirPlay` TXT record data
 
-use crate::types::DeviceCapabilities;
 use std::collections::HashMap;
+
+use crate::types::DeviceCapabilities;
 
 /// Parse TXT records from mDNS response
 #[must_use]

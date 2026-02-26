@@ -171,7 +171,7 @@ impl PtpSlaveHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_packet(&general_buf[..len], src);
+                    self.handle_general_packet(&general_buf[..len], src).await;
                     // Check if a Delay_Resp arrived on the general port and
                     // we have all four timestamps to complete a timing exchange.
                     self.try_complete_timing().await;
@@ -336,7 +336,7 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
+    async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
         if self.config.use_airplay_format {
             return;
         }

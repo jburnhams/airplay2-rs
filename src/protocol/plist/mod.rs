@@ -10,10 +10,10 @@ pub mod airplay;
 pub mod decode;
 pub mod encode;
 
+use std::collections::HashMap;
+
 pub use decode::{PlistDecodeError, decode};
 pub use encode::{PlistEncodeError, encode};
-
-use std::collections::HashMap;
 
 /// A property list value
 #[derive(Debug, Clone, PartialEq)]

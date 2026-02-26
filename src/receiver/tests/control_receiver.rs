@@ -1,9 +1,11 @@
-use crate::receiver::control_receiver::*;
 use std::sync::Arc;
 use std::time::Duration;
+
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+
+use crate::receiver::control_receiver::*;
 
 struct ControlReceiverFixture {
     sender_socket: UdpSocket,

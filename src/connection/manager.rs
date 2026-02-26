@@ -1,21 +1,23 @@
 //! Connection manager for `AirPlay` devices
 #![allow(dead_code)]
 
+use std::fmt::Write;
+use std::sync::Arc;
+
+use tokio::net::UdpSocket;
+use tokio::sync::{Mutex, RwLock, broadcast};
+
 use super::state::{ConnectionEvent, ConnectionState, ConnectionStats, DisconnectReason};
 use crate::audio::AudioCodec;
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt, Runtime, TcpStream};
+use crate::protocol::pairing::storage::StorageError;
 use crate::protocol::pairing::{
     AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
 };
 use crate::protocol::ptp::{PtpHandlerConfig, PtpRole, SharedPtpClock, create_shared_clock};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice, TimingProtocol};
-
-use std::fmt::Write;
-use std::sync::Arc;
-use tokio::net::UdpSocket;
-use tokio::sync::{Mutex, RwLock, broadcast};
 
 /// Connection manager handles device connections
 pub struct ConnectionManager {
@@ -259,6 +261,29 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Remove pairing for a device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if removal fails
+    pub async fn remove_pairing(&self, device_id: &str) -> Result<(), AirPlayError> {
+        if let Some(ref mut storage) = *self.pairing_storage.lock().await {
+            storage.remove(device_id).await.map_err(|e| match e {
+                StorageError::Io(err) => AirPlayError::IoError {
+                    message: format!("Failed to remove pairing: {err}"),
+                    source: Some(Box::new(err)),
+                },
+                StorageError::Serialization(msg) => AirPlayError::InternalError {
+                    message: format!("Storage serialization error: {msg}"),
+                },
+                StorageError::NotAvailable => AirPlayError::InternalError {
+                    message: "Storage not available".to_string(),
+                },
+            })?;
+        }
+        Ok(())
+    }
+
     /// Send RTSP OPTIONS and process response
     async fn send_options(&self) -> Result<(), AirPlayError> {
         let request = {
@@ -475,9 +500,9 @@ impl ConnectionManager {
         // If PIN is "3939", assume transient mode (for AirPort Express 2)
         // Note: For persistent pairing test, we disable this override.
         // In a real app, this logic needs to be smarter (maybe try both?)
-        /*if pin == "3939" {
-            pairing.set_transient(true);
-        }*/
+        // if pin == "3939" {
+        // pairing.set_transient(true);
+        // }
 
         // M1: Start pairing
         let m1 = pairing
@@ -738,15 +763,21 @@ impl ConnectionManager {
         } else {
             tracing::debug!("Performing ANNOUNCE...");
             let sdp = match self.config.audio_codec {
-                AudioCodec::Alac => {
-                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
-                }
-                AudioCodec::Pcm => {
-                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n".to_string()
-                }
-                AudioCodec::Aac => {
-                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/44100/2\r\na=fmtp:96 mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;constantDuration=1024\r\n".to_string()
-                }
+                AudioCodec::Alac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                                     0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                                     AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 \
+                                     44100\r\n"
+                    .to_string(),
+                AudioCodec::Pcm => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                                    L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n"
+                    .to_string(),
+                AudioCodec::Aac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                                    mpeg4-generic/44100/2\r\na=fmtp:96 \
+                                    mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
+                                    constantDuration=1024\r\n"
+                    .to_string(),
                 AudioCodec::Opus => {
                     return Err(AirPlayError::InvalidParameter {
                         name: "audio_codec".to_string(),
@@ -864,90 +895,91 @@ impl ConnectionManager {
         }
 
         // Parse Event/Timing ports from Step 1
-        let (server_event_port, server_timing_port, device_clock_port) = match crate::protocol::plist::decode(
-            &response_step1.body,
-        ) {
-            Ok(plist) => {
-                tracing::info!("SETUP Step 1 plist: {:#?}", plist);
-                if let Some(dict) = plist.as_dict() {
-                    let ep = dict
+        let (server_event_port, server_timing_port, device_clock_port) =
+            match crate::protocol::plist::decode(&response_step1.body) {
+                Ok(plist) => {
+                    tracing::info!("SETUP Step 1 plist: {:#?}", plist);
+                    if let Some(dict) = plist.as_dict() {
+                        let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
                                 #[allow(
                                     clippy::cast_possible_truncation,
                                     clippy::cast_sign_loss,
-                                    reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                    reason = "Ports are u16, plist uses i64. Truncation is \
+                                              acceptable as ports fit in u16."
                                 )]
                                 {
                                     i as u16
                                 }
                             });
-                    let tp = dict
+                        let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
                                 #[allow(
                                     clippy::cast_possible_truncation,
                                     clippy::cast_sign_loss,
-                                    reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                    reason = "Ports are u16, plist uses i64. Truncation is \
+                                              acceptable as ports fit in u16."
                                 )]
                                 {
                                     i as u16
                                 }
                             });
-                    tracing::info!(
-                        "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
-                        ep,
-                        tp
-                    );
-                    // Extract ClockPorts and ClockID from timingPeerInfo for PTP.
-                    // HomePod advertises a non-standard port for PTP via ClockPorts.
-                    let mut clock_port: Option<u16> = None;
-                    if let Some(tpi) = dict.get("timingPeerInfo") {
-                        tracing::info!("Device timingPeerInfo: {:#?}", tpi);
-                        if let Some(tpi_dict) = tpi.as_dict() {
-                            // Extract ClockID for SETRATEANCHORTIME networkTimeTimelineID
-                            if let Some(cid) = tpi_dict.get("ClockID") {
-                                if let Some(cid_val) = cid.as_i64() {
-                                    #[allow(clippy::cast_sign_loss, reason = "Clock ID is unsigned but plist stores as i64")]
-                                    let clock_id = cid_val as u64;
-                                    tracing::info!("Device ClockID: 0x{:016X}", clock_id);
-                                    *self.device_clock_id.lock().await = Some(clock_id);
+                        tracing::info!(
+                            "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
+                            ep,
+                            tp
+                        );
+                        // Extract ClockPorts and ClockID from timingPeerInfo for PTP.
+                        // HomePod advertises a non-standard port for PTP via ClockPorts.
+                        let mut clock_port: Option<u16> = None;
+                        if let Some(tpi) = dict.get("timingPeerInfo") {
+                            tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                            if let Some(tpi_dict) = tpi.as_dict() {
+                                // Extract ClockID for SETRATEANCHORTIME networkTimeTimelineID
+                                if let Some(cid) = tpi_dict.get("ClockID") {
+                                    if let Some(cid_val) = cid.as_i64() {
+                                        #[allow(clippy::cast_sign_loss, reason = "Clock ID is unsigned but plist stores as i64")]
+                                        let clock_id = cid_val as u64;
+                                        tracing::info!("Device ClockID: 0x{:016X}", clock_id);
+                                        *self.device_clock_id.lock().await = Some(clock_id);
+                                    }
                                 }
-                            }
-                            if let Some(cp) = tpi_dict.get("ClockPorts") {
-                                if let Some(cp_dict) = cp.as_dict() {
-                                    for (key, val) in cp_dict {
-                                        if let Some(port_val) = val.as_i64() {
-                                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                            let port = port_val as u16;
-                                            tracing::info!(
-                                                "Device ClockPorts: {} -> {} (unsigned)",
-                                                key,
-                                                port
-                                            );
-                                            clock_port = Some(port);
+                                if let Some(cp) = tpi_dict.get("ClockPorts") {
+                                    if let Some(cp_dict) = cp.as_dict() {
+                                        for (key, val) in cp_dict {
+                                            if let Some(port_val) = val.as_i64() {
+                                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                                let port = port_val as u16;
+                                                tracing::info!(
+                                                    "Device ClockPorts: {} -> {} (unsigned)",
+                                                    key,
+                                                    port
+                                                );
+                                                clock_port = Some(port);
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                        // Store clock_port for PTP handler setup.
+                        if let Some(cp) = clock_port {
+                            tracing::info!("Will use ClockPorts port {} for PTP Delay_Req", cp);
+                        }
+                        (ep, tp, clock_port)
+                    } else {
+                        (None, None, None)
                     }
-                    // Store clock_port for PTP handler setup.
-                    if let Some(cp) = clock_port {
-                        tracing::info!("Will use ClockPorts port {} for PTP Delay_Req", cp);
-                    }
-                    (ep, tp, clock_port)
-                } else {
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
                     (None, None, None)
                 }
-            }
-            Err(e) => {
-                tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
-                (None, None, None)
-            }
-        };
+            };
 
         // 5. Stream Setup (SETUP Step 2: Audio/Control)
         tracing::debug!("Performing Stream SETUP (Step 2)...");
@@ -968,10 +1000,12 @@ impl ConnectionManager {
         );
 
         let transport = format!(
-            "RTP/AVP/UDP;unicast;mode=record;client_port={audio_port};control_port={ctrl_port};timing_port={time_port}"
+            "RTP/AVP/UDP;unicast;mode=record;client_port={audio_port};control_port={ctrl_port};\
+             timing_port={time_port}"
         );
 
-        // AirPlay 2 uses 96 (General Audio) with buffered audio params for both buffered and realtime
+        // AirPlay 2 uses 96 (General Audio) with buffered audio params for both buffered and
+        // realtime
         let stream_type = 96;
 
         // Determine ct (compression type) and audioFormat
@@ -984,15 +1018,16 @@ impl ConnectionManager {
         };
 
         // Note: audioFormat values are bitmasks or specific IDs.
-        // For compatibility with the Python receiver (which expects audioFormat), we send a valid one.
-        // 1<<11 (2048) works for PCM in the receiver.
+        // For compatibility with the Python receiver (which expects audioFormat), we send a valid
+        // one. 1<<11 (2048) works for PCM in the receiver.
         // For AAC, let's try 0x100 (256) or just use the same default if it's ignored for AAC?
         // Receiver uses audio_format for ALSA setup?
         // Let's assume 0x400 (1024) or similar?
         // Actually, Python receiver uses audio_format in AudioRealtime/Buffered.
         // If we send 1<<11 (2048), it sets up 44100/16/2 PCM.
         // Even for AAC streaming, the receiver might decode to PCM?
-        // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output format?
+        // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output
+        // format?
 
         let stream_entry = DictBuilder::new()
             .insert("type", stream_type)
@@ -1053,7 +1088,8 @@ impl ConnectionManager {
                             #[allow(
                                 clippy::cast_possible_truncation,
                                 clippy::cast_sign_loss,
-                                reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                reason = "Ports are u16, plist uses i64. Truncation is acceptable \
+                                          as ports fit in u16."
                             )]
                             {
                                 i as u16
@@ -1066,7 +1102,8 @@ impl ConnectionManager {
                             #[allow(
                                 clippy::cast_possible_truncation,
                                 clippy::cast_sign_loss,
-                                reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                reason = "Ports are u16, plist uses i64. Truncation is acceptable \
+                                          as ports fit in u16."
                             )]
                             {
                                 i as u16
@@ -1086,7 +1123,8 @@ impl ConnectionManager {
                                         #[allow(
                                             clippy::cast_possible_truncation,
                                             clippy::cast_sign_loss,
-                                            reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                            reason = "Ports are u16, plist uses i64. Truncation \
+                                                      is acceptable as ports fit in u16."
                                         )]
                                         {
                                             i as u16
@@ -1098,7 +1136,8 @@ impl ConnectionManager {
                                         #[allow(
                                             clippy::cast_possible_truncation,
                                             clippy::cast_sign_loss,
-                                            reason = "Ports are u16, plist uses i64. Truncation is acceptable as ports fit in u16."
+                                            reason = "Ports are u16, plist uses i64. Truncation \
+                                                      is acceptable as ports fit in u16."
                                         )]
                                         {
                                             i as u16
@@ -1116,7 +1155,8 @@ impl ConnectionManager {
                     };
 
                     if let (Some(dp), Some(cp)) = (data_port, control_port) {
-                        // We need event/timing ports too. Use ones from Step 1 or fallback to default/derived.
+                        // We need event/timing ports too. Use ones from Step 1 or fallback to
+                        // default/derived.
                         let ep = server_event_port.unwrap_or(0); // Sockets might fail if 0?
                         let tp = server_timing_port.unwrap_or(0);
                         server_ports = Some((dp, cp, ep, tp));
@@ -1252,13 +1292,9 @@ impl ConnectionManager {
 
         // Construct request with all headers
         let mut request = format!(
-            "POST {path} HTTP/1.1\r\n\
-             Host: {host}\r\n\
-             Content-Type: application/octet-stream\r\n\
-             Content-Length: {}\r\n\
-             User-Agent: {user_agent}\r\n\
-             Active-Remote: 4294967295\r\n\
-             X-Apple-Client-Name: airplay2-rs\r\n",
+            "POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: \
+             application/octet-stream\r\nContent-Length: {}\r\nUser-Agent: \
+             {user_agent}\r\nActive-Remote: 4294967295\r\nX-Apple-Client-Name: airplay2-rs\r\n",
             data.len()
         );
 
@@ -1887,6 +1923,20 @@ impl ConnectionManager {
     ///
     /// Returns error if disconnection fails
     pub async fn disconnect(&self) -> Result<(), AirPlayError> {
+        self.disconnect_with_reason(DisconnectReason::UserRequested)
+            .await
+    }
+
+    /// Disconnect with a specific reason
+    ///
+    /// # Errors
+    ///
+    /// Returns error if disconnection sequence fails (e.g. TEARDOWN failure), though the connection
+    /// will be closed regardless.
+    pub async fn disconnect_with_reason(
+        &self,
+        reason: DisconnectReason,
+    ) -> Result<(), AirPlayError> {
         let device = self.device.read().await.clone();
 
         // Send TEARDOWN if connected
@@ -1913,10 +1963,7 @@ impl ConnectionManager {
         self.set_state(ConnectionState::Disconnected).await;
 
         if let Some(device) = device {
-            self.send_event(ConnectionEvent::Disconnected {
-                device,
-                reason: DisconnectReason::UserRequested,
-            });
+            self.send_event(ConnectionEvent::Disconnected { device, reason });
         }
 
         Ok(())
@@ -1972,7 +2019,8 @@ impl ConnectionManager {
     /// 2. `127.0.0.1:0` (IPv4 localhost)
     /// 3. `[::]:0` (IPv6 any)
     ///
-    /// This provides robustness against environments with restricted networking (like some CI runners).
+    /// This provides robustness against environments with restricted networking (like some CI
+    /// runners).
     async fn bind_ephemeral_socket() -> std::io::Result<UdpSocket> {
         // Try IPv4 Any
         if let Ok(sock) = UdpSocket::bind("0.0.0.0:0").await {
@@ -1988,10 +2036,12 @@ impl ConnectionManager {
         UdpSocket::bind("[::]:0").await
     }
 
-    /// Start the PTP slave handler as a background task.
+    /// Start the PTP node as a background task.
     ///
-    /// The `HomePod` acts as PTP grandmaster clock. We act as slave,
-    /// syncing to the device's clock for accurate RTP timestamping.
+    /// Uses a unified `PtpNode` that supports both master and slave roles.
+    /// The node starts as master (sending Sync to the device) but will
+    /// switch to slave if the device announces with a better priority
+    /// (e.g. `HomePod` acting as grandmaster).
     ///
     /// `AirPlay` 2 PTP uses standard IEEE 1588 ports:
     /// - Port 319 for event messages (Sync, `Delay_Req`)
@@ -2021,7 +2071,8 @@ impl ConnectionManager {
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. (Run as root for standard PTP)",
+                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. (Run \
+                     as root for standard PTP)",
                     PTP_EVENT_PORT,
                     e
                 );

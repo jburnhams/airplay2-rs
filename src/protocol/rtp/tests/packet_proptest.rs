@@ -1,5 +1,6 @@
-use crate::protocol::rtp::{PayloadType, RtpHeader};
 use proptest::prelude::*;
+
+use crate::protocol::rtp::{PayloadType, RtpHeader};
 
 proptest! {
     #[test]

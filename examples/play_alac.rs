@@ -1,10 +1,11 @@
 //! Example: Streaming ALAC-encoded audio
 
+use std::f32::consts::PI;
+use std::time::Duration;
+
 use airplay2::audio::{AudioCodec, AudioFormat};
 use airplay2::streaming::AudioSource;
 use airplay2::{AirPlayClient, AirPlayConfig, scan};
-use std::f32::consts::PI;
-use std::time::Duration;
 
 // Sine wave generator
 struct SineSource {

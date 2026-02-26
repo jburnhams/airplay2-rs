@@ -1,15 +1,16 @@
 //! Playback control for `AirPlay`
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::sync::RwLock;
+
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use crate::protocol::plist::DictBuilder;
 use crate::protocol::rtsp::Method;
 use crate::types::{PlaybackState, RepeatMode};
-
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::RwLock;
 
 /// Shuffle mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
