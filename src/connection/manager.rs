@@ -942,7 +942,10 @@ impl ConnectionManager {
                                 // Extract ClockID for SETRATEANCHORTIME networkTimeTimelineID
                                 if let Some(cid) = tpi_dict.get("ClockID") {
                                     if let Some(cid_val) = cid.as_i64() {
-                                        #[allow(clippy::cast_sign_loss, reason = "Clock ID is unsigned but plist stores as i64")]
+                                        #[allow(
+                                            clippy::cast_sign_loss,
+                                            reason = "Clock ID is unsigned but plist stores as i64"
+                                        )]
                                         let clock_id = cid_val as u64;
                                         tracing::info!("Device ClockID: 0x{:016X}", clock_id);
                                         *self.device_clock_id.lock().await = Some(clock_id);
@@ -952,7 +955,10 @@ impl ConnectionManager {
                                     if let Some(cp_dict) = cp.as_dict() {
                                         for (key, val) in cp_dict {
                                             if let Some(port_val) = val.as_i64() {
-                                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                                #[allow(
+                                                    clippy::cast_possible_truncation,
+                                                    clippy::cast_sign_loss
+                                                )]
                                                 let port = port_val as u16;
                                                 tracing::info!(
                                                     "Device ClockPorts: {} -> {} (unsigned)",
@@ -1622,7 +1628,10 @@ impl ConnectionManager {
 
         tracing::info!(
             "Sending SETRATEANCHORTIME (rate={}, networkTimeSecs={}, networkTimeFrac=0x{:016X}, timelineID=0x{:016X})",
-            rate, network_secs, network_frac, device_clock_id,
+            rate,
+            network_secs,
+            network_frac,
+            device_clock_id,
         );
 
         // Build SETRATEANCHORTIME plist with PTP timing fields.
@@ -1634,7 +1643,10 @@ impl ConnectionManager {
 
         // Only include timing fields if we have a valid device clock ID
         if device_clock_id != 0 {
-            #[allow(clippy::cast_possible_wrap, reason = "Bit pattern preserved for plist encoding")]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "Bit pattern preserved for plist encoding"
+            )]
             {
                 body = body
                     .insert("networkTimeSecs", network_secs as i64)
@@ -1646,10 +1658,11 @@ impl ConnectionManager {
         let body = body.build();
 
         tracing::info!("SETRATEANCHORTIME plist: {:#?}", body);
-        let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-            message: format!("Failed to encode SETRATEANCHORTIME plist: {e}"),
-            status_code: None,
-        })?;
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode SETRATEANCHORTIME plist: {e}"),
+                status_code: None,
+            })?;
 
         tracing::info!(
             "SETRATEANCHORTIME encoded plist ({} bytes): {:02X?}",
@@ -1661,7 +1674,8 @@ impl ConnectionManager {
             crate::protocol::rtsp::Method::SetRateAnchorTime,
             Some(encoded),
             Some("application/x-apple-binary-plist".to_string()),
-        ).await?;
+        )
+        .await?;
 
         tracing::info!("SETRATEANCHORTIME accepted by device (rate={})", rate);
         Ok(())
@@ -1815,11 +1829,7 @@ impl ConnectionManager {
                     plist_val
                 );
             } else if let Ok(text) = std::str::from_utf8(&response.body) {
-                tracing::warn!(
-                    "{} error response body (text): {}",
-                    method.as_str(),
-                    text
-                );
+                tracing::warn!("{} error response body (text): {}", method.as_str(), text);
             } else {
                 tracing::warn!(
                     "{} error response body ({} bytes): {:02X?}",

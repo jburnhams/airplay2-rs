@@ -150,7 +150,9 @@ impl PtpSlaveHandler {
         tracing::info!(
             "PTP slave: run loop starting, event_socket={:?}, general_socket={}",
             self.event_socket.local_addr(),
-            self.general_socket.as_ref().map_or("None".to_string(), |s| format!("{:?}", s.local_addr()))
+            self.general_socket
+                .as_ref()
+                .map_or("None".to_string(), |s| format!("{:?}", s.local_addr()))
         );
 
         loop {
@@ -577,8 +579,7 @@ impl PtpMasterHandler {
         let mut announce_timer = tokio::time::interval(Duration::from_secs(2));
         let mut announce_sequence: u16 = 0;
         // Dual-role: send Delay_Req to measure offset to the remote clock
-        let mut delay_req_timer =
-            tokio::time::interval(self.config.delay_req_interval);
+        let mut delay_req_timer = tokio::time::interval(self.config.delay_req_interval);
 
         // Send initial Announce immediately
         self.send_announce(&mut announce_sequence).await?;
@@ -721,82 +722,83 @@ impl PtpMasterHandler {
                     data.len()
                 );
                 match &msg.body {
-                PtpMessageBody::FollowUp {
-                    precise_origin_timestamp,
-                } => {
-                    tracing::info!(
-                        "PTP master: Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
-                        src,
-                        msg.header.sequence_id,
+                    PtpMessageBody::FollowUp {
                         precise_origin_timestamp,
-                        msg.header.source_port_identity.clock_identity
-                    );
-                    // Dual-role: record precise T1 from remote's Follow_Up.
-                    self.pending_remote_t1 = Some(*precise_origin_timestamp);
-                }
-                PtpMessageBody::DelayResp {
-                    receive_timestamp, ..
-                } => {
-                    // Dual-role: this is T4 from the remote responding to our Delay_Req.
-                    tracing::info!(
-                        "PTP master: Received Delay_Resp from {} seq={}, T4={}",
-                        src,
-                        msg.header.sequence_id,
-                        receive_timestamp
-                    );
-                    // Complete the timing exchange with all four timestamps.
-                    if let (Some(t1), Some(t2), Some(t3)) = (
-                        self.pending_remote_t1.take(),
-                        self.pending_remote_t2.take(),
-                        self.pending_remote_t3.take(),
-                    ) {
-                        let t4 = *receive_timestamp;
-                        let mut clock = self.clock.write().await;
-                        clock.process_timing(t1, t2, t3, t4);
+                    } => {
                         tracing::info!(
-                            "PTP master: Clock synced with remote (offset={:.3}ms, measurements={})",
-                            clock.offset_millis(),
-                            clock.measurement_count()
+                            "PTP master: Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
+                            src,
+                            msg.header.sequence_id,
+                            precise_origin_timestamp,
+                            msg.header.source_port_identity.clock_identity
                         );
-                    } else {
+                        // Dual-role: record precise T1 from remote's Follow_Up.
+                        self.pending_remote_t1 = Some(*precise_origin_timestamp);
+                    }
+                    PtpMessageBody::DelayResp {
+                        receive_timestamp, ..
+                    } => {
+                        // Dual-role: this is T4 from the remote responding to our Delay_Req.
+                        tracing::info!(
+                            "PTP master: Received Delay_Resp from {} seq={}, T4={}",
+                            src,
+                            msg.header.sequence_id,
+                            receive_timestamp
+                        );
+                        // Complete the timing exchange with all four timestamps.
+                        if let (Some(t1), Some(t2), Some(t3)) = (
+                            self.pending_remote_t1.take(),
+                            self.pending_remote_t2.take(),
+                            self.pending_remote_t3.take(),
+                        ) {
+                            let t4 = *receive_timestamp;
+                            let mut clock = self.clock.write().await;
+                            clock.process_timing(t1, t2, t3, t4);
+                            tracing::info!(
+                                "PTP master: Clock synced with remote (offset={:.3}ms, measurements={})",
+                                clock.offset_millis(),
+                                clock.measurement_count()
+                            );
+                        } else {
+                            tracing::debug!(
+                                "PTP master: Delay_Resp received but missing T1/T2/T3 — timing incomplete"
+                            );
+                        }
+                    }
+                    PtpMessageBody::Announce {
+                        grandmaster_identity,
+                        grandmaster_priority1,
+                        ..
+                    } => {
                         tracing::debug!(
-                            "PTP master: Delay_Resp received but missing T1/T2/T3 — timing incomplete"
+                            "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
+                            src,
+                            msg.header.sequence_id,
+                            grandmaster_identity,
+                            grandmaster_priority1
+                        );
+                    }
+                    PtpMessageBody::Signaling => {
+                        tracing::info!(
+                            "PTP master: Received Signaling from {} seq={}",
+                            src,
+                            msg.header.sequence_id
+                        );
+                    }
+                    _ => {
+                        let hex: Vec<String> =
+                            data.iter().take(44).map(|b| format!("{b:02X}")).collect();
+                        tracing::info!(
+                            "PTP master: Received {:?} ({} bytes) on general port from {} seq={}, hex=[{}]",
+                            msg.header.message_type,
+                            data.len(),
+                            src,
+                            msg.header.sequence_id,
+                            hex.join(", ")
                         );
                     }
                 }
-                PtpMessageBody::Announce {
-                    grandmaster_identity,
-                    grandmaster_priority1,
-                    ..
-                } => {
-                    tracing::debug!(
-                        "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
-                        src,
-                        msg.header.sequence_id,
-                        grandmaster_identity,
-                        grandmaster_priority1
-                    );
-                }
-                PtpMessageBody::Signaling => {
-                    tracing::info!(
-                        "PTP master: Received Signaling from {} seq={}",
-                        src,
-                        msg.header.sequence_id
-                    );
-                }
-                _ => {
-                    let hex: Vec<String> = data.iter().take(44).map(|b| format!("{b:02X}")).collect();
-                    tracing::info!(
-                        "PTP master: Received {:?} ({} bytes) on general port from {} seq={}, hex=[{}]",
-                        msg.header.message_type,
-                        data.len(),
-                        src,
-                        msg.header.sequence_id,
-                        hex.join(", ")
-                    );
-                }
             }
-            },
             Err(e) => {
                 let hex: Vec<String> = data.iter().take(44).map(|b| format!("{b:02X}")).collect();
                 tracing::warn!(

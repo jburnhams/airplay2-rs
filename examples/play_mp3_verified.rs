@@ -33,7 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
         {
             Ok(_) => {
-                println!("  OK: Connected to '{}' on attempt {}", target_name, attempt);
+                println!(
+                    "  OK: Connected to '{}' on attempt {}",
+                    target_name, attempt
+                );
                 connected = true;
                 break;
             }
@@ -47,7 +50,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if !connected {
-        eprintln!("\nFAIL: Could not connect to '{}' after 5 attempts.", target_name);
+        eprintln!(
+            "\nFAIL: Could not connect to '{}' after 5 attempts.",
+            target_name
+        );
         // List available devices for debugging
         println!("\nAvailable devices:");
         match player.client().scan(Duration::from_secs(3)).await {
@@ -74,7 +80,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if ptp_active {
         println!("  OK: PTP timing is active");
     } else {
-        eprintln!("  WARN: PTP timing is NOT active — device may use NTP or AirPlay compact timing");
+        eprintln!(
+            "  WARN: PTP timing is NOT active — device may use NTP or AirPlay compact timing"
+        );
     }
 
     // Step 3: Check PTP clock state before playback
@@ -175,7 +183,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match monitor_client.get_playback_info().await {
             Ok(info_bytes) => {
                 if info_bytes.is_empty() {
-                    println!("  Playback info: empty response (device may not support GET_PARAMETER)");
+                    println!(
+                        "  Playback info: empty response (device may not support GET_PARAMETER)"
+                    );
                 } else if let Ok(s) = String::from_utf8(info_bytes.clone()) {
                     println!("  Playback info: {}", s.trim());
                 } else {
@@ -184,19 +194,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) => {
                 // This is common — many devices don't support GET_PARAMETER playback-info
-                println!("  Playback info query: {} (this is normal for some devices)", e);
+                println!(
+                    "  Playback info query: {} (this is normal for some devices)",
+                    e
+                );
             }
         }
 
         // Check connection state
         let client_state = monitor_client.state().await;
-        println!("  Connected device: {:?}", client_state.device.as_ref().map(|d| &d.name));
+        println!(
+            "  Connected device: {:?}",
+            client_state.device.as_ref().map(|d| &d.name)
+        );
 
         // === Final Verdict ===
         println!("\n========== VERIFICATION RESULTS ==========");
         let ptp_is_active = monitor_client.is_ptp_active().await;
         let playing_ok = playback_state.is_playing;
-        let volume_result = if volume_ok { "OK" } else { "WARN (455 error — normal for HomePod buffered audio)" };
+        let volume_result = if volume_ok {
+            "OK"
+        } else {
+            "WARN (455 error — normal for HomePod buffered audio)"
+        };
 
         // For a PTP master, synced=false is EXPECTED — the master defines the clock.
         // The slave (HomePod) syncs to us. What matters is that PTP is active and
@@ -215,20 +235,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ptp_sync_confirmed,
                     ptp_measurement_count
                 );
-                if matches!(role, airplay2::protocol::ptp::clock::PtpRole::Master) && !ptp_sync_confirmed {
+                if matches!(role, airplay2::protocol::ptp::clock::PtpRole::Master)
+                    && !ptp_sync_confirmed
+                {
                     println!("                  (Master clock does not sync — this is expected)");
                 }
             }
         } else {
             println!("  PTP timing:     N/A (not active)");
         }
-        println!("  Playback:       {}", if playing_ok { "OK (playing)" } else { "WARN (not confirmed playing)" });
+        println!(
+            "  Playback:       {}",
+            if playing_ok {
+                "OK (playing)"
+            } else {
+                "WARN (not confirmed playing)"
+            }
+        );
         println!("  Volume:         {}", volume_result);
 
         if playing_ok && ptp_ok {
-            println!("\n  RESULT: SUCCESS — MP3 is playing on '{}' with PTP active\n", target_name);
+            println!(
+                "\n  RESULT: SUCCESS — MP3 is playing on '{}' with PTP active\n",
+                target_name
+            );
         } else if playing_ok {
-            println!("\n  RESULT: SUCCESS — MP3 is playing on '{}'\n", target_name);
+            println!(
+                "\n  RESULT: SUCCESS — MP3 is playing on '{}'\n",
+                target_name
+            );
         } else {
             println!("\n  RESULT: UNCERTAIN — Check device for audio output\n");
         }
