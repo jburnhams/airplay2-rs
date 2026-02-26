@@ -1,5 +1,6 @@
-use crate::audio::aac_encoder::AacEncoder;
 use fdk_aac::enc::AudioObjectType;
+
+use crate::audio::aac_encoder::AacEncoder;
 
 #[test]
 fn test_aac_encoding() {

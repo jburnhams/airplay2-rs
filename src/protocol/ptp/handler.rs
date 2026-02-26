@@ -173,7 +173,7 @@ impl PtpSlaveHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_packet(&general_buf[..len], src);
+                    self.handle_general_packet(&general_buf[..len], src).await;
                     // Check if a Delay_Resp arrived on the general port and
                     // we have all four timestamps to complete a timing exchange.
                     self.try_complete_timing().await;
@@ -268,7 +268,8 @@ impl PtpSlaveHandler {
                     if self.sync_count <= 3 {
                         let hex: Vec<String> = data.iter().map(|b| format!("{b:02X}")).collect();
                         tracing::info!(
-                            "PTP slave: Sync seq={}, two_step={}, T1={:?}, sync_count={}, src_clock=0x{:016X}, domain={}, hex=[{}]",
+                            "PTP slave: Sync seq={}, two_step={}, T1={:?}, sync_count={}, \
+                             src_clock=0x{:016X}, domain={}, hex=[{}]",
                             msg.header.sequence_id,
                             two_step,
                             origin_timestamp,
@@ -671,7 +672,8 @@ impl PtpMasterHandler {
                     let two_step = msg.header.flags & 0x0200 != 0;
                     let t2 = PtpTimestamp::now();
                     tracing::info!(
-                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, T1={}, T2={}",
+                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, \
+                         T1={}, T2={}",
                         src,
                         msg.header.sequence_id,
                         two_step,
@@ -760,13 +762,15 @@ impl PtpMasterHandler {
                             let mut clock = self.clock.write().await;
                             clock.process_timing(t1, t2, t3, t4);
                             tracing::info!(
-                                "PTP master: Clock synced with remote (offset={:.3}ms, measurements={})",
+                                "PTP master: Clock synced with remote (offset={:.3}ms, \
+                                 measurements={})",
                                 clock.offset_millis(),
                                 clock.measurement_count()
                             );
                         } else {
                             tracing::debug!(
-                                "PTP master: Delay_Resp received but missing T1/T2/T3 — timing incomplete"
+                                "PTP master: Delay_Resp received but missing T1/T2/T3 — timing \
+                                 incomplete"
                             );
                         }
                     }
@@ -776,7 +780,8 @@ impl PtpMasterHandler {
                         ..
                     } => {
                         tracing::debug!(
-                            "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
+                            "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, \
+                             priority1={}",
                             src,
                             msg.header.sequence_id,
                             grandmaster_identity,
@@ -794,7 +799,8 @@ impl PtpMasterHandler {
                         let hex: Vec<String> =
                             data.iter().take(44).map(|b| format!("{b:02X}")).collect();
                         tracing::info!(
-                            "PTP master: Received {:?} ({} bytes) on general port from {} seq={}, hex=[{}]",
+                            "PTP master: Received {:?} ({} bytes) on general port from {} seq={}, \
+                             hex=[{}]",
                             msg.header.message_type,
                             data.len(),
                             src,

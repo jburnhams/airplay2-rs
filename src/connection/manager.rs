@@ -759,7 +759,8 @@ impl ConnectionManager {
         // AirPlay 2 Buffered Audio negotiates format via SETUP plist, not ANNOUNCE SDP.
         // Sending ANNOUNCE to HomePod returns 455 and may corrupt session state.
         // However, for AAC-ELD (Realtime), we must send ANNOUNCE to provide the ASC (config)
-        // because SETUP plist doesn't support it in standard AirPlay 2 flow (or Python Receiver needs it).
+        // because SETUP plist doesn't support it in standard AirPlay 2 flow (or Python Receiver
+        // needs it).
         let is_aac_eld = matches!(self.config.audio_codec, AudioCodec::AacEld);
         if use_ptp && !is_aac_eld {
             tracing::info!("Skipping ANNOUNCE for PTP/Buffered Audio device");
@@ -814,8 +815,8 @@ impl ConnectionManager {
                     });
 
                     format!(
-                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
-                         0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                         0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
                          mpeg4-generic/44100/2\r\na=fmtp:96 \
                          mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
                          config={config_hex};constantDuration={frame_len}\r\n"
@@ -1681,7 +1682,8 @@ impl ConnectionManager {
         };
 
         tracing::info!(
-            "Sending SETRATEANCHORTIME (rate={}, networkTimeSecs={}, networkTimeFrac=0x{:016X}, timelineID=0x{:016X})",
+            "Sending SETRATEANCHORTIME (rate={}, networkTimeSecs={}, networkTimeFrac=0x{:016X}, \
+             timelineID=0x{:016X})",
             rate,
             network_secs,
             network_frac,

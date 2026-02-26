@@ -215,7 +215,8 @@ async fn test_airplay_format_exchange() {
 
 #[tokio::test]
 async fn test_master_handler_responds_to_delay_req() {
-    // Need to ignore manual_let_else for test setup where let-else is less readable or just not preferred
+    // Need to ignore manual_let_else for test setup where let-else is less readable or just not
+    // preferred
     #[allow(clippy::manual_let_else)]
     let master_sock = {
         let Ok(sock) = UdpSocket::bind("127.0.0.1:0").await else {

@@ -81,10 +81,12 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
         if has_ptp {
             tracing::info!("✓ Receiver logs contain 'PTP'");
         } else {
-            // PTP logs might be suppressed if the receiver fails to bind privileged ports (common in CI)
-            // or if logging level is different. "SETPEERS" is a reliable indicator that we attempted PTP setup.
+            // PTP logs might be suppressed if the receiver fails to bind privileged ports (common
+            // in CI) or if logging level is different. "SETPEERS" is a reliable
+            // indicator that we attempted PTP setup.
             tracing::warn!(
-                "Receiver logs DO NOT contain 'PTP' (might be suppressed). Checking for SETPEERS..."
+                "Receiver logs DO NOT contain 'PTP' (might be suppressed). Checking for \
+                 SETPEERS..."
             );
         }
         // assert!(has_ptp, "Receiver logs should contain 'PTP'");
