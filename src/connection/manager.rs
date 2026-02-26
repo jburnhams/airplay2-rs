@@ -750,7 +750,10 @@ impl ConnectionManager {
         // 3. Announce (ANNOUNCE / with SDP) — skip for PTP/Buffered Audio devices
         // AirPlay 2 Buffered Audio negotiates format via SETUP plist, not ANNOUNCE SDP.
         // Sending ANNOUNCE to HomePod returns 455 and may corrupt session state.
-        if use_ptp {
+        // However, for AAC-ELD (Realtime), we must send ANNOUNCE to provide the ASC (config)
+        // because SETUP plist doesn't support it in standard AirPlay 2 flow (or Python Receiver needs it).
+        let is_aac_eld = matches!(self.config.audio_codec, AudioCodec::AacEld);
+        if use_ptp && !is_aac_eld {
             tracing::info!("Skipping ANNOUNCE for PTP/Buffered Audio device");
         } else {
             tracing::debug!("Performing ANNOUNCE...");
@@ -775,6 +778,38 @@ impl ConnectionManager {
                         name: "audio_codec".to_string(),
                         message: "Opus codec not yet supported for SDP generation".to_string(),
                     });
+                }
+                AudioCodec::AacEld => {
+                    // Instantiate encoder to get ASC
+                    // Standard ELD: 44100Hz, Stereo
+                    let encoder = crate::audio::AacEncoder::new(
+                        44100,
+                        2,
+                        64000,
+                        fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
+                    )
+                    .map_err(|e| AirPlayError::InternalError {
+                        message: format!("Failed to initialize AAC-ELD encoder for ASC: {e}"),
+                    })?;
+
+                    let asc = encoder.get_asc().ok_or_else(|| AirPlayError::InternalError {
+                        message: "Failed to get ASC from AAC-ELD encoder".to_string(),
+                    })?;
+
+                    let frame_len = encoder.get_frame_length().unwrap_or(512);
+
+                    let config_hex = asc
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect::<String>();
+
+                    format!(
+                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
+                         0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                         mpeg4-generic/44100/2\r\na=fmtp:96 \
+                         mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
+                         config={config_hex};constantDuration={frame_len}\r\n"
+                    )
                 }
             };
 
@@ -973,7 +1008,19 @@ impl ConnectionManager {
             AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
             AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
             AudioCodec::Aac => (0x4, 1024, 1 << 22), // AAC_LC_44100_2
-            AudioCodec::Opus => (0x0, 480, 0),      // Not supported by standard receivers usually
+            AudioCodec::AacEld => {
+                let spf = crate::audio::AacEncoder::new(
+                    44100,
+                    2,
+                    64000,
+                    fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
+                )
+                .ok()
+                .and_then(|e| e.get_frame_length())
+                .unwrap_or(512);
+                (0x8, spf, 1 << 24)
+            }
+            AudioCodec::Opus => (0x0, 480, 0), // Not supported by standard receivers usually
         };
 
         // Note: audioFormat values are bitmasks or specific IDs.
@@ -992,7 +1039,7 @@ impl ConnectionManager {
             .insert("type", stream_type)
             .insert("ct", ct)
             .insert("audioFormat", audio_format)
-            .insert("spf", spf)
+            .insert("spf", u64::from(spf))
             .insert("audioType", "default")
             .insert("shk", ek.to_vec())
             .insert("shiv", eiv.to_vec()) // Include IV for Realtime streams (Python receiver needs it)
