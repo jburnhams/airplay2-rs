@@ -1,9 +1,11 @@
 use crate::audio::aac_encoder::AacEncoder;
+use fdk_aac::enc::AudioObjectType;
 
 #[test]
 fn test_aac_encoding() {
     // 44.1kHz, Stereo, 64kbps
-    let mut encoder = AacEncoder::new(44100, 2, 64000).expect("Failed to create encoder");
+    let mut encoder = AacEncoder::new(44100, 2, 64000, AudioObjectType::Mpeg4LowComplexity)
+        .expect("Failed to create encoder");
 
     // 1024 samples (AAC frame size usually) * 2 channels
     let input = vec![0i16; 1024 * 2];
@@ -32,7 +34,8 @@ fn test_aac_encoding() {
 #[test]
 fn test_encoder_configurations() {
     // Mono
-    let mut encoder = AacEncoder::new(44100, 1, 64000).expect("Mono encoder failed");
+    let mut encoder = AacEncoder::new(44100, 1, 64000, AudioObjectType::Mpeg4LowComplexity)
+        .expect("Mono encoder failed");
     let input = vec![0i16; 1024]; // 1 channel
     let output = encoder.encode(&input).expect("Encoding failed");
 
@@ -49,7 +52,8 @@ fn test_encoder_configurations() {
     );
 
     // Stereo, higher bitrate
-    let mut encoder = AacEncoder::new(48000, 2, 128_000).expect("Stereo encoder failed");
+    let mut encoder = AacEncoder::new(48000, 2, 128_000, AudioObjectType::Mpeg4LowComplexity)
+        .expect("Stereo encoder failed");
     let input = vec![0i16; 2048]; // 2 channels
     let output = encoder.encode(&input).expect("Encoding failed");
 
@@ -69,6 +73,6 @@ fn test_encoder_configurations() {
 #[test]
 fn test_encoder_errors() {
     // Invalid channel count
-    let result = AacEncoder::new(44100, 5, 64000);
+    let result = AacEncoder::new(44100, 5, 64000, AudioObjectType::Mpeg4LowComplexity);
     assert!(result.is_err());
 }
