@@ -191,7 +191,7 @@ impl MultiRoomCoordinator {
 
     /// Get clock offset for diagnostics
     pub fn clock_offset_ms(&self) -> f64 {
-        self.clock.offset_millis()
+        self.clock.offset_ms()
     }
 }
 
@@ -242,12 +242,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [x] Group join/leave functionality
-- [x] Leader/follower role support
-- [x] Playback time synchronization
-- [x] Drift detection and correction
-- [x] Clock offset tracking
-- [x] All unit tests pass
+- [ ] Group join/leave functionality
+- [ ] Leader/follower role support
+- [ ] Playback time synchronization
+- [ ] Drift detection and correction
+- [ ] Clock offset tracking
+- [ ] All unit tests pass
 
 ---
 
