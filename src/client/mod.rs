@@ -574,17 +574,30 @@ impl AirPlayClient {
         self.state.update(|s| s.playback.is_playing = true).await;
         self.playback.set_playing(true).await;
 
-        // Send RECORD request to start buffering on device
-        // We spawn this because it might block waiting for sync, or we want to start streaming first
+        // Send SETRATEANCHORTIME after audio starts flowing.
+        // RECORD was already sent during connect(). SETRATEANCHORTIME tells the device
+        // to start rendering audio at the given rate and PTP-anchored time.
         let connection = self.connection.clone();
         tokio::spawn(async move {
-            // Short delay to allow streamer to fill buffer and start sending
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            tracing::info!("Sending RECORD request to device...");
-            match connection.record().await {
-                Ok(()) => tracing::info!("RECORD request accepted by device"),
-                Err(e) => tracing::error!("RECORD request failed: {}", e),
+            // Wait for audio data to fill the device buffer
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+
+            // Retry SETRATEANCHORTIME with increasing delays
+            let delays_ms = [1000, 2000, 3000, 5000, 8000];
+            for (attempt, delay) in delays_ms.iter().enumerate() {
+                tracing::info!("Sending SETRATEANCHORTIME attempt {}/{}...", attempt + 1, delays_ms.len());
+                match connection.send_set_rate_anchor_time(1).await {
+                    Ok(()) => {
+                        tracing::info!("SETRATEANCHORTIME succeeded on attempt {}", attempt + 1);
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::warn!("SETRATEANCHORTIME attempt {} failed: {}", attempt + 1, e);
+                        tokio::time::sleep(Duration::from_millis(*delay)).await;
+                    }
+                }
             }
+            tracing::error!("SETRATEANCHORTIME failed after all retries");
         });
 
         streamer.stream(source).await
@@ -607,6 +620,18 @@ impl AirPlayClient {
     #[must_use]
     pub fn subscribe_state(&self) -> tokio::sync::watch::Receiver<ClientState> {
         self.state.subscribe()
+    }
+
+    /// Check if PTP timing is active for the current connection.
+    pub async fn is_ptp_active(&self) -> bool {
+        self.connection.is_ptp_active().await
+    }
+
+    /// Get the shared PTP clock, if PTP timing is active.
+    pub async fn ptp_clock(
+        &self,
+    ) -> Option<crate::protocol::ptp::handler::SharedPtpClock> {
+        self.connection.ptp_clock().await
     }
 }
 

@@ -241,7 +241,8 @@ impl RtspSession {
         content_type: &str,
         body: Vec<u8>,
     ) -> RtspRequest {
-        self.request_builder(Method::SetRateAnchorTime, "")
+        let path = format!("/{}", self.client_session_id);
+        self.request_builder(Method::SetRateAnchorTime, &path)
             .content_type(content_type)
             .body(body)
             .build()
