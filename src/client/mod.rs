@@ -689,7 +689,11 @@ impl AirPlayClient {
             // Retry SETRATEANCHORTIME with increasing delays
             let delays_ms = [1000, 2000, 3000, 5000, 8000];
             for (attempt, delay) in delays_ms.iter().enumerate() {
-                tracing::info!("Sending SETRATEANCHORTIME attempt {}/{}...", attempt + 1, delays_ms.len());
+                tracing::info!(
+                    "Sending SETRATEANCHORTIME attempt {}/{}...",
+                    attempt + 1,
+                    delays_ms.len()
+                );
                 match connection.send_set_rate_anchor_time(1).await {
                     Ok(()) => {
                         tracing::info!("SETRATEANCHORTIME succeeded on attempt {}", attempt + 1);
@@ -732,9 +736,7 @@ impl AirPlayClient {
     }
 
     /// Get the shared PTP clock, if PTP timing is active.
-    pub async fn ptp_clock(
-        &self,
-    ) -> Option<crate::protocol::ptp::handler::SharedPtpClock> {
+    pub async fn ptp_clock(&self) -> Option<crate::protocol::ptp::handler::SharedPtpClock> {
         self.connection.ptp_clock().await
     }
 }

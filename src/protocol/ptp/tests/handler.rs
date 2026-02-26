@@ -445,20 +445,17 @@ async fn test_master_handler_clock_accessor() {
 
 /// Verify that the master's `handle_ieee_delay_req` derives the general port
 /// address (port 320) from the event source address, and does NOT send the
-/// Delay_Resp back to the original event source port.
+/// `Delay_Resp` back to the original event source port.
 ///
 /// We simulate this by having a client bind to port 320 on loopback and checking
-/// the Delay_Resp arrives there.
+/// the `Delay_Resp` arrives there.
 #[tokio::test]
 async fn test_master_sends_delay_resp_on_general_port() {
     // Bind the client "general" socket to the expected PTP general port (320).
     // This simulates how a real PTP slave would listen.
-    let client_general = match UdpSocket::bind(("127.0.0.1", PTP_GENERAL_PORT)).await {
-        Ok(sock) => sock,
-        Err(_) => {
-            // Can't bind privileged port in this environment — skip test.
-            return;
-        }
+    let Ok(client_general) = UdpSocket::bind(("127.0.0.1", PTP_GENERAL_PORT)).await else {
+        // Can't bind privileged port in this environment — skip test.
+        return;
     };
 
     let master_event = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
@@ -518,7 +515,7 @@ async fn test_master_sends_delay_resp_on_general_port() {
 
 // ===== Master handler without general socket falls back to event port =====
 
-/// When the master has NO general socket (fallback mode), Delay_Resp should
+/// When the master has NO general socket (fallback mode), `Delay_Resp` should
 /// be sent on the event socket back to the source.
 #[tokio::test]
 async fn test_master_delay_resp_falls_back_to_event_socket() {
@@ -573,7 +570,7 @@ async fn test_master_delay_resp_falls_back_to_event_socket() {
 // ===== Slave try_complete_timing via general port =====
 
 /// Test that the slave handler correctly completes a timing exchange
-/// when Delay_Resp arrives on the general port (as per IEEE 1588).
+/// when `Delay_Resp` arrives on the general port (as per IEEE 1588).
 #[tokio::test]
 async fn test_slave_completes_timing_via_general_port() {
     let slave_event = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());

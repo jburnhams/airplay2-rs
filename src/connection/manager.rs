@@ -56,7 +56,7 @@ pub struct ConnectionManager {
     /// Device's PTP clock ID (from SETUP Step 1 timingPeerInfo.ClockID)
     device_clock_id: Mutex<Option<u64>>,
     /// Whether a RECORD request was sent but its response hasn't been consumed yet.
-    /// This happens when RECORD times out during connect(). The deferred response
+    /// This happens when RECORD times out during `connect()`. The deferred response
     /// must be consumed before sending the next RTSP command.
     pending_record_response: Mutex<bool>,
 }
@@ -942,7 +942,10 @@ impl ConnectionManager {
                                 // Extract ClockID for SETRATEANCHORTIME networkTimeTimelineID
                                 if let Some(cid) = tpi_dict.get("ClockID") {
                                     if let Some(cid_val) = cid.as_i64() {
-                                        #[allow(clippy::cast_sign_loss, reason = "Clock ID is unsigned but plist stores as i64")]
+                                        #[allow(
+                                            clippy::cast_sign_loss,
+                                            reason = "Clock ID is unsigned but plist stores as i64"
+                                        )]
                                         let clock_id = cid_val as u64;
                                         tracing::info!("Device ClockID: 0x{:016X}", clock_id);
                                         *self.device_clock_id.lock().await = Some(clock_id);
@@ -952,7 +955,10 @@ impl ConnectionManager {
                                     if let Some(cp_dict) = cp.as_dict() {
                                         for (key, val) in cp_dict {
                                             if let Some(port_val) = val.as_i64() {
-                                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                                #[allow(
+                                                    clippy::cast_possible_truncation,
+                                                    clippy::cast_sign_loss
+                                                )]
                                                 let port = port_val as u16;
                                                 tracing::info!(
                                                     "Device ClockPorts: {} -> {} (unsigned)",
@@ -1391,6 +1397,7 @@ impl ConnectionManager {
     }
 
     /// Send RTSP request and get response
+    #[allow(clippy::too_many_lines, reason = "Complex RTSP request handling logic")]
     async fn send_rtsp_request(&self, request: &RtspRequest) -> Result<RtspResponse, AirPlayError> {
         let encoded = request.encode();
 
@@ -1433,7 +1440,7 @@ impl ConnectionManager {
                 false
             }
         };
-        let mut responses_to_skip = if has_pending { 1 } else { 0 };
+        let mut responses_to_skip = i32::from(has_pending);
 
         // Read response
         let mut codec = self.rtsp_codec.lock().await;
@@ -1590,6 +1597,10 @@ impl ConnectionManager {
     /// `rate`: 1 = play, 0 = pause.
     /// Includes `networkTimeSecs`, `networkTimeFrac`, and `networkTimeTimelineID`
     /// derived from the PTP clock.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if plist encoding fails or RTSP request fails.
     pub async fn send_set_rate_anchor_time(&self, rate: i64) -> Result<(), AirPlayError> {
         // Get device clock ID
         let device_clock_id = self.device_clock_id().await.unwrap_or(0);
@@ -1622,7 +1633,10 @@ impl ConnectionManager {
 
         tracing::info!(
             "Sending SETRATEANCHORTIME (rate={}, networkTimeSecs={}, networkTimeFrac=0x{:016X}, timelineID=0x{:016X})",
-            rate, network_secs, network_frac, device_clock_id,
+            rate,
+            network_secs,
+            network_frac,
+            device_clock_id,
         );
 
         // Build SETRATEANCHORTIME plist with PTP timing fields.
@@ -1634,7 +1648,10 @@ impl ConnectionManager {
 
         // Only include timing fields if we have a valid device clock ID
         if device_clock_id != 0 {
-            #[allow(clippy::cast_possible_wrap, reason = "Bit pattern preserved for plist encoding")]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "Bit pattern preserved for plist encoding"
+            )]
             {
                 body = body
                     .insert("networkTimeSecs", network_secs as i64)
@@ -1646,10 +1663,11 @@ impl ConnectionManager {
         let body = body.build();
 
         tracing::info!("SETRATEANCHORTIME plist: {:#?}", body);
-        let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-            message: format!("Failed to encode SETRATEANCHORTIME plist: {e}"),
-            status_code: None,
-        })?;
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode SETRATEANCHORTIME plist: {e}"),
+                status_code: None,
+            })?;
 
         tracing::info!(
             "SETRATEANCHORTIME encoded plist ({} bytes): {:02X?}",
@@ -1661,7 +1679,8 @@ impl ConnectionManager {
             crate::protocol::rtsp::Method::SetRateAnchorTime,
             Some(encoded),
             Some("application/x-apple-binary-plist".to_string()),
-        ).await?;
+        )
+        .await?;
 
         tracing::info!("SETRATEANCHORTIME accepted by device (rate={})", rate);
         Ok(())
@@ -1815,11 +1834,7 @@ impl ConnectionManager {
                     plist_val
                 );
             } else if let Ok(text) = std::str::from_utf8(&response.body) {
-                tracing::warn!(
-                    "{} error response body (text): {}",
-                    method.as_str(),
-                    text
-                );
+                tracing::warn!("{} error response body (text): {}", method.as_str(), text);
             } else {
                 tracing::warn!(
                     "{} error response body ({} bytes): {:02X?}",
