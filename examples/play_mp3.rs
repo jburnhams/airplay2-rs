@@ -80,6 +80,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // We need to use a separate task to handle Ctrl+C or user input if we want to stop early?
     // Actually stream_audio returns when EOF.
 
+    #[cfg(not(feature = "decoders"))]
+    {
+        println!("Decoders feature not enabled. Cannot play MP3.");
+        return Ok(());
+    }
+
     #[cfg(feature = "decoders")]
     {
         println!("Starting playback...");
@@ -122,33 +128,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
-        // Query playback info to confirm device state difference (Debug only)
-        /*
-        println!("Querying device playback status...");
-        match volume_client.get_playback_info().await {
-            Ok(info_bytes) => {
-                println!("Playback Info Response ({} bytes):", info_bytes.len());
-                // Try to parse as string, otherwise hex
-                if let Ok(s) = String::from_utf8(info_bytes.clone()) {
-                    println!("{}", s.trim());
-                } else {
-                    // Truncate long binary data for display
-                    let display_len = std::cmp::min(info_bytes.len(), 64);
-                    println!("{:02X?}...", &info_bytes[..display_len]);
-                }
-            }
-            Err(e) => eprintln!("Failed to get playback info: {}", e),
-        }
-        */
-
         // Wait for playback to finish
         match play_task.await {
             Ok(Ok(_)) => println!("Playback finished successfully."),
             Ok(Err(e)) => eprintln!("Playback error: {}", e),
             Err(e) => eprintln!("Task join error: {}", e),
         }
-    }
 
-    println!("\nPlayback finished.");
-    Ok(())
+        println!("\nPlayback finished.");
+        Ok(())
+    }
 }
