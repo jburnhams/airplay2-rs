@@ -476,7 +476,10 @@ impl PtpSlaveHandler {
             // Without T3/T4, we just use T2 - T1 which includes network delay.
             // This is good enough for AirPlay rendering (tens of ms precision).
             let offset_nanos = t2.diff_nanos(&t1);
-            #[allow(clippy::cast_precision_loss, reason = "Precision loss acceptable for millisecond display")]
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "Precision loss acceptable for millisecond display"
+            )]
             let offset_ms = offset_nanos as f64 / 1_000_000.0;
 
             // Use T1/T2 for both halves of the exchange (treating T3=T2, T4=T1)
