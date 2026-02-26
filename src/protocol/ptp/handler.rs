@@ -338,7 +338,8 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
+    #[allow(clippy::unused_async)]
+    async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
         if self.config.use_airplay_format {
             return;
         }
