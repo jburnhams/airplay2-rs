@@ -238,3 +238,40 @@ fn test_buffer_complex_range() {
     assert_eq!(packets[1].sequence, 12);
     assert_eq!(packets[2].sequence, 15);
 }
+
+#[test]
+fn test_buffer_gap_in_sequence() {
+    let mut buffer = PacketBuffer::new(10);
+    // Insert 10, 12 (missing 11)
+    buffer.push(BufferedPacket {
+        sequence: 10,
+        timestamp: 0,
+        data: Bytes::new(),
+    });
+    buffer.push(BufferedPacket {
+        sequence: 12,
+        timestamp: 0,
+        data: Bytes::new(),
+    });
+
+    // Request 10, 11, 12
+    let packets: Vec<_> = buffer.get_range(10, 3).collect();
+
+    assert_eq!(packets.len(), 2);
+    assert_eq!(packets[0].sequence, 10);
+    assert_eq!(packets[1].sequence, 12);
+}
+
+#[test]
+fn test_buffer_all_missing() {
+    let mut buffer = PacketBuffer::new(10);
+    buffer.push(BufferedPacket {
+        sequence: 10,
+        timestamp: 0,
+        data: Bytes::new(),
+    });
+
+    // Request 20, 21, 22
+    let packets: Vec<_> = buffer.get_range(20, 3).collect();
+    assert!(packets.is_empty());
+}

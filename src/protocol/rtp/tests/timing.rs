@@ -111,3 +111,24 @@ fn test_offset_calculation() {
 
     assert!((offset - expected).abs() < tolerance, "Offset was {offset}",);
 }
+
+#[test]
+fn test_timing_response_decode_errors() {
+    use crate::protocol::rtp::packet::RtpDecodeError;
+
+    // Buffer too small (23 bytes)
+    let buf = [0u8; 23];
+    let result = TimingResponse::decode(&buf);
+    assert!(matches!(
+        result,
+        Err(RtpDecodeError::BufferTooSmall {
+            needed: 24,
+            have: 23
+        })
+    ));
+
+    // Just enough bytes (24)
+    let buf = [0u8; 24];
+    let result = TimingResponse::decode(&buf);
+    assert!(result.is_ok());
+}
