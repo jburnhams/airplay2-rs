@@ -24,6 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 1: Connect to Kitchen
     println!("[1/6] Connecting to '{}'...", target_name);
+    #[allow(unused_mut)]
     let mut player = AirPlayPlayer::new();
     let mut connected = false;
 

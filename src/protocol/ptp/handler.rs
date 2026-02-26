@@ -173,7 +173,7 @@ impl PtpSlaveHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_packet(&general_buf[..len], src);
+                    self.handle_general_packet(&general_buf[..len], src).await;
                     // Check if a Delay_Resp arrived on the general port and
                     // we have all four timestamps to complete a timing exchange.
                     self.try_complete_timing().await;

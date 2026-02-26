@@ -222,14 +222,14 @@ impl MultiRoomCoordinator {
             let target_sys = now_sys + dur;
             let dur_since_epoch = target_sys
                 .duration_since(UNIX_EPOCH)
-                .unwrap_or_else(|_| Duration::ZERO);
+                .unwrap_or(Duration::ZERO);
             PtpTimestamp::from_duration(dur_since_epoch)
         } else {
             let dur = now_inst - inst;
             let target_sys = now_sys.checked_sub(dur).unwrap_or(UNIX_EPOCH);
             let dur_since_epoch = target_sys
                 .duration_since(UNIX_EPOCH)
-                .unwrap_or_else(|_| Duration::ZERO);
+                .unwrap_or(Duration::ZERO);
             PtpTimestamp::from_duration(dur_since_epoch)
         }
     }
