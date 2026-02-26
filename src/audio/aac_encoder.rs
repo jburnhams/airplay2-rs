@@ -1,6 +1,6 @@
 //! AAC audio encoder using fdk-aac
 
-use fdk_aac::enc::{BitRate, ChannelMode, Encoder, EncoderParams, Transport};
+use fdk_aac::enc::{AudioObjectType, BitRate, ChannelMode, Encoder, EncoderParams, Transport};
 use thiserror::Error;
 
 /// AAC encoder error
@@ -21,7 +21,7 @@ pub struct AacEncoder {
 }
 
 impl AacEncoder {
-    /// Create a new AAC encoder
+    /// Create a new AAC encoder (defaulting to AAC-LC)
     ///
     /// # Arguments
     ///
@@ -33,10 +33,36 @@ impl AacEncoder {
     ///
     /// Returns error if encoder cannot be initialized
     pub fn new(sample_rate: u32, channels: u32, bitrate: u32) -> Result<Self, AacEncoderError> {
+        Self::new_with_type(
+            sample_rate,
+            channels,
+            bitrate,
+            AudioObjectType::Mpeg4LowComplexity,
+        )
+    }
+
+    /// Create a new AAC encoder with specific object type
+    ///
+    /// # Arguments
+    ///
+    /// * `sample_rate` - Sample rate in Hz
+    /// * `channels` - Number of channels
+    /// * `bitrate` - Bitrate in bps
+    /// * `aot` - Audio Object Type (e.g. LC, ELD)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if encoder cannot be initialized
+    pub fn new_with_type(
+        sample_rate: u32,
+        channels: u32,
+        bitrate: u32,
+        aot: AudioObjectType,
+    ) -> Result<Self, AacEncoderError> {
         let params = EncoderParams {
             bit_rate: BitRate::Cbr(bitrate),
             transport: Transport::Raw, // Raw AAC frames for RTP
-            audio_object_type: fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
+            audio_object_type: aot,
             channels: match channels {
                 1 => ChannelMode::Mono,
                 2 => ChannelMode::Stereo,
@@ -55,6 +81,18 @@ impl AacEncoder {
             encoder,
             output_buffer: vec![0u8; buffer_size],
         })
+    }
+
+    /// Get Audio Specific Config (ASC)
+    ///
+    /// # Errors
+    ///
+    /// Returns error if encoder info cannot be retrieved
+    pub fn get_asc(&self) -> Result<Vec<u8>, AacEncoderError> {
+        self.encoder
+            .info()
+            .map(|info| info.confBuf[..info.confSize as usize].to_vec())
+            .map_err(|_| AacEncoderError::Initialization)
     }
 
     /// Encode PCM samples to AAC frame

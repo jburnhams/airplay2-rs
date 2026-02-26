@@ -72,3 +72,18 @@ fn test_encoder_errors() {
     let result = AacEncoder::new(44100, 5, 64000);
     assert!(result.is_err());
 }
+
+#[test]
+fn test_aac_eld_configuration() {
+    use fdk_aac::enc::AudioObjectType;
+
+    // AAC-ELD
+    let encoder =
+        AacEncoder::new_with_type(44100, 2, 64000, AudioObjectType::Mpeg4EnhancedLowDelay)
+            .expect("Failed to create ELD encoder");
+
+    // Check ASC
+    let asc = encoder.get_asc().expect("Failed to get ASC");
+    assert!(!asc.is_empty(), "ASC should not be empty");
+    println!("ASC (ELD): {asc:02X?}");
+}

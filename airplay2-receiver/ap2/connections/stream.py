@@ -7,6 +7,14 @@ from .stream_connection import StreamConnection
 from ap2.utils import get_free_socket
 
 
+class PredefinedAudioSetup:
+    def __init__(self, extradata):
+        self.extradata = extradata
+
+    def get_extra_data(self):
+        return self.extradata
+
+
 class Stream:
     REALTIME = 96
     BUFFERED = 103
@@ -92,6 +100,7 @@ class Stream:
                 isDebug=self.isDebug,
             )
 
+        aud_params = None
         if self.streamtype == Stream.REALTIME or self.streamtype == Stream.BUFFERED:
             self.control_proc, self.control_conns = Control.spawn(
                 controladdr_ours=self.control_socket,
@@ -114,6 +123,13 @@ class Stream:
             print(f"[Stream] Session key length: {len(self.session_key)}")
             self.spf = stream["spf"]
             self.buff_size = buff_size
+
+            if "fmtp" in stream:
+                fmtp = stream["fmtp"]
+                params = dict(item.split("=") for item in fmtp.split(";") if "=" in item)
+                if "config" in params:
+                    print(f"[Stream] Found config in fmtp: {params['config']}")
+                    aud_params = PredefinedAudioSetup(bytes.fromhex(params["config"]))
 
         if self.streamtype == Stream.REALTIME:
             self.session_iv = stream["shiv"] if "shiv" in stream else None
@@ -138,7 +154,7 @@ class Stream:
                 self.streamtype,
                 control_conns=self.control_conns,
                 isDebug=self.isDebug,
-                aud_params=None,
+                aud_params=aud_params,
             )
             self.descriptor = {
                 "type": self.streamtype,
@@ -163,7 +179,7 @@ class Stream:
                 self.streamtype,
                 control_conns=self.control_conns,
                 isDebug=self.isDebug,
-                aud_params=None,
+                aud_params=aud_params,
             )
             self.descriptor = {
                 "type": self.streamtype,
