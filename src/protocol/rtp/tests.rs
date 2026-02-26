@@ -1,4 +1,5 @@
 mod codec;
+mod codec_chacha;
 mod control;
 mod extra_packet;
 mod packet;

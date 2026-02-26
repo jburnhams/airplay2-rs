@@ -89,3 +89,15 @@ fn test_multicast_parsing() {
     let transport = TransportHeader::parse("RTP/AVP/UDP;multicast").unwrap();
     assert_eq!(transport.cast, CastMode::Multicast);
 }
+
+#[test]
+fn test_parse_transport_with_server_port() {
+    let transport = TransportHeader::parse(
+        "RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;timing_port=6002",
+    )
+    .unwrap();
+
+    assert_eq!(transport.server_port, Some(6000));
+    assert_eq!(transport.control_port, Some(6001));
+    assert_eq!(transport.timing_port, Some(6002));
+}

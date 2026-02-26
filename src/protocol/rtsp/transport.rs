@@ -14,6 +14,8 @@ pub struct TransportHeader {
     pub cast: CastMode,
     /// Mode (usually "record" for RAOP)
     pub mode: Option<String>,
+    /// Server's audio/data port (for response parsing)
+    pub server_port: Option<u16>,
     /// Client's control port
     pub control_port: Option<u16>,
     /// Client's timing port
@@ -52,6 +54,7 @@ impl TransportHeader {
             lower_transport,
             cast: CastMode::Unicast, // Default
             mode: None,
+            server_port: None,
             control_port: None,
             timing_port: None,
             interleaved: None,
@@ -67,6 +70,12 @@ impl TransportHeader {
                 transport.cast = CastMode::Multicast;
             } else if let Some(value) = part.strip_prefix("mode=") {
                 transport.mode = Some(value.to_string());
+            } else if let Some(value) = part.strip_prefix("server_port=") {
+                transport.server_port = Some(
+                    value
+                        .parse()
+                        .map_err(|_| TransportParseError::InvalidPort)?,
+                );
             } else if let Some(value) = part.strip_prefix("control_port=") {
                 transport.control_port = Some(
                     value

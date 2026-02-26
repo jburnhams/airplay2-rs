@@ -1168,15 +1168,20 @@ impl ConnectionManager {
 
         // Check for Transport header in Step 2 response
         if server_ports.is_none() {
-            if let Some(transport_header) = response_step2.headers.get("Transport") {
-                if let Ok((sp, cp, tp)) = Self::parse_transport_ports(transport_header) {
-                    // parse_transport_ports returns (server_port, control_port, timing_port)
-                    // server_port is data port.
-                    // timing_port is usually timing port.
-                    // Where is event port? Only in plist?
-                    // Use step 1 event port.
-                    let ep = server_event_port.unwrap_or(0);
-                    server_ports = Some((sp, cp, ep, tp));
+            if let Some(transport_header_str) = response_step2.headers.get("Transport") {
+                if let Ok(transport) =
+                    crate::protocol::rtsp::transport::TransportHeader::parse(transport_header_str)
+                {
+                    if let (Some(sp), Some(cp), Some(tp)) = (
+                        transport.server_port,
+                        transport.control_port,
+                        transport.timing_port,
+                    ) {
+                        if sp > 0 {
+                            let ep = server_event_port.unwrap_or(0);
+                            server_ports = Some((sp, cp, ep, tp));
+                        }
+                    }
                 }
             }
         }
@@ -2193,33 +2198,5 @@ impl ConnectionManager {
     /// Check if PTP timing is active for the current connection.
     pub async fn is_ptp_active(&self) -> bool {
         *self.ptp_active.read().await
-    }
-
-    fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {
-        let mut server_audio_port = 0;
-        let mut server_ctrl_port = 0;
-        let mut server_time_port = 0;
-
-        for part in transport_header.split(';') {
-            if let Some((key, value)) = part.trim().split_once('=') {
-                if let Ok(port) = value.parse::<u16>() {
-                    match key {
-                        "server_port" => server_audio_port = port,
-                        "control_port" => server_ctrl_port = port,
-                        "timing_port" => server_time_port = port,
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        if server_audio_port == 0 {
-            return Err(AirPlayError::RtspError {
-                message: "Could not determine server audio port".to_string(),
-                status_code: None,
-            });
-        }
-
-        Ok((server_audio_port, server_ctrl_port, server_time_port))
     }
 }
