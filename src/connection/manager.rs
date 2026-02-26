@@ -15,7 +15,7 @@ use crate::protocol::pairing::storage::StorageError;
 use crate::protocol::pairing::{
     AuthSetup, PairSetup, PairVerify, PairingKeys, PairingStepResult, PairingStorage, SessionKeys,
 };
-use crate::protocol::ptp::{PtpNodeConfig, PtpRole, SharedPtpClock, create_shared_clock};
+use crate::protocol::ptp::{PtpHandlerConfig, PtpRole, SharedPtpClock, create_shared_clock};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse, RtspSession};
 use crate::types::{AirPlayConfig, AirPlayDevice, TimingProtocol};
 
@@ -53,6 +53,12 @@ pub struct ConnectionManager {
     ptp_shutdown_tx: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     /// Whether PTP timing is active for the current session
     ptp_active: RwLock<bool>,
+    /// Device's PTP clock ID (from SETUP Step 1 timingPeerInfo.ClockID)
+    device_clock_id: Mutex<Option<u64>>,
+    /// Whether a RECORD request was sent but its response hasn't been consumed yet.
+    /// This happens when RECORD times out during `connect()`. The deferred response
+    /// must be consumed before sending the next RTSP command.
+    pending_record_response: Mutex<bool>,
 }
 
 /// UDP sockets for streaming
@@ -91,6 +97,8 @@ impl ConnectionManager {
             ptp_clock: Mutex::new(None),
             ptp_shutdown_tx: Mutex::new(None),
             ptp_active: RwLock::new(false),
+            device_clock_id: Mutex::new(None),
+            pending_record_response: Mutex::new(false),
         }
     }
 
@@ -887,7 +895,7 @@ impl ConnectionManager {
         }
 
         // Parse Event/Timing ports from Step 1
-        let (server_event_port, server_timing_port) =
+        let (server_event_port, server_timing_port, device_clock_port) =
             match crate::protocol::plist::decode(&response_step1.body) {
                 Ok(plist) => {
                     tracing::info!("SETUP Step 1 plist: {:#?}", plist);
@@ -925,18 +933,57 @@ impl ConnectionManager {
                             ep,
                             tp
                         );
-                        // Also log timingPeerInfo from device
+                        // Extract ClockPorts and ClockID from timingPeerInfo for PTP.
+                        // HomePod advertises a non-standard port for PTP via ClockPorts.
+                        let mut clock_port: Option<u16> = None;
                         if let Some(tpi) = dict.get("timingPeerInfo") {
                             tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                            if let Some(tpi_dict) = tpi.as_dict() {
+                                // Extract ClockID for SETRATEANCHORTIME networkTimeTimelineID
+                                if let Some(cid) = tpi_dict.get("ClockID") {
+                                    if let Some(cid_val) = cid.as_i64() {
+                                        #[allow(
+                                            clippy::cast_sign_loss,
+                                            reason = "Clock ID is unsigned but plist stores as i64"
+                                        )]
+                                        let clock_id = cid_val as u64;
+                                        tracing::info!("Device ClockID: 0x{:016X}", clock_id);
+                                        *self.device_clock_id.lock().await = Some(clock_id);
+                                    }
+                                }
+                                if let Some(cp) = tpi_dict.get("ClockPorts") {
+                                    if let Some(cp_dict) = cp.as_dict() {
+                                        for (key, val) in cp_dict {
+                                            if let Some(port_val) = val.as_i64() {
+                                                #[allow(
+                                                    clippy::cast_possible_truncation,
+                                                    clippy::cast_sign_loss
+                                                )]
+                                                let port = port_val as u16;
+                                                tracing::info!(
+                                                    "Device ClockPorts: {} -> {} (unsigned)",
+                                                    key,
+                                                    port
+                                                );
+                                                clock_port = Some(port);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        (ep, tp)
+                        // Store clock_port for PTP handler setup.
+                        if let Some(cp) = clock_port {
+                            tracing::info!("Will use ClockPorts port {} for PTP Delay_Req", cp);
+                        }
+                        (ep, tp, clock_port)
                     } else {
-                        (None, None)
+                        (None, None, None)
                     }
                 }
                 Err(e) => {
                     tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
-                    (None, None)
+                    (None, None, None)
                 }
             };
 
@@ -1184,7 +1231,7 @@ impl ConnectionManager {
                     tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
                 }
 
-                self.start_ptp_master(&time_sock, device_ip, server_time_port)
+                self.start_ptp_master(&time_sock, device_ip, server_time_port, device_clock_port)
                     .await;
             }
 
@@ -1198,21 +1245,25 @@ impl ConnectionManager {
             });
         }
 
-        // 8. Send RECORD to start the streaming session
+        // 8. Send RECORD to start the streaming session.
+        // For AirPlay 2 buffered audio, RECORD triggers PTP Sync messages.
+        // HomePod may not respond to RECORD until audio data starts flowing.
+        // We send RECORD and wait with a 5s timeout. If it times out, we mark
+        // that there's a pending RECORD response that must be consumed before
+        // the next RTSP request.
         if use_ptp {
-            // For AirPlay 2 Buffered Audio: RECORD is sent as part of the setup flow
-            // (per protocol: SETUP → SETPEERS → RECORD → FLUSH → Audio data)
             tracing::info!("Sending RECORD for AirPlay 2 Buffered Audio...");
-            // Add a small delay to allow receiver to process SETPEERS/sockets
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
             match tokio::time::timeout(std::time::Duration::from_secs(5), self.record()).await {
                 Ok(Ok(())) => tracing::info!("RECORD accepted by device"),
                 Ok(Err(e)) => tracing::warn!("RECORD failed: {}", e),
-                Err(_) => tracing::warn!("RECORD timed out after 5s (device may respond later)"),
+                Err(_) => {
+                    tracing::warn!("RECORD timed out after 5s — marking pending response");
+                    *self.pending_record_response.lock().await = true;
+                }
             }
         }
-        // Note: For NTP/AirPlay 1 devices, RECORD is still deferred until streaming starts.
         Ok(())
     }
 
@@ -1346,7 +1397,7 @@ impl ConnectionManager {
     }
 
     /// Send RTSP request and get response
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, reason = "Complex RTSP request handling logic")]
     async fn send_rtsp_request(&self, request: &RtspRequest) -> Result<RtspResponse, AirPlayError> {
         let encoded = request.encode();
 
@@ -1379,6 +1430,18 @@ impl ConnectionManager {
         // Update stats
         self.stats.write().await.record_sent(encoded.len());
 
+        // Check if there's a pending RECORD response to consume first
+        let has_pending = {
+            let mut guard = self.pending_record_response.lock().await;
+            if *guard {
+                *guard = false;
+                true
+            } else {
+                false
+            }
+        };
+        let mut responses_to_skip = i32::from(has_pending);
+
         // Read response
         let mut codec = self.rtsp_codec.lock().await;
         let mut buf = vec![0u8; 4096];
@@ -1389,6 +1452,15 @@ impl ConnectionManager {
                 message: e.to_string(),
                 status_code: None,
             })? {
+                if responses_to_skip > 0 {
+                    tracing::info!(
+                        "Consumed deferred RECORD response: {} {}",
+                        response.status.as_u16(),
+                        response.reason
+                    );
+                    responses_to_skip -= 1;
+                    continue;
+                }
                 return Ok(response);
             }
 
@@ -1520,6 +1592,100 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Send SETRATEANCHORTIME with PTP timing fields.
+    ///
+    /// `rate`: 1 = play, 0 = pause.
+    /// Includes `networkTimeSecs`, `networkTimeFrac`, and `networkTimeTimelineID`
+    /// derived from the PTP clock.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if plist encoding fails or RTSP request fails.
+    pub async fn send_set_rate_anchor_time(&self, rate: i64) -> Result<(), AirPlayError> {
+        // Get device clock ID
+        let device_clock_id = self.device_clock_id().await.unwrap_or(0);
+
+        // Get current network time. The HomePod's PTP clock uses its own epoch.
+        // We send the master clock time (HomePod's PTP time = local - offset).
+        let now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+        let (network_secs, network_frac) = {
+            let clock_opt = self.ptp_clock().await;
+            if let Some(ref clock_arc) = clock_opt {
+                let clock = clock_arc.read().await;
+                let local_nanos = now.to_nanos();
+                // offset = slave - master, so master_time = local_time - offset
+                let remote_nanos = local_nanos - clock.offset_nanos();
+                let remote = if remote_nanos < 0 {
+                    crate::protocol::ptp::timestamp::PtpTimestamp::ZERO
+                } else {
+                    crate::protocol::ptp::timestamp::PtpTimestamp::from_nanos(remote_nanos)
+                };
+                // NTP-style 64-bit fraction: (nanoseconds / 1e9) * 2^64
+                #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
+                let frac = ((u128::from(remote.nanoseconds) << 64) / 1_000_000_000) as u64;
+                (remote.seconds, frac)
+            } else {
+                #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
+                let frac = ((u128::from(now.nanoseconds) << 64) / 1_000_000_000) as u64;
+                (now.seconds, frac)
+            }
+        };
+
+        tracing::info!(
+            "Sending SETRATEANCHORTIME (rate={}, networkTimeSecs={}, networkTimeFrac=0x{:016X}, timelineID=0x{:016X})",
+            rate,
+            network_secs,
+            network_frac,
+            device_clock_id,
+        );
+
+        // Build SETRATEANCHORTIME plist with PTP timing fields.
+        // All fields use Integer type. networkTimeSecs/networkTimeFrac/networkTimeTimelineID
+        // are read as uint by receivers (shairport-sync) but encoded as signed Integer.
+        let mut body = crate::protocol::plist::DictBuilder::new()
+            .insert("rate", rate)
+            .insert("rtpTime", 0i64);
+
+        // Only include timing fields if we have a valid device clock ID
+        if device_clock_id != 0 {
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "Bit pattern preserved for plist encoding"
+            )]
+            {
+                body = body
+                    .insert("networkTimeSecs", network_secs as i64)
+                    .insert("networkTimeFrac", network_frac as i64)
+                    .insert("networkTimeTimelineID", device_clock_id as i64);
+            }
+        }
+
+        let body = body.build();
+
+        tracing::info!("SETRATEANCHORTIME plist: {:#?}", body);
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode SETRATEANCHORTIME plist: {e}"),
+                status_code: None,
+            })?;
+
+        tracing::info!(
+            "SETRATEANCHORTIME encoded plist ({} bytes): {:02X?}",
+            encoded.len(),
+            &encoded[..encoded.len().min(200)]
+        );
+
+        self.send_command(
+            crate::protocol::rtsp::Method::SetRateAnchorTime,
+            Some(encoded),
+            Some("application/x-apple-binary-plist".to_string()),
+        )
+        .await?;
+
+        tracing::info!("SETRATEANCHORTIME accepted by device (rate={})", rate);
+        Ok(())
+    }
+
     /// Send RTP audio packet
     ///
     /// # Errors
@@ -1630,6 +1796,7 @@ impl ConnectionManager {
                 Method::GetParameter => {
                     session.get_parameter_request(content_type.as_deref(), body)
                 }
+                Method::Flush => session.flush_request(0, 0),
                 Method::Teardown => session.teardown_request(),
                 Method::Pause => session.pause_request(),
                 Method::SetRateAnchorTime => {
@@ -1648,6 +1815,35 @@ impl ConnectionManager {
         };
 
         let response = self.send_rtsp_request(&request).await?;
+
+        // Log error response bodies for debugging
+        if !response.is_success() && response.body.is_empty() {
+            tracing::warn!(
+                "{} failed: {} {} (no body in error response)",
+                method.as_str(),
+                response.status.as_u16(),
+                response.reason
+            );
+        }
+        if !response.is_success() && !response.body.is_empty() {
+            // Try to decode as binary plist first, fall back to raw display
+            if let Ok(plist_val) = crate::protocol::plist::decode(&response.body) {
+                tracing::warn!(
+                    "{} error response body (plist): {:#?}",
+                    method.as_str(),
+                    plist_val
+                );
+            } else if let Ok(text) = std::str::from_utf8(&response.body) {
+                tracing::warn!("{} error response body (text): {}", method.as_str(), text);
+            } else {
+                tracing::warn!(
+                    "{} error response body ({} bytes): {:02X?}",
+                    method.as_str(),
+                    response.body.len(),
+                    &response.body[..response.body.len().min(200)]
+                );
+            }
+        }
 
         // Update session state
         {
@@ -1873,12 +2069,14 @@ impl ConnectionManager {
         _timing_socket: &UdpSocket,
         device_ip: std::net::IpAddr,
         _server_timing_port: u16,
+        device_clock_port: Option<u16>,
     ) {
-        use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT};
-        use crate::protocol::ptp::node::PtpNode;
+        use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpSlaveHandler};
 
         let clock_id: u64 = rand::random();
-        let clock = create_shared_clock(clock_id, PtpRole::Master);
+        // We act as PTP slave — the HomePod acts as master and sends Sync/Follow_Up.
+        // This lets us measure the offset between our clock and the HomePod's clock.
+        let clock = create_shared_clock(clock_id, PtpRole::Slave);
 
         // Bind to standard PTP event port (319) — privileged, requires admin
         let ptp_event_socket = match UdpSocket::bind(("0.0.0.0", PTP_EVENT_PORT)).await {
@@ -1927,42 +2125,52 @@ impl ConnectionManager {
 
         let ptp_event_socket = Arc::new(ptp_event_socket);
 
-        let config = PtpNodeConfig {
+        let config = PtpHandlerConfig {
             clock_id,
-            priority1: 128, // Default priority; HomePod sends 248 (lower priority)
-            priority2: 128,
+            role: PtpRole::Slave,
             sync_interval: std::time::Duration::from_secs(1),
             delay_req_interval: std::time::Duration::from_secs(1),
-            announce_interval: std::time::Duration::from_secs(2),
             recv_buf_size: 256,
             use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP (44-byte messages)
         };
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-        // Pre-populate with the device as peer (for both Sync sending and receiving)
-        let peer_event_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
-        let peer_general_addr = std::net::SocketAddr::new(device_ip, PTP_GENERAL_PORT);
+        // The HomePod is the PTP master — it sends Sync/Follow_Up on ports 319/320.
+        // We act as slave: listen for its Sync, process Follow_Up for T1, send Delay_Req,
+        // and process Delay_Resp to compute the clock offset.
+        let master_event_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
 
         let handler_clock = clock.clone();
 
         tokio::spawn(async move {
-            let mut node =
-                PtpNode::new(ptp_event_socket, ptp_general_socket, handler_clock, config);
+            let mut handler = PtpSlaveHandler::new(
+                ptp_event_socket,
+                ptp_general_socket,
+                handler_clock,
+                config,
+                master_event_addr,
+            );
 
-            // Pre-populate with the device as a peer
-            node.add_slave(peer_event_addr);
-            node.add_general_slave(peer_general_addr);
+            // If device advertised ClockPorts, try sending Delay_Req there too.
+            if let Some(cp) = device_clock_port {
+                let clock_port_addr = std::net::SocketAddr::new(device_ip, cp);
+                tracing::info!(
+                    "PTP slave: Setting ClockPorts address {} for Delay_Req",
+                    clock_port_addr
+                );
+                handler.set_clock_port_addr(clock_port_addr);
+            }
 
             tracing::info!(
-                "PTP node started (clock_id=0x{:016X}, peer={})",
+                "PTP slave handler started (clock_id=0x{:016X}, master={})",
                 clock_id,
-                peer_event_addr
+                master_event_addr
             );
-            if let Err(e) = node.run(shutdown_rx).await {
-                tracing::error!("PTP node error: {}", e);
+            if let Err(e) = handler.run(shutdown_rx).await {
+                tracing::error!("PTP slave handler error: {}", e);
             }
-            tracing::info!("PTP node stopped (final role={:?})", node.role());
+            tracing::info!("PTP slave handler stopped");
         });
 
         *self.ptp_clock.lock().await = Some(clock);
@@ -1970,7 +2178,7 @@ impl ConnectionManager {
         *self.ptp_active.write().await = true;
 
         tracing::info!(
-            "PTP timing started for peer at {} (event port {}, general port {})",
+            "PTP timing started as SLAVE to master at {} (event port {}, general port {})",
             device_ip,
             PTP_EVENT_PORT,
             PTP_GENERAL_PORT
@@ -1990,6 +2198,11 @@ impl ConnectionManager {
     /// Get the shared PTP clock, if PTP timing is active.
     pub async fn ptp_clock(&self) -> Option<SharedPtpClock> {
         self.ptp_clock.lock().await.clone()
+    }
+
+    /// Get the device's PTP clock ID (from SETUP Step 1 timingPeerInfo).
+    pub async fn device_clock_id(&self) -> Option<u64> {
+        *self.device_clock_id.lock().await
     }
 
     /// Check if PTP timing is active for the current connection.

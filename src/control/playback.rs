@@ -66,7 +66,7 @@ impl PlaybackController {
 
         if !state.is_playing {
             let body = DictBuilder::new()
-                .insert("rate", 1.0)
+                .insert("rate", 1i64)
                 .insert("rtpTime", 0u64)
                 .build();
             let encoded =
@@ -98,7 +98,7 @@ impl PlaybackController {
 
         if state.is_playing {
             let body = DictBuilder::new()
-                .insert("rate", 0.0)
+                .insert("rate", 0i64)
                 .insert("rtpTime", 0u64)
                 .build();
             let encoded =

@@ -111,7 +111,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Pause
     println!("Pausing...");
     client.pause().await?;
-    // Verify log: "rate': 0.0" inside a dictionary log or similar
+    // Verify log: "rate': 0" inside a dictionary log or similar (Python might print 0.0 as 0)
     // The log is: {'rate': 0.0, 'rtpTime': ...}
     // Increased timeout for CI environment
     receiver
@@ -121,7 +121,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 6. Resume
     println!("Resuming...");
     client.play().await?;
-    // Verify log: "rate': 1.0"
+    // Verify log: "rate': 1"
     receiver
         .wait_for_log("'rate': 1.0", Duration::from_secs(15))
         .await?;
