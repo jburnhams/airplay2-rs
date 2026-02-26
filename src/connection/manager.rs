@@ -56,7 +56,7 @@ pub struct ConnectionManager {
     /// Device's PTP clock ID (from SETUP Step 1 timingPeerInfo.ClockID)
     device_clock_id: Mutex<Option<u64>>,
     /// Whether a RECORD request was sent but its response hasn't been consumed yet.
-    /// This happens when RECORD times out during connect(). The deferred response
+    /// This happens when RECORD times out during `connect()`. The deferred response
     /// must be consumed before sending the next RTSP command.
     pending_record_response: Mutex<bool>,
 }
@@ -1397,6 +1397,7 @@ impl ConnectionManager {
     }
 
     /// Send RTSP request and get response
+    #[allow(clippy::too_many_lines, reason = "Complex RTSP request handling logic")]
     async fn send_rtsp_request(&self, request: &RtspRequest) -> Result<RtspResponse, AirPlayError> {
         let encoded = request.encode();
 
@@ -1439,7 +1440,7 @@ impl ConnectionManager {
                 false
             }
         };
-        let mut responses_to_skip = if has_pending { 1 } else { 0 };
+        let mut responses_to_skip = i32::from(has_pending);
 
         // Read response
         let mut codec = self.rtsp_codec.lock().await;
@@ -1596,6 +1597,10 @@ impl ConnectionManager {
     /// `rate`: 1 = play, 0 = pause.
     /// Includes `networkTimeSecs`, `networkTimeFrac`, and `networkTimeTimelineID`
     /// derived from the PTP clock.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if plist encoding fails or RTSP request fails.
     pub async fn send_set_rate_anchor_time(&self, rate: i64) -> Result<(), AirPlayError> {
         // Get device clock ID
         let device_clock_id = self.device_clock_id().await.unwrap_or(0);

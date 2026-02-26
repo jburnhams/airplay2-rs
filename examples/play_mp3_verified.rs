@@ -286,14 +286,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Don't wait for the full file to play — just confirm it's working and exit
         println!("\nPlayback verified. Exiting (playback task will be dropped).");
         play_task.abort();
+        Ok(())
     }
 
     #[cfg(not(feature = "decoders"))]
     {
         eprintln!("This example requires the 'decoders' feature. Run with:");
         eprintln!("  cargo run --example play_mp3_verified --features decoders");
-        return Err("Missing 'decoders' feature".into());
+        Err("Missing 'decoders' feature".into())
     }
-
-    Ok(())
 }

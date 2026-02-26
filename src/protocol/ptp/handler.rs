@@ -71,7 +71,7 @@ pub struct PtpSlaveHandler {
     config: PtpHandlerConfig,
     /// Address of the master (event port 319).
     master_addr: SocketAddr,
-    /// Optional alternative master address for Delay_Req (e.g., `ClockPorts`).
+    /// Optional alternative master address for `Delay_Req` (e.g., `ClockPorts`).
     master_clock_port_addr: Option<SocketAddr>,
     /// Next sequence ID for `Delay_Req`.
     delay_req_sequence: u16,
@@ -87,7 +87,7 @@ pub struct PtpSlaveHandler {
     delay_req_sent_at: Option<tokio::time::Instant>,
     /// Count of Sync messages processed (for one-way sync).
     sync_count: u64,
-    /// Count of Delay_Req messages sent without response (for fallback logic).
+    /// Count of `Delay_Req` messages sent without response (for fallback logic).
     delay_req_no_resp_count: u32,
 }
 
@@ -118,7 +118,7 @@ impl PtpSlaveHandler {
         }
     }
 
-    /// Set an alternative address for Delay_Req (e.g., from ClockPorts).
+    /// Set an alternative address for `Delay_Req` (e.g., from `ClockPorts`).
     pub fn set_clock_port_addr(&mut self, addr: SocketAddr) {
         self.master_clock_port_addr = Some(addr);
     }
@@ -131,7 +131,7 @@ impl PtpSlaveHandler {
     /// 3. Sends `Delay_Req` messages periodically (recording T3)
     /// 4. Receives `Delay_Resp` messages and records T4
     /// 5. Updates the PTP clock with complete measurements
-    /// 6. Falls back to one-way sync if Delay_Resp never arrives
+    /// 6. Falls back to one-way sync if `Delay_Resp` never arrives
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
@@ -173,7 +173,7 @@ impl PtpSlaveHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    self.handle_general_packet(&general_buf[..len], src).await;
+                    self.handle_general_packet(&general_buf[..len], src);
                     // Check if a Delay_Resp arrived on the general port and
                     // we have all four timestamps to complete a timing exchange.
                     self.try_complete_timing().await;
@@ -234,7 +234,7 @@ impl PtpSlaveHandler {
     async fn handle_event_packet(
         &mut self,
         data: &[u8],
-        _src: SocketAddr,
+        src: SocketAddr,
     ) -> Result<(), std::io::Error> {
         let t2 = PtpTimestamp::now();
 
@@ -325,7 +325,7 @@ impl PtpSlaveHandler {
                     tracing::info!(
                         "PTP slave: Unexpected event message type: {:?} from {}",
                         std::mem::discriminant(&other),
-                        _src
+                        src
                     );
                 }
             }
@@ -338,7 +338,7 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
+    fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
         if self.config.use_airplay_format {
             return;
         }
@@ -476,6 +476,7 @@ impl PtpSlaveHandler {
             // Without T3/T4, we just use T2 - T1 which includes network delay.
             // This is good enough for AirPlay rendering (tens of ms precision).
             let offset_nanos = t2.diff_nanos(&t1);
+            #[allow(clippy::cast_precision_loss, reason = "Precision loss acceptable for millisecond display")]
             let offset_ms = offset_nanos as f64 / 1_000_000.0;
 
             // Use T1/T2 for both halves of the exchange (treating T3=T2, T4=T1)
@@ -517,13 +518,13 @@ pub struct PtpMasterHandler {
     /// Known slave general addresses (port 320) for `Follow_Up` messages.
     known_general_slaves: Vec<SocketAddr>,
     // --- Dual-role: also measure offset to remote clock ---
-    /// Pending T1 from incoming Sync/Follow_Up (remote's timestamp).
+    /// Pending T1 from incoming `Sync/Follow_Up` (remote's timestamp).
     pending_remote_t1: Option<PtpTimestamp>,
     /// Pending T2 (our local time when we received the remote Sync).
     pending_remote_t2: Option<PtpTimestamp>,
-    /// Pending T3 (our local time when we sent a Delay_Req to remote).
+    /// Pending T3 (our local time when we sent a `Delay_Req` to remote).
     pending_remote_t3: Option<PtpTimestamp>,
-    /// Next Delay_Req sequence ID for dual-role measurements.
+    /// Next `Delay_Req` sequence ID for dual-role measurements.
     delay_req_sequence: u16,
 }
 
@@ -811,7 +812,7 @@ impl PtpMasterHandler {
         }
     }
 
-    /// Dual-role: send Delay_Req to the first known slave to measure clock offset.
+    /// Dual-role: send `Delay_Req` to the first known slave to measure clock offset.
     async fn send_delay_req_to_remote(&mut self) -> Result<(), std::io::Error> {
         // Send to the first known slave on event port.
         if let Some(&slave_addr) = self.known_slaves.first() {
