@@ -42,7 +42,20 @@ async fn test_forget_device() {
     // 3. Connect and Pair
     let device = receiver.device_config();
 
-    client.connect(&device).await.expect("Failed to connect");
+    // Use retry logic for robustness in CI environments
+    let mut connected = false;
+    for i in 0..3 {
+        println!("Connection attempt {}/3...", i + 1);
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        panic!("Failed to connect client after retries");
+    }
 
     // Verify keys are stored
     // We can't access client's storage directly easily.
