@@ -81,7 +81,11 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
         // Verify we actually loaded something
         use airplay2::protocol::pairing::storage::PairingStorage;
         let keys = storage.load(&device.id).await;
-        assert!(keys.is_some(), "Should have loaded keys for device {}", device.id);
+        assert!(
+            keys.is_some(),
+            "Should have loaded keys for device {}",
+            device.id
+        );
 
         let config = airplay2::AirPlayConfig::builder()
             .pairing_storage(storage_path.clone())
