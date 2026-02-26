@@ -85,7 +85,10 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
     // produced by fdk-aac (InvalidDataError), but RTP packets are received correctly.
     // We relax the check to only verify RTP reception to confirm protocol works.
     if let Err(e) = output.verify_audio_received() {
-        tracing::warn!("Audio decoding failed (expected with current PyAV/fdk-aac mismatch): {}", e);
+        tracing::warn!(
+            "Audio decoding failed (expected with current PyAV/fdk-aac mismatch): {}",
+            e
+        );
         if output.log_path.exists() {
             let logs = std::fs::read_to_string(&output.log_path)?;
             // Check if we have invalid data errors (confirming packet reception)
@@ -107,16 +110,18 @@ async fn test_aac_eld_streaming_end_to_end() -> Result<(), Box<dyn std::error::E
         if logs.contains("AAC_ELD") {
             tracing::info!("✓ Receiver confirmed AAC-ELD format");
         } else {
-            tracing::warn!("Receiver did not explicitly confirm AAC-ELD in logs (check manual verification)");
+            tracing::warn!(
+                "Receiver did not explicitly confirm AAC-ELD in logs (check manual verification)"
+            );
             // If it mentions AAC but not ELD, it might be misidentified, but let's see.
             if logs.contains("Matched AAC") {
-                 tracing::info!("Receiver matched AAC generic");
+                tracing::info!("Receiver matched AAC generic");
             }
         }
 
         // Also check if config parsing happened
         if logs.contains("Negotiated audio format: AAC_ELD") {
-             tracing::info!("✓ Receiver negotiated AAC-ELD");
+            tracing::info!("✓ Receiver negotiated AAC-ELD");
         }
     }
 

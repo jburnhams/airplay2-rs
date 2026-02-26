@@ -792,16 +792,18 @@ impl ConnectionManager {
                         message: format!("Failed to initialize AAC-ELD encoder for ASC: {e}"),
                     })?;
 
-                    let asc = encoder.get_asc().ok_or_else(|| AirPlayError::InternalError {
-                        message: "Failed to get ASC from AAC-ELD encoder".to_string(),
-                    })?;
+                    let asc = encoder
+                        .get_asc()
+                        .ok_or_else(|| AirPlayError::InternalError {
+                            message: "Failed to get ASC from AAC-ELD encoder".to_string(),
+                        })?;
 
                     let frame_len = encoder.get_frame_length().unwrap_or(512);
 
-                    let config_hex = asc
-                        .iter()
-                        .map(|b| format!("{b:02x}"))
-                        .collect::<String>();
+                    let config_hex = asc.iter().fold(String::new(), |mut output, b| {
+                        let _ = write!(output, "{b:02x}");
+                        output
+                    });
 
                     format!(
                         "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
