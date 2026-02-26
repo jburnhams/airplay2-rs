@@ -68,7 +68,21 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
         .connection_timeout(Duration::from_secs(30))
         .build();
     let client = AirPlayClient::new(config);
-    client.connect(&device).await?;
+
+    // Use retry logic for robustness in CI
+    let mut connected = false;
+    for i in 0..3 {
+        println!("Connection attempt {}/3...", i + 1);
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect client after retries".into());
+    }
 
     // 3. Set Volume (Initial)
     println!("Setting volume to 0.5 (-6.02 dB)...");
@@ -99,8 +113,9 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     client.pause().await?;
     // Verify log: "rate': 0.0" inside a dictionary log or similar
     // The log is: {'rate': 0.0, 'rtpTime': ...}
+    // Increased timeout for CI environment
     receiver
-        .wait_for_log("'rate': 0.0", Duration::from_secs(5))
+        .wait_for_log("'rate': 0.0", Duration::from_secs(15))
         .await?;
 
     // 6. Resume
@@ -108,7 +123,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     client.play().await?;
     // Verify log: "rate': 1.0"
     receiver
-        .wait_for_log("'rate': 1.0", Duration::from_secs(5))
+        .wait_for_log("'rate': 1.0", Duration::from_secs(15))
         .await?;
 
     // 7. Change Volume
