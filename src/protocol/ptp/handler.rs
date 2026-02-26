@@ -69,8 +69,10 @@ pub struct PtpSlaveHandler {
     clock: SharedPtpClock,
     /// Configuration.
     config: PtpHandlerConfig,
-    /// Address of the master.
+    /// Address of the master (event port 319).
     master_addr: SocketAddr,
+    /// Optional alternative master address for Delay_Req (e.g., `ClockPorts`).
+    master_clock_port_addr: Option<SocketAddr>,
     /// Next sequence ID for `Delay_Req`.
     delay_req_sequence: u16,
     /// Pending Sync T1 (from Sync or Follow-up).
@@ -79,6 +81,14 @@ pub struct PtpSlaveHandler {
     pending_t2: Option<PtpTimestamp>,
     /// Pending `Delay_Req` T3.
     pending_t3: Option<PtpTimestamp>,
+    /// Pending `Delay_Resp` T4 received on general port.
+    pending_delay_resp: Option<PtpTimestamp>,
+    /// When the pending `Delay_Req` was sent (for timeout).
+    delay_req_sent_at: Option<tokio::time::Instant>,
+    /// Count of Sync messages processed (for one-way sync).
+    sync_count: u64,
+    /// Count of Delay_Req messages sent without response (for fallback logic).
+    delay_req_no_resp_count: u32,
 }
 
 impl PtpSlaveHandler {
@@ -96,11 +106,21 @@ impl PtpSlaveHandler {
             clock,
             config,
             master_addr,
+            master_clock_port_addr: None,
             delay_req_sequence: 0,
             pending_t1: None,
             pending_t2: None,
             pending_t3: None,
+            pending_delay_resp: None,
+            delay_req_sent_at: None,
+            sync_count: 0,
+            delay_req_no_resp_count: 0,
         }
+    }
+
+    /// Set an alternative address for Delay_Req (e.g., from ClockPorts).
+    pub fn set_clock_port_addr(&mut self, addr: SocketAddr) {
+        self.master_clock_port_addr = Some(addr);
     }
 
     /// Run the slave handler loop.
@@ -111,6 +131,7 @@ impl PtpSlaveHandler {
     /// 3. Sends `Delay_Req` messages periodically (recording T3)
     /// 4. Receives `Delay_Resp` messages and records T4
     /// 5. Updates the PTP clock with complete measurements
+    /// 6. Falls back to one-way sync if Delay_Resp never arrives
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
@@ -121,6 +142,16 @@ impl PtpSlaveHandler {
         let mut event_buf = vec![0u8; self.config.recv_buf_size];
         let mut general_buf = vec![0u8; self.config.recv_buf_size];
         let mut delay_req_timer = tokio::time::interval(self.config.delay_req_interval);
+        // Timeout for pending Delay_Req: if no Delay_Resp within 2 seconds, clear and retry.
+        let delay_req_timeout = Duration::from_secs(2);
+        // One-way sync: every N Sync messages without a Delay_Resp, do one-way sync.
+        let one_way_sync_interval: u64 = 8;
+
+        tracing::info!(
+            "PTP slave: run loop starting, event_socket={:?}, general_socket={}",
+            self.event_socket.local_addr(),
+            self.general_socket.as_ref().map_or("None".to_string(), |s| format!("{:?}", s.local_addr()))
+        );
 
         loop {
             tokio::select! {
@@ -141,12 +172,48 @@ impl PtpSlaveHandler {
                 } => {
                     let (len, src) = result?;
                     self.handle_general_packet(&general_buf[..len], src).await;
+                    // Check if a Delay_Resp arrived on the general port and
+                    // we have all four timestamps to complete a timing exchange.
+                    self.try_complete_timing().await;
                 }
 
-                // Send Delay_Req periodically (only if we have a Sync but no pending exchange).
+                // Send Delay_Req periodically.
                 _ = delay_req_timer.tick() => {
+                    if self.sync_count == 0 && self.delay_req_sequence == 0 {
+                        tracing::info!(
+                            "PTP slave: Timer tick, waiting for first Sync (sync_count=0)"
+                        );
+                    }
+                    // Check for timeout on pending Delay_Req.
+                    if self.pending_t3.is_some() {
+                        if let Some(sent_at) = self.delay_req_sent_at {
+                            if sent_at.elapsed() > delay_req_timeout {
+                                self.delay_req_no_resp_count += 1;
+                                tracing::warn!(
+                                    "PTP slave: Delay_Req timed out (no Delay_Resp after {:.1}s, count={})",
+                                    sent_at.elapsed().as_secs_f64(),
+                                    self.delay_req_no_resp_count
+                                );
+                                // Clear pending state so we can send a new Delay_Req.
+                                self.pending_t3 = None;
+                                self.delay_req_sent_at = None;
+                            }
+                        }
+                    }
+
+                    // Send Delay_Req if we have T1 from a Sync and no pending exchange.
                     if self.pending_t1.is_some() && self.pending_t3.is_none() {
                         self.send_delay_req().await?;
+                    }
+
+                    // One-way sync fallback: if we're getting Sync/Follow_Up but never
+                    // Delay_Resp, use one-way estimates. One-way sync has no RTT correction
+                    // but provides a rough offset which is better than nothing.
+                    if self.sync_count > 0
+                        && self.sync_count % one_way_sync_interval == 0
+                        && self.delay_req_no_resp_count >= 3
+                    {
+                        self.try_one_way_sync().await;
                     }
                 }
 
@@ -195,12 +262,26 @@ impl PtpSlaveHandler {
             match msg.body {
                 PtpMessageBody::Sync { origin_timestamp } => {
                     let two_step = msg.header.flags & 0x0200 != 0;
-                    tracing::info!(
-                        "PTP slave: Sync seq={}, two_step={}, T1={:?}",
-                        msg.header.sequence_id,
-                        two_step,
-                        origin_timestamp
-                    );
+                    self.sync_count += 1;
+                    if self.sync_count <= 3 {
+                        let hex: Vec<String> = data.iter().map(|b| format!("{b:02X}")).collect();
+                        tracing::info!(
+                            "PTP slave: Sync seq={}, two_step={}, T1={:?}, sync_count={}, src_clock=0x{:016X}, domain={}, hex=[{}]",
+                            msg.header.sequence_id,
+                            two_step,
+                            origin_timestamp,
+                            self.sync_count,
+                            msg.header.source_port_identity.clock_identity,
+                            msg.header.domain_number,
+                            hex.join(" ")
+                        );
+                    } else if self.sync_count % 20 == 0 {
+                        tracing::info!(
+                            "PTP slave: Sync seq={}, sync_count={}",
+                            msg.header.sequence_id,
+                            self.sync_count,
+                        );
+                    }
                     // Always store T1 from Sync. For two-step, Follow_Up will
                     // overwrite with the precise value. If Follow_Up never arrives,
                     // this at least allows Delay_Req to be sent (keeping PTP alive).
@@ -238,8 +319,12 @@ impl PtpSlaveHandler {
                         self.pending_t3 = None;
                     }
                 }
-                _ => {
-                    tracing::debug!("PTP slave: Ignoring event message type {:?}", msg.body);
+                other => {
+                    tracing::info!(
+                        "PTP slave: Unexpected event message type: {:?} from {}",
+                        std::mem::discriminant(&other),
+                        _src
+                    );
                 }
             }
         } else {
@@ -262,38 +347,27 @@ impl PtpSlaveHandler {
                     PtpMessageBody::FollowUp {
                         precise_origin_timestamp,
                     } => {
-                        tracing::info!(
-                            "PTP slave: Follow_Up seq={}, T1={:?}",
-                            msg.header.sequence_id,
-                            precise_origin_timestamp
-                        );
+                        if self.sync_count <= 3 || self.sync_count % 20 == 0 {
+                            tracing::info!(
+                                "PTP slave: Follow_Up seq={}, T1={:?}",
+                                msg.header.sequence_id,
+                                precise_origin_timestamp
+                            );
+                        }
                         // Two-step Sync: the Follow-up carries the precise T1.
                         self.pending_t1 = Some(precise_origin_timestamp);
                     }
                     PtpMessageBody::DelayResp {
                         receive_timestamp, ..
                     } => {
+                        // Delay_Resp is a general message per IEEE 1588,
+                        // so it arrives on port 320.
                         tracing::info!(
                             "PTP slave: DelayResp (general port) seq={}, T4={:?}",
                             msg.header.sequence_id,
                             receive_timestamp
                         );
-                        // Delay_Resp is a general message in IEEE 1588 and may
-                        // arrive on port 320 instead of port 319.
-                        if let (Some(t1), Some(t2_saved), Some(t3)) =
-                            (self.pending_t1, self.pending_t2, self.pending_t3)
-                        {
-                            let t4 = receive_timestamp;
-                            let mut clock = self.clock.write().await;
-                            clock.process_timing(t1, t2_saved, t3, t4);
-                            tracing::info!(
-                                "PTP slave: Clock synced via general port (offset={:.3}ms)",
-                                clock.offset_millis()
-                            );
-                            self.pending_t1 = None;
-                            self.pending_t2 = None;
-                            self.pending_t3 = None;
-                        }
+                        self.pending_delay_resp = Some(receive_timestamp);
                     }
                     _ => {
                         tracing::debug!("PTP slave: Ignoring general message type {:?}", msg.body);
@@ -312,9 +386,33 @@ impl PtpSlaveHandler {
         }
     }
 
+    /// Try to complete a timing exchange if we have all four timestamps.
+    ///
+    /// This handles the case where `Delay_Resp` arrives on the general port
+    /// (as per IEEE 1588) rather than the event port.
+    async fn try_complete_timing(&mut self) {
+        if let (Some(t1), Some(t2), Some(t3), Some(t4)) = (
+            self.pending_t1,
+            self.pending_t2,
+            self.pending_t3,
+            self.pending_delay_resp.take(),
+        ) {
+            let mut clock = self.clock.write().await;
+            clock.process_timing(t1, t2, t3, t4);
+            tracing::info!(
+                "PTP slave: Clock synced via general port (offset={:.3}ms)",
+                clock.offset_millis()
+            );
+            self.pending_t1 = None;
+            self.pending_t2 = None;
+            self.pending_t3 = None;
+        }
+    }
+
     async fn send_delay_req(&mut self) -> Result<(), std::io::Error> {
         let t3 = PtpTimestamp::now();
         self.pending_t3 = Some(t3);
+        self.delay_req_sent_at = Some(tokio::time::Instant::now());
 
         let data = if self.config.use_airplay_format {
             let pkt = AirPlayTimingPacket {
@@ -326,18 +424,68 @@ impl PtpSlaveHandler {
             pkt.encode().to_vec()
         } else {
             let source = PtpPortIdentity::new(self.config.clock_id, 1);
-            let msg = PtpMessage::delay_req(source, self.delay_req_sequence, t3);
+            let mut msg = PtpMessage::delay_req(source, self.delay_req_sequence, t3);
+            // Apple PTP uses transport_specific=1 (seen in HomePod's Sync messages).
+            // Standard IEEE 1588 uses 0, but Apple devices may ignore Delay_Req
+            // without this set.
+            msg.header.transport_specific = 1;
+            // Match Apple PTP flags: ptpTimescale (0x0008) + unicast (0x0400)
+            // The HomePod Sync uses 0x0608 (twoStep+unicast+ptpTimescale).
+            // For Delay_Req we don't set twoStep (0x0200).
+            msg.header.flags = 0x0408; // unicast + ptpTimescale
             msg.encode()
         };
 
+        // Send to standard event port (319).
+        let target = self.master_addr;
+        let hex: Vec<String> = data.iter().map(|b| format!("{b:02X}")).collect();
         tracing::info!(
-            "PTP slave: Sending Delay_Req seq={} to {}",
+            "PTP slave: Sending Delay_Req seq={} to {} ({} bytes): [{}]",
             self.delay_req_sequence,
-            self.master_addr
+            target,
+            data.len(),
+            hex.join(" ")
         );
-        self.event_socket.send_to(&data, self.master_addr).await?;
+        self.event_socket.send_to(&data, target).await?;
+
+        // Also send to ClockPorts address if configured (HomePod may listen there).
+        if let Some(clock_port_addr) = self.master_clock_port_addr {
+            tracing::info!(
+                "PTP slave: Also sending Delay_Req seq={} to ClockPorts addr {}",
+                self.delay_req_sequence,
+                clock_port_addr
+            );
+            self.event_socket.send_to(&data, clock_port_addr).await?;
+        }
+
         self.delay_req_sequence = self.delay_req_sequence.wrapping_add(1);
         Ok(())
+    }
+
+    /// One-way sync fallback: estimate offset using only T1 and T2.
+    ///
+    /// When the master never responds to `Delay_Req`, we can still estimate
+    /// the clock offset using one-way measurements. This assumes symmetric
+    /// network delay, which gives a rough approximation.
+    async fn try_one_way_sync(&mut self) {
+        if let (Some(t1), Some(t2)) = (self.pending_t1, self.pending_t2) {
+            // One-way offset = T2 - T1 (includes one-way network delay).
+            // For actual PTP: offset = ((T2-T1) + (T3-T4))/2.
+            // Without T3/T4, we just use T2 - T1 which includes network delay.
+            // This is good enough for AirPlay rendering (tens of ms precision).
+            let offset_nanos = t2.diff_nanos(&t1);
+            let offset_ms = offset_nanos as f64 / 1_000_000.0;
+
+            // Use T1/T2 for both halves of the exchange (treating T3=T2, T4=T1)
+            // to get the clock.process_timing to accept it. The result is just (T2-T1).
+            let mut clock = self.clock.write().await;
+            clock.process_timing(t1, t2, t2, t1);
+            tracing::info!(
+                "PTP slave: One-way sync (no Delay_Resp), offset≈{:.3}ms, measurements={}",
+                offset_ms,
+                clock.measurement_count()
+            );
+        }
     }
 
     /// Get a handle to the shared clock.
@@ -366,6 +514,15 @@ pub struct PtpMasterHandler {
     known_slaves: Vec<SocketAddr>,
     /// Known slave general addresses (port 320) for `Follow_Up` messages.
     known_general_slaves: Vec<SocketAddr>,
+    // --- Dual-role: also measure offset to remote clock ---
+    /// Pending T1 from incoming Sync/Follow_Up (remote's timestamp).
+    pending_remote_t1: Option<PtpTimestamp>,
+    /// Pending T2 (our local time when we received the remote Sync).
+    pending_remote_t2: Option<PtpTimestamp>,
+    /// Pending T3 (our local time when we sent a Delay_Req to remote).
+    pending_remote_t3: Option<PtpTimestamp>,
+    /// Next Delay_Req sequence ID for dual-role measurements.
+    delay_req_sequence: u16,
 }
 
 impl PtpMasterHandler {
@@ -384,6 +541,10 @@ impl PtpMasterHandler {
             sync_sequence: 0,
             known_slaves: Vec::new(),
             known_general_slaves: Vec::new(),
+            pending_remote_t1: None,
+            pending_remote_t2: None,
+            pending_remote_t3: None,
+            delay_req_sequence: 0,
         }
     }
 
@@ -415,6 +576,9 @@ impl PtpMasterHandler {
         // Send Announce every 2 seconds
         let mut announce_timer = tokio::time::interval(Duration::from_secs(2));
         let mut announce_sequence: u16 = 0;
+        // Dual-role: send Delay_Req to measure offset to the remote clock
+        let mut delay_req_timer =
+            tokio::time::interval(self.config.delay_req_interval);
 
         // Send initial Announce immediately
         self.send_announce(&mut announce_sequence).await?;
@@ -436,7 +600,9 @@ impl PtpMasterHandler {
                     }
                 } => {
                     let (len, src) = result?;
-                    Self::handle_general_message(&general_buf[..len], src);
+                    let first_byte = if len > 0 { format!("type=0x{:02X}", general_buf[0] & 0x0F) } else { "empty".to_string() };
+                    tracing::info!("PTP master: Received {} bytes on general port from {} ({})", len, src, first_byte);
+                    self.handle_general_message(&general_buf[..len], src).await;
                 }
 
                 // Send periodic Sync + Follow_Up to known slaves.
@@ -451,6 +617,13 @@ impl PtpMasterHandler {
                 // Send periodic Announce.
                 _ = announce_timer.tick() => {
                     self.send_announce(&mut announce_sequence).await?;
+                }
+
+                // Dual-role: send Delay_Req to measure offset to remote clock.
+                _ = delay_req_timer.tick() => {
+                    if !self.known_slaves.is_empty() && !self.config.use_airplay_format {
+                        self.send_delay_req_to_remote().await?;
+                    }
                 }
 
                 // Shutdown.
@@ -490,15 +663,22 @@ impl PtpMasterHandler {
             Ok(msg) => match &msg.body {
                 PtpMessageBody::Sync { origin_timestamp } => {
                     let two_step = msg.header.flags & 0x0200 != 0;
-                    tracing::debug!(
-                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, \
-                         T1={}",
+                    let t2 = PtpTimestamp::now();
+                    tracing::info!(
+                        "PTP master: Received Sync from {} seq={}, two_step={}, clock=0x{:016X}, T1={}, T2={}",
                         src,
                         msg.header.sequence_id,
                         two_step,
                         msg.header.source_port_identity.clock_identity,
-                        origin_timestamp
+                        origin_timestamp,
+                        t2
                     );
+                    // Dual-role: record T2 for offset measurement.
+                    self.pending_remote_t2 = Some(t2);
+                    if !two_step {
+                        // One-step: T1 is in the Sync itself.
+                        self.pending_remote_t1 = Some(*origin_timestamp);
+                    }
                 }
                 PtpMessageBody::DelayReq { .. } => {
                     tracing::info!(
@@ -530,26 +710,66 @@ impl PtpMasterHandler {
     }
 
     /// Handle incoming message on general port (320).
-    fn handle_general_message(data: &[u8], src: SocketAddr) {
+    async fn handle_general_message(&mut self, data: &[u8], src: SocketAddr) {
         match PtpMessage::decode(data) {
-            Ok(msg) => match &msg.body {
+            Ok(msg) => {
+                tracing::info!(
+                    "PTP master general: decoded {:?} from {} seq={} ({} bytes)",
+                    msg.header.message_type,
+                    src,
+                    msg.header.sequence_id,
+                    data.len()
+                );
+                match &msg.body {
                 PtpMessageBody::FollowUp {
                     precise_origin_timestamp,
                 } => {
                     tracing::info!(
-                        "PTP master: Received Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
+                        "PTP master: Follow_Up from {} seq={}, T1={}, clock=0x{:016X}",
                         src,
                         msg.header.sequence_id,
                         precise_origin_timestamp,
                         msg.header.source_port_identity.clock_identity
                     );
+                    // Dual-role: record precise T1 from remote's Follow_Up.
+                    self.pending_remote_t1 = Some(*precise_origin_timestamp);
+                }
+                PtpMessageBody::DelayResp {
+                    receive_timestamp, ..
+                } => {
+                    // Dual-role: this is T4 from the remote responding to our Delay_Req.
+                    tracing::info!(
+                        "PTP master: Received Delay_Resp from {} seq={}, T4={}",
+                        src,
+                        msg.header.sequence_id,
+                        receive_timestamp
+                    );
+                    // Complete the timing exchange with all four timestamps.
+                    if let (Some(t1), Some(t2), Some(t3)) = (
+                        self.pending_remote_t1.take(),
+                        self.pending_remote_t2.take(),
+                        self.pending_remote_t3.take(),
+                    ) {
+                        let t4 = *receive_timestamp;
+                        let mut clock = self.clock.write().await;
+                        clock.process_timing(t1, t2, t3, t4);
+                        tracing::info!(
+                            "PTP master: Clock synced with remote (offset={:.3}ms, measurements={})",
+                            clock.offset_millis(),
+                            clock.measurement_count()
+                        );
+                    } else {
+                        tracing::debug!(
+                            "PTP master: Delay_Resp received but missing T1/T2/T3 — timing incomplete"
+                        );
+                    }
                 }
                 PtpMessageBody::Announce {
                     grandmaster_identity,
                     grandmaster_priority1,
                     ..
                 } => {
-                    tracing::info!(
+                    tracing::debug!(
                         "PTP master: Received Announce from {} seq={}, GM=0x{:016X}, priority1={}",
                         src,
                         msg.header.sequence_id,
@@ -558,30 +778,54 @@ impl PtpMasterHandler {
                     );
                 }
                 PtpMessageBody::Signaling => {
-                    tracing::debug!(
+                    tracing::info!(
                         "PTP master: Received Signaling from {} seq={}",
                         src,
                         msg.header.sequence_id
                     );
                 }
                 _ => {
-                    tracing::debug!(
-                        "PTP master: Received {:?} on general port from {}",
+                    let hex: Vec<String> = data.iter().take(44).map(|b| format!("{b:02X}")).collect();
+                    tracing::info!(
+                        "PTP master: Received {:?} ({} bytes) on general port from {} seq={}, hex=[{}]",
                         msg.header.message_type,
-                        src
+                        data.len(),
+                        src,
+                        msg.header.sequence_id,
+                        hex.join(", ")
                     );
                 }
+            }
             },
             Err(e) => {
-                let hex: Vec<String> = data.iter().take(20).map(|b| format!("{b:02X}")).collect();
+                let hex: Vec<String> = data.iter().take(44).map(|b| format!("{b:02X}")).collect();
                 tracing::warn!(
-                    "PTP master: Failed to decode general packet ({} bytes, first 20: [{}]): {}",
+                    "PTP master: Failed to decode general packet ({} bytes, first 44: [{}]): {}",
                     data.len(),
                     hex.join(", "),
                     e
                 );
             }
         }
+    }
+
+    /// Dual-role: send Delay_Req to the first known slave to measure clock offset.
+    async fn send_delay_req_to_remote(&mut self) -> Result<(), std::io::Error> {
+        // Send to the first known slave on event port.
+        if let Some(&slave_addr) = self.known_slaves.first() {
+            let t3 = PtpTimestamp::now();
+            let source = PtpPortIdentity::new(self.config.clock_id, 1);
+            let req = PtpMessage::delay_req(source, self.delay_req_sequence, t3);
+            self.event_socket.send_to(&req.encode(), slave_addr).await?;
+            self.pending_remote_t3 = Some(t3);
+            tracing::info!(
+                "PTP master: Sent Delay_Req seq={} to {}",
+                self.delay_req_sequence,
+                slave_addr
+            );
+            self.delay_req_sequence = self.delay_req_sequence.wrapping_add(1);
+        }
+        Ok(())
     }
 
     /// Send Announce message to establish ourselves as PTP master.
@@ -698,8 +942,14 @@ impl PtpMasterHandler {
         msg: PtpMessage,
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
-        // Remember this slave for future Sync broadcasts.
+        // Remember this slave for future Sync broadcasts (event port).
         self.add_slave(src);
+
+        // Also register the general port address for Follow_Up messages.
+        // IEEE 1588: general messages (Follow_Up, Delay_Resp) use port 320.
+        let general_addr = SocketAddr::new(src.ip(), PTP_GENERAL_PORT);
+        self.add_general_slave(general_addr);
+
         let t4 = PtpTimestamp::now();
         let source = PtpPortIdentity::new(self.config.clock_id, 1);
 
@@ -715,13 +965,14 @@ impl PtpMasterHandler {
             t4,
             msg.header.source_port_identity,
         );
-        // Delay_Resp goes on general port if available.
+        // Delay_Resp is a general message — send to general port (320), not event port (319).
         if let Some(ref general) = self.general_socket {
-            general.send_to(&resp.encode(), src).await?;
+            general.send_to(&resp.encode(), general_addr).await?;
         } else {
+            // Fallback: no general socket, send on event socket to original source.
             self.event_socket.send_to(&resp.encode(), src).await?;
         }
-        tracing::info!("PTP: Sent IEEE 1588 DelayResp to {}", src);
+        tracing::info!("PTP: Sent IEEE 1588 DelayResp to {}", general_addr);
 
         Ok(())
     }
