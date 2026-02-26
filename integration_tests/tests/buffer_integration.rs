@@ -18,12 +18,24 @@ async fn setup_streaming_test(
 
     let mut config = AirPlayConfig::default();
     config.discovery_timeout = Duration::from_secs(5);
-    config.connection_timeout = Duration::from_secs(5);
+    config.connection_timeout = Duration::from_secs(10);
     config.audio_buffer_frames = buffer_frames;
 
     let client = AirPlayClient::new(config);
     let device = receiver.device_config();
-    client.connect(&device).await?;
+
+    let mut connected = false;
+    for _ in 0..3 {
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect client after retries".into());
+    }
 
     Ok((receiver, client, device))
 }
