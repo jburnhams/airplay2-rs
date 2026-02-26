@@ -170,8 +170,7 @@ impl<'a> Decoder<'a> {
             .get(index_usize)
             .ok_or(PlistDecodeError::InvalidOffset(index))?;
 
-        #[allow(clippy::cast_possible_truncation)]
-        let pos = offset as usize;
+        let pos = usize::try_from(offset).map_err(|_| PlistDecodeError::InvalidOffset(offset))?;
         if pos >= self.data.len() {
             return Err(PlistDecodeError::InvalidOffset(offset));
         }
@@ -227,7 +226,10 @@ impl<'a> Decoder<'a> {
         let int_bytes = &self.data[pos..pos + bytes_len];
 
         match bytes_len {
-            #[allow(clippy::cast_possible_wrap)]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "Integers in binary plist are signed"
+            )]
             1 => Ok(PlistValue::Integer(i64::from(int_bytes[0] as i8))),
             2 => Ok(PlistValue::Integer(i64::from(i16::from_be_bytes(
                 int_bytes.try_into().unwrap(),
@@ -241,8 +243,9 @@ impl<'a> Decoder<'a> {
             16 => {
                 let val = u128::from_be_bytes(int_bytes.try_into().unwrap());
                 if val <= u128::from(u64::MAX) {
-                    #[allow(clippy::cast_possible_truncation)]
-                    Ok(PlistValue::UnsignedInteger(val as u64))
+                    Ok(PlistValue::UnsignedInteger(
+                        u64::try_from(val).expect("Checked above"),
+                    ))
                 } else {
                     Err(PlistDecodeError::IntegerOverflow)
                 }
@@ -321,8 +324,8 @@ impl<'a> Decoder<'a> {
                 _ => return Err(PlistDecodeError::IntegerOverflow),
             };
 
-            #[allow(clippy::cast_possible_truncation)]
-            Ok((int_val as usize, pos + 1 + bytes_len))
+            let len = usize::try_from(int_val).map_err(|_| PlistDecodeError::IntegerOverflow)?;
+            Ok((len, pos + 1 + bytes_len))
         } else {
             Ok((nibble as usize, pos))
         }
