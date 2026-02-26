@@ -6,8 +6,9 @@
 //! is active and syncing, plays an MP3 file, and confirms playback
 //! status through multiple indicators.
 
-use airplay2::AirPlayPlayer;
 use std::time::Duration;
+
+use airplay2::AirPlayPlayer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

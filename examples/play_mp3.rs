@@ -91,7 +91,8 @@ async fn play_mp3(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting playback...");
     println!(
-        "Note: Setting volume to 25% (-12dB) after playback starts to work around HomePod 455 error."
+        "Note: Setting volume to 25% (-12dB) after playback starts to work around HomePod 455 \
+         error."
     );
 
     // Clone client for volume control (AirPlayPlayer is not Clone, but Client is)
