@@ -1346,6 +1346,7 @@ impl ConnectionManager {
     }
 
     /// Send RTSP request and get response
+    #[allow(clippy::too_many_lines)]
     async fn send_rtsp_request(&self, request: &RtspRequest) -> Result<RtspResponse, AirPlayError> {
         let encoded = request.encode();
 

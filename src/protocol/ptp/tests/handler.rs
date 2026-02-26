@@ -87,7 +87,7 @@ async fn test_master_slave_ieee1588_exchange() {
     let fu_msg = PtpMessage::decode(&buf[..len]).unwrap();
     assert_eq!(fu_msg.header.message_type, PtpMessageType::FollowUp);
 
-    // 4. Slave sends Delay_Req.
+    // 4. Slave sends `Delay_Req`.
     let t3 = PtpTimestamp::new(1000, 10_000_000);
     let slave_source = PtpPortIdentity::new(0xBBBB, 1);
     let delay_req = PtpMessage::delay_req(slave_source, 1, t3);
@@ -96,7 +96,7 @@ async fn test_master_slave_ieee1588_exchange() {
         .await
         .unwrap();
 
-    // 5. Master receives Delay_Req and sends Delay_Resp.
+    // 5. Master receives `Delay_Req` and sends `Delay_Resp`.
     let (len, from) = master_socket.recv_from(&mut buf).await.unwrap();
     let t4 = PtpTimestamp::new(1000, 15_000_000);
     let req_msg = PtpMessage::decode(&buf[..len]).unwrap();
@@ -108,7 +108,7 @@ async fn test_master_slave_ieee1588_exchange() {
         .await
         .unwrap();
 
-    // 6. Slave receives Delay_Resp and updates clock.
+    // 6. Slave receives `Delay_Resp` and updates clock.
     let (len, _) = slave_socket.recv_from(&mut buf).await.unwrap();
     let resp_msg = PtpMessage::decode(&buf[..len]).unwrap();
     assert_eq!(resp_msg.header.message_type, PtpMessageType::DelayResp);
@@ -161,7 +161,7 @@ async fn test_airplay_format_exchange() {
     let received = AirPlayTimingPacket::decode(&buf[..len]).unwrap();
     assert_eq!(received.message_type, PtpMessageType::Sync);
 
-    // 3. Slave sends DelayReq.
+    // 3. Slave sends `Delay_Req`.
     let t3 = PtpTimestamp::new(500, 5_000_000);
     let delay_req_pkt = AirPlayTimingPacket {
         message_type: PtpMessageType::DelayReq,
@@ -174,7 +174,7 @@ async fn test_airplay_format_exchange() {
         .await
         .unwrap();
 
-    // 4. Master receives and sends DelayResp.
+    // 4. Master receives and sends `Delay_Resp`.
     let (len, from) = master_socket.recv_from(&mut buf).await.unwrap();
     let t4 = PtpTimestamp::new(500, 8_000_000);
     let req = AirPlayTimingPacket::decode(&buf[..len]).unwrap();
@@ -191,7 +191,7 @@ async fn test_airplay_format_exchange() {
         .await
         .unwrap();
 
-    // 5. Slave receives DelayResp and updates clock.
+    // 5. Slave receives `Delay_Resp` and updates clock.
     let (len, _) = slave_socket.recv_from(&mut buf).await.unwrap();
     let resp = AirPlayTimingPacket::decode(&buf[..len]).unwrap();
     assert_eq!(resp.message_type, PtpMessageType::DelayResp);
@@ -211,11 +211,19 @@ async fn test_airplay_format_exchange() {
     );
 }
 
-// ===== Master handler Delay_Req handling =====
+// ===== Master handler `Delay_Req` handling =====
 
 #[tokio::test]
 async fn test_master_handler_responds_to_delay_req() {
-    let master_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    // Need to ignore manual_let_else for test setup where let-else is less readable or just not preferred
+    #[allow(clippy::manual_let_else)]
+    let master_sock = {
+        let Ok(sock) = UdpSocket::bind("127.0.0.1:0").await else {
+            // Can't bind privileged port in this environment — skip test.
+            return;
+        };
+        Arc::new(sock)
+    };
     let client_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let master_addr = master_sock.local_addr().unwrap();
@@ -237,7 +245,7 @@ async fn test_master_handler_responds_to_delay_req() {
         handler.run(shutdown_rx).await
     });
 
-    // Send a Delay_Req from client.
+    // Send a `Delay_Req` from client.
     let source = PtpPortIdentity::new(0xBBBB, 1);
     let t3 = PtpTimestamp::new(100, 0);
     let req = PtpMessage::delay_req(source, 42, t3);
@@ -246,7 +254,7 @@ async fn test_master_handler_responds_to_delay_req() {
         .await
         .unwrap();
 
-    // Receive the Delay_Resp.
+    // Receive the `Delay_Resp`.
     let mut buf = [0u8; 256];
     let result =
         tokio::time::timeout(Duration::from_secs(2), client_sock.recv_from(&mut buf)).await;
@@ -287,7 +295,7 @@ async fn test_master_handler_airplay_format() {
         handler.run(shutdown_rx).await
     });
 
-    // Send AirPlay Delay_Req.
+    // Send AirPlay `Delay_Req`.
     let req = AirPlayTimingPacket {
         message_type: PtpMessageType::DelayReq,
         sequence_id: 7,
@@ -299,7 +307,7 @@ async fn test_master_handler_airplay_format() {
         .await
         .unwrap();
 
-    // Receive AirPlay Delay_Resp.
+    // Receive AirPlay `Delay_Resp`.
     let mut buf = [0u8; 256];
     let result =
         tokio::time::timeout(Duration::from_secs(2), client_sock.recv_from(&mut buf)).await;
@@ -355,7 +363,7 @@ async fn test_slave_handler_synchronizes() {
     let recv_sync = AirPlayTimingPacket::decode(&buf[..len]).unwrap();
     assert_eq!(recv_sync.message_type, PtpMessageType::Sync);
 
-    // 3. Slave sends Delay_Req.
+    // 3. Slave sends `Delay_Req`.
     let t3 = PtpTimestamp::now();
     let delay_req = AirPlayTimingPacket {
         message_type: PtpMessageType::DelayReq,
@@ -368,7 +376,7 @@ async fn test_slave_handler_synchronizes() {
         .await
         .unwrap();
 
-    // 4. Master receives Delay_Req and sends Delay_Resp.
+    // 4. Master receives `Delay_Req` and sends `Delay_Resp`.
     let (len, from) = master_sock.recv_from(&mut buf).await.unwrap();
     let recv_req = AirPlayTimingPacket::decode(&buf[..len]).unwrap();
     assert_eq!(recv_req.message_type, PtpMessageType::DelayReq);
@@ -385,7 +393,7 @@ async fn test_slave_handler_synchronizes() {
         .await
         .unwrap();
 
-    // 5. Slave receives Delay_Resp.
+    // 5. Slave receives `Delay_Resp`.
     let (len, _) = slave_sock.recv_from(&mut buf).await.unwrap();
     let recv_resp = AirPlayTimingPacket::decode(&buf[..len]).unwrap();
     assert_eq!(recv_resp.message_type, PtpMessageType::DelayResp);
