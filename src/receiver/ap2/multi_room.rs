@@ -2,10 +2,12 @@
 //!
 //! Enables synchronized playback across multiple receivers in a group.
 
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use tracing::{info, warn};
+
 use crate::protocol::ptp::clock::{PtpClock, PtpRole};
 use crate::protocol::ptp::timestamp::PtpTimestamp;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tracing::{info, warn};
 
 /// Group role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -53,12 +55,12 @@ pub enum PlaybackCommand {
     /// Start playback at specified time
     StartAt {
         /// PTP timestamp to start playback
-        timestamp: u64
+        timestamp: u64,
     },
     /// Adjust playback rate to catch up/slow down
     AdjustRate {
         /// Adjustment rate in parts per million
-        rate_ppm: i32
+        rate_ppm: i32,
     },
     /// Pause playback
     Pause,
@@ -159,7 +161,10 @@ impl MultiRoomCoordinator {
         // 1/65536 sec units to nanoseconds: * 1_000_000_000 / 65536
         let drift_ns = (current_ptp_i128 - target_i128) * 1_000_000_000 / 65536;
 
-        #[allow(clippy::cast_possible_truncation, reason = "drift fits in i64 unless huge")]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "drift fits in i64 unless huge"
+        )]
         let drift_micros = (drift_ns / 1000) as i64;
 
         self.in_sync = drift_micros.abs() < self.sync_tolerance_us;
@@ -171,7 +176,10 @@ impl MultiRoomCoordinator {
         // Need adjustment
         if drift_micros.abs() > 10_000 {
             // More than 10ms off - hard sync
-            warn!("Multi-room: large drift {}us, requesting hard sync", drift_micros);
+            warn!(
+                "Multi-room: large drift {}us, requesting hard sync",
+                drift_micros
+            );
             Some(PlaybackCommand::StartAt { timestamp: target })
         } else {
             // Small drift - adjust rate
@@ -188,7 +196,13 @@ impl MultiRoomCoordinator {
     /// t2: Slave Receive Time (Local Instant)
     /// t3: Slave Send Time (Local Instant)
     /// t4: Master Receive Time (Compact u64)
-    pub fn update_timing(&mut self, t1_compact: u64, t2_local: Instant, t3_local: Instant, t4_compact: u64) {
+    pub fn update_timing(
+        &mut self,
+        t1_compact: u64,
+        t2_local: Instant,
+        t3_local: Instant,
+        t4_compact: u64,
+    ) {
         let t1 = PtpTimestamp::from_airplay_compact(t1_compact);
         let t2 = Self::instant_to_ptp(t2_local);
         let t3 = Self::instant_to_ptp(t3_local);
@@ -206,12 +220,16 @@ impl MultiRoomCoordinator {
         if inst > now_inst {
             let dur = inst - now_inst;
             let target_sys = now_sys + dur;
-            let dur_since_epoch = target_sys.duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
+            let dur_since_epoch = target_sys
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO);
             PtpTimestamp::from_duration(dur_since_epoch)
         } else {
             let dur = now_inst - inst;
             let target_sys = now_sys.checked_sub(dur).unwrap_or(UNIX_EPOCH);
-            let dur_since_epoch = target_sys.duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
+            let dur_since_epoch = target_sys
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO);
             PtpTimestamp::from_duration(dur_since_epoch)
         }
     }

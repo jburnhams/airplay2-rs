@@ -1,14 +1,15 @@
-use crate::receiver::ap2::multi_room::{MultiRoomCoordinator, GroupRole, PlaybackCommand};
-use crate::protocol::ptp::timestamp::PtpTimestamp;
 use std::time::{Duration, Instant};
+
+use crate::protocol::ptp::timestamp::PtpTimestamp;
+use crate::receiver::ap2::multi_room::{GroupRole, MultiRoomCoordinator, PlaybackCommand};
 
 #[test]
 fn test_group_join_leave() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
 
     assert!(coord.group_info().is_none());
 
-    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x654321));
+    coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x0065_4321));
     assert!(coord.group_info().is_some());
     assert!(!coord.is_leader());
     assert_eq!(coord.group_uuid(), Some("group-uuid"));
@@ -19,7 +20,7 @@ fn test_group_join_leave() {
 
 #[test]
 fn test_leader_role() {
-    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x123456);
+    let mut coord = MultiRoomCoordinator::new("AA:BB:CC:DD:EE:FF".into(), 0x0012_3456);
     coord.join_group("group-uuid".into(), GroupRole::Leader, None);
 
     assert!(coord.is_leader());
@@ -55,13 +56,10 @@ fn test_adjustment_synced() {
     // Calculate adjustment
     let cmd = coord.calculate_adjustment();
 
-    match cmd {
-        Some(PlaybackCommand::StartAt { .. }) => {
-            panic!("Should not require hard sync with 0 offset");
-        }
-        _ => {
-            // Either None (in sync) or AdjustRate (small drift) is acceptable
-        }
+    if let Some(PlaybackCommand::StartAt { .. }) = cmd {
+        panic!("Should not require hard sync with 0 offset");
+    } else {
+        // Either None (in sync) or AdjustRate (small drift) is acceptable
     }
 }
 
@@ -78,7 +76,8 @@ fn test_adjustment_with_offset() {
     let offset_dur = Duration::from_millis(100);
 
     // Calculate Master Time = now_ptp - offset
-    let master_time_ptp = PtpTimestamp::from_duration(now_ptp.to_duration().checked_sub(offset_dur).unwrap());
+    let master_time_ptp =
+        PtpTimestamp::from_duration(now_ptp.to_duration().checked_sub(offset_dur).unwrap());
     let master_compact = master_time_ptp.to_airplay_compact();
 
     // Feed measurements:
@@ -91,16 +90,18 @@ fn test_adjustment_with_offset() {
 
     // Check offset is approx 100ms
     let offset_ms = coord.clock_offset_ms();
-    assert!((offset_ms - 100.0).abs() < 5.0, "Offset should be approx 100ms, got {}", offset_ms);
+    assert!(
+        (offset_ms - 100.0).abs() < 5.0,
+        "Offset should be approx 100ms, got {offset_ms}"
+    );
 
     // Set target to exactly Master Time
     coord.set_target_time(master_compact);
 
     // Should be synced (drift ~ 0)
     let cmd = coord.calculate_adjustment();
-    match cmd {
-        Some(PlaybackCommand::StartAt { .. }) => panic!("Should be synced when target is adjusted for offset"),
-        _ => {}
+    if let Some(PlaybackCommand::StartAt { .. }) = cmd {
+        panic!("Should be synced when target is adjusted for offset");
     }
 
     // Set target to Slave Time (which is Master + 100ms)
@@ -111,10 +112,9 @@ fn test_adjustment_with_offset() {
     coord.set_target_time(slave_compact);
 
     let cmd = coord.calculate_adjustment();
-    match cmd {
-        Some(PlaybackCommand::StartAt { timestamp }) => {
-             assert_eq!(timestamp, slave_compact);
-        },
-        _ => panic!("Should detect large drift (-100ms) and StartAt"),
+    if let Some(PlaybackCommand::StartAt { timestamp }) = cmd {
+        assert_eq!(timestamp, slave_compact);
+    } else {
+        panic!("Should detect large drift (-100ms) and StartAt");
     }
 }
