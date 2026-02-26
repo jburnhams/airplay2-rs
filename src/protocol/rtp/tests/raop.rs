@@ -99,12 +99,11 @@ fn test_buffer_overflow() {
 fn test_buffer_range() {
     let mut buffer = PacketBuffer::new(10);
 
-    #[allow(clippy::cast_possible_truncation)]
-    for i in 0..5 {
+    for i in 0u8..5 {
         buffer.push(BufferedPacket {
-            sequence: i,
+            sequence: u16::from(i),
             timestamp: u32::from(i) * 352,
-            data: vec![i as u8].into(),
+            data: vec![i].into(),
         });
     }
 

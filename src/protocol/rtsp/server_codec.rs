@@ -6,7 +6,7 @@
 
 use std::str::{self, FromStr};
 
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 
 use super::{Headers, Method, RtspRequest, RtspResponse, StatusCode};
 
