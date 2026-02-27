@@ -684,7 +684,7 @@ impl AirPlayClient {
         let connection = self.connection.clone();
         tokio::spawn(async move {
             // Wait for audio data to fill the device buffer
-            tokio::time::sleep(Duration::from_millis(1000)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
 
             // Retry SETRATEANCHORTIME with increasing delays
             let delays_ms = [1000, 2000, 3000, 5000, 8000];
