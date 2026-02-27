@@ -296,9 +296,7 @@ fn test_convergence_simulation() {
     let now_inst = Instant::now();
 
     // Simulate 8ms down to 0ms.
-    for i in (0..9).rev() {
-        #[allow(clippy::cast_sign_loss, reason = "i is positive")]
-        let drift_ms = i as u64;
+    for drift_ms in (0..9u64).rev() {
         let drift_dur = Duration::from_millis(drift_ms);
 
         let target_ptp =
