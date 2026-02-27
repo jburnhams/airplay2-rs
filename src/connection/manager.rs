@@ -353,14 +353,14 @@ impl ConnectionManager {
 
     /// Authenticate with the device
     async fn authenticate(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
-        // 1. Try configured PIN first if available (prioritize user config)
-        if let Some(ref pin) = self.config.pin {
-            return self.try_configured_pin(device, pin).await;
-        }
-
-        // 2. Check if we have stored keys
+        // 1. Check if we have stored keys (prioritize existing pairing)
         if self.try_stored_keys(device).await.is_ok() {
             return Ok(());
+        }
+
+        // 2. Try configured PIN if available (prioritize user config over brute force)
+        if let Some(ref pin) = self.config.pin {
+            return self.try_configured_pin(device, pin).await;
         }
 
         // 3. Try Transient Pairing first (most common for HomePods allowing it)
