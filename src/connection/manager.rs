@@ -51,6 +51,8 @@ pub struct ConnectionManager {
     ptp_shutdown_tx: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
     /// Whether PTP timing is active for the current session
     ptp_active: RwLock<bool>,
+    /// Pre-generated PTP clock identity (created before SETUP, used by PTP node)
+    ptp_clock_id: Mutex<u64>,
 }
 
 /// UDP sockets for streaming
@@ -89,6 +91,7 @@ impl ConnectionManager {
             ptp_clock: Mutex::new(None),
             ptp_shutdown_tx: Mutex::new(None),
             ptp_active: RwLock::new(false),
+            ptp_clock_id: Mutex::new(rand::random()),
         }
     }
 
@@ -782,6 +785,24 @@ impl ConnectionManager {
         // Note: We reuse the `use_ptp` decision made earlier to ensure consistency
         // (e.g. skipping ANNOUNCE implies using PTP SETUP flow).
 
+        // Pre-bind PTP sockets to ephemeral ports BEFORE SETUP so we can
+        // advertise our actual ports in ClockPorts. Using ephemeral ports
+        // avoids Windows Firewall blocking standard PTP ports 319/320.
+        let ptp_event_socket = if use_ptp {
+            Some(Self::bind_ephemeral_socket().await?)
+        } else {
+            None
+        };
+        let ptp_general_socket = if use_ptp {
+            Some(Self::bind_ephemeral_socket().await?)
+        } else {
+            None
+        };
+        let our_ptp_event_port = ptp_event_socket
+            .as_ref()
+            .map(|s| s.local_addr().map(|a| a.port()).unwrap_or(0))
+            .unwrap_or(0);
+
         let setup_plist_step1 = if use_ptp {
             tracing::info!("Device supports Buffered Audio - Using PTP timing protocol");
 
@@ -796,6 +817,15 @@ impl ConnectionManager {
             }
             .unwrap_or_else(|| "0.0.0.0".to_string());
 
+            // Get our pre-generated PTP clock identity for SETUP negotiation
+            let our_clock_id = *self.ptp_clock_id.lock().await;
+            let clock_id_hex = format!("{our_clock_id:016X}");
+
+            // Build ClockPorts dictionary mapping our clock ID to our PTP event port
+            let clock_ports = DictBuilder::new()
+                .insert(clock_id_hex.clone(), u64::from(our_ptp_event_port))
+                .build();
+
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
                 .insert(
@@ -807,7 +837,15 @@ impl ConnectionManager {
                         .map(|s| s.client_session_id().to_string())
                         .unwrap_or_default(),
                 )
+                .insert("ClockID", our_clock_id)
+                .insert("ClockPorts", clock_ports)
                 .build();
+
+            tracing::info!(
+                "SETUP Step 1: Our PTP ClockID=0x{}, ClockPort={}",
+                clock_id_hex,
+                our_ptp_event_port,
+            );
 
             DictBuilder::new()
                 .insert("timingProtocol", "PTP")
@@ -855,7 +893,8 @@ impl ConnectionManager {
             );
         }
 
-        // Parse Event/Timing ports from Step 1
+        // Parse Event/Timing ports and PTP ClockPorts from Step 1
+        let mut device_ptp_port: Option<u16> = None;
         let (server_event_port, server_timing_port) = match crate::protocol::plist::decode(
             &response_step1.body,
         ) {
@@ -893,9 +932,34 @@ impl ConnectionManager {
                         ep,
                         tp
                     );
-                    // Also log timingPeerInfo from device
+
+                    // Extract device PTP clock port from timingPeerInfo.ClockPorts
                     if let Some(tpi) = dict.get("timingPeerInfo") {
                         tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                        if let Some(tpi_dict) = tpi.as_dict() {
+                            if let Some(clock_ports) = tpi_dict
+                                .get("ClockPorts")
+                                .and_then(|v| v.as_dict())
+                            {
+                                // ClockPorts maps clock identity hex strings to port numbers
+                                for (clock_id, port_val) in clock_ports {
+                                    if let Some(port_i64) = port_val.as_i64() {
+                                        #[allow(
+                                            clippy::cast_possible_truncation,
+                                            clippy::cast_sign_loss,
+                                            reason = "Port values are u16; plist stores as i64. Truncation to u16 is correct."
+                                        )]
+                                        let port = port_i64 as u16;
+                                        tracing::info!(
+                                            "Device PTP ClockPort: clock_id={}, port={}",
+                                            clock_id,
+                                            port
+                                        );
+                                        device_ptp_port = Some(port);
+                                    }
+                                }
+                            }
+                        }
                     }
                     (ep, tp)
                 } else {
@@ -1144,7 +1208,10 @@ impl ConnectionManager {
                     tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
                 }
 
-                self.start_ptp_master(&time_sock, device_ip, server_time_port)
+                // Pass pre-bound PTP sockets (ephemeral ports) to avoid firewall issues
+                let ptp_ev = ptp_event_socket.expect("PTP event socket should be bound");
+                let ptp_gen = ptp_general_socket.expect("PTP general socket should be bound");
+                self.start_ptp_with_sockets(ptp_ev, ptp_gen, device_ip, device_ptp_port)
                     .await;
             }
 
@@ -1557,6 +1624,84 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Send `SETRATEANCHORTIME` to tell the device to start or stop playback.
+    ///
+    /// For AirPlay 2 with PTP timing, this anchors the RTP timestamp to the PTP
+    /// clock so the device knows when to schedule audio output.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the RTSP command fails.
+    pub async fn send_set_rate_anchor_time(
+        &self,
+        rate: f64,
+        rtp_time: u32,
+    ) -> Result<(), AirPlayError> {
+        use crate::protocol::plist::DictBuilder;
+
+        let mut builder = DictBuilder::new()
+            .insert("rate", rate)
+            .insert("rtpTime", u64::from(rtp_time));
+
+        // Include PTP network time anchoring if PTP is active
+        if *self.ptp_active.read().await {
+            let clock_guard = self.ptp_clock.lock().await;
+            if let Some(clock) = clock_guard.as_ref() {
+                let clock = clock.read().await;
+                let ptp_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+                let nanos = ptp_now.to_nanos();
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "PTP seconds fit in u64"
+                )]
+                let secs = (nanos / 1_000_000_000) as u64;
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "PTP fraction fits in u64"
+                )]
+                let frac = (nanos % 1_000_000_000) as u64;
+                // Convert nanosecond fraction to fixed-point 32-bit fraction
+                // frac_32 = frac_ns * 2^32 / 1_000_000_000
+                let frac_32 = (u128::from(frac) << 32) / 1_000_000_000;
+
+                // Network time timeline ID is the clock identity as hex string
+                let clock_id = clock.clock_id();
+                let timeline_id = format!("{clock_id:016X}");
+
+                builder = builder
+                    .insert("networkTimeSecs", secs)
+                    .insert("networkTimeFrac", frac_32 as u64)
+                    .insert("networkTimeTimelineID", timeline_id);
+
+                tracing::info!(
+                    "SETRATEANCHORTIME with PTP anchor: rate={}, rtpTime={}, networkTime={}.{:09}",
+                    rate,
+                    rtp_time,
+                    secs,
+                    frac,
+                );
+            }
+        }
+
+        let body = builder.build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.send_command(
+            Method::SetRateAnchorTime,
+            Some(encoded),
+            Some("application/x-apple-binary-plist".to_string()),
+        )
+        .await?;
+
+        Ok(())
+    }
+
     /// Send an arbitrary RTSP command
     ///
     /// # Errors
@@ -1824,11 +1969,29 @@ impl ConnectionManager {
         _timing_socket: &UdpSocket,
         device_ip: std::net::IpAddr,
         _server_timing_port: u16,
+        device_ptp_port: Option<u16>,
     ) {
         use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT};
         use crate::protocol::ptp::node::PtpNode;
 
-        let clock_id: u64 = rand::random();
+        // Use device's PTP port from SETUP ClockPorts if available, otherwise standard 319/320
+        let peer_event_port = device_ptp_port.unwrap_or(PTP_EVENT_PORT);
+        let peer_general_port = if device_ptp_port.is_some() {
+            // If device uses a non-standard event port, general messages also go there
+            peer_event_port
+        } else {
+            PTP_GENERAL_PORT
+        };
+
+        tracing::info!(
+            "PTP peer ports: event={}, general={} (device_ptp_port={:?})",
+            peer_event_port,
+            peer_general_port,
+            device_ptp_port,
+        );
+
+        // Use the pre-generated clock_id that was included in SETUP Step 1
+        let clock_id = *self.ptp_clock_id.lock().await;
         let clock = create_shared_clock(clock_id, PtpRole::Master);
 
         // Bind to standard PTP event port (319) — privileged, requires admin
@@ -1890,9 +2053,9 @@ impl ConnectionManager {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-        // Pre-populate with the device as peer (for both Sync sending and receiving)
-        let peer_event_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
-        let peer_general_addr = std::net::SocketAddr::new(device_ip, PTP_GENERAL_PORT);
+        // Use device's actual PTP port (from ClockPorts) for peer addressing
+        let peer_event_addr = std::net::SocketAddr::new(device_ip, peer_event_port);
+        let peer_general_addr = std::net::SocketAddr::new(device_ip, peer_general_port);
 
         let handler_clock = clock.clone();
 

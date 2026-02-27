@@ -574,15 +574,26 @@ impl AirPlayClient {
         self.state.update(|s| s.playback.is_playing = true).await;
         self.playback.set_playing(true).await;
 
-        // Send RECORD request to start buffering on device
-        // We spawn this because it might block waiting for sync, or we want to start streaming first
+        // Send RECORD request to start buffering on device, then SETRATEANCHORTIME to begin playback.
+        // For AirPlay 2 with PTP, the device won't play until it receives SETRATEANCHORTIME.
         let connection = self.connection.clone();
         tokio::spawn(async move {
             // Short delay to allow streamer to fill buffer and start sending
             tokio::time::sleep(Duration::from_millis(100)).await;
             tracing::info!("Sending RECORD request to device...");
             match connection.record().await {
-                Ok(()) => tracing::info!("RECORD request accepted by device"),
+                Ok(()) => {
+                    tracing::info!("RECORD request accepted by device");
+
+                    // Send SETRATEANCHORTIME to tell the device to start playing.
+                    // This is required for AirPlay 2 Buffered Audio with PTP timing.
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    if let Err(e) = connection.send_set_rate_anchor_time(1.0, 0).await {
+                        tracing::error!("Failed to send SETRATEANCHORTIME: {}", e);
+                    } else {
+                        tracing::info!("SETRATEANCHORTIME sent (rate=1.0) — device should begin playback");
+                    }
+                }
                 Err(e) => tracing::error!("RECORD request failed: {}", e),
             }
         });
