@@ -54,8 +54,8 @@ impl MetadataController {
     ///
     /// Returns `MetadataError` if parsing fails.
     pub fn update_metadata(&self, dmap_data: &[u8]) -> Result<(), MetadataError> {
-        let parsed = DmapParser::parse(dmap_data)
-            .map_err(|e| MetadataError::ParseError(e.to_string()))?;
+        let parsed =
+            DmapParser::parse(dmap_data).map_err(|e| MetadataError::ParseError(e.to_string()))?;
 
         if let Ok(mut metadata) = self.metadata.write() {
             Self::extract_metadata(&parsed, &mut metadata);
