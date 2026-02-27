@@ -60,13 +60,19 @@ async fn test_metadata_updates() -> Result<(), Box<dyn std::error::Error>> {
     // asal -> daap.songalbum
     tracing::info!("Verifying metadata logs...");
     receiver
-        .wait_for_log("dmap.itemname: Rust AirPlay Integration Test", Duration::from_secs(5))
+        .wait_for_log(
+            "dmap.itemname: Rust AirPlay Integration Test",
+            Duration::from_secs(5),
+        )
         .await?;
     receiver
         .wait_for_log("daap.songartist: Ferris the Crab", Duration::from_secs(5))
         .await?;
     receiver
-        .wait_for_log("daap.songalbum: Systems Programming", Duration::from_secs(5))
+        .wait_for_log(
+            "daap.songalbum: Systems Programming",
+            Duration::from_secs(5),
+        )
         .await?;
     tracing::info!("Metadata verified!");
 
@@ -80,7 +86,10 @@ async fn test_metadata_updates() -> Result<(), Box<dyn std::error::Error>> {
     // Note: The python code logs `pp[1]` which includes the leading space from "progress: 0/1000/5000"
     tracing::info!("Verifying progress logs...");
     receiver
-        .wait_for_log("SET_PARAMETER: b'progress' => b' 0/1000/5000", Duration::from_secs(5))
+        .wait_for_log(
+            "SET_PARAMETER: b'progress' => b' 0/1000/5000",
+            Duration::from_secs(5),
+        )
         .await?;
     tracing::info!("Progress verified!");
 
