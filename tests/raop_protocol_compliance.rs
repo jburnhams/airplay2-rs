@@ -175,9 +175,9 @@ mod dmap_compliance {
     #[test]
     fn test_dmap_tag_codes() {
         // Verify tag codes match DAAP specification
-        assert_eq!(DmapTag::ItemName.code(), b"minm");
-        assert_eq!(DmapTag::SongArtist.code(), b"asar");
-        assert_eq!(DmapTag::SongAlbum.code(), b"asal");
+        assert_eq!(DmapTag::ItemName.code(), *b"minm");
+        assert_eq!(DmapTag::SongArtist.code(), *b"asar");
+        assert_eq!(DmapTag::SongAlbum.code(), *b"asal");
     }
 
     #[test]

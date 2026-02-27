@@ -29,6 +29,8 @@ pub mod stream;
 // pub mod command_handler;
 // pub mod feedback_handler;
 pub mod multi_room;
+pub mod volume_handler;
+pub mod metadata_handler;
 
 #[cfg(test)]
 mod tests;
