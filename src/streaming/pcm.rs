@@ -477,6 +477,7 @@ impl PcmStreamer {
                             *self.state.write().await = StreamerState::Idle;
                             return Ok(());
                         }
+                        #[allow(clippy::collapsible_match, reason = "Collapsing introduces non-exhaustive pattern")]
                         Some(StreamerCommand::Seek(pos)) => {
                             if source.is_seekable() {
                                 source.seek(pos).map_err(|e| AirPlayError::IoError {

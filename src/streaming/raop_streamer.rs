@@ -63,7 +63,7 @@ impl RaopStreamer {
     const TIMING_INTERVAL: Duration = Duration::from_secs(3);
 
     /// Sync packet interval
-    const SYNC_INTERVAL: Duration = Duration::from_millis(1000);
+    const SYNC_INTERVAL: Duration = Duration::from_secs(1);
 
     /// Create new streamer
     ///
