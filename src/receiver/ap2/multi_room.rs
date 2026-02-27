@@ -167,6 +167,20 @@ impl MultiRoomCoordinator {
         )]
         let drift_micros = (drift_ns / 1000) as i64;
 
+        // If drift is > 0, we are AHEAD (Local > Target).
+        // If we are AHEAD, we need to slow down to let the target catch up.
+        // A POSITIVE drift means we are processing faster/ahead.
+        // `rate_ppm` typically adds to the playback rate: speed = 1.0 + ppm/1e6.
+        // To slow down, `rate_ppm` should be NEGATIVE.
+        //
+        // Original logic: rate_ppm = drift / 10.
+        // If drift = +5000 (ahead), rate = +500. Speed = 1.0005 (Faster).
+        // This makes us go FURTHER ahead. Divergence.
+        //
+        // Correct logic: If drift > 0 (ahead), rate should be negative (slow down).
+        // rate_ppm = -(drift / 10).
+        // If drift = +5000, rate = -500. Speed = 0.9995 (Slower). Convergence.
+
         self.in_sync = drift_micros.abs() < self.sync_tolerance_us;
 
         if self.in_sync {
@@ -184,8 +198,54 @@ impl MultiRoomCoordinator {
         } else {
             // Small drift - adjust rate
             // 500 ppm max adjustment
+            // Invert sign to correct drift direction
             #[allow(clippy::cast_possible_truncation, reason = "clamped value fits in i32")]
-            let rate_ppm = (drift_micros / 10).clamp(-500, 500) as i32;
+            let rate_ppm = -(drift_micros / 10).clamp(-500, 500) as i32;
+            Some(PlaybackCommand::AdjustRate { rate_ppm })
+        }
+    }
+
+    /// Calculate adjustment at a specific time (for testing)
+    #[cfg(test)]
+    pub fn calculate_adjustment_at(&mut self, now: PtpTimestamp) -> Option<PlaybackCommand> {
+        let group = self.group.as_ref()?;
+        let target = group.target_playback_time?;
+
+        if !self.clock.is_synchronized() {
+            return None;
+        }
+
+        let master_time = self.clock.remote_to_local(now);
+        let current_ptp = master_time.to_airplay_compact();
+
+        #[allow(clippy::cast_lossless, reason = "u64 fits in i128")]
+        let current_ptp_i128 = i128::from(current_ptp);
+        #[allow(clippy::cast_lossless, reason = "u64 fits in i128")]
+        let target_i128 = i128::from(target);
+
+        let drift_ns = (current_ptp_i128 - target_i128) * 1_000_000_000 / 65536;
+
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "drift fits in i64 unless huge"
+        )]
+        let drift_micros = (drift_ns / 1000) as i64;
+
+        self.in_sync = drift_micros.abs() < self.sync_tolerance_us;
+
+        if self.in_sync {
+            return None;
+        }
+
+        if drift_micros.abs() > 10_000 {
+            warn!(
+                "Multi-room: large drift {}us, requesting hard sync",
+                drift_micros
+            );
+            Some(PlaybackCommand::StartAt { timestamp: target })
+        } else {
+            #[allow(clippy::cast_possible_truncation, reason = "clamped value fits in i32")]
+            let rate_ppm = -(drift_micros / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
     }
