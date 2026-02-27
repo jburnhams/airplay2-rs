@@ -132,6 +132,18 @@ impl MultiRoomCoordinator {
 
     /// Calculate playback adjustment needed
     pub fn calculate_adjustment(&mut self) -> Option<PlaybackCommand> {
+        let now = PtpTimestamp::now(); // System time (Slave/Local)
+        self.calculate_adjustment_internal(now)
+    }
+
+    /// Calculate adjustment at a specific time (for testing)
+    #[cfg(test)]
+    pub fn calculate_adjustment_at(&mut self, now: PtpTimestamp) -> Option<PlaybackCommand> {
+        self.calculate_adjustment_internal(now)
+    }
+
+    /// Internal logic for calculating adjustment based on a given timestamp
+    fn calculate_adjustment_internal(&mut self, now: PtpTimestamp) -> Option<PlaybackCommand> {
         let group = self.group.as_ref()?;
         let target = group.target_playback_time?;
 
@@ -146,7 +158,6 @@ impl MultiRoomCoordinator {
         // remote_to_local(ts) = ts - offset = ts - (Slave - Master).
         // If we pass Slave time as input: Slave - (Slave - Master) = Master.
         // So we use remote_to_local to convert Slave -> Master.
-        let now = PtpTimestamp::now(); // System time (Slave/Local)
         let master_time = self.clock.remote_to_local(now);
         let current_ptp = master_time.to_airplay_compact();
 
@@ -167,6 +178,20 @@ impl MultiRoomCoordinator {
         )]
         let drift_micros = (drift_ns / 1000) as i64;
 
+        // If drift is > 0, we are AHEAD (Local > Target).
+        // If we are AHEAD, we need to slow down to let the target catch up.
+        // A POSITIVE drift means we are processing faster/ahead.
+        // `rate_ppm` typically adds to the playback rate: speed = 1.0 + ppm/1e6.
+        // To slow down, `rate_ppm` should be NEGATIVE.
+        //
+        // Original logic: rate_ppm = drift / 10.
+        // If drift = +5000 (ahead), rate = +500. Speed = 1.0005 (Faster).
+        // This makes us go FURTHER ahead. Divergence.
+        //
+        // Correct logic: If drift > 0 (ahead), rate should be negative (slow down).
+        // rate_ppm = -(drift / 10).
+        // If drift = +5000, rate = -500. Speed = 0.9995 (Slower). Convergence.
+
         self.in_sync = drift_micros.abs() < self.sync_tolerance_us;
 
         if self.in_sync {
@@ -184,8 +209,9 @@ impl MultiRoomCoordinator {
         } else {
             // Small drift - adjust rate
             // 500 ppm max adjustment
+            // Invert sign to correct drift direction
             #[allow(clippy::cast_possible_truncation, reason = "clamped value fits in i32")]
-            let rate_ppm = (drift_micros / 10).clamp(-500, 500) as i32;
+            let rate_ppm = -(drift_micros / 10).clamp(-500, 500) as i32;
             Some(PlaybackCommand::AdjustRate { rate_ppm })
         }
     }
