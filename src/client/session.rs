@@ -393,7 +393,8 @@ impl AirPlaySession for RaopSessionImpl {
                     #[allow(
                         clippy::cast_possible_truncation,
                         clippy::cast_sign_loss,
-                        reason = "Duration in seconds * 1000 fits in u32 (max ~49 days) and is checked for bounds"
+                        reason = "Duration in seconds * 1000 fits in u32 (max ~49 days) and is \
+                                  checked for bounds"
                     )]
                     {
                         ms as u32

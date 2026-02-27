@@ -77,7 +77,8 @@ impl PtpTimestamp {
     #[must_use]
     #[allow(
         clippy::cast_possible_wrap,
-        reason = "Timestamp seconds fit in i64 for foreseeable future (until year ~292 billion)"
+        reason = "Timestamp seconds fit in i64 for foreseeable future (until year ~292 \
+                  billion)"
     )]
     pub fn to_micros(&self) -> i64 {
         (self.seconds as i64 * 1_000_000) + (i64::from(self.nanoseconds) / 1_000)
