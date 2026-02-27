@@ -855,8 +855,8 @@ impl ConnectionManager {
             );
         }
 
-        // Parse Event/Timing ports from Step 1
-        let (server_event_port, server_timing_port) = match crate::protocol::plist::decode(
+        // Parse Event/Timing ports and ClockPorts from Step 1
+        let (server_event_port, server_timing_port, device_clock_port) = match crate::protocol::plist::decode(
             &response_step1.body,
         ) {
             Ok(plist) => {
@@ -893,18 +893,44 @@ impl ConnectionManager {
                         ep,
                         tp
                     );
-                    // Also log timingPeerInfo from device
+
+                    // Parse ClockPorts from timingPeerInfo — the port the device
+                    // uses for PTP communication (may differ from standard 319).
+                    let mut clock_port: Option<u16> = None;
                     if let Some(tpi) = dict.get("timingPeerInfo") {
                         tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                        if let Some(tpi_dict) = tpi.as_dict() {
+                            if let Some(cp_val) = tpi_dict.get("ClockPorts") {
+                                if let Some(cp_dict) = cp_val.as_dict() {
+                                    // Take the first ClockPort value
+                                    for (key, val) in cp_dict {
+                                        if let Some(port_i64) = val.as_i64() {
+                                            #[allow(
+                                                clippy::cast_possible_truncation,
+                                                clippy::cast_sign_loss
+                                            )]
+                                            let port = port_i64 as u16;
+                                            tracing::info!(
+                                                "Device ClockPort: key={}, port={} (raw={})",
+                                                key, port, port_i64
+                                            );
+                                            clock_port = Some(port);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    (ep, tp)
+
+                    (ep, tp, clock_port)
                 } else {
-                    (None, None)
+                    (None, None, None)
                 }
             }
             Err(e) => {
                 tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
-                (None, None)
+                (None, None, None)
             }
         };
 
@@ -1144,7 +1170,7 @@ impl ConnectionManager {
                     tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
                 }
 
-                self.start_ptp_master(&time_sock, device_ip, server_time_port)
+                self.start_ptp_master(&time_sock, device_ip, server_time_port, device_clock_port)
                     .await;
             }
 
@@ -1508,6 +1534,37 @@ impl ConnectionManager {
         }
     }
 
+    /// Get PTP network time for `SetRateAnchorTime`.
+    ///
+    /// Returns `(networkTimeSecs, networkTimeFrac, networkTimeTimelineID)` in the
+    /// remote master's PTP clock domain. `networkTimeFrac` uses Apple's 64-bit
+    /// fixed-point format where `2^64` represents one second.
+    ///
+    /// Returns `None` if PTP timing is not active or clock is not synchronized.
+    pub async fn get_ptp_network_time(&self) -> Option<(u64, u64, u64)> {
+        let clock_guard = self.ptp_clock.lock().await;
+        let clock = clock_guard.as_ref()?;
+        let clock = clock.read().await;
+
+        if !clock.is_synchronized() {
+            return None;
+        }
+
+        // Convert our local (Unix) time to the master's PTP time domain.
+        let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+        let master_time = clock.remote_to_local(local_now);
+
+        let secs = master_time.seconds;
+        // Convert nanoseconds to Apple's 64-bit fixed-point fraction: frac = nanos * 2^64 / 10^9
+        let frac = ((master_time.nanoseconds as u128) << 64) / 1_000_000_000u128;
+        let frac = frac as u64;
+
+        // Use the remote master's clock ID as timeline identifier.
+        let clock_id = clock.remote_master_clock_id().unwrap_or_else(|| clock.clock_id());
+
+        Some((secs, frac, clock_id))
+    }
+
     /// Send PTP Time Announce control packet
     ///
     /// # Errors
@@ -1518,20 +1575,40 @@ impl ConnectionManager {
         rtp_timestamp: u32,
         sample_rate: u32,
     ) -> Result<(), AirPlayError> {
-        let (ptp_time, clock_id) = {
+        let (ptp_nanos, clock_id) = {
             let clock_guard = self.ptp_clock.lock().await;
             if let Some(clock) = clock_guard.as_ref() {
                 let clock = clock.read().await;
-                (
-                    crate::protocol::ptp::timestamp::PtpTimestamp::now(),
-                    clock.clock_id(),
-                )
+                // Convert our local time to the master's PTP time domain.
+                // When we are slave, offset = (slave - master), so
+                // master_time = local_time - offset, which is remote_to_local().
+                let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+                let master_time = clock.remote_to_local(local_now);
+                let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
+                // Use the remote master's clock ID if available, otherwise our own.
+                let id = clock.remote_master_clock_id().unwrap_or_else(|| clock.clock_id());
+                (nanos, id)
             } else {
                 return Ok(()); // PTP not active, skip
             }
         };
 
-        let ptp_nanos = u64::try_from(ptp_time.to_nanos()).unwrap_or(0);
+        let ptp_secs = ptp_nanos / 1_000_000_000;
+        let ptp_subsec_nanos = (ptp_nanos % 1_000_000_000) as u32;
+
+        // Log first few and then every 10th to avoid spam
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static ANNOUNCE_COUNT: AtomicU64 = AtomicU64::new(0);
+        let count = ANNOUNCE_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count < 3 || count % 10 == 0 {
+            tracing::info!(
+                "TimeAnnounce: rtp_ts={}, ptp_time={}.{:09}, clock=0x{:016X} (#{count})",
+                rtp_timestamp,
+                ptp_secs,
+                ptp_subsec_nanos,
+                clock_id,
+            );
+        }
 
         let packet = crate::protocol::rtp::ControlPacket::TimeAnnouncePtp {
             rtp_timestamp,
@@ -1824,6 +1901,7 @@ impl ConnectionManager {
         _timing_socket: &UdpSocket,
         device_ip: std::net::IpAddr,
         _server_timing_port: u16,
+        device_clock_port: Option<u16>,
     ) {
         use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT};
         use crate::protocol::ptp::node::PtpNode;
@@ -1877,10 +1955,16 @@ impl ConnectionManager {
 
         let ptp_event_socket = Arc::new(ptp_event_socket);
 
+        // PTP priority: lower value = higher priority.
+        // HomePod sends priority1=248.
+        // Set to 128 (better than HomePod) to act as MASTER,
+        // or 255 (worse than HomePod) to defer and become SLAVE.
+        let ptp_priority1 = self.config.ptp_priority.unwrap_or(255);
+
         let config = PtpNodeConfig {
             clock_id,
-            priority1: 128, // Default priority; HomePod sends 248 (lower priority)
-            priority2: 128,
+            priority1: ptp_priority1,
+            priority2: 255,
             sync_interval: std::time::Duration::from_secs(1),
             delay_req_interval: std::time::Duration::from_secs(1),
             announce_interval: std::time::Duration::from_secs(2),
@@ -1890,8 +1974,20 @@ impl ConnectionManager {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-        // Pre-populate with the device as peer (for both Sync sending and receiving)
-        let peer_event_addr = std::net::SocketAddr::new(device_ip, PTP_EVENT_PORT);
+        // Pre-populate with the device as peer.
+        // If the device advertised a ClockPort in timingPeerInfo, use that for
+        // Delay_Req (the device may only listen for PTP on its ClockPort, not
+        // on the standard IEEE 1588 port 319).  We still send Sync/Announce to
+        // the standard port so both sides see each other's broadcasts.
+        let delay_req_port = device_clock_port.unwrap_or(PTP_EVENT_PORT);
+        if device_clock_port.is_some() {
+            tracing::info!(
+                "Using device ClockPort {} for PTP Delay_Req (instead of standard {})",
+                delay_req_port,
+                PTP_EVENT_PORT
+            );
+        }
+        let peer_event_addr = std::net::SocketAddr::new(device_ip, delay_req_port);
         let peer_general_addr = std::net::SocketAddr::new(device_ip, PTP_GENERAL_PORT);
 
         let handler_clock = clock.clone();
@@ -1949,6 +2045,16 @@ impl ConnectionManager {
     /// Check if PTP timing is active for the current connection.
     pub async fn is_ptp_active(&self) -> bool {
         *self.ptp_active.read().await
+    }
+
+    /// Check if PTP clock is synchronized (has received enough measurements).
+    pub async fn is_ptp_synchronized(&self) -> bool {
+        let clock_guard = self.ptp_clock.lock().await;
+        if let Some(clock) = clock_guard.as_ref() {
+            clock.read().await.is_synchronized()
+        } else {
+            false
+        }
     }
 
     fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {

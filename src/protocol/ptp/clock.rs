@@ -98,6 +98,8 @@ pub struct PtpClock {
     min_sync_measurements: usize,
     /// Maximum RTT to accept a measurement (outlier rejection).
     max_rtt: Duration,
+    /// Clock identity of the remote PTP master (set when acting as slave).
+    remote_master_clock_id: Option<u64>,
 }
 
 impl PtpClock {
@@ -123,6 +125,7 @@ impl PtpClock {
             synchronized: false,
             min_sync_measurements: Self::DEFAULT_MIN_SYNC,
             max_rtt: Self::DEFAULT_MAX_RTT,
+            remote_master_clock_id: None,
         }
     }
 
@@ -181,6 +184,39 @@ impl PtpClock {
         }
 
         true
+    }
+
+    /// Process a one-way timing estimate from Sync/Follow_Up only.
+    ///
+    /// Uses offset = T2 - T1 (slave_receive - master_send). This assumes
+    /// negligible one-way network delay, which is typically < 1ms on LAN.
+    /// Less accurate than the full four-timestamp exchange but works when
+    /// the remote master doesn't respond to Delay_Req (common with AirPlay
+    /// devices like HomePod).
+    pub fn process_one_way(&mut self, t1: PtpTimestamp, t2: PtpTimestamp) {
+        let offset_ns = t2.diff_nanos(&t1);
+
+        let measurement = TimingMeasurement {
+            t1,
+            t2,
+            t3: t2, // No Delay_Req sent
+            t4: t1, // No Delay_Resp received
+            local_time: Instant::now(),
+            offset_ns,
+            rtt: Duration::ZERO,
+        };
+
+        self.measurements.push_back(measurement);
+        while self.measurements.len() > self.max_measurements {
+            self.measurements.pop_front();
+        }
+
+        self.update_offset();
+        self.update_drift();
+
+        if self.measurements.len() >= self.min_sync_measurements {
+            self.synchronized = true;
+        }
     }
 
     /// Update offset using the median of recent measurements.
@@ -291,6 +327,17 @@ impl PtpClock {
         self.role
     }
 
+    /// Get the remote master's clock identity (set when acting as slave).
+    #[must_use]
+    pub fn remote_master_clock_id(&self) -> Option<u64> {
+        self.remote_master_clock_id
+    }
+
+    /// Set the remote master's clock identity.
+    pub fn set_remote_master_clock_id(&mut self, id: u64) {
+        self.remote_master_clock_id = Some(id);
+    }
+
     /// Get the number of measurements currently held.
     #[must_use]
     pub fn measurement_count(&self) -> usize {
@@ -320,6 +367,7 @@ impl PtpClock {
         self.offset_ns = 0;
         self.drift_ppm = 0.0;
         self.synchronized = false;
+        self.remote_master_clock_id = None;
     }
 
     /// Get all stored measurements (for diagnostics).

@@ -57,6 +57,11 @@ impl PlaybackController {
 
     /// Play (resume if paused, start if stopped)
     ///
+    /// Sends `SetRateAnchorTime` with `rate=1.0` and an RTP/PTP anchor mapping.
+    /// When PTP timing is active, includes `networkTimeSecs`, `networkTimeFrac`,
+    /// and `networkTimeTimelineID` so the device can map RTP timestamps to its
+    /// PTP clock domain and know exactly when to start rendering audio.
+    ///
     /// # Errors
     ///
     /// Returns error if state is invalid or network fails
@@ -64,10 +69,33 @@ impl PlaybackController {
         let mut state = self.state.write().await;
 
         if !state.is_playing {
-            let body = DictBuilder::new()
+            let mut builder = DictBuilder::new()
                 .insert("rate", 1.0)
-                .insert("rtpTime", 0u64)
-                .build();
+                .insert("rtpTime", 0u64);
+
+            // Include PTP anchor timestamps so the device knows when to render
+            if let Some((secs, frac, timeline_id)) =
+                self.connection.get_ptp_network_time().await
+            {
+                tracing::info!(
+                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} (timeline=0x{:016X})",
+                    secs,
+                    // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
+                    ((frac as u128 * 1_000_000_000u128) >> 64) as u32,
+                    timeline_id,
+                );
+                builder = builder
+                    .insert("networkTimeSecs", secs)
+                    .insert("networkTimeFrac", frac)
+                    .insert("networkTimeTimelineID", timeline_id);
+            } else {
+                tracing::warn!(
+                    "SetRateAnchorTime: PTP clock not available or not synchronized — \
+                     sending without networkTime fields (device may not render audio)"
+                );
+            }
+
+            let body = builder.build();
             let encoded =
                 crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
                     message: format!("Failed to encode plist: {e}"),

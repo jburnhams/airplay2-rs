@@ -52,6 +52,11 @@ pub struct AirPlayConfig {
 
     /// Timing protocol for clock synchronization (default: Auto)
     pub timing_protocol: TimingProtocol,
+
+    /// PTP priority1 value (lower = higher priority).
+    /// When `None` (default), uses 255 so HomePod (248) wins BMCA and we become slave.
+    /// Set to e.g. `Some(128)` to force this client to become PTP master.
+    pub ptp_priority: Option<u8>,
 }
 
 impl Default for AirPlayConfig {
@@ -69,6 +74,7 @@ impl Default for AirPlayConfig {
             pin: None,
             aac_bitrate: 128_000,
             timing_protocol: TimingProtocol::default(),
+            ptp_priority: None,
         }
     }
 }
@@ -148,6 +154,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn timing_protocol(mut self, protocol: TimingProtocol) -> Self {
         self.config.timing_protocol = protocol;
+        self
+    }
+
+    /// Set PTP priority1 value (lower = higher priority)
+    #[must_use]
+    pub fn ptp_priority(mut self, priority: u8) -> Self {
+        self.config.ptp_priority = Some(priority);
         self
     }
 

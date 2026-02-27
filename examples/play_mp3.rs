@@ -18,8 +18,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_name = "Kitchen";
     println!("Connecting to '{}'...", target_name);
 
+    // Allow PTP priority override via env var for testing master/slave roles
+    // PTP_PRIORITY=128 → we become master; PTP_PRIORITY=255 (default) → HomePod is master
+    let config = {
+        let mut cfg = airplay2::AirPlayConfig::default();
+        if let Ok(prio) = std::env::var("PTP_PRIORITY") {
+            if let Ok(p) = prio.parse::<u8>() {
+                println!("Using PTP priority1={} (lower=better priority)", p);
+                cfg.ptp_priority = Some(p);
+            }
+        }
+        cfg
+    };
+
     #[allow(unused_mut)]
-    let mut player = AirPlayPlayer::new();
+    let mut player = AirPlayPlayer::with_config(config);
     let mut retry_count = 0;
     let max_retries = 5;
 

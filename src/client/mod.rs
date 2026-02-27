@@ -565,25 +565,80 @@ impl AirPlayClient {
 
         // Configure encryption if available
         if let Some(key) = self.connection.encryption_key().await {
-            tracing::debug!("Enabling audio encryption with session key");
+            tracing::info!("Enabling ChaCha20-Poly1305 audio encryption (key[0..4]={:02X?})", &key[..4]);
             streamer.set_encryption_key(key).await;
+        } else {
+            tracing::warn!("No encryption key available — audio will be sent UNENCRYPTED (HomePod will reject this)");
         }
 
         self.streamer = Some(streamer.clone());
 
-        self.state.update(|s| s.playback.is_playing = true).await;
-        self.playback.set_playing(true).await;
+        // Don't set is_playing yet — we need to send SetRateAnchorTime first
+        // (play() checks is_playing and skips if already true)
 
-        // Send RECORD request to start buffering on device
-        // We spawn this because it might block waiting for sync, or we want to start streaming first
+        // For PTP devices, RECORD was already sent during setup_session().
+        // For NTP devices, we need to send RECORD here.
+        // After RECORD, send SetRateAnchorTime (rate=1.0) to tell the device
+        // to start rendering audio from its buffer.
         let connection = self.connection.clone();
+        let playback = self.playback.clone();
+        let state = self.state.clone();
         tokio::spawn(async move {
-            // Short delay to allow streamer to fill buffer and start sending
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            tracing::info!("Sending RECORD request to device...");
-            match connection.record().await {
-                Ok(()) => tracing::info!("RECORD request accepted by device"),
-                Err(e) => tracing::error!("RECORD request failed: {}", e),
+            let ptp_active = connection.is_ptp_active().await;
+
+            if !ptp_active {
+                // NTP/AirPlay 1: RECORD hasn't been sent yet
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                tracing::info!("Sending RECORD request to device...");
+                match connection.record().await {
+                    Ok(()) => tracing::info!("RECORD request accepted by device"),
+                    Err(e) => tracing::error!("RECORD request failed: {}", e),
+                }
+            }
+
+            // Wait for PTP to synchronize so SetRateAnchorTime can include
+            // proper networkTimeSecs/Frac anchor timestamps.
+            if ptp_active {
+                tracing::info!("Waiting for PTP clock to synchronize...");
+                let ptp_timeout = Duration::from_secs(10);
+                let poll_interval = Duration::from_millis(200);
+                let start = tokio::time::Instant::now();
+                loop {
+                    if connection.is_ptp_synchronized().await {
+                        tracing::info!(
+                            "PTP clock synchronized after {:.1}s",
+                            start.elapsed().as_secs_f64()
+                        );
+                        break;
+                    }
+                    if start.elapsed() > ptp_timeout {
+                        tracing::warn!(
+                            "PTP clock not synchronized after {:.0}s — sending SetRateAnchorTime \
+                             without PTP timestamps (audio may not play)",
+                            ptp_timeout.as_secs_f64()
+                        );
+                        break;
+                    }
+                    tokio::time::sleep(poll_interval).await;
+                }
+            }
+
+            // Wait briefly for some audio data to be buffered before telling device to play.
+            let delay = Duration::from_secs(2);
+            tracing::info!(
+                "Waiting {:.0}s for audio to buffer before sending SetRateAnchorTime...",
+                delay.as_secs_f64()
+            );
+            tokio::time::sleep(delay).await;
+
+            // Send SetRateAnchorTime (rate=1.0) to start playback
+            tracing::info!("Sending SetRateAnchorTime (rate=1.0) to start playback...");
+            match playback.play().await {
+                Ok(()) => {
+                    tracing::info!("SetRateAnchorTime accepted — device should now render audio");
+                    state.update(|s| s.playback.is_playing = true).await;
+                }
+                Err(e) => tracing::warn!("SetRateAnchorTime failed: {}", e),
             }
         });
 
