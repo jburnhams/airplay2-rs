@@ -1,5 +1,11 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 9):**
+- **Metadata and Progress Updates**:
+  - ✅ **VERIFIED**: `metadata_integration` test verifies `set_metadata` (DAAP/DMAP) and `set_progress`.
+  - Confirmed `dmap.itemname`, `daap.songartist`, and `daap.songalbum` tags are correctly received by Python receiver.
+  - Confirmed `text/parameters` progress updates are correctly received.
+
 **Work Done (Session 8):**
 - **AAC-ELD Codec Implementation**:
   - ✅ **VERIFIED**: `aac_eld_streaming` integration test verifies protocol exchange and RTP transmission.
@@ -315,6 +321,13 @@
 ### Device Status and Feedback
 - [x] Query device status (available, busy, offline)
   - *Status*: Connection state tracking implemented.
+
+### SET_PARAMETER
+- [x] `text/parameters` — e.g. `volume: N` and `progress: X/Y/Z`
+  - ✅ **VERIFIED**: `metadata_integration` test verifies `set_progress` is received correctly.
+- [ ] `image/jpeg` — artwork image data
+- [x] `application/x-dmap-tagged` — DAAP/now‑playing metadata
+  - ✅ **VERIFIED**: `metadata_integration` test verifies `set_metadata` (DAAP/DMAP) is received correctly.
 
 ## Encryption and Security
 
