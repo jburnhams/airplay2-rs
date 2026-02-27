@@ -2,7 +2,6 @@ mod advertisement;
 mod body_handler;
 mod capabilities;
 mod config;
-mod encrypted_channel;
 mod encrypted_rtsp;
 mod features;
 mod info_endpoint;
