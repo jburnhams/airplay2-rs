@@ -54,37 +54,75 @@ impl MetadataController {
     ///
     /// Returns `MetadataError` if parsing fails.
     pub fn update_metadata(&self, dmap_data: &[u8]) -> Result<(), MetadataError> {
-        let parsed =
-            DmapParser::parse(dmap_data).map_err(|e| MetadataError::ParseError(e.to_string()))?;
+        let parsed = DmapParser::parse(dmap_data)
+            .map_err(|e| MetadataError::ParseError(e.to_string()))?;
 
         if let Ok(mut metadata) = self.metadata.write() {
-            // Extract known fields
-            if let Some(title) = Self::get_string(&parsed, DmapTag::ItemName) {
-                metadata.title = Some(title);
-            }
-            if let Some(artist) = Self::get_string(&parsed, DmapTag::SongArtist) {
-                metadata.artist = Some(artist);
-            }
-            if let Some(album) = Self::get_string(&parsed, DmapTag::SongAlbum) {
-                metadata.album = Some(album);
-            }
-            if let Some(genre) = Self::get_string(&parsed, DmapTag::SongGenre) {
-                metadata.genre = Some(genre);
-            }
-            if let Some(duration) = Self::get_u32(&parsed, DmapTag::SongTime) {
-                metadata.duration_ms = Some(duration);
-            }
-            if let Some(track) = Self::get_u32(&parsed, DmapTag::SongTrackNumber) {
-                metadata.track_number = Some(track);
-            }
-            if let Some(disc) = Self::get_u32(&parsed, DmapTag::SongDiscNumber) {
-                metadata.disc_number = Some(disc);
-            }
-
+            Self::extract_metadata(&parsed, &mut metadata);
             tracing::debug!("Metadata updated: {:?}", *metadata);
         }
 
         Ok(())
+    }
+
+    /// Recursively extract metadata fields from DMAP value
+    fn extract_metadata(value: &DmapValue, metadata: &mut TrackMetadata) {
+        if let DmapValue::Container(items) = value {
+            for (tag, val) in items {
+                match tag {
+                    DmapTag::ItemName => {
+                        if let DmapValue::String(s) = val {
+                            metadata.title = Some(s.clone());
+                        }
+                    }
+                    DmapTag::SongArtist => {
+                        if let DmapValue::String(s) = val {
+                            metadata.artist = Some(s.clone());
+                        }
+                    }
+                    DmapTag::SongAlbum => {
+                        if let DmapValue::String(s) = val {
+                            metadata.album = Some(s.clone());
+                        }
+                    }
+                    DmapTag::SongGenre => {
+                        if let DmapValue::String(s) = val {
+                            metadata.genre = Some(s.clone());
+                        }
+                    }
+                    DmapTag::SongTime => {
+                        if let DmapValue::Int(i) = val {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            {
+                                metadata.duration_ms = Some(*i as u32);
+                            }
+                        }
+                    }
+                    DmapTag::SongTrackNumber => {
+                        if let DmapValue::Int(i) = val {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            {
+                                metadata.track_number = Some(*i as u32);
+                            }
+                        }
+                    }
+                    DmapTag::SongDiscNumber => {
+                        if let DmapValue::Int(i) = val {
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            {
+                                metadata.disc_number = Some(*i as u32);
+                            }
+                        }
+                    }
+                    _ => {
+                        // Recursively check containers
+                        if let DmapValue::Container(_) = val {
+                            Self::extract_metadata(val, metadata);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Update artwork
@@ -120,43 +158,6 @@ impl MetadataController {
         if let Ok(mut a) = self.artwork.write() {
             *a = None;
         }
-    }
-
-    fn get_string(dmap: &DmapValue, tag: DmapTag) -> Option<String> {
-        // Navigate DMAP structure to find key
-        if let DmapValue::Container(items) = dmap {
-            for (k, v) in items {
-                if *k == tag {
-                    if let DmapValue::String(s) = v {
-                        return Some(s.clone());
-                    }
-                } else if let DmapValue::Container(_) = v {
-                    // Recursive search
-                    if let Some(s) = Self::get_string(v, tag) {
-                        return Some(s);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn get_u32(dmap: &DmapValue, tag: DmapTag) -> Option<u32> {
-        if let DmapValue::Container(items) = dmap {
-            for (k, v) in items {
-                if *k == tag {
-                    if let DmapValue::Int(i) = v {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                        return Some(*i as u32);
-                    }
-                } else if let DmapValue::Container(_) = v {
-                    if let Some(i) = Self::get_u32(v, tag) {
-                        return Some(i);
-                    }
-                }
-            }
-        }
-        None
     }
 }
 
