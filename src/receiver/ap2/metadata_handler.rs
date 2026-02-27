@@ -1,6 +1,6 @@
 //! Metadata and Artwork Handling
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 
 use crate::protocol::daap::dmap::{DmapParser, DmapTag, DmapValue};
 
@@ -54,8 +54,8 @@ impl MetadataController {
     ///
     /// Returns `MetadataError` if parsing fails.
     pub fn update_metadata(&self, dmap_data: &[u8]) -> Result<(), MetadataError> {
-        let parsed = DmapParser::parse(dmap_data)
-            .map_err(|e| MetadataError::ParseError(e.to_string()))?;
+        let parsed =
+            DmapParser::parse(dmap_data).map_err(|e| MetadataError::ParseError(e.to_string()))?;
 
         if let Ok(mut metadata) = self.metadata.write() {
             // Extract known fields
@@ -97,13 +97,19 @@ impl MetadataController {
     /// Get current metadata
     #[must_use]
     pub fn metadata(&self) -> TrackMetadata {
-        self.metadata.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.metadata
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// Get current artwork
     #[must_use]
     pub fn artwork(&self) -> Option<Artwork> {
-        self.artwork.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.artwork
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// Clear metadata and artwork

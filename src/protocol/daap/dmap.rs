@@ -280,8 +280,6 @@ impl DmapParser {
 /// Returns `DmapDecodeError` if data is invalid.
 #[allow(dead_code)]
 pub fn decode_dmap(data: &[u8]) -> Result<Vec<(String, String)>, DmapDecodeError> {
-    let value = DmapParser::parse(data)?;
-
     fn flatten(v: &DmapValue, acc: &mut Vec<(String, String)>) {
         if let DmapValue::Container(items) = v {
             for (tag, val) in items {
@@ -297,6 +295,7 @@ pub fn decode_dmap(data: &[u8]) -> Result<Vec<(String, String)>, DmapDecodeError
         }
     }
 
+    let value = DmapParser::parse(data)?;
     let mut result = Vec::new();
     flatten(&value, &mut result);
     Ok(result)

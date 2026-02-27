@@ -1,6 +1,6 @@
-//! Volume Control for AirPlay 2 Receiver
+//! Volume Control for `AirPlay` 2 Receiver
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 
 use super::body_handler::parse_text_parameters;
 use super::request_handler::{Ap2Event, Ap2HandleResult};
@@ -36,7 +36,10 @@ impl VolumeController {
     /// Get current volume in dB
     #[must_use]
     pub fn volume_db(&self) -> f32 {
-        *self.volume_db.read().unwrap_or_else(|e| e.into_inner())
+        *self
+            .volume_db
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Convert dB to linear (0.0 to 1.0)
@@ -60,10 +63,10 @@ impl VolumeController {
     /// Check if muted
     #[must_use]
     pub fn is_muted(&self) -> bool {
-        *self.muted.read().unwrap_or_else(|e| e.into_inner())
+        *self.muted.read().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Handle SET_PARAMETER with volume
+    /// Handle `SET_PARAMETER` with volume
     ///
     /// # Errors
     ///
@@ -100,7 +103,7 @@ pub enum VolumeError {
     InvalidValue,
 }
 
-/// Handle SET_PARAMETER for volume
+/// Handle `SET_PARAMETER` for volume
 ///
 /// # Arguments
 ///
@@ -132,6 +135,7 @@ pub fn handle_volume_set_parameter(
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

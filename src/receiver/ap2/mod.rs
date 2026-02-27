@@ -28,9 +28,9 @@ pub mod stream;
 // pub mod ptp_clock;
 // pub mod command_handler;
 // pub mod feedback_handler;
+pub mod metadata_handler;
 pub mod multi_room;
 pub mod volume_handler;
-pub mod metadata_handler;
 
 #[cfg(test)]
 mod tests;
