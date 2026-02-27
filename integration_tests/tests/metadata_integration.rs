@@ -1,6 +1,7 @@
 //! Integration tests for Metadata and Progress updates
 //!
-//! Verifies that client `set_metadata` (DAAP/DMAP) and `set_progress` are correctly received and processed by the Python receiver.
+//! Verifies that client `set_metadata` (DAAP/DMAP) and `set_progress` are correctly received and
+//! processed by the Python receiver.
 
 use std::time::Duration;
 
@@ -83,7 +84,8 @@ async fn test_metadata_updates() -> Result<(), Box<dyn std::error::Error>> {
     client.set_progress(progress).await?;
 
     // Verify log: SET_PARAMETER: b'progress' => b' 0/1000/5000'
-    // Note: The python code logs `pp[1]` which includes the leading space from "progress: 0/1000/5000"
+    // Note: The python code logs `pp[1]` which includes the leading space from "progress:
+    // 0/1000/5000"
     tracing::info!("Verifying progress logs...");
     receiver
         .wait_for_log(
