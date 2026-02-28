@@ -102,8 +102,8 @@ impl From<&PlaybackState> for PlaybackInfo {
                 .queue
                 .iter()
                 .map(|item| {
-                    #[allow(clippy::cast_possible_truncation, reason = "Queue item ID fits in i32")]
-                    (item.track.clone(), item.id.0 as i32)
+                    // The cast from u64 to i32 is unsafe. Using try_from is safer.
+                    (item.track.clone(), i32::try_from(item.id.0).unwrap_or(-1))
                 })
                 .collect(),
         }
