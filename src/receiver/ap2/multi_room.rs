@@ -137,7 +137,6 @@ impl MultiRoomCoordinator {
     }
 
     /// Calculate adjustment at a specific time (for testing)
-    #[cfg(test)]
     pub fn calculate_adjustment_at(&mut self, now: PtpTimestamp) -> Option<PlaybackCommand> {
         self.calculate_adjustment_internal(now)
     }
