@@ -683,6 +683,11 @@ impl AirPlayClient {
         // Send SETRATEANCHORTIME after audio starts flowing.
         // RECORD was already sent during connect(). SETRATEANCHORTIME tells the device
         // to start rendering audio at the given rate and PTP-anchored time.
+        //
+        // We use a oneshot channel so the setup task can report failure back to us.
+        // If SETRATEANCHORTIME fails after all retries, we abort streaming early
+        // rather than wasting CPU/network on audio the device will never render.
+        let (setup_tx, setup_rx) = tokio::sync::oneshot::channel::<Result<(), AirPlayError>>();
         let connection = self.connection.clone();
         tokio::spawn(async move {
             // Wait for PTP to synchronize so SETRATEANCHORTIME can include
@@ -717,6 +722,7 @@ impl AirPlayClient {
 
             // Retry SETRATEANCHORTIME with increasing delays
             let delays_ms = [1000, 2000, 3000, 5000, 8000];
+            let mut last_err = None;
             for (attempt, delay) in delays_ms.iter().enumerate() {
                 tracing::info!(
                     "Sending SETRATEANCHORTIME attempt {}/{}...",
@@ -726,18 +732,44 @@ impl AirPlayClient {
                 match connection.send_set_rate_anchor_time(1).await {
                     Ok(()) => {
                         tracing::info!("SETRATEANCHORTIME succeeded on attempt {}", attempt + 1);
+                        let _ = setup_tx.send(Ok(()));
                         return;
                     }
                     Err(e) => {
                         tracing::warn!("SETRATEANCHORTIME attempt {} failed: {}", attempt + 1, e);
+                        last_err = Some(e);
                         tokio::time::sleep(Duration::from_millis(*delay)).await;
                     }
                 }
             }
             tracing::error!("SETRATEANCHORTIME failed after all retries");
+            let _ = setup_tx.send(Err(last_err.unwrap_or_else(|| AirPlayError::RtspError {
+                message: "SETRATEANCHORTIME failed after all retries".to_string(),
+                status_code: None,
+            })));
         });
 
-        streamer.stream(source).await
+        // Race streaming against the setup task. If setup fails, abort early.
+        // If setup succeeds, continue streaming until the source is exhausted.
+        let stream_fut = streamer.stream(source);
+        tokio::pin!(stream_fut);
+
+        tokio::select! {
+            result = &mut stream_fut => result,
+            setup_result = setup_rx => {
+                match setup_result {
+                    Ok(Ok(())) => {
+                        // Setup succeeded — continue streaming normally
+                        stream_fut.await
+                    }
+                    Ok(Err(e)) => Err(e),
+                    Err(_) => {
+                        // Setup task panicked or was cancelled — continue streaming
+                        stream_fut.await
+                    }
+                }
+            }
+        }
     }
 
     // === Events ===
