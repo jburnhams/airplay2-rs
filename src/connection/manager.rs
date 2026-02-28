@@ -1762,6 +1762,37 @@ impl ConnectionManager {
         }
     }
 
+    /// Get PTP network time for `SetRateAnchorTime`.
+    ///
+    /// Returns `(networkTimeSecs, networkTimeFrac, networkTimeTimelineID)` in the
+    /// remote master's PTP clock domain. `networkTimeFrac` uses Apple's 64-bit
+    /// fixed-point format where `2^64` represents one second.
+    ///
+    /// Returns `None` if PTP timing is not active or clock is not synchronized.
+    pub async fn get_ptp_network_time(&self) -> Option<(u64, u64, u64)> {
+        let clock_guard = self.ptp_clock.lock().await;
+        let clock = clock_guard.as_ref()?;
+        let clock = clock.read().await;
+
+        if !clock.is_synchronized() {
+            return None;
+        }
+
+        // Convert our local (Unix) time to the master's PTP time domain.
+        let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+        let master_time = clock.remote_to_local(local_now);
+
+        let secs = master_time.seconds;
+        // Convert nanoseconds to Apple's 64-bit fixed-point fraction: frac = nanos * 2^64 / 10^9
+        let frac = ((master_time.nanoseconds as u128) << 64) / 1_000_000_000u128;
+        let frac = frac as u64;
+
+        // Use the remote master's clock ID as timeline identifier.
+        let clock_id = clock.remote_master_clock_id().unwrap_or_else(|| clock.clock_id());
+
+        Some((secs, frac, clock_id))
+    }
+
     /// Send PTP Time Announce control packet
     ///
     /// # Errors
@@ -1772,20 +1803,40 @@ impl ConnectionManager {
         rtp_timestamp: u32,
         sample_rate: u32,
     ) -> Result<(), AirPlayError> {
-        let (ptp_time, clock_id) = {
+        let (ptp_nanos, clock_id) = {
             let clock_guard = self.ptp_clock.lock().await;
             if let Some(clock) = clock_guard.as_ref() {
                 let clock = clock.read().await;
-                (
-                    crate::protocol::ptp::timestamp::PtpTimestamp::now(),
-                    clock.clock_id(),
-                )
+                // Convert our local time to the master's PTP time domain.
+                // When we are slave, offset = (slave - master), so
+                // master_time = local_time - offset, which is remote_to_local().
+                let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+                let master_time = clock.remote_to_local(local_now);
+                let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
+                // Use the remote master's clock ID if available, otherwise our own.
+                let id = clock.remote_master_clock_id().unwrap_or_else(|| clock.clock_id());
+                (nanos, id)
             } else {
                 return Ok(()); // PTP not active, skip
             }
         };
 
-        let ptp_nanos = u64::try_from(ptp_time.to_nanos()).unwrap_or(0);
+        let ptp_secs = ptp_nanos / 1_000_000_000;
+        let ptp_subsec_nanos = (ptp_nanos % 1_000_000_000) as u32;
+
+        // Log first few and then every 10th to avoid spam
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static ANNOUNCE_COUNT: AtomicU64 = AtomicU64::new(0);
+        let count = ANNOUNCE_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count < 3 || count % 10 == 0 {
+            tracing::info!(
+                "TimeAnnounce: rtp_ts={}, ptp_time={}.{:09}, clock=0x{:016X} (#{count})",
+                rtp_timestamp,
+                ptp_secs,
+                ptp_subsec_nanos,
+                clock_id,
+            );
+        }
 
         let packet = crate::protocol::rtp::ControlPacket::TimeAnnouncePtp {
             rtp_timestamp,
@@ -2259,6 +2310,16 @@ impl ConnectionManager {
     /// Check if PTP timing is active for the current connection.
     pub async fn is_ptp_active(&self) -> bool {
         *self.ptp_active.read().await
+    }
+
+    /// Check if PTP clock is synchronized (has received enough measurements).
+    pub async fn is_ptp_synchronized(&self) -> bool {
+        let clock_guard = self.ptp_clock.lock().await;
+        if let Some(clock) = clock_guard.as_ref() {
+            clock.read().await.is_synchronized()
+        } else {
+            false
+        }
     }
 
     fn parse_transport_ports(transport_header: &str) -> Result<(u16, u16, u16), AirPlayError> {

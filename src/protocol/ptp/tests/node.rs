@@ -6,7 +6,7 @@ use tokio::net::UdpSocket;
 use crate::protocol::ptp::clock::PtpRole;
 use crate::protocol::ptp::handler::create_shared_clock;
 use crate::protocol::ptp::message::{
-    AirPlayTimingPacket, PtpMessage, PtpMessageType, PtpPortIdentity,
+    AirPlayTimingPacket, PtpMessage, PtpMessageBody, PtpMessageType, PtpPortIdentity,
 };
 use crate::protocol::ptp::node::{EffectiveRole, PtpNode, PtpNodeConfig};
 use crate::protocol::ptp::timestamp::PtpTimestamp;
@@ -273,6 +273,70 @@ async fn test_bmca_ignores_own_announce() {
         EffectiveRole::Master,
         "Node should ignore its own Announce and stay Master"
     );
+}
+
+// ===== BMCA sets remote_master_clock_id =====
+
+#[tokio::test]
+async fn test_bmca_sets_remote_master_clock_id() {
+    // When BMCA switches to slave, the shared clock should have
+    // remote_master_clock_id set to the grandmaster's identity.
+    let event_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let general_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let remote_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let general_addr = general_sock.local_addr().unwrap();
+
+    let clock = create_shared_clock(0xAAAA, PtpRole::Master);
+    let clock_ref = clock.clone();
+    let config = PtpNodeConfig {
+        clock_id: 0xAAAA,
+        priority1: 255, // Low priority so remote wins
+        sync_interval: Duration::from_secs(60),
+        delay_req_interval: Duration::from_secs(60),
+        announce_interval: Duration::from_secs(60),
+        ..Default::default()
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    let mut node = PtpNode::new(event_sock, Some(general_sock), clock, config);
+
+    let handle = tokio::spawn(async move {
+        node.run(shutdown_rx).await.unwrap();
+        node.role()
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Send Announce from a remote master with clock ID 0x50BC_9664_729E_0008
+    let remote_gm = 0x50BC_9664_729E_0008_u64;
+    let source = PtpPortIdentity::new(remote_gm, 1);
+    let announce = PtpMessage::announce(source, 0, remote_gm, 248, 239);
+    remote_sock
+        .send_to(&announce.encode(), general_addr)
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Verify the shared clock has the remote master's clock ID
+    {
+        let c = clock_ref.read().await;
+        assert_eq!(
+            c.remote_master_clock_id(),
+            Some(remote_gm),
+            "Clock should have remote master's clock ID after BMCA switch to slave"
+        );
+    }
+
+    shutdown_tx.send(true).unwrap();
+    let final_role = tokio::time::timeout(Duration::from_secs(2), handle)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(final_role, EffectiveRole::Slave);
 }
 
 // ===== Node as Master: responds to Delay_Req =====
@@ -845,4 +909,415 @@ async fn test_slave_handler_delay_resp_on_general_port() {
 
     shutdown_tx.send(true).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+}
+
+// ===== One-way fallback: master ignores Delay_Req (like HomePod) =====
+
+/// Simulate a master that sends Sync + Follow_Up but NEVER responds to Delay_Req.
+/// This mimics HomePod behaviour. Verify the slave falls back to one-way
+/// estimation and gets synchronized.
+#[tokio::test]
+async fn test_one_way_fallback_when_master_ignores_delay_req() {
+    let slave_event_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let slave_general_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let master_event_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let master_general_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let slave_event_addr = slave_event_sock.local_addr().unwrap();
+    let slave_general_addr = slave_general_sock.local_addr().unwrap();
+    let master_event_addr = master_event_sock.local_addr().unwrap();
+
+    let slave_clock = create_shared_clock(0xBBBB, PtpRole::Slave);
+
+    // Slave with high priority1 (will defer to master).
+    let config = PtpNodeConfig {
+        clock_id: 0xBBBB,
+        priority1: 255,
+        priority2: 255,
+        sync_interval: Duration::from_secs(60),
+        delay_req_interval: Duration::from_millis(500), // Fast for testing
+        announce_interval: Duration::from_secs(60),
+        ..Default::default()
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let slave_clock_ref = slave_clock.clone();
+
+    let handle = tokio::spawn(async move {
+        let mut node = PtpNode::new(
+            slave_event_sock,
+            Some(slave_general_sock),
+            slave_clock_ref,
+            config,
+        );
+        // Register master as known peer (so slave can send Delay_Req)
+        node.add_slave(master_event_addr);
+        node.run(shutdown_rx).await.unwrap();
+        node.role()
+    });
+
+    // Wait for node to start
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // First, send Announce from master so slave switches role
+    let master_source = PtpPortIdentity::new(0xAAAA, 1);
+    let announce = PtpMessage::announce(master_source, 0, 0xAAAA, 128, 128);
+    master_general_sock
+        .send_to(&announce.encode(), slave_general_addr)
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Now send multiple Sync + Follow_Up rounds from master.
+    // The slave will send Delay_Req which we deliberately IGNORE.
+    //
+    // Timeline with delay_req_interval=500ms and 3s timeout:
+    //   t≈0.5s:  First Delay_Req sent
+    //   t≈3.5s:  Timeout → unanswered=1
+    //   t≈4.0s:  Second Delay_Req sent
+    //   t≈7.0s:  Timeout → unanswered=2 → fallback activated
+    //   t≈7.5s+: Follow_Up triggers try_one_way_sync → synchronized!
+    // So we need at least 8 seconds of Sync/Follow_Up.
+    let master_base_time = 705_000u64; // Boot-based time like HomePod
+
+    for i in 0..16u64 {
+        // Send Sync on event port
+        let t1 = PtpTimestamp::new(master_base_time + i, 0);
+        let mut sync_msg = PtpMessage::sync(master_source, i as u16, t1);
+        sync_msg.header.flags = 0x0200; // Two-step
+        master_event_sock
+            .send_to(&sync_msg.encode(), slave_event_addr)
+            .await
+            .unwrap();
+
+        // Small delay then Follow_Up on general port
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let precise_t1 = PtpTimestamp::new(master_base_time + i, 500_000);
+        let follow_up = PtpMessage::follow_up(master_source, i as u16, precise_t1);
+        master_general_sock
+            .send_to(&follow_up.encode(), slave_general_addr)
+            .await
+            .unwrap();
+
+        // Wait 600ms between rounds
+        tokio::time::sleep(Duration::from_millis(600)).await;
+
+        // Drain any Delay_Req that arrived (but DON'T respond)
+        let mut discard_buf = [0u8; 256];
+        while master_event_sock
+            .try_recv_from(&mut discard_buf)
+            .is_ok()
+        {}
+    }
+
+    // Verify slave is synced via one-way fallback
+    {
+        let clock = slave_clock.read().await;
+        assert!(
+            clock.is_synchronized(),
+            "Slave should be synchronized via one-way fallback (measurements={})",
+            clock.measurement_count()
+        );
+        assert!(
+            clock.measurement_count() >= 1,
+            "Should have at least 1 one-way measurement, got {}",
+            clock.measurement_count()
+        );
+
+        // Offset should be large (difference between Unix and boot-based epoch)
+        let offset_s = clock.offset_nanos() / 1_000_000_000;
+        assert!(
+            offset_s > 1_000_000_000,
+            "Offset should be > 1 billion seconds (Unix vs boot time), got {offset_s}"
+        );
+    }
+
+    shutdown_tx.send(true).unwrap();
+    let final_role = tokio::time::timeout(Duration::from_secs(2), handle)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(final_role, EffectiveRole::Slave);
+}
+
+// ===== Master sends correct Sync + Follow_Up =====
+
+/// Verify that when acting as master, the node sends valid Sync and
+/// Follow_Up packets that a slave can decode and use.
+#[tokio::test]
+async fn test_master_sends_sync_follow_up_pair() {
+    let master_event = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let master_general = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let slave_event_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let slave_general_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let slave_event_addr = slave_event_sock.local_addr().unwrap();
+    let slave_general_addr = slave_general_sock.local_addr().unwrap();
+
+    let master_clock = create_shared_clock(0xAAAA, PtpRole::Master);
+    let config = PtpNodeConfig {
+        clock_id: 0xAAAA,
+        priority1: 64,
+        sync_interval: Duration::from_millis(200), // Fast
+        delay_req_interval: Duration::from_secs(60),
+        announce_interval: Duration::from_secs(60),
+        ..Default::default()
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    let mut node = PtpNode::new(
+        master_event.clone(),
+        Some(master_general.clone()),
+        master_clock,
+        config,
+    );
+    node.add_slave(slave_event_addr);
+    node.add_general_slave(slave_general_addr);
+
+    let handle = tokio::spawn(async move {
+        node.run(shutdown_rx).await
+    });
+
+    // Wait for at least one Sync to be sent
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Receive Sync on event port
+    let mut buf = [0u8; 256];
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        slave_event_sock.recv_from(&mut buf),
+    )
+    .await;
+    assert!(result.is_ok(), "Should receive Sync from master");
+    let (len, _) = result.unwrap().unwrap();
+    let sync_msg = PtpMessage::decode(&buf[..len]).unwrap();
+    assert_eq!(sync_msg.header.message_type, PtpMessageType::Sync);
+    assert_eq!(sync_msg.header.flags & 0x0200, 0x0200, "Two-step flag should be set");
+
+    // The Sync should have a valid origin timestamp
+    if let PtpMessageBody::Sync { origin_timestamp } = &sync_msg.body {
+        assert!(origin_timestamp.seconds > 0, "Sync should have non-zero timestamp");
+    } else {
+        panic!("Expected Sync body");
+    }
+
+    // Receive from general port — might get Announce first (sent on init),
+    // so drain until we get a Follow_Up.
+    let mut found_follow_up = false;
+    for _ in 0..5 {
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            slave_general_sock.recv_from(&mut buf),
+        )
+        .await;
+        if result.is_err() {
+            break;
+        }
+        let (len, _) = result.unwrap().unwrap();
+        if let Ok(msg) = PtpMessage::decode(&buf[..len]) {
+            if msg.header.message_type == PtpMessageType::FollowUp {
+                assert_eq!(
+                    msg.header.sequence_id, sync_msg.header.sequence_id,
+                    "Follow_Up should match Sync sequence ID"
+                );
+                if let PtpMessageBody::FollowUp { precise_origin_timestamp } = &msg.body {
+                    assert!(
+                        precise_origin_timestamp.seconds > 0,
+                        "Follow_Up should have non-zero precise timestamp"
+                    );
+                }
+                found_follow_up = true;
+                break;
+            }
+            // else: Announce or other — continue draining
+        }
+    }
+    assert!(found_follow_up, "Should receive Follow_Up from master on general port");
+
+    shutdown_tx.send(true).unwrap();
+    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+}
+
+// ===== Full master-slave sync with offset verification =====
+
+/// Run two nodes where they use the same local clock (loopback) and verify
+/// the slave's offset converges to near-zero. This validates the full
+/// Sync → Follow_Up → Delay_Req → Delay_Resp pipeline end-to-end.
+#[tokio::test]
+async fn test_full_sync_pipeline_offset_converges() {
+    let a_event = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let a_general = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let a_event_addr = a_event.local_addr().unwrap();
+    let a_general_addr = a_general.local_addr().unwrap();
+
+    let b_event = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let b_general = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let b_event_addr = b_event.local_addr().unwrap();
+    let b_general_addr = b_general.local_addr().unwrap();
+
+    let a_clock = create_shared_clock(0x0001, PtpRole::Master);
+    let b_clock = create_shared_clock(0x0002, PtpRole::Slave);
+
+    let a_config = PtpNodeConfig {
+        clock_id: 0x0001,
+        priority1: 64,
+        priority2: 128,
+        sync_interval: Duration::from_millis(100),
+        delay_req_interval: Duration::from_millis(100),
+        announce_interval: Duration::from_millis(200),
+        ..Default::default()
+    };
+
+    let b_config = PtpNodeConfig {
+        clock_id: 0x0002,
+        priority1: 200,
+        priority2: 128,
+        sync_interval: Duration::from_millis(100),
+        delay_req_interval: Duration::from_millis(100),
+        announce_interval: Duration::from_millis(200),
+        ..Default::default()
+    };
+
+    let (a_shutdown_tx, a_shutdown_rx) = tokio::sync::watch::channel(false);
+    let (b_shutdown_tx, b_shutdown_rx) = tokio::sync::watch::channel(false);
+
+    let b_clock_ref = b_clock.clone();
+
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+
+    let barrier_a = barrier.clone();
+    let a_handle = tokio::spawn(async move {
+        let mut node_a = PtpNode::new(a_event, Some(a_general), a_clock, a_config);
+        node_a.add_slave(b_event_addr);
+        node_a.add_general_slave(b_general_addr);
+        barrier_a.wait().await;
+        node_a.run(a_shutdown_rx).await.unwrap();
+        node_a.role()
+    });
+
+    let barrier_b = barrier.clone();
+    let b_handle = tokio::spawn(async move {
+        let mut node_b = PtpNode::new(b_event, Some(b_general), b_clock_ref, b_config);
+        node_b.add_slave(a_event_addr);
+        node_b.add_general_slave(a_general_addr);
+        barrier_b.wait().await;
+        node_b.run(b_shutdown_rx).await.unwrap();
+        node_b.role()
+    });
+
+    // Let them sync for 3 seconds
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    a_shutdown_tx.send(true).unwrap();
+    b_shutdown_tx.send(true).unwrap();
+
+    let a_role = tokio::time::timeout(Duration::from_secs(2), a_handle)
+        .await
+        .unwrap()
+        .unwrap();
+    let b_role = tokio::time::timeout(Duration::from_secs(2), b_handle)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(a_role, EffectiveRole::Master, "A should be master (p1=64)");
+    assert_eq!(b_role, EffectiveRole::Slave, "B should be slave (p1=200)");
+
+    // Verify B's clock state
+    let b_locked = b_clock.read().await;
+    assert!(b_locked.is_synchronized(), "Slave must be synchronized");
+
+    let measurements = b_locked.measurement_count();
+    assert!(
+        measurements >= 4,
+        "Expected >= 4 measurements after 3s at 100ms intervals, got {measurements}"
+    );
+
+    // On loopback both use PtpTimestamp::now() (same clock),
+    // so offset should be very small (< 5ms).
+    let offset_ms = b_locked.offset_millis().abs();
+    assert!(
+        offset_ms < 5.0,
+        "Offset should be < 5ms on loopback, got {offset_ms:.3}ms"
+    );
+
+    // RTT should also be very small
+    if let Some(rtt) = b_locked.median_rtt() {
+        assert!(
+            rtt < Duration::from_millis(5),
+            "RTT should be < 5ms on loopback, got {rtt:?}"
+        );
+    }
+
+    // Verify conversion is near-identity on loopback
+    let now = PtpTimestamp::new(1_740_000_000, 0);
+    let converted = b_locked.remote_to_local(now);
+    let diff_ms = ((converted.to_nanos() - now.to_nanos()).unsigned_abs() as f64) / 1_000_000.0;
+    assert!(
+        diff_ms < 10.0,
+        "remote_to_local should be near-identity on loopback, diff={diff_ms:.3}ms"
+    );
+}
+
+// ===== Announce timeout: slave reverts to master =====
+
+#[tokio::test]
+async fn test_announce_timeout_reverts_to_master() {
+    let event_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let general_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let remote_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let general_addr = general_sock.local_addr().unwrap();
+
+    let clock = create_shared_clock(0xCCCC, PtpRole::Master);
+    let config = PtpNodeConfig {
+        clock_id: 0xCCCC,
+        priority1: 200,
+        sync_interval: Duration::from_secs(60),
+        delay_req_interval: Duration::from_secs(60),
+        announce_interval: Duration::from_millis(500), // Fast announce check
+        ..Default::default()
+    };
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    let handle = tokio::spawn(async move {
+        let mut node = PtpNode::new(event_sock, Some(general_sock), clock, config);
+        node.run(shutdown_rx).await.unwrap();
+        node.role()
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Send Announce from superior master
+    let source = PtpPortIdentity::new(0xDDDD, 1);
+    let announce = PtpMessage::announce(source, 0, 0xDDDD, 32, 128);
+    remote_sock
+        .send_to(&announce.encode(), general_addr)
+        .await
+        .unwrap();
+
+    // Wait briefly — node should switch to slave
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Now DON'T send any more Announces.
+    // The node's announce_timeout is 6 seconds by default.
+    // Wait for announce timeout to trigger.
+    tokio::time::sleep(Duration::from_secs(7)).await;
+
+    // Node should have reverted to Master
+    shutdown_tx.send(true).unwrap();
+    let final_role = tokio::time::timeout(Duration::from_secs(2), handle)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        final_role,
+        EffectiveRole::Master,
+        "Node should revert to Master after remote master's Announce times out"
+    );
 }
