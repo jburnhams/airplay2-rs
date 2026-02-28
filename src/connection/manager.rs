@@ -1790,7 +1790,7 @@ impl ConnectionManager {
         let secs = master_time.seconds;
         // Convert nanoseconds to Apple's 64-bit fixed-point fraction: frac = nanos * 2^64 / 10^9
         let frac = (u128::from(master_time.nanoseconds) << 64) / 1_000_000_000u128;
-        let frac = u64::try_from(frac).unwrap();
+let frac = u64::try_from(frac).expect("PTP time fraction should fit in u64");
 
         // Use the remote master's clock ID as timeline identifier.
         let clock_id = clock
