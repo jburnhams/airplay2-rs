@@ -51,11 +51,11 @@ impl NtpTimestamp {
         let seconds = now.as_secs() + NTP_EPOCH_OFFSET;
         let nanos = now.subsec_nanos();
         // Convert nanoseconds to NTP fraction (2^32 / 10^9)
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u32")]
         let fraction = ((u64::from(nanos) * 0x1_0000_0000_u64) / 1_000_000_000) as u32;
 
         Self {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Seconds fit in u32")]
             seconds: seconds as u32,
             fraction,
         }
@@ -65,9 +65,9 @@ impl NtpTimestamp {
     #[must_use]
     pub fn from_u64(value: u64) -> Self {
         Self {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Seconds shift fits in u32")]
             seconds: (value >> 32) as u32,
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Fraction fits in u32")]
             fraction: value as u32,
         }
     }
@@ -153,14 +153,17 @@ impl ClockSync {
 
         // Update moving average
         let alpha = if self.exchange_count < 10 { 0.5 } else { 0.1 };
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "Precision loss acceptable for moving average"
+        )]
         {
             self.offset_avg = (1.0 - alpha) * self.offset_avg + alpha * (receive_diff as f64);
         }
 
         // Convert strict casting to avoid clippy warnings if needed, but here simple cast is fine
         // for now
-        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_possible_truncation, reason = "Offset fits in i64")]
         let offset = self.offset_avg as i64;
         self.offset_micros = offset;
 

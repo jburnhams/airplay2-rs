@@ -34,7 +34,11 @@ impl Volume {
 
     /// Get as percentage (0 - 100)
     #[must_use]
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Volume percentage fits in u8"
+    )]
     pub fn as_percent(&self) -> u8 {
         (self.0 * 100.0).round() as u8
     }
