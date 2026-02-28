@@ -1,5 +1,12 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 10):**
+- **Artwork Support**:
+  - ✅ **VERIFIED**: `metadata_integration` test verifies `set_artwork` is correctly received.
+  - Added `set_artwork` method to `AirPlayClient` and `PlaybackController`.
+  - Verified `image/jpeg` MIME type data is parsed correctly.
+  - Patched `python-ap2` receiver to save the received image bytes to a temp file, allowing the log output verification.
+
 **Work Done (Session 9):**
 - **Metadata and Progress Updates**:
   - ✅ **VERIFIED**: `metadata_integration` test verifies `set_metadata` (DAAP/DMAP) and `set_progress`.
@@ -325,7 +332,8 @@
 ### SET_PARAMETER
 - [x] `text/parameters` — e.g. `volume: N` and `progress: X/Y/Z`
   - ✅ **VERIFIED**: `metadata_integration` test verifies `set_progress` is received correctly.
-- [ ] `image/jpeg` — artwork image data
+- [x] `image/jpeg` — artwork image data
+  - ✅ **VERIFIED**: `metadata_integration` test verifies `set_artwork` is received correctly.
 - [x] `application/x-dmap-tagged` — DAAP/now‑playing metadata
   - ✅ **VERIFIED**: `metadata_integration` test verifies `set_metadata` (DAAP/DMAP) is received correctly.
 

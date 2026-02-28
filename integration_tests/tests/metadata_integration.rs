@@ -95,7 +95,18 @@ async fn test_metadata_updates() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     tracing::info!("Progress verified!");
 
-    // 5. Cleanup
+    // 5. Send Artwork
+    tracing::info!("Sending artwork...");
+    let artwork_data = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F']; // Fake JPEG header
+    client.set_artwork(&artwork_data, "image/jpeg").await?;
+
+    tracing::info!("Verifying artwork logs...");
+    receiver
+        .wait_for_log("Artwork saved to ", Duration::from_secs(5))
+        .await?;
+    tracing::info!("Artwork verified!");
+
+    // 6. Cleanup
     tracing::info!("Disconnecting...");
     client.disconnect().await?;
     receiver.stop().await?;

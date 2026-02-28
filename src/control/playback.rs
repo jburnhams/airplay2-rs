@@ -316,6 +316,22 @@ impl PlaybackController {
         Ok(())
     }
 
+    /// Set artwork
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_artwork(&self, data: &[u8], mime_type: &str) -> Result<(), AirPlayError> {
+        self.connection
+            .send_command(
+                Method::SetParameter,
+                Some(data.to_vec()),
+                Some(mime_type.to_string()),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Internal: send scrub command
     async fn send_scrub(&self, position: f64) -> Result<(), AirPlayError> {
         // AirPlay 2 uses progress parameter for scrub
