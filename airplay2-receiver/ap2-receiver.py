@@ -3,6 +3,7 @@ import argparse
 import multiprocessing
 import random
 import tempfile  # noqa
+import os
 from threading import current_thread
 
 import pprint
@@ -707,10 +708,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(content_len)
 
                 fname = None
-                with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False, suffix=".jpg") as f:
-                    f.write(body)
-                    fname = f.name
-                self.logger.info(f"Artwork saved to {fname}")
+                try:
+                    with tempfile.NamedTemporaryFile(prefix="artwork", delete=False, suffix=".jpg") as f:
+                        f.write(body)
+                        fname = f.name
+                    self.logger.info(f"Artwork saved to {fname}")
+                finally:
+                    if fname and os.path.exists(fname):
+                        os.remove(fname)
         elif content_type == HTTP_CT_DMAP:
             if content_len > 0:
                 self.logger.info(parse_dxxp(self.rfile.read(content_len)))
