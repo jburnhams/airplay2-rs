@@ -86,7 +86,8 @@ impl PlaybackController {
                      (timeline=0x{:016X})",
                     secs,
                     // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
-u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64).expect("PTP time fraction conversion should fit in u32"),
+                    u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
+                        .expect("PTP time fraction conversion should fit in u32"),
                     timeline_id,
                 );
                 builder = builder
