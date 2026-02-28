@@ -11,12 +11,12 @@ fn test_multi_room_convergence() {
     coord.join_group("group-uuid".into(), GroupRole::Follower, Some(0x3333_4444));
 
     let mut now_ptp = PtpTimestamp::now();
-    let now_inst = Instant::now();
 
     // Start with a large 50ms drift
     let mut current_drift_ms: i64 = 50;
 
     for _step in 0..20 {
+        let now_inst = Instant::now();
         let drift_dur = Duration::from_millis(current_drift_ms.unsigned_abs());
         let target_ptp = if current_drift_ms > 0 {
             // Local clock is AHEAD of Target. Drift is positive.
