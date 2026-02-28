@@ -120,9 +120,9 @@ pub struct PtpNode {
     pending_t2: Option<PtpTimestamp>,
     /// Pending `Delay_Req` T3 (slave role).
     pending_t3: Option<PtpTimestamp>,
-    /// When the pending Delay_Req was sent (for timeout).
+    /// When the pending `Delay_Req` was sent (for timeout).
     delay_req_sent_at: Option<tokio::time::Instant>,
-    /// Number of consecutive Delay_Req without response.
+    /// Number of consecutive `Delay_Req` without response.
     delay_req_unanswered: u32,
     /// The current remote master we are slaving to (if any).
     remote_master: Option<RemoteMaster>,
@@ -338,6 +338,10 @@ impl PtpNode {
     }
 
     /// Handle incoming packet on event port (319).
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Complex logic function with multiple match arms"
+    )]
     async fn handle_event_packet(
         &mut self,
         data: &[u8],
@@ -384,7 +388,8 @@ impl PtpNode {
                     let two_step = msg.header.flags & 0x0200 != 0;
                     if msg.header.sequence_id % 64 == 0 {
                         tracing::info!(
-                            "PTP node: Received Sync from {} seq={}, two_step={}, T1={} (role={:?})",
+                            "PTP node: Received Sync from {} seq={}, two_step={}, T1={} \
+                             (role={:?})",
                             src,
                             msg.header.sequence_id,
                             two_step,
@@ -554,11 +559,11 @@ impl PtpNode {
         }
     }
 
-    /// Check if a pending Delay_Req has timed out.
+    /// Check if a pending `Delay_Req` has timed out.
     ///
-    /// After 2 consecutive unanswered Delay_Req, falls back to one-way
-    /// offset estimation (using just Sync T1/T2). This handles AirPlay
-    /// devices that act as PTP master but don't respond to Delay_Req.
+    /// After 2 consecutive unanswered `Delay_Req`, falls back to one-way
+    /// offset estimation (using just Sync T1/T2). This handles `AirPlay`
+    /// devices that act as PTP master but don't respond to `Delay_Req`.
     async fn check_delay_req_timeout(&mut self) {
         const DELAY_REQ_TIMEOUT: Duration = Duration::from_secs(3);
         const MAX_UNANSWERED_BEFORE_FALLBACK: u32 = 2;
@@ -594,9 +599,9 @@ impl PtpNode {
 
     /// Process one-way sync if we're in fallback mode and have T1/T2.
     ///
-    /// Called after receiving Follow_Up with precise T1. Only processes
-    /// if we've given up on Delay_Req (unanswered >= 2) and aren't waiting
-    /// for a Delay_Resp.
+    /// Called after receiving `Follow_Up` with precise T1. Only processes
+    /// if we've given up on `Delay_Req` (unanswered >= 2) and aren't waiting
+    /// for a `Delay_Resp`.
     async fn try_one_way_sync(&mut self) {
         const MAX_UNANSWERED_BEFORE_FALLBACK: u32 = 2;
 

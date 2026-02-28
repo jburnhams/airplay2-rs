@@ -648,6 +648,10 @@ impl AirPlayClient {
     /// # Errors
     ///
     /// Returns error if streaming fails or device is disconnected.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Complex streaming logic with multiple phases requires length"
+    )]
     pub async fn stream_audio<S: AudioSource + 'static>(
         &mut self,
         source: S,
@@ -678,10 +682,16 @@ impl AirPlayClient {
 
         // Configure encryption if available
         if let Some(key) = self.connection.encryption_key().await {
-            tracing::info!("Enabling ChaCha20-Poly1305 audio encryption (key[0..4]={:02X?})", &key[..4]);
+            tracing::info!(
+                "Enabling ChaCha20-Poly1305 audio encryption (key[0..4]={:02X?})",
+                &key[..4]
+            );
             streamer.set_encryption_key(key).await;
         } else {
-            tracing::warn!("No encryption key available — audio will be sent UNENCRYPTED (HomePod will reject this)");
+            tracing::warn!(
+                "No encryption key available — audio will be sent UNENCRYPTED (HomePod will \
+                 reject this)"
+            );
         }
 
         self.streamer = Some(streamer.clone());
