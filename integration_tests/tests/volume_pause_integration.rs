@@ -111,13 +111,11 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Pause
     println!("Pausing...");
     client.pause().await?;
-    // Verify log: 'rate': 0 inside a dictionary log or similar (Python might print 0.0 as 0)
-    // The log is: {'rate': 0.0, 'rtpTime': ...} or {'rate': 0, ...}
-    // We check for "rate': 0" which matches both "0" and "0.0" (prefix match)
-    // Alternatively, it might be inside SETRATEANCHORTIME
+    // Wait for the pause command to reach the Python receiver logger via pprint
+    // Python's pprint will format it as {'rate': 0, 'rtpTime': 0}
     // Increased timeout for CI environment
     receiver
-        .wait_for_log("rate': 0", Duration::from_secs(15))
+        .wait_for_log("'rate': 0,", Duration::from_secs(15))
         .await?;
 
     // 6. Resume
@@ -125,7 +123,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     client.play().await?;
     // Verify log: 'rate': 1
     receiver
-        .wait_for_log("rate': 1", Duration::from_secs(15))
+        .wait_for_log("'rate': 1,", Duration::from_secs(15))
         .await?;
 
     // 7. Change Volume

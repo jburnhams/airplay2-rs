@@ -128,26 +128,26 @@ impl PlaybackController {
     pub async fn pause(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
-        if state.is_playing {
-            let body = DictBuilder::new()
-                .insert("rate", 0i64)
-                .insert("rtpTime", 0u64)
-                .build();
-            let encoded =
-                crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-                    message: format!("Failed to encode plist: {e}"),
-                    status_code: None,
-                })?;
+        // Send pause unconditionally. We might have started a stream in another task
+        // and the state might not be synchronized, but it's safe to send a pause command.
+        let body = DictBuilder::new()
+            .insert("rate", 0i64)
+            .insert("rtpTime", 0u64)
+            .build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
 
-            self.connection
-                .send_command(
-                    Method::SetRateAnchorTime,
-                    Some(encoded),
-                    Some("application/x-apple-binary-plist".to_string()),
-                )
-                .await?;
-            state.is_playing = false;
-        }
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+        state.is_playing = false;
 
         Ok(())
     }
