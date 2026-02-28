@@ -1213,8 +1213,8 @@ async fn test_full_sync_pipeline_offset_converges() {
         node_b.role()
     });
 
-    // Let them sync for 3 seconds
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    // Let them sync for enough time to get measurements (4 seconds for robustness)
+    tokio::time::sleep(Duration::from_secs(4)).await;
 
     a_shutdown_tx.send(true).unwrap();
     b_shutdown_tx.send(true).unwrap();
