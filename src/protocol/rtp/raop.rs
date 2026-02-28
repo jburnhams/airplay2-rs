@@ -1,8 +1,9 @@
 //! RAOP-specific RTP packet types
 
+use bytes::BufMut;
+
 use super::packet::RtpDecodeError;
 use super::timing::NtpTimestamp;
-use bytes::BufMut;
 
 /// RAOP RTP payload types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

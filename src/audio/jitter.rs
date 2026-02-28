@@ -3,9 +3,10 @@
 //! Buffers incoming packets, reorders them by sequence number,
 //! and releases them at the appropriate playback time.
 
-use crate::receiver::rtp_receiver::AudioPacket;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+
+use crate::receiver::rtp_receiver::AudioPacket;
 
 /// Jitter buffer configuration
 #[derive(Debug, Clone)]
@@ -142,7 +143,10 @@ impl JitterBuffer {
 
         // Check if packet is too old (behind playback point)
         if let Some(next_seq) = self.next_play_seq {
-            #[allow(clippy::cast_possible_wrap)]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "Standard sequence number difference calculation"
+            )]
             let diff = seq.wrapping_sub(next_seq) as i16;
             if diff < 0 {
                 // Packet is late
@@ -249,10 +253,12 @@ impl JitterBuffer {
         // Check wrap-around gap (keys[0] vs keys[last])
         let wrap_gap = u32::from(keys[0]) + 65536 - u32::from(*keys.last().unwrap());
 
-        // If the linear gap is larger than the wrap gap, it means the sequence wraps "inside" the u16 range.
+        // If the linear gap is larger than the wrap gap, it means the sequence wraps "inside" the
+        // u16 range.
         if max_gap > wrap_gap {
             // The sequence is wrapping around 0 in the buffer.
-            // The logical order is keys[max_gap_index+1] ... keys[last] -> keys[0] ... keys[max_gap_index]
+            // The logical order is keys[max_gap_index+1] ... keys[last] -> keys[0] ...
+            // keys[max_gap_index]
             Some(keys[max_gap_index + 1])
         } else {
             // Standard order
@@ -348,7 +354,10 @@ impl JitterBuffer {
 
     /// Get fill percentage (0.0 to 1.0)
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Buffer depth is small enough to fit in f64"
+    )]
     pub fn fill_ratio(&self) -> f64 {
         self.packets.len() as f64 / self.config.target_depth as f64
     }
@@ -362,7 +371,10 @@ impl JitterBuffer {
 
     /// Get estimated latency based on buffer depth
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Buffer depth is small enough to fit in f64"
+    )]
     pub fn estimated_latency(&self) -> Duration {
         let packets = self.packets.len() as f64;
         Duration::from_secs_f64(packets / self.config.packets_per_second)
@@ -370,7 +382,10 @@ impl JitterBuffer {
 
     /// Calculate packet loss rate
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Packet count unlikely to exceed 2^53"
+    )]
     pub fn loss_rate(&self) -> f64 {
         let total = self.stats.packets_received + self.stats.packets_concealed;
         if total == 0 {

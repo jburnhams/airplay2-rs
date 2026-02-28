@@ -1,9 +1,11 @@
+use std::net::{IpAddr, Ipv4Addr};
+use std::time::Duration;
+
+use tokio::time::sleep;
+
 use crate::client::{ClientConfig, PreferredProtocol, UnifiedAirPlayClient};
 use crate::testing::mock_raop_server::{MockRaopConfig, MockRaopServer};
 use crate::types::{AirPlayDevice, DeviceCapabilities};
-use std::net::{IpAddr, Ipv4Addr};
-use std::time::Duration;
-use tokio::time::sleep;
 
 async fn create_device_with_server() -> (AirPlayDevice, MockRaopServer) {
     let config = MockRaopConfig {

@@ -1,7 +1,8 @@
+use bytes::Bytes;
+
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use crate::protocol::rtp::raop::{RaopAudioPacket, RaopPayloadType, RetransmitRequest, SyncPacket};
 use crate::protocol::rtp::timing::NtpTimestamp;
-use bytes::Bytes;
 
 #[test]
 fn test_sync_packet_encode_decode() {

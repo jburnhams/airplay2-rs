@@ -1,9 +1,10 @@
+use std::collections::HashMap;
+
 use crate::protocol::plist::PlistValue;
 use crate::receiver::ap2::body_handler::{
     BodyParseError, PlistExt, PlistResponseBuilder, encode_bplist_body, encode_text_parameters,
     parse_bplist_body, parse_text_parameters,
 };
-use std::collections::HashMap;
 
 #[test]
 fn test_text_parameters_roundtrip() {

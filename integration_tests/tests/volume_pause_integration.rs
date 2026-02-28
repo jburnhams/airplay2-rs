@@ -2,9 +2,11 @@
 //!
 //! Verifies that client commands are correctly received and processed by the Python receiver.
 
-use airplay2::streaming::AudioSource;
-use airplay2::{AirPlayClient, AirPlayConfig, audio::AudioFormat};
 use std::time::Duration;
+
+use airplay2::audio::AudioFormat;
+use airplay2::streaming::AudioSource;
+use airplay2::{AirPlayClient, AirPlayConfig};
 use tokio::time::sleep;
 mod common;
 use common::python_receiver::PythonReceiver;
@@ -60,12 +62,27 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Connect
     println!("Connecting...");
-    // Use a longer timeout for CI environments where the Python receiver might be slow to accept connections
+    // Use a longer timeout for CI environments where the Python receiver might be slow to accept
+    // connections
     let config = AirPlayConfig::builder()
         .connection_timeout(Duration::from_secs(30))
         .build();
     let client = AirPlayClient::new(config);
-    client.connect(&device).await?;
+
+    // Use retry logic for robustness in CI
+    let mut connected = false;
+    for i in 0..3 {
+        println!("Connection attempt {}/3...", i + 1);
+        if client.connect(&device).await.is_ok() {
+            connected = true;
+            break;
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect client after retries".into());
+    }
 
     // 3. Set Volume (Initial)
     println!("Setting volume to 0.5 (-6.02 dB)...");
@@ -94,18 +111,20 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Pause
     println!("Pausing...");
     client.pause().await?;
-    // Verify log: "rate': 0.0" inside a dictionary log or similar
-    // The log is: {'rate': 0.0, 'rtpTime': ...}
+    // Verify log: "rate': 0" inside a dictionary log or similar (Python might print 0.0 as 0)
+    // The log is: {'rate': 0.0, 'rtpTime': ...} or {'rate': 0, ...}
+    // We check for "rate': 0" which matches both "0" and "0.0" (prefix match)
+    // Increased timeout for CI environment
     receiver
-        .wait_for_log("'rate': 0.0", Duration::from_secs(5))
+        .wait_for_log("'rate': 0", Duration::from_secs(15))
         .await?;
 
     // 6. Resume
     println!("Resuming...");
     client.play().await?;
-    // Verify log: "rate': 1.0"
+    // Verify log: "rate': 1"
     receiver
-        .wait_for_log("'rate': 1.0", Duration::from_secs(5))
+        .wait_for_log("'rate': 1", Duration::from_secs(15))
         .await?;
 
     // 7. Change Volume

@@ -5,14 +5,16 @@
 
 #[cfg(feature = "audio-cpal")]
 mod implementation {
+    use std::sync::{Arc, Mutex, mpsc};
+    use std::thread;
+    use std::time::Duration;
+
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
     use super::super::output::{
         AudioCallback, AudioDevice, AudioOutput, AudioOutputError, OutputState,
     };
     use crate::audio::format::{AudioFormat, SampleFormat, SampleRate};
-    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use std::sync::{Arc, Mutex, mpsc};
-    use std::thread;
-    use std::time::Duration;
 
     enum StreamCommand {
         Pause,

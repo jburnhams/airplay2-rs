@@ -1,9 +1,11 @@
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use tokio::time::Duration;
+
 use crate::audio::AudioFormat;
 use crate::error::AirPlayError;
 use crate::streaming::{PcmStreamer, RtpSender, SliceSource, StreamerState};
-use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
-use tokio::time::Duration;
 
 #[derive(Default)]
 struct MockRtpSender {
@@ -28,15 +30,16 @@ impl RtpSender for MockRtpSender {
 
 #[tokio::test]
 async fn test_pcm_streamer_creation() {
+    use std::sync::Arc;
+
     use crate::connection::ConnectionManager;
     use crate::types::AirPlayConfig;
-    use std::sync::Arc;
 
     let config = AirPlayConfig::default();
     let connection = Arc::new(ConnectionManager::new(config));
     let format = AudioFormat::CD_QUALITY;
 
-    let streamer = PcmStreamer::new(connection, format);
+    let streamer = PcmStreamer::new(connection, format, 44100);
     assert_eq!(streamer.state().await, StreamerState::Idle);
 }
 
@@ -46,7 +49,7 @@ async fn test_streaming_loop() {
     let packets = sender.packets.clone();
 
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Create source
     // Increase size to ensure it doesn't finish before we check state
@@ -63,7 +66,8 @@ async fn test_streaming_loop() {
     // Allow some time for streaming
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // Check state (might be Streaming or finished if fast, but with interval it should be streaming)
+    // Check state (might be Streaming or finished if fast, but with interval it should be
+    // streaming)
     assert_eq!(streamer_arc.state().await, StreamerState::Streaming);
 
     // Pause
@@ -89,17 +93,18 @@ async fn test_streaming_loop() {
 
 #[tokio::test]
 async fn benchmark_pcm_streaming_performance() {
+    use std::sync::Arc;
+
     use crate::audio::AudioFormat;
     use crate::streaming::PcmStreamer;
     use crate::streaming::source::SliceSource;
-    use std::sync::Arc;
 
     // Pause time to run fast
     tokio::time::pause();
 
     let sender = Arc::new(MockRtpSender::default());
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Create a large source
     // 352 frames * 4 bytes = 1408 bytes per packet
@@ -120,7 +125,7 @@ async fn benchmark_pcm_streaming_performance() {
 async fn test_finished_state() {
     let sender = Arc::new(MockRtpSender::default());
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Small source
     let data = vec![1u8; 1408 * 2]; // 2 packets
@@ -137,7 +142,7 @@ async fn test_alac_encoding_usage() {
     let packets = sender.packets.clone();
 
     let format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, format);
+    let streamer = PcmStreamer::new(sender, format, 44100);
 
     // Enable ALAC
     streamer.use_alac().await;
@@ -175,7 +180,7 @@ async fn test_resampling_integration() {
     let packets = sender.packets.clone();
 
     let target_format = AudioFormat::CD_QUALITY;
-    let streamer = PcmStreamer::new(sender, target_format);
+    let streamer = PcmStreamer::new(sender, target_format, 44100);
 
     // Source is 48kHz
     let source_format = AudioFormat {
@@ -186,8 +191,11 @@ async fn test_resampling_integration() {
 
     // 100ms of audio
     let duration_secs = 0.1;
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Test data generation"
+    )]
     let num_samples = (f64::from(source_format.sample_rate.as_u32()) * duration_secs) as usize;
     let data = vec![0u8; num_samples * source_format.bytes_per_frame()];
     let source = SliceSource::new(data, source_format);

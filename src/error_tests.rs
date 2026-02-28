@@ -1,5 +1,6 @@
-use crate::error::*;
 use std::io;
+
+use crate::error::*;
 
 #[test]
 fn test_error_display() {

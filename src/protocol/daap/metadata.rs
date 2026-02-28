@@ -42,44 +42,41 @@ impl TrackMetadata {
         let mut encoder = DmapEncoder::new();
 
         // Wrap in mlit (listing item) container
-        let mut item_encoder = DmapEncoder::new();
+        let mut items = Vec::new();
 
         if let Some(ref title) = self.title {
-            item_encoder.string(DmapTag::ItemName, title);
+            items.push((DmapTag::ItemName, DmapValue::String(title.clone())));
         }
 
         if let Some(ref artist) = self.artist {
-            item_encoder.string(DmapTag::SongArtist, artist);
+            items.push((DmapTag::SongArtist, DmapValue::String(artist.clone())));
         }
 
         if let Some(ref album) = self.album {
-            item_encoder.string(DmapTag::SongAlbum, album);
+            items.push((DmapTag::SongAlbum, DmapValue::String(album.clone())));
         }
 
         if let Some(ref genre) = self.genre {
-            item_encoder.string(DmapTag::SongGenre, genre);
+            items.push((DmapTag::SongGenre, DmapValue::String(genre.clone())));
         }
 
         if let Some(track) = self.track_number {
-            item_encoder.int(DmapTag::SongTrackNumber, i64::from(track));
+            items.push((DmapTag::SongTrackNumber, DmapValue::Int(i64::from(track))));
         }
 
         if let Some(disc) = self.disc_number {
-            item_encoder.int(DmapTag::SongDiscNumber, i64::from(disc));
+            items.push((DmapTag::SongDiscNumber, DmapValue::Int(i64::from(disc))));
         }
 
         if let Some(year) = self.year {
-            item_encoder.int(DmapTag::SongYear, i64::from(year));
+            items.push((DmapTag::SongYear, DmapValue::Int(i64::from(year))));
         }
 
         if let Some(duration) = self.duration_ms {
-            item_encoder.int(DmapTag::SongTime, i64::from(duration));
+            items.push((DmapTag::SongTime, DmapValue::Int(i64::from(duration))));
         }
 
-        let item_data = item_encoder.finish();
-
-        // Wrap the item data in mlit tag
-        encoder.encode_tag(DmapTag::ListingItem, &DmapValue::Raw(item_data));
+        encoder.encode_tag(DmapTag::ListingItem, &DmapValue::Container(items));
 
         encoder.finish()
     }

@@ -1,5 +1,6 @@
-use crate::protocol::ptp::timestamp::PtpTimestamp;
 use std::time::Duration;
+
+use crate::protocol::ptp::timestamp::PtpTimestamp;
 
 // ===== Construction =====
 

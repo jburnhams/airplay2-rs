@@ -248,7 +248,10 @@ impl PtpClock {
 
         // Simple two-point drift estimate. For production, a full linear regression
         // over all measurements would be more robust.
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "Precision loss acceptable for drift calculation"
+        )]
         let offset_diff_ns = (last.offset_ns - first.offset_ns) as f64;
         // Drift in ppm: (offset change in ns) / (time in ns) * 1e6
         self.drift_ppm = offset_diff_ns / (time_diff_secs * 1e9) * 1e6;
@@ -298,7 +301,10 @@ impl PtpClock {
 
     /// Get the current offset estimate in milliseconds.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Precision loss acceptable for display"
+    )]
     pub fn offset_millis(&self) -> f64 {
         self.offset_ns as f64 / 1_000_000.0
     }
@@ -386,7 +392,10 @@ impl PtpClock {
         rtp_anchor: u32,
         ptp_anchor: PtpTimestamp,
     ) -> PtpTimestamp {
-        #[allow(clippy::cast_possible_wrap)]
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "RTP timestamp wrapping arithmetic"
+        )]
         let sample_diff = i64::from(rtp_timestamp.wrapping_sub(rtp_anchor) as i32);
         let nanos_diff = sample_diff * 1_000_000_000 / i64::from(sample_rate);
         let remote_ptp_nanos = ptp_anchor.to_nanos() + i128::from(nanos_diff);

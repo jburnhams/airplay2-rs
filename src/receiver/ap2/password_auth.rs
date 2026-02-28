@@ -4,10 +4,11 @@
 //! `HomeKit` PIN-based pairing. It uses the same SRP-6a protocol but
 //! with a user-configured password.
 
+use std::sync::{Arc, RwLock};
+
 use super::config::Ap2Config;
 use super::pairing_server::{EncryptionKeys, PairingError, PairingServer, PairingServerState};
 use crate::protocol::crypto::Ed25519KeyPair;
-use std::sync::{Arc, RwLock};
 
 /// Password authentication manager
 ///

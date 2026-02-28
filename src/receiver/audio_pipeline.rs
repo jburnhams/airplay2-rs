@@ -1,9 +1,10 @@
 //! Audio pipeline connecting jitter buffer to output
 
+use std::sync::{Arc, Mutex};
+
 use crate::audio::format::{AudioCodec, AudioFormat};
 use crate::audio::jitter::JitterBuffer;
 use crate::audio::output::{AudioCallback, AudioOutput, AudioOutputError};
-use std::sync::{Arc, Mutex};
 
 /// Audio pipeline state
 pub struct AudioPipeline {
@@ -43,7 +44,7 @@ impl AudioPipeline {
     ) -> Result<Self, AudioOutputError> {
         let decoder = match codec {
             AudioCodec::Alac => Some(AudioDecoder::Alac(AlacDecoder)),
-            AudioCodec::Aac => Some(AudioDecoder::Aac(AacDecoder)),
+            AudioCodec::Aac | AudioCodec::AacEld => Some(AudioDecoder::Aac(AacDecoder)),
             AudioCodec::Pcm => Some(AudioDecoder::Pcm),
             AudioCodec::Opus => None, // Handle Opus or others
         };

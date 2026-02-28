@@ -1,9 +1,10 @@
 //! Network simulation tests for AirPlay receiver
 
+use std::time::Duration;
+
 use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
 use airplay2::testing::network_sim::NetworkSimulator;
-use std::time::Duration;
 
 /// Test streaming with packet loss and jitter
 #[tokio::test]

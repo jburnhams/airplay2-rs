@@ -28,7 +28,9 @@ pub mod stream;
 // pub mod ptp_clock;
 // pub mod command_handler;
 // pub mod feedback_handler;
-// pub mod multi_room;
+pub mod metadata_handler;
+pub mod multi_room;
+pub mod volume_handler;
 
 #[cfg(test)]
 mod tests;
@@ -46,3 +48,4 @@ pub use session_state::Ap2SessionState;
 pub use setup_handler::SetupHandler;
 pub use stream::StreamType;
 // pub use receiver::AirPlay2Receiver;
+pub mod jitter_buffer;

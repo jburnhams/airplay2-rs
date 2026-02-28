@@ -1,8 +1,9 @@
 //! RAOP challenge-response authentication
 
-use super::super::crypto::CryptoError;
-use super::super::crypto::{AppleRsaPublicKey, RaopRsaPrivateKey};
-use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
+
+use super::super::crypto::{AppleRsaPublicKey, CryptoError, RaopRsaPrivateKey};
 
 /// Challenge size in bytes (128 bits)
 pub const CHALLENGE_SIZE: usize = 16;

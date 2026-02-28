@@ -1,5 +1,6 @@
-use crate::audio::AudioCodec;
 use std::time::Duration;
+
+use crate::audio::AudioCodec;
 
 /// Timing protocol to use for clock synchronization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use super::manager::*;
 use crate::control::volume::Volume;
 use crate::types::{AirPlayDevice, DeviceCapabilities};
-use std::collections::HashMap;
 
 fn test_device(id: &str) -> AirPlayDevice {
     AirPlayDevice {

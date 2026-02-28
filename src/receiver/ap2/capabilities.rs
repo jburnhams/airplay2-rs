@@ -3,9 +3,10 @@
 //! These structures define what our receiver advertises to senders
 //! via the /info endpoint.
 
+use std::collections::HashMap;
+
 use crate::protocol::plist::PlistValue;
 use crate::receiver::ap2::features::{FeatureFlag, FeatureFlags};
-use std::collections::HashMap;
 
 /// Device capabilities for /info response
 #[derive(Debug, Clone)]
@@ -261,7 +262,8 @@ impl DeviceCapabilities {
         let hash = hasher.finalize();
 
         format!(
-            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:\
+             02x}{:02x}{:02x}",
             hash[0],
             hash[1],
             hash[2],

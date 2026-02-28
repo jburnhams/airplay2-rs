@@ -1,23 +1,24 @@
 //! Main `AirPlay` client implementation
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use futures::Stream;
+use tokio::sync::{Mutex, RwLock};
+
 use crate::audio::AudioCodec;
-use crate::connection::{ConnectionManager, ConnectionState};
+use crate::connection::{ConnectionManager, ConnectionState, DisconnectReason};
 use crate::control::playback::{PlaybackController, ShuffleMode};
 use crate::control::queue::PlaybackQueue;
 use crate::control::volume::{Volume, VolumeController};
 use crate::discovery::{DiscoveryEvent, discover, scan};
 use crate::error::AirPlayError;
+use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use crate::state::{ClientEvent, ClientState, EventBus, StateContainer};
 use crate::streaming::{AudioSource, PcmStreamer, UrlStreamer};
 use crate::types::{
     AirPlayConfig, AirPlayDevice, PlaybackState, QueueItem, QueueItemId, RepeatMode, TrackInfo,
 };
-
-use crate::protocol::daap::{DmapProgress, TrackMetadata};
-use futures::Stream;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, RwLock};
 
 pub mod protocol;
 pub mod session;
@@ -33,8 +34,9 @@ pub use session::{AirPlay2SessionImpl, AirPlaySession, RaopSessionImpl};
 /// # Example
 ///
 /// ```rust,no_run
-/// use airplay2::{AirPlayClient, AirPlayConfig};
 /// use std::time::Duration;
+///
+/// use airplay2::{AirPlayClient, AirPlayConfig};
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
 /// // Create client with default config
@@ -159,6 +161,10 @@ impl AirPlayClient {
     pub async fn connect(&self, device: &AirPlayDevice) -> Result<(), AirPlayError> {
         self.connection.connect(device).await?;
 
+        // Start background tasks
+        self.start_monitor();
+        self.start_keep_alive();
+
         // Update state
         self.state.set_device(Some(device.clone())).await;
         self.events.emit(ClientEvent::Connected {
@@ -166,6 +172,100 @@ impl AirPlayClient {
         });
 
         Ok(())
+    }
+
+    /// Forget a paired device
+    ///
+    /// Removes persistent pairing keys for the specified device ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if storage operation fails.
+    pub async fn forget_device(&self, device_id: &str) -> Result<(), AirPlayError> {
+        self.connection.remove_pairing(device_id).await
+    }
+
+    fn start_monitor(&self) {
+        let connection = self.connection.clone();
+        let events = self.events.clone();
+        let state = self.state.clone();
+        let mut rx = connection.subscribe();
+
+        tokio::spawn(async move {
+            while let Ok(event) = rx.recv().await {
+                use crate::connection::ConnectionEvent;
+                match event {
+                    ConnectionEvent::Disconnected { device, reason } => {
+                        state.set_device(None).await;
+                        events.emit(ClientEvent::Disconnected {
+                            device,
+                            reason: format!("{reason:?}"),
+                        });
+                        // Stop monitor loop on disconnect
+                        break;
+                    }
+                    ConnectionEvent::Connected { device } => {
+                        state.set_device(Some(device.clone())).await;
+                        events.emit(ClientEvent::Connected { device });
+                    }
+                    ConnectionEvent::Error {
+                        message,
+                        recoverable,
+                    } => {
+                        // Forward errors?
+                        tracing::warn!(
+                            "Connection error: {} (recoverable: {})",
+                            message,
+                            recoverable
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        });
+    }
+
+    fn start_keep_alive(&self) {
+        let connection = self.connection.clone();
+
+        tokio::spawn(async move {
+            // Check more frequently (1s) to detect disconnection faster
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
+            loop {
+                interval.tick().await;
+
+                // Check if connected
+                let state = connection.state().await;
+                if state != ConnectionState::Connected {
+                    if state == ConnectionState::Disconnected {
+                        tracing::debug!("Keep-alive stopping (disconnected)");
+                        break;
+                    }
+                    continue;
+                }
+
+                tracing::debug!("Sending keep-alive (GET /info)");
+                // Send keep-alive (GET /info)
+                match connection.send_get_command("/info").await {
+                    Ok(_) => {
+                        tracing::debug!("Keep-alive success");
+                    }
+                    Err(e) => {
+                        tracing::warn!("Keep-alive failed: {}", e);
+                        // Trigger disconnect
+                        let reason = DisconnectReason::NetworkError(e.to_string());
+
+                        // We must force state update because send_get_command might not have done
+                        // it if it failed at logic level. But if it failed
+                        // with IO error, connection might be broken.
+                        // Calling disconnect_with_reason will ensure state update and event
+                        // emission.
+                        let _ = connection.disconnect_with_reason(reason).await;
+                        break;
+                    }
+                }
+            }
+        });
     }
 
     /// Disconnect from current device
@@ -184,7 +284,7 @@ impl AirPlayClient {
         if let Some(device) = device {
             self.events.emit(ClientEvent::Disconnected {
                 device,
-                reason: "User requested".to_string(),
+                reason: "UserRequested".to_string(),
             });
         }
 
@@ -554,7 +654,11 @@ impl AirPlayClient {
             sample_format: crate::audio::SampleFormat::I16,
         };
 
-        let streamer = Arc::new(PcmStreamer::new(self.connection.clone(), target_format));
+        let streamer = Arc::new(PcmStreamer::new(
+            self.connection.clone(),
+            target_format,
+            self.config.audio_buffer_frames,
+        ));
 
         // Enable ALAC encoding if configured
         if self.config.audio_codec == AudioCodec::Alac {
@@ -576,29 +680,14 @@ impl AirPlayClient {
         // Don't set is_playing yet — we need to send SetRateAnchorTime first
         // (play() checks is_playing and skips if already true)
 
-        // For PTP devices, RECORD was already sent during setup_session().
-        // For NTP devices, we need to send RECORD here.
-        // After RECORD, send SetRateAnchorTime (rate=1.0) to tell the device
-        // to start rendering audio from its buffer.
+        // Send SETRATEANCHORTIME after audio starts flowing.
+        // RECORD was already sent during connect(). SETRATEANCHORTIME tells the device
+        // to start rendering audio at the given rate and PTP-anchored time.
         let connection = self.connection.clone();
-        let playback = self.playback.clone();
-        let state = self.state.clone();
         tokio::spawn(async move {
-            let ptp_active = connection.is_ptp_active().await;
-
-            if !ptp_active {
-                // NTP/AirPlay 1: RECORD hasn't been sent yet
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                tracing::info!("Sending RECORD request to device...");
-                match connection.record().await {
-                    Ok(()) => tracing::info!("RECORD request accepted by device"),
-                    Err(e) => tracing::error!("RECORD request failed: {}", e),
-                }
-            }
-
-            // Wait for PTP to synchronize so SetRateAnchorTime can include
+            // Wait for PTP to synchronize so SETRATEANCHORTIME can include
             // proper networkTimeSecs/Frac anchor timestamps.
-            if ptp_active {
+            if connection.is_ptp_active().await {
                 tracing::info!("Waiting for PTP clock to synchronize...");
                 let ptp_timeout = Duration::from_secs(10);
                 let poll_interval = Duration::from_millis(200);
@@ -613,7 +702,7 @@ impl AirPlayClient {
                     }
                     if start.elapsed() > ptp_timeout {
                         tracing::warn!(
-                            "PTP clock not synchronized after {:.0}s — sending SetRateAnchorTime \
+                            "PTP clock not synchronized after {:.0}s — sending SETRATEANCHORTIME \
                              without PTP timestamps (audio may not play)",
                             ptp_timeout.as_secs_f64()
                         );
@@ -623,23 +712,29 @@ impl AirPlayClient {
                 }
             }
 
-            // Wait briefly for some audio data to be buffered before telling device to play.
-            let delay = Duration::from_secs(2);
-            tracing::info!(
-                "Waiting {:.0}s for audio to buffer before sending SetRateAnchorTime...",
-                delay.as_secs_f64()
-            );
-            tokio::time::sleep(delay).await;
+            // Wait for audio data to fill the device buffer
+            tokio::time::sleep(Duration::from_millis(1000)).await;
 
-            // Send SetRateAnchorTime (rate=1.0) to start playback
-            tracing::info!("Sending SetRateAnchorTime (rate=1.0) to start playback...");
-            match playback.play().await {
-                Ok(()) => {
-                    tracing::info!("SetRateAnchorTime accepted — device should now render audio");
-                    state.update(|s| s.playback.is_playing = true).await;
+            // Retry SETRATEANCHORTIME with increasing delays
+            let delays_ms = [1000, 2000, 3000, 5000, 8000];
+            for (attempt, delay) in delays_ms.iter().enumerate() {
+                tracing::info!(
+                    "Sending SETRATEANCHORTIME attempt {}/{}...",
+                    attempt + 1,
+                    delays_ms.len()
+                );
+                match connection.send_set_rate_anchor_time(1).await {
+                    Ok(()) => {
+                        tracing::info!("SETRATEANCHORTIME succeeded on attempt {}", attempt + 1);
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::warn!("SETRATEANCHORTIME attempt {} failed: {}", attempt + 1, e);
+                        tokio::time::sleep(Duration::from_millis(*delay)).await;
+                    }
                 }
-                Err(e) => tracing::warn!("SetRateAnchorTime failed: {}", e),
             }
+            tracing::error!("SETRATEANCHORTIME failed after all retries");
         });
 
         streamer.stream(source).await
@@ -662,6 +757,16 @@ impl AirPlayClient {
     #[must_use]
     pub fn subscribe_state(&self) -> tokio::sync::watch::Receiver<ClientState> {
         self.state.subscribe()
+    }
+
+    /// Check if PTP timing is active for the current connection.
+    pub async fn is_ptp_active(&self) -> bool {
+        self.connection.is_ptp_active().await
+    }
+
+    /// Get the shared PTP clock, if PTP timing is active.
+    pub async fn ptp_clock(&self) -> Option<crate::protocol::ptp::handler::SharedPtpClock> {
+        self.connection.ptp_clock().await
     }
 }
 

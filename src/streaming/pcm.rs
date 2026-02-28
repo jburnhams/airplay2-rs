@@ -1,5 +1,12 @@
 //! PCM audio streaming to `AirPlay` devices
 
+use std::borrow::Cow;
+use std::sync::Arc;
+use std::time::Duration;
+
+use async_trait::async_trait;
+use tokio::sync::{Mutex, RwLock, mpsc};
+
 use super::ResamplingSource;
 use super::source::AudioSource;
 use crate::audio::aac_encoder::AacEncoder;
@@ -7,12 +14,6 @@ use crate::audio::{AudioFormat, AudioRingBuffer};
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::rtp::RtpCodec;
-
-use async_trait::async_trait;
-use std::borrow::Cow;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// RTP packet sender trait
 #[async_trait]
@@ -106,11 +107,15 @@ impl PcmStreamer {
 
     /// Create a new PCM streamer
     #[must_use]
-    pub fn new<C: RtpSender + 'static>(connection: Arc<C>, format: AudioFormat) -> Self {
+    pub fn new<C: RtpSender + 'static>(
+        connection: Arc<C>,
+        format: AudioFormat,
+        buffer_frames: usize,
+    ) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
 
-        // Buffer for ~500ms of audio
-        let buffer_size = format.duration_to_bytes(Duration::from_millis(500));
+        // Buffer size in bytes based on frame count
+        let buffer_size = buffer_frames * format.bytes_per_frame();
         let buffer = Arc::new(AudioRingBuffer::new(buffer_size));
 
         // SSRC for RTP
@@ -234,6 +239,16 @@ impl PcmStreamer {
         let codec_type = *self.codec_type.read().await;
         let frames_per_packet = match codec_type {
             AudioCodec::Aac => 1024,
+            AudioCodec::AacEld => {
+                let guard = self.encoder_aac.lock().await;
+                if let Some(encoder) = guard.as_ref() {
+                    let len = encoder.get_frame_length().unwrap_or(512);
+                    tracing::info!("Using AAC-ELD frame length: {}", len);
+                    len as usize
+                } else {
+                    512
+                }
+            }
             _ => Self::FRAMES_PER_PACKET,
         };
 
@@ -346,7 +361,7 @@ impl PcmStreamer {
                                     Cow::Borrowed(&packet_data)
                                 }
                             }
-                            AudioCodec::Aac => {
+                            AudioCodec::Aac | AudioCodec::AacEld => {
                                 let mut encoder_guard = self.encoder_aac.lock().await;
                                 if let Some(encoder) = encoder_guard.as_mut() {
                                     // Convert bytes to i16 (Little Endian)
@@ -580,12 +595,33 @@ impl PcmStreamer {
             self.format.sample_rate.as_u32(),
             u32::from(self.format.channels.channels()),
             bitrate,
+            fdk_aac::enc::AudioObjectType::Mpeg4LowComplexity,
         )
         .expect("Failed to initialize AAC encoder");
 
         *self.encoder_aac.lock().await = Some(encoder);
         *self.encoder.lock().await = None;
         *self.codec_type.write().await = AudioCodec::Aac;
+    }
+
+    /// Set codec to AAC-ELD
+    ///
+    /// # Panics
+    ///
+    /// Panics if the AAC encoder cannot be initialized (e.g. invalid parameters).
+    pub async fn use_aac_eld(&self, bitrate: u32) {
+        // AAC-ELD: 44100Hz, Stereo
+        let encoder = AacEncoder::new(
+            self.format.sample_rate.as_u32(),
+            u32::from(self.format.channels.channels()),
+            bitrate,
+            fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
+        )
+        .expect("Failed to initialize AAC-ELD encoder");
+
+        *self.encoder_aac.lock().await = Some(encoder);
+        *self.encoder.lock().await = None;
+        *self.codec_type.write().await = AudioCodec::AacEld;
     }
 
     /// Set codec to PCM (default)

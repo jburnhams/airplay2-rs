@@ -2,7 +2,7 @@
 
 /// Playback progress information
 #[derive(Debug, Clone, Copy)]
-pub struct PlaybackProgress {
+pub struct DmapProgress {
     /// RTP timestamp of track start
     pub start: u32,
     /// RTP timestamp of current position
@@ -11,7 +11,7 @@ pub struct PlaybackProgress {
     pub end: u32,
 }
 
-impl PlaybackProgress {
+impl DmapProgress {
     /// Create new progress
     #[must_use]
     pub fn new(start: u32, current: u32, end: u32) -> Self {

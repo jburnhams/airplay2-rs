@@ -1,7 +1,8 @@
 //! `AirPlay` receiver configuration
 
-use crate::discovery::advertiser::RaopCapabilities;
 use std::time::Duration;
+
+use crate::discovery::advertiser::RaopCapabilities;
 
 /// Receiver configuration
 #[derive(Debug, Clone)]
