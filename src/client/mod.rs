@@ -522,6 +522,15 @@ impl AirPlayClient {
         self.playback.set_progress(progress).await
     }
 
+    /// Set artwork
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_artwork(&self, data: &[u8], mime_type: &str) -> Result<(), AirPlayError> {
+        self.playback.set_artwork(data, mime_type).await
+    }
+
     // === Queue ===
 
     /// Add a track to the queue
