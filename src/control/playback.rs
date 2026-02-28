@@ -66,6 +66,11 @@ impl PlaybackController {
     /// # Errors
     ///
     /// Returns error if state is invalid or network fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if the fractional portion of the PTP network time overflows a `u32` when converted
+    /// back to nanoseconds for display formatting. This should never happen.
     pub async fn play(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
@@ -75,14 +80,14 @@ impl PlaybackController {
                 .insert("rtpTime", 0u64);
 
             // Include PTP anchor timestamps so the device knows when to render
-            if let Some((secs, frac, timeline_id)) =
-                self.connection.get_ptp_network_time().await
-            {
+            if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
                 tracing::info!(
-                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} (timeline=0x{:016X})",
+                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} \
+                     (timeline=0x{:016X})",
                     secs,
                     // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
-                    ((frac as u128 * 1_000_000_000u128) >> 64) as u32,
+                    u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
+                        .expect("PTP time fraction conversion should fit in u32"),
                     timeline_id,
                 );
                 builder = builder
@@ -91,8 +96,8 @@ impl PlaybackController {
                     .insert("networkTimeTimelineID", timeline_id);
             } else {
                 tracing::warn!(
-                    "SetRateAnchorTime: PTP clock not available or not synchronized — \
-                     sending without networkTime fields (device may not render audio)"
+                    "SetRateAnchorTime: PTP clock not available or not synchronized — sending \
+                     without networkTime fields (device may not render audio)"
                 );
             }
 
@@ -124,26 +129,26 @@ impl PlaybackController {
     pub async fn pause(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
-        if state.is_playing {
-            let body = DictBuilder::new()
-                .insert("rate", 0i64)
-                .insert("rtpTime", 0u64)
-                .build();
-            let encoded =
-                crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-                    message: format!("Failed to encode plist: {e}"),
-                    status_code: None,
-                })?;
+        // Send pause unconditionally. We might have started a stream in another task
+        // and the state might not be synchronized, but it's safe to send a pause command.
+        let body = DictBuilder::new()
+            .insert("rate", 0i64)
+            .insert("rtpTime", 0u64)
+            .build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
 
-            self.connection
-                .send_command(
-                    Method::SetRateAnchorTime,
-                    Some(encoded),
-                    Some("application/x-apple-binary-plist".to_string()),
-                )
-                .await?;
-            state.is_playing = false;
-        }
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+        state.is_playing = false;
 
         Ok(())
     }

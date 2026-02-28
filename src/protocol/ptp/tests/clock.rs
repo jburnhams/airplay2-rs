@@ -574,10 +574,7 @@ fn test_remote_master_clock_id_initially_none() {
 fn test_set_and_get_remote_master_clock_id() {
     let mut clock = PtpClock::new(0x42, PtpRole::Slave);
     clock.set_remote_master_clock_id(0x50BC_9664_729E_0008);
-    assert_eq!(
-        clock.remote_master_clock_id(),
-        Some(0x50BC_9664_729E_0008)
-    );
+    assert_eq!(clock.remote_master_clock_id(), Some(0x50BC_9664_729E_0008));
 }
 
 #[test]
@@ -615,8 +612,8 @@ fn test_measurements_iterator() {
 
 // ===== HomePod-like scenario: large epoch offset =====
 
-/// Simulates the HomePod scenario: our clock uses Unix epoch (~1.74 billion seconds),
-/// HomePod uses boot-based PTP time (~700,000 seconds). Tests that the offset
+/// Simulates the `HomePod` scenario: our clock uses Unix epoch (~1.74 billion seconds),
+/// `HomePod` uses boot-based PTP time (~700,000 seconds). Tests that the offset
 /// calculation and domain conversion are correct with this very large offset.
 #[test]
 fn test_homepod_epoch_offset_full_exchange() {
@@ -669,7 +666,7 @@ fn test_homepod_epoch_offset_full_exchange() {
     );
 }
 
-/// Same scenario but with one-way estimation (no Delay_Req response).
+/// Same scenario but with one-way estimation (no `Delay_Req` response).
 #[test]
 fn test_homepod_epoch_offset_one_way() {
     let mut clock = PtpClock::new(0xAAAA, PtpRole::Slave);
@@ -697,8 +694,8 @@ fn test_homepod_epoch_offset_one_way() {
     );
 }
 
-/// Verify that remote_to_local and local_to_remote form a consistent pair
-/// under the HomePod scenario.
+/// Verify that `remote_to_local` and `local_to_remote` form a consistent pair
+/// under the `HomePod` scenario.
 #[test]
 fn test_conversion_roundtrip_large_offset() {
     let mut clock = PtpClock::new(0, PtpRole::Slave);
@@ -731,8 +728,8 @@ fn test_conversion_roundtrip_large_offset() {
     );
 }
 
-/// Test TimeAnnounce conversion: verify that when we compute the PTP timestamp
-/// for TimeAnnounce, it correctly maps to the master's PTP domain.
+/// Test `TimeAnnounce` conversion: verify that when we compute the PTP timestamp
+/// for `TimeAnnounce`, it correctly maps to the master's PTP domain.
 #[test]
 fn test_time_announce_conversion_slave_to_master_domain() {
     let mut clock = PtpClock::new(0xAAAA, PtpRole::Slave);
@@ -774,7 +771,7 @@ fn test_time_announce_conversion_slave_to_master_domain() {
     );
 }
 
-/// When acting as master (no remote master), TimeAnnounce should use our own
+/// When acting as master (no remote master), `TimeAnnounce` should use our own
 /// clock ID and current time directly.
 #[test]
 fn test_time_announce_conversion_as_master() {
@@ -806,7 +803,7 @@ fn test_one_way_measurements_median_filter() {
     let offsets_ms = [0, 2, -1, 3, 1]; // jitter around 0ms added to base
     for jitter_ms in offsets_ms {
         let t1 = PtpTimestamp::new(705_000, 0);
-        let t2_nanos = 1_000_000u32.wrapping_add((1 + jitter_ms) as u32 * 1_000_000);
+        let t2_nanos = 1_000_000u32.wrapping_add(u32::try_from(1 + jitter_ms).unwrap() * 1_000_000);
         let t2 = PtpTimestamp::new(1_740_000_000, t2_nanos);
         clock.process_one_way(t1, t2);
     }

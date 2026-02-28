@@ -55,7 +55,7 @@ pub struct AirPlayConfig {
     pub timing_protocol: TimingProtocol,
 
     /// PTP priority1 value (lower = higher priority).
-    /// When `None` (default), uses 255 so HomePod (248) wins BMCA and we become slave.
+    /// When `None` (default), uses 255 so `HomePod` (248) wins BMCA and we become slave.
     /// Set to e.g. `Some(128)` to force this client to become PTP master.
     pub ptp_priority: Option<u8>,
 }

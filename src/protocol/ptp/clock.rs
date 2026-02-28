@@ -186,13 +186,13 @@ impl PtpClock {
         true
     }
 
-    /// Process a one-way timing estimate from Sync/Follow_Up only.
+    /// Process a one-way timing estimate from `Sync`/`Follow_Up` only.
     ///
-    /// Uses offset = T2 - T1 (slave_receive - master_send). This assumes
+    /// Uses offset = T2 - T1 (`slave_receive` - `master_send`). This assumes
     /// negligible one-way network delay, which is typically < 1ms on LAN.
     /// Less accurate than the full four-timestamp exchange but works when
-    /// the remote master doesn't respond to Delay_Req (common with AirPlay
-    /// devices like HomePod).
+    /// the remote master doesn't respond to `Delay_Req` (common with `AirPlay`
+    /// devices like `HomePod`).
     pub fn process_one_way(&mut self, t1: PtpTimestamp, t2: PtpTimestamp) {
         let offset_ns = t2.diff_nanos(&t1);
 
