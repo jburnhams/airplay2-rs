@@ -51,10 +51,7 @@ impl NtpTimestamp {
         let seconds = now.as_secs() + NTP_EPOCH_OFFSET;
         let nanos = now.subsec_nanos();
         // Convert nanoseconds to NTP fraction (2^32 / 10^9)
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "NTP fraction fits in u32"
-        )]
+        #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u32")]
         let fraction = ((u64::from(nanos) * 0x1_0000_0000_u64) / 1_000_000_000) as u32;
 
         Self {

@@ -101,10 +101,7 @@ impl Concealer {
             for sample_idx in (frame_start..frame_end).step_by(2) {
                 if sample_idx + 1 < output.len() {
                     let sample = i16::from_le_bytes([output[sample_idx], output[sample_idx + 1]]);
-                    #[allow(
-                        clippy::cast_possible_truncation,
-                        reason = "Audio sample fits in i16"
-                    )]
+                    #[allow(clippy::cast_possible_truncation, reason = "Audio sample fits in i16")]
                     let faded = (f32::from(sample) * fade) as i16;
                     let bytes = faded.to_le_bytes();
                     output[sample_idx] = bytes[0];
