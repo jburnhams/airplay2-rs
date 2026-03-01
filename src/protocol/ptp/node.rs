@@ -203,7 +203,7 @@ impl PtpNode {
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, reason = "Centralized protocol logic requires multiple steps")]
     pub async fn run(
         &mut self,
         mut shutdown: tokio::sync::watch::Receiver<bool>,
