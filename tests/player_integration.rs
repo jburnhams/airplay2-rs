@@ -52,23 +52,51 @@ async fn test_player_integration() {
         ),
     ];
 
+    let mut rx = player.client().subscribe_state();
+
     player
         .play_tracks(tracks)
         .await
         .expect("Play tracks failed");
 
     // Check playback state
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait for state to become playing
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !rx.borrow_and_update().playback.is_playing {
+            rx.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("Timeout waiting for playback to start");
+
     assert!(player.is_playing().await);
     assert_eq!(player.queue_length().await, 2);
 
     // 6. Controls
     player.pause().await.expect("Pause failed");
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Wait for state to become paused
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while rx.borrow_and_update().playback.is_playing {
+            rx.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("Timeout waiting for playback to pause");
+
     assert!(!player.is_playing().await);
 
     player.play().await.expect("Resume failed");
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Wait for state to become playing
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !rx.borrow_and_update().playback.is_playing {
+            rx.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("Timeout waiting for playback to resume");
+
     assert!(player.is_playing().await);
 
     player.skip().await.expect("Skip failed");
