@@ -150,14 +150,15 @@ impl FileStorage {
                 return Err(StorageError::Encryption("File too small".to_string()));
             }
             let (nonce_bytes, ciphertext) = bytes.split_at(12);
-            #[allow(deprecated)]
-            let key = Key::from_slice(&key_bytes);
-            let cipher = ChaCha20Poly1305::new(key);
-            #[allow(deprecated)]
-            let nonce = Nonce::from_slice(nonce_bytes);
+            let key = Key::from(key_bytes);
+            let cipher = ChaCha20Poly1305::new(&key);
+
+            // We know the length is exactly 12 bytes
+            let nonce_array: [u8; 12] = nonce_bytes.try_into().unwrap();
+            let nonce = Nonce::from(nonce_array);
 
             cipher
-                .decrypt(nonce, ciphertext)
+                .decrypt(&nonce, ciphertext)
                 .map_err(|e| StorageError::Encryption(format!("Decryption failed: {e}")))?
         } else {
             bytes
@@ -183,16 +184,14 @@ impl FileStorage {
 
         // Encrypt if necessary
         let out_bytes = if let Some(key_bytes) = encryption_key {
-            #[allow(deprecated)]
-            let key = Key::from_slice(&key_bytes);
-            let cipher = ChaCha20Poly1305::new(key);
+            let key = Key::from(key_bytes);
+            let cipher = ChaCha20Poly1305::new(&key);
             let mut nonce_bytes = [0u8; 12];
             rand::rngs::OsRng.fill(&mut nonce_bytes);
-            #[allow(deprecated)]
-            let nonce = Nonce::from_slice(&nonce_bytes); // 96-bits; unique per message
+            let nonce = Nonce::from(nonce_bytes); // 96-bits; unique per message
 
             let ciphertext = cipher
-                .encrypt(nonce, json_bytes.as_ref())
+                .encrypt(&nonce, json_bytes.as_ref())
                 .map_err(|e| StorageError::Encryption(format!("Encryption failed: {e}")))?;
 
             let mut final_bytes = Vec::with_capacity(12 + ciphertext.len());
