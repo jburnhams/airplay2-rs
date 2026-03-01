@@ -156,10 +156,10 @@ async fn test_player_advanced_controls() {
     assert!((vol - 0.8).abs() < f32::EPSILON);
 
     player.mute().await.expect("Mute failed");
-    assert!(player.client().state().await.volume.is_muted, "Player should be in a muted state");
+    assert!(player.client().state().await.muted, "Player should be in a muted state");
 
     player.unmute().await.expect("Unmute failed");
-    assert!(!player.client().state().await.volume.is_muted, "Player should be in an unmuted state");
+    assert!(!player.client().state().await.muted, "Player should be in an unmuted state");
 
     player.repeat_one().await.expect("Repeat one failed");
     player.repeat_all().await.expect("Repeat all failed");
