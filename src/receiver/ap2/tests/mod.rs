@@ -1,6 +1,7 @@
 mod advertisement;
 mod body_handler;
 mod capabilities;
+mod command_handler;
 mod config;
 mod encrypted_channel;
 mod encrypted_rtsp;
@@ -10,6 +11,7 @@ mod jitter_buffer;
 mod multi_room;
 mod pairing_server;
 mod password_integration;
+mod receiver;
 mod request_handler;
 mod request_router;
 mod response_builder;

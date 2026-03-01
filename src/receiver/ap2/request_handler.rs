@@ -322,8 +322,8 @@ impl Default for Ap2Handlers {
             teardown: Box::new(stub_handler),
             get_parameter: Box::new(stub_handler),
             set_parameter: Box::new(stub_handler),
-            command: Box::new(stub_handler),
-            feedback: Box::new(stub_handler),
+            command: Box::new(crate::receiver::ap2::command_handler::handle_command),
+            feedback: Box::new(crate::receiver::ap2::command_handler::handle_feedback),
             audio_mode: Box::new(stub_handler),
         }
     }
