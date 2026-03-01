@@ -40,7 +40,7 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     // 3. Connect Client A (Initial Pairing)
     tracing::info!("--- Step 1: Initial Pairing (Pair-Setup) ---");
     {
-        let storage = FileStorage::new(&storage_path).await?;
+        let storage = FileStorage::new(&storage_path, None).await?;
         let config = airplay2::AirPlayConfig::builder()
             .pairing_storage(storage_path.clone()) // This sets the path in config, but we also pass storage directly
             .pin("3939")
@@ -76,7 +76,7 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     tracing::info!("--- Step 2: Reconnection (Pair-Verify) ---");
     {
         // New client instance, but loading from same storage
-        let storage = FileStorage::new(&storage_path).await?;
+        let storage = FileStorage::new(&storage_path, None).await?;
 
         // Verify we actually loaded something
         use airplay2::protocol::pairing::storage::PairingStorage;

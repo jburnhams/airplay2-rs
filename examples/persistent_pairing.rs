@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::remove_file(storage_path)?;
     }
 
-    let storage = Box::new(FileStorage::new(storage_path).await?);
+    let storage = Box::new(FileStorage::new(storage_path, None).await?);
 
     // Create client with storage
     let config = AirPlayConfig::default();

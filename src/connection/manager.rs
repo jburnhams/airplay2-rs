@@ -279,6 +279,9 @@ impl ConnectionManager {
                 StorageError::NotAvailable => AirPlayError::InternalError {
                     message: "Storage not available".to_string(),
                 },
+                StorageError::Encryption(msg) => AirPlayError::InternalError {
+                    message: format!("Storage encryption error: {msg}"),
+                },
             })?;
         }
         Ok(())

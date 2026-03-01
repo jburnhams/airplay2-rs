@@ -1,5 +1,12 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 11):**
+- **Encrypted Key Storage**:
+  - ✅ **VERIFIED**: `test_encrypted_storage` verifies encryption and decryption works correctly.
+  - Updated `FileStorage` in `src/protocol/pairing/storage.rs` to take an optional `encryption_key`.
+  - Implemented data-at-rest encryption via `ChaCha20Poly1305` using the provided key and randomized nonces per file save.
+  - Updated tests and examples to handle the new `FileStorage::new` signature.
+
 **Work Done (Session 10):**
 - **Artwork Support**:
   - ✅ **VERIFIED**: `metadata_integration` test verifies `set_artwork` is correctly received.
@@ -342,8 +349,8 @@
 ### Credential Storage
 - [x] Securely store pairing credentials (local keychain/vault)
   - *Status*: File-based storage implemented.
-- [ ] Encrypt stored keys at rest (device-level encryption)
-  - *Note*: Using plain JSON for now, encryption pending.
+- [x] Encrypt stored keys at rest (device-level encryption)
+  - ✅ **VERIFIED**: Updated `FileStorage` to accept an optional 32-byte encryption key. Uses ChaCha20Poly1305 to encrypt the JSON payloads and includes a random nonce per file write. Test coverage verified the storage successfully encrypts and decrypts key material without leaking plaintext.
 
 ### Input Validation and Sanitization
 - [x] Validate RTSP responses for malformed data

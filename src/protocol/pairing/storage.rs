@@ -3,6 +3,9 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 /// Stored pairing keys for a device
@@ -53,6 +56,9 @@ pub enum StorageError {
 
     #[error("storage not available")]
     NotAvailable,
+
+    #[error("encryption error: {0}")]
+    Encryption(String),
 }
 
 /// In-memory pairing storage (non-persistent)
@@ -95,6 +101,7 @@ pub struct FileStorage {
     #[allow(dead_code)]
     path: std::path::PathBuf,
     cache: HashMap<String, PairingKeys>,
+    encryption_key: Option<[u8; 32]>,
 }
 
 impl FileStorage {
@@ -103,7 +110,10 @@ impl FileStorage {
     /// # Errors
     ///
     /// Returns error if directory cannot be created or file loaded
-    pub async fn new(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+    pub async fn new(
+        path: impl AsRef<std::path::Path>,
+        encryption_key: Option<[u8; 32]>,
+    ) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
 
         // Create directory if it doesn't exist
@@ -112,13 +122,18 @@ impl FileStorage {
         }
 
         // Load existing keys
-        let cache = Self::load_all(&path).await?;
+        let cache = Self::load_all(&path, encryption_key).await?;
 
-        Ok(Self { path, cache })
+        Ok(Self {
+            path,
+            cache,
+            encryption_key,
+        })
     }
 
     async fn load_all(
         path: &std::path::Path,
+        encryption_key: Option<[u8; 32]>,
     ) -> Result<HashMap<String, PairingKeys>, StorageError> {
         if !tokio::fs::try_exists(path).await? {
             return Ok(HashMap::new());
@@ -129,7 +144,26 @@ impl FileStorage {
             return Ok(HashMap::new());
         }
 
-        let cache = tokio::task::spawn_blocking(move || serde_json::from_slice(&bytes))
+        // Decrypt if necessary
+        let json_bytes = if let Some(key_bytes) = encryption_key {
+            if bytes.len() < 12 {
+                return Err(StorageError::Encryption("File too small".to_string()));
+            }
+            let (nonce_bytes, ciphertext) = bytes.split_at(12);
+            #[allow(deprecated)]
+            let key = Key::from_slice(&key_bytes);
+            let cipher = ChaCha20Poly1305::new(key);
+            #[allow(deprecated)]
+            let nonce = Nonce::from_slice(nonce_bytes);
+
+            cipher
+                .decrypt(nonce, ciphertext)
+                .map_err(|e| StorageError::Encryption(format!("Decryption failed: {e}")))?
+        } else {
+            bytes
+        };
+
+        let cache = tokio::task::spawn_blocking(move || serde_json::from_slice(&json_bytes))
             .await
             .map_err(|e| StorageError::Serialization(format!("Deserialization task failed: {e}")))?
             .map_err(|e| StorageError::Serialization(e.to_string()))?;
@@ -140,13 +174,36 @@ impl FileStorage {
     async fn save_all(&self) -> Result<(), StorageError> {
         let path = self.path.clone();
         let cache = self.cache.clone();
+        let encryption_key = self.encryption_key;
 
-        let bytes = tokio::task::spawn_blocking(move || serde_json::to_vec_pretty(&cache))
+        let json_bytes = tokio::task::spawn_blocking(move || serde_json::to_vec_pretty(&cache))
             .await
             .map_err(|e| StorageError::Serialization(format!("Serialization task failed: {e}")))?
             .map_err(|e| StorageError::Serialization(e.to_string()))?;
 
-        tokio::fs::write(path, bytes).await?;
+        // Encrypt if necessary
+        let out_bytes = if let Some(key_bytes) = encryption_key {
+            #[allow(deprecated)]
+            let key = Key::from_slice(&key_bytes);
+            let cipher = ChaCha20Poly1305::new(key);
+            let mut nonce_bytes = [0u8; 12];
+            rand::rngs::OsRng.fill(&mut nonce_bytes);
+            #[allow(deprecated)]
+            let nonce = Nonce::from_slice(&nonce_bytes); // 96-bits; unique per message
+
+            let ciphertext = cipher
+                .encrypt(nonce, json_bytes.as_ref())
+                .map_err(|e| StorageError::Encryption(format!("Encryption failed: {e}")))?;
+
+            let mut final_bytes = Vec::with_capacity(12 + ciphertext.len());
+            final_bytes.extend_from_slice(nonce.as_ref());
+            final_bytes.extend_from_slice(&ciphertext);
+            final_bytes
+        } else {
+            json_bytes
+        };
+
+        tokio::fs::write(path, out_bytes).await?;
         Ok(())
     }
 }
