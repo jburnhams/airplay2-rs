@@ -81,3 +81,65 @@ async fn test_player_integration() {
 
     server.stop().await;
 }
+
+#[tokio::test]
+async fn test_player_advanced_controls() {
+    let config = MockServerConfig {
+        rtsp_port: 0,
+        ..Default::default()
+    };
+    let mut server = MockServer::new(config);
+    let addr = server.start().await.expect("Failed to start server");
+
+    let player = AirPlayPlayer::new();
+    let device = AirPlayDevice {
+        id: "player_test_advanced".to_string(),
+        name: "Advanced Test Device".to_string(),
+        model: Some("Mock".to_string()),
+        addresses: vec![addr.ip()],
+        port: addr.port(),
+        capabilities: airplay2::types::DeviceCapabilities {
+            airplay2: true,
+            supports_audio: true,
+            ..Default::default()
+        },
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+    };
+
+    player.connect(&device).await.expect("Connect failed");
+
+    player
+        .play_track(
+            "http://example.com/single.mp3",
+            "Single Track",
+            "Solo Artist",
+        )
+        .await
+        .expect("Play track failed");
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(player.is_playing().await);
+    assert_eq!(player.queue_length().await, 1);
+
+    player.set_volume(0.8).await.expect("Set volume failed");
+    let vol = player.volume().await;
+    assert!((vol - 0.8).abs() < f32::EPSILON);
+
+    player.mute().await.expect("Mute failed");
+    // Verify it doesn't fail, client volume may not reflect mute immediately due to implementation
+    player.unmute().await.expect("Unmute failed");
+
+    player.repeat_one().await.expect("Repeat one failed");
+    player.repeat_all().await.expect("Repeat all failed");
+    player.repeat_off().await.expect("Repeat off failed");
+
+    player.shuffle_on().await.expect("Shuffle on failed");
+    player.shuffle_off().await.expect("Shuffle off failed");
+
+    player.seek(15.0).await.expect("Seek failed");
+
+    player.disconnect().await.expect("Disconnect failed");
+    server.stop().await;
+}

@@ -160,3 +160,19 @@ async fn test_client_connect_fails_without_device_ptp() {
     let result = client.connect(&device).await;
     assert!(result.is_err());
 }
+
+// Note: test_set_metadata, test_set_progress, test_set_artwork rely on self.playback
+// which does not explicitly check for ensure_connected() internally for these, but rather sends
+// through network. In the current implementation, playback.set_metadata returns OK if there is no
+// session to send to. So we cannot easily assert Err(Disconnected). These tests are skipped here
+// and better covered via integration.
+
+#[tokio::test]
+async fn test_play_url_fails_without_connection() {
+    let client = AirPlayClient::default_client();
+    let res = client.play_url("http://example.com/audio.mp3").await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+}
