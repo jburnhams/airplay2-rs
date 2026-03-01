@@ -2,9 +2,12 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(missing_docs)]
-#![allow(clippy::all)]
-#![allow(clippy::pedantic)]
-#![allow(clippy::nursery)]
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    reason = "Legacy module"
+)]
 
 pub mod airplay;
 pub mod decode;

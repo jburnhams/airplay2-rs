@@ -339,7 +339,10 @@ impl PtpSlaveHandler {
         Ok(())
     }
 
-    #[allow(clippy::unused_async)]
+    #[allow(
+        clippy::unused_async,
+        reason = "Async required for consistent trait/interface signature"
+    )]
     async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {
         if self.config.use_airplay_format {
             return;
