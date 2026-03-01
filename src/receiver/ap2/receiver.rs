@@ -141,6 +141,7 @@ pub struct AirPlay2Receiver {
     state: Arc<RwLock<ReceiverState>>,
     event_tx: broadcast::Sender<ReceiverEvent>,
     shutdown_tx: Option<broadcast::Sender<()>>,
+    advertiser: Option<Ap2ServiceAdvertiser>,
 }
 
 impl AirPlay2Receiver {
@@ -158,6 +159,7 @@ impl AirPlay2Receiver {
             state: Arc::new(RwLock::new(ReceiverState::Stopped)),
             event_tx,
             shutdown_tx: None,
+            advertiser: None,
         })
     }
 
@@ -191,6 +193,7 @@ impl AirPlay2Receiver {
             .start()
             .await
             .map_err(|e| ReceiverError::Advertisement(e.to_string()))?;
+        self.advertiser = Some(advertiser);
 
         // Start TCP listener
         let listener = TcpListener::bind(format!("0.0.0.0:{}", self.config.server_port))
@@ -250,6 +253,10 @@ impl AirPlay2Receiver {
         // Signal shutdown
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
+        }
+
+        if let Some(advertiser) = self.advertiser.take() {
+            let _ = advertiser.stop().await;
         }
 
         *self.state.write().await = ReceiverState::Stopped;
