@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use super::body_handler::{encode_bplist_body, parse_bplist_body, PlistExt};
+use super::body_handler::{PlistExt, encode_bplist_body, parse_bplist_body};
 use super::request_handler::{Ap2Event, Ap2HandleResult, Ap2RequestContext};
 use super::response_builder::Ap2ResponseBuilder;
 use crate::protocol::plist::PlistValue;
@@ -37,6 +37,7 @@ pub enum PlaybackCommand {
 
 impl PlaybackCommand {
     /// Parse from plist
+    #[must_use]
     pub fn from_plist(plist: &PlistValue) -> Option<Self> {
         let cmd_type = plist.get_string("type")?;
 
@@ -47,7 +48,7 @@ impl PlaybackCommand {
             "nextItem" | "skipNext" => Some(Self::SkipNext),
             "previousItem" | "skipPrevious" => Some(Self::SkipPrevious),
             "seekToPosition" => {
-                let position = plist.get_int("position")? as u64;
+                let position = u64::try_from(plist.get_int("position")?).ok()?;
                 Some(Self::Seek {
                     position_ms: position,
                 })
@@ -127,6 +128,7 @@ pub fn handle_command(
 }
 
 /// Handle POST /feedback
+#[must_use]
 pub fn handle_feedback(
     request: &RtspRequest,
     cseq: u32,
