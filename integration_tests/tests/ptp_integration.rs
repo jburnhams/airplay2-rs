@@ -27,7 +27,6 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
     let config = AirPlayConfig::builder()
         .audio_codec(AudioCodec::Pcm) // Use PCM for simplicity
         .timing_protocol(TimingProtocol::Ptp) // Explicitly request PTP
-        .pin("3939")
         .build();
 
     let mut client = AirPlayClient::new(config);

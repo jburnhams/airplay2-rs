@@ -54,9 +54,13 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
 
         // Wait a bit to ensure keys are saved and receiver flushes pairing to disk.
         // Python receiver might take some time to write the file.
-        sleep(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(5)).await;
 
         client.disconnect().await?;
+
+        // Give the python receiver a bit more time to process the disconnection
+        // before attempting to reconnect, which avoids concurrent state modification issues.
+        sleep(Duration::from_secs(2)).await;
     }
 
     // 4. Verify storage file created

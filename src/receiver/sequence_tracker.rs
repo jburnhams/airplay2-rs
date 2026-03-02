@@ -104,7 +104,10 @@ impl SequenceTracker {
 
     /// Get packet loss ratio (0.0 to 1.0)
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Precision loss acceptable for ratio calculation"
+    )]
     pub fn loss_ratio(&self) -> f64 {
         if self.packets_received == 0 {
             return 0.0;
