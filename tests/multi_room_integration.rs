@@ -148,3 +148,85 @@ fn test_sync_tolerance() {
         "Coordinator should report being in sync"
     );
 }
+
+#[tokio::test]
+async fn test_group_manager_integration() {
+    use std::collections::HashMap;
+
+    use airplay2::control::volume::Volume;
+    use airplay2::group::{GroupId, GroupManager};
+    use airplay2::types::{AirPlayDevice, DeviceCapabilities};
+
+    fn test_device(id: &str) -> AirPlayDevice {
+        AirPlayDevice {
+            id: id.to_string(),
+            name: format!("Device {}", id),
+            model: None,
+            addresses: vec!["127.0.0.1".parse().unwrap()],
+            port: 7000,
+            capabilities: DeviceCapabilities::default(),
+            raop_port: None,
+            raop_capabilities: None,
+            txt_records: HashMap::default(),
+        }
+    }
+
+    let manager = GroupManager::new();
+
+    // 1. Create a group
+    let group_id: GroupId = manager.create_group("Whole House").await;
+
+    // 2. Add devices
+    let dev1 = test_device("living_room");
+    let dev2 = test_device("kitchen");
+    let dev3 = test_device("bedroom");
+
+    manager
+        .add_device_to_group(&group_id, dev1)
+        .await
+        .expect("Failed to add dev1");
+    manager
+        .add_device_to_group(&group_id, dev2)
+        .await
+        .expect("Failed to add dev2");
+    manager
+        .add_device_to_group(&group_id, dev3)
+        .await
+        .expect("Failed to add dev3");
+
+    // 3. Verify devices are in group and leader is living_room
+    let group = manager.get_group(&group_id).await.unwrap();
+    assert_eq!(group.member_count(), 3);
+    assert!(group.leader().is_some());
+    assert_eq!(group.leader().unwrap().device.id, "living_room");
+
+    // 4. Set Group Volume and verify effective volume
+    manager
+        .set_group_volume(&group_id, Volume::from_percent(50))
+        .await
+        .expect("Failed to set group vol");
+    manager
+        .set_member_volume(&group_id, "kitchen", Volume::from_percent(80))
+        .await
+        .expect("Failed to set member vol");
+
+    let group = manager.get_group(&group_id).await.unwrap();
+    assert_eq!(group.effective_volume("living_room").as_percent(), 50); // 50% * 100%
+    assert_eq!(group.effective_volume("kitchen").as_percent(), 40); // 50% * 80%
+
+    // 5. Remove Leader, verify promotion
+    manager
+        .remove_device_from_group("living_room")
+        .await
+        .expect("Failed to remove dev1");
+    let group = manager.get_group(&group_id).await.unwrap();
+    assert_eq!(group.member_count(), 2);
+    assert_eq!(group.leader().unwrap().device.id, "kitchen"); // kitchen promoted
+
+    // 6. Delete group
+    let deleted: Option<_> = manager.delete_group(&group_id).await;
+    assert!(deleted.is_some());
+
+    let none_group: Option<_> = manager.get_group(&group_id).await;
+    assert!(none_group.is_none());
+}
