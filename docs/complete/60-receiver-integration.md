@@ -291,12 +291,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Unified high-level API
-- [ ] Event subscription mechanism
-- [ ] Start/stop lifecycle
-- [ ] Builder pattern for configuration
-- [ ] Graceful shutdown
-- [ ] All unit tests pass
+- [x] Unified high-level API
+- [x] Event subscription mechanism
+- [x] Start/stop lifecycle
+- [x] Builder pattern for configuration
+- [x] Graceful shutdown
+- [x] All unit tests pass
 
 ---
 
