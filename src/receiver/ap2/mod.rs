@@ -26,7 +26,7 @@ pub mod setup_handler;
 pub mod stream;
 // pub mod receiver;
 // pub mod ptp_clock;
-// pub mod command_handler;
+pub mod command_handler;
 // pub mod feedback_handler;
 pub mod metadata_handler;
 pub mod multi_room;
