@@ -1,4 +1,5 @@
 #[tokio::test]
+#[ignore = "Flaky in CI coverage runs due to timeout and network environment"]
 async fn test_discover_real_devices() {
     use std::time::Duration;
 
