@@ -48,8 +48,7 @@ impl PlaybackCommand {
             "nextItem" | "skipNext" => Some(Self::SkipNext),
             "previousItem" | "skipPrevious" => Some(Self::SkipPrevious),
             "seekToPosition" => {
-                #[allow(clippy::cast_sign_loss)]
-                let position = plist.get_int("position")? as u64;
+                let position: u64 = plist.get_int("position")?.try_into().ok()?;
                 Some(Self::Seek {
                     position_ms: position,
                 })
@@ -94,7 +93,16 @@ pub fn handle_command(
     };
 
     // Extract command
-    let command = PlaybackCommand::from_plist(&plist);
+    let Some(command) = PlaybackCommand::from_plist(&plist) else {
+        return Ap2HandleResult {
+            response: Ap2ResponseBuilder::error(StatusCode::BAD_REQUEST)
+                .cseq(cseq)
+                .encode(),
+            new_state: None,
+            event: None,
+            error: Some("Malformed command plist".to_string()),
+        };
+    };
 
     tracing::debug!("Received command: {:?}", command);
 
@@ -119,8 +127,8 @@ pub fn handle_command(
         }
     };
 
-    let event = command.as_ref().map(|cmd| Ap2Event::CommandReceived {
-        command: format!("{cmd:?}"),
+    let event = Some(Ap2Event::CommandReceived {
+        command: format!("{command:?}"),
     });
 
     Ap2HandleResult {
@@ -149,7 +157,11 @@ pub fn handle_feedback(
     _context: &Ap2RequestContext,
 ) -> Ap2HandleResult {
     // Feedback is typically empty or contains timing info
-    let _plist = parse_bplist_body(&request.body);
+    if !request.body.is_empty() {
+        if let Err(e) = parse_bplist_body(&request.body) {
+            tracing::warn!("Failed to parse /feedback bplist body: {}", e);
+        }
+    }
 
     // Just acknowledge
     Ap2HandleResult {
