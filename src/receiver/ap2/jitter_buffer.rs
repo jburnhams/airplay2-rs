@@ -151,7 +151,7 @@ impl JitterBuffer {
     ///
     /// Returns `sample_count` *frames* (e.g. 352), resulting in `sample_count * channels` samples.
     pub fn pull(&mut self, sample_count: usize) -> Vec<i16> {
-        let channels = self.config.channels as usize;
+        let channels = (self.config.channels as usize).max(1);
         let total_samples_needed = sample_count * channels;
 
         if self.state == BufferState::Buffering {
@@ -287,7 +287,7 @@ impl JitterBuffer {
     }
 
     fn update_depth(&mut self) {
-        let channels = self.config.channels as usize;
+        let channels = (self.config.channels as usize).max(1);
 
         // Determine the "end" timestamp (timestamp of the last sample + 1)
         let end_ts = if let Some((_, last_frame)) = self.frames.iter().next_back() {
