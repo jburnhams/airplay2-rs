@@ -469,7 +469,7 @@ impl SetupResponse {
                     "type".to_string(),
                     PlistValue::Integer(i64::from(s.stream_type)),
                 );
-                #[allow(clippy::cast_possible_wrap, reason = "Stream IDs are small integers and will not overflow i64")]
+                #[allow(clippy::cast_possible_wrap, reason = "Plist ints are signed")]
                 stream_dict.insert(
                     "streamID".to_string(),
                     PlistValue::Integer(s.stream_id as i64),
