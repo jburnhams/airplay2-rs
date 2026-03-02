@@ -161,21 +161,18 @@ impl MultiRoomCoordinator {
         let current_ptp = master_time.to_airplay_compact();
 
         // Calculate drift from target
-        // drift = current_ptp - target
+        // Since both current_ptp and target are in AirPlay compact format (u64),
+        // doing a simple subtraction and casting to i128 can produce large erroneous values if
+        // the u64 wraps around (which happens every ~136 years, but more relevantly,
+        // if target wraps around 0 before current_ptp does).
+        // A safer way is to rely on `PtpTimestamp` difference directly instead of compact format diff.
 
-        #[allow(clippy::cast_lossless, reason = "u64 fits in i128")]
-        let current_ptp_i128 = i128::from(current_ptp);
-        #[allow(clippy::cast_lossless, reason = "u64 fits in i128")]
-        let target_i128 = i128::from(target);
+        let current_ts = PtpTimestamp::from_airplay_compact(current_ptp);
+        let target_ts = PtpTimestamp::from_airplay_compact(target);
 
-        // 1/65536 sec units to nanoseconds: * 1_000_000_000 / 65536
-        let drift_ns = (current_ptp_i128 - target_i128) * 1_000_000_000 / 65536;
-
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "drift fits in i64 unless huge"
-        )]
-        let drift_micros = (drift_ns / 1000) as i64;
+        // drift_micros: difference in microseconds (current - target)
+        // If current > target, drift is positive (we are ahead).
+        let drift_micros = current_ts.diff_micros(&target_ts);
 
         // If drift is > 0, we are AHEAD (Local > Target).
         // If we are AHEAD, we need to slow down to let the target catch up.
