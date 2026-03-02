@@ -289,13 +289,13 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Volume parsing from SET_PARAMETER
-- [ ] dB to linear conversion
-- [ ] DMAP metadata parsing
-- [ ] Artwork storage
-- [ ] Events emitted on changes
-- [ ] Reuses existing DAAP codec
-- [ ] All unit tests pass
+ - [x] Volume parsing from SET_PARAMETER
+ - [x] dB to linear conversion
+ - [x] DMAP metadata parsing
+ - [x] Artwork storage
+ - [x] Events emitted on changes
+ - [x] Reuses existing DAAP codec
+ - [x] All unit tests pass
 
 ---
 

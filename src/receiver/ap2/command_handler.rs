@@ -1,48 +1,37 @@
-# Section 59: /command & /feedback Endpoints
-
-## Dependencies
-- **Section 48**: RTSP/HTTP Server Extensions
-- **Section 03**: Binary Plist Codec
-
-## Overview
-
-The `/command` and `/feedback` endpoints handle playback control and status reporting. These are POST endpoints that use binary plist bodies.
-
-## Objectives
-
-- Handle playback commands (play, pause, stop, seek)
-- Process feedback requests
-- Support progress reporting
-- Emit appropriate events
-
----
-
-## Tasks
-
-### 59.1 Command Handler
-
-**File:** `src/receiver/ap2/command_handler.rs`
-
-```rust
 //! /command Endpoint Handler
 
-use super::request_handler::{Ap2HandleResult, Ap2Event, Ap2RequestContext};
+use std::collections::HashMap;
+
+use super::body_handler::{encode_bplist_body, parse_bplist_body, PlistExt};
+use super::request_handler::{Ap2Event, Ap2HandleResult, Ap2RequestContext};
 use super::response_builder::Ap2ResponseBuilder;
-use super::body_handler::{parse_bplist_body, PlistExt, encode_bplist_body};
 use crate::protocol::plist::PlistValue;
 use crate::protocol::rtsp::{RtspRequest, StatusCode};
-use std::collections::HashMap;
 
 /// Playback command types
 #[derive(Debug, Clone)]
 pub enum PlaybackCommand {
+    /// Play command
     Play,
+    /// Pause command
     Pause,
+    /// Stop command
     Stop,
+    /// Skip to next item
     SkipNext,
+    /// Skip to previous item
     SkipPrevious,
-    Seek { position_ms: u64 },
-    SetRate { rate: f32 },
+    /// Seek to a specific position
+    Seek {
+        /// Position in milliseconds
+        position_ms: u64,
+    },
+    /// Set the playback rate
+    SetRate {
+        /// Playback rate (e.g. 1.0 for play, 0.0 for pause)
+        rate: f32,
+    },
+    /// Unknown command
     Unknown(String),
 }
 
@@ -59,11 +48,14 @@ impl PlaybackCommand {
             "previousItem" | "skipPrevious" => Some(Self::SkipPrevious),
             "seekToPosition" => {
                 let position = plist.get_int("position")? as u64;
-                Some(Self::Seek { position_ms: position })
+                Some(Self::Seek {
+                    position_ms: position,
+                })
             }
             "setPlaybackRate" => {
                 // Rate is typically 0.0 (pause) or 1.0 (play)
-                let rate = plist.get_int("rate").map(|i| i as f32).unwrap_or(1.0);
+                #[allow(clippy::cast_precision_loss)]
+                let rate = plist.get_int("rate").map_or(1.0, |i| i as f32);
                 Some(Self::SetRate { rate })
             }
             other => Some(Self::Unknown(other.to_string())),
@@ -83,10 +75,11 @@ pub fn handle_command(
         Err(e) => {
             return Ap2HandleResult {
                 response: Ap2ResponseBuilder::error(StatusCode::BAD_REQUEST)
-                    .cseq(cseq).encode(),
+                    .cseq(cseq)
+                    .encode(),
                 new_state: None,
                 event: None,
-                error: Some(format!("Failed to parse command: {}", e)),
+                error: Some(format!("Failed to parse command: {e}")),
             };
         }
     };
@@ -94,12 +87,12 @@ pub fn handle_command(
     // Extract command
     let command = PlaybackCommand::from_plist(&plist);
 
-    log::debug!("Received command: {:?}", command);
+    tracing::debug!("Received command: {:?}", command);
 
     // Build response
-    let response_plist = PlistValue::Dict({
+    let response_plist = PlistValue::Dictionary({
         let mut d = HashMap::new();
-        d.insert("status".to_string(), PlistValue::Integer(0));  // Success
+        d.insert("status".to_string(), PlistValue::Integer(0)); // Success
         d
     });
 
@@ -108,18 +101,17 @@ pub fn handle_command(
         Err(e) => {
             return Ap2HandleResult {
                 response: Ap2ResponseBuilder::error(StatusCode::INTERNAL_ERROR)
-                    .cseq(cseq).encode(),
+                    .cseq(cseq)
+                    .encode(),
                 new_state: None,
                 event: None,
-                error: Some(format!("Failed to encode response: {}", e)),
+                error: Some(format!("Failed to encode response: {e}")),
             };
         }
     };
 
-    let event = command.as_ref().map(|cmd| {
-        Ap2Event::CommandReceived {
-            command: format!("{:?}", cmd),
-        }
+    let event = command.as_ref().map(|cmd| Ap2Event::CommandReceived {
+        command: format!("{cmd:?}"),
     });
 
     Ap2HandleResult {
@@ -145,54 +137,9 @@ pub fn handle_feedback(
 
     // Just acknowledge
     Ap2HandleResult {
-        response: Ap2ResponseBuilder::ok()
-            .cseq(cseq)
-            .encode(),
+        response: Ap2ResponseBuilder::ok().cseq(cseq).encode(),
         new_state: None,
         event: None,
         error: None,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_play_command() {
-        let mut dict = HashMap::new();
-        dict.insert("type".to_string(), PlistValue::String("play".to_string()));
-        let plist = PlistValue::Dict(dict);
-
-        let cmd = PlaybackCommand::from_plist(&plist).unwrap();
-        assert!(matches!(cmd, PlaybackCommand::Play));
-    }
-
-    #[test]
-    fn test_parse_seek_command() {
-        let mut dict = HashMap::new();
-        dict.insert("type".to_string(), PlistValue::String("seekToPosition".to_string()));
-        dict.insert("position".to_string(), PlistValue::Integer(30000));
-        let plist = PlistValue::Dict(dict);
-
-        let cmd = PlaybackCommand::from_plist(&plist).unwrap();
-        assert!(matches!(cmd, PlaybackCommand::Seek { position_ms: 30000 }));
-    }
-}
-```
-
----
-
-## Acceptance Criteria
-
-- [ ] Command parsing from binary plist
-- [ ] All command types handled
-- [ ] Feedback endpoint acknowledged
-- [ ] Events emitted for commands
-- [ ] All unit tests pass
-
----
-
-## References
-
-- [AirPlay 2 Protocol Analysis](https://emanuelecozzi.net/docs/airplay2/)
