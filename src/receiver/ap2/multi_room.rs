@@ -165,7 +165,8 @@ impl MultiRoomCoordinator {
         // doing a simple subtraction and casting to i128 can produce large erroneous values if
         // the u64 wraps around (which happens every ~136 years, but more relevantly,
         // if target wraps around 0 before current_ptp does).
-        // A safer way is to rely on `PtpTimestamp` difference directly instead of compact format diff.
+        // A safer way is to rely on `PtpTimestamp` difference directly instead of compact format
+        // diff.
 
         let current_ts = PtpTimestamp::from_airplay_compact(current_ptp);
         let target_ts = PtpTimestamp::from_airplay_compact(target);
