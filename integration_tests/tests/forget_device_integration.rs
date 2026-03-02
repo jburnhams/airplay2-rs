@@ -33,7 +33,7 @@ async fn test_forget_device() {
     // initializes with NO storage (MemoryStorage).
     // We MUST use with_pairing_storage().
 
-    let storage = FileStorage::new(&storage_path)
+    let storage = FileStorage::new(&storage_path, None)
         .await
         .expect("Failed to create storage");
 
@@ -61,7 +61,7 @@ async fn test_forget_device() {
     // We can't access client's storage directly easily.
     // But we can create another FileStorage instance to check the file.
     {
-        let check_storage = FileStorage::new(&storage_path)
+        let check_storage = FileStorage::new(&storage_path, None)
             .await
             .expect("Failed to open storage");
         let keys = check_storage.load(&device.id).await;
@@ -79,7 +79,7 @@ async fn test_forget_device() {
 
     // 6. Verify keys are removed
     {
-        let check_storage = FileStorage::new(&storage_path)
+        let check_storage = FileStorage::new(&storage_path, None)
             .await
             .expect("Failed to open storage");
         let keys = check_storage.load(&device.id).await;
