@@ -49,17 +49,15 @@ impl PlaybackCommand {
             "previousItem" | "skipPrevious" => Some(Self::SkipPrevious),
             "seekToPosition" => {
                 let position = plist.get_int("position")?;
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                Some(Self::Seek {
-                    position_ms: position as u64,
-                })
+                let position_ms = u64::try_from(position).ok()?;
+                Some(Self::Seek { position_ms })
             }
             "setPlaybackRate" => {
                 // Rate is typically 0.0 (pause) or 1.0 (play)
-                let rate = plist.get_int("rate").map_or(1.0, |i| {
-                    #[allow(clippy::cast_precision_loss)]
+                let rate = plist.get_f64("rate").map_or(1.0, |r| {
+                    #[allow(clippy::cast_possible_truncation)]
                     {
-                        i as f32
+                        r as f32
                     }
                 });
                 Some(Self::SetRate { rate })
