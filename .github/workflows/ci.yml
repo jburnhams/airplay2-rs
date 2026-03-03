@@ -62,7 +62,23 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libavdevice-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev \
+            libavfilter-dev \
+            portaudio19-dev \
+            alsa-utils
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install portaudio ffmpeg
       - name: Install Python dependencies
         run: pip install -r airplay2-receiver/requirements.txt
       - run: cargo test --all-features
@@ -94,7 +110,18 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y libasound2-dev
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libavdevice-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev \
+            libavfilter-dev \
+            portaudio19-dev \
+            alsa-utils
           pip install -r airplay2-receiver/requirements.txt
       - uses: taiki-e/install-action@cargo-llvm-cov
       - run: cargo llvm-cov --all-features --lcov --output-path lcov.info
