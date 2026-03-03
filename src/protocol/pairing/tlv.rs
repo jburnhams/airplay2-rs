@@ -103,14 +103,17 @@ impl TlvEncoder {
     }
 
     /// Add a TLV item
+    ///
+    /// # Panics
+    ///
+    /// Panics if chunk length is larger than `u8::MAX` (which shouldn't happen).
     #[must_use]
     pub fn add(mut self, tlv_type: TlvType, value: &[u8]) -> Self {
         // TLV8 limits each chunk to 255 bytes
         // For larger values, we need to fragment across multiple TLVs
         for chunk in value.chunks(255) {
             self.buffer.push(tlv_type as u8);
-            #[allow(clippy::cast_possible_truncation)]
-            self.buffer.push(chunk.len() as u8);
+            self.buffer.push(u8::try_from(chunk.len()).unwrap());
             self.buffer.extend_from_slice(chunk);
         }
 

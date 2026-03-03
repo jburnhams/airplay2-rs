@@ -64,7 +64,10 @@ pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-#[allow(clippy::needless_pass_by_value)] // Value is needed to avoid lifetime issues with impl Stream
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "Value is needed to avoid lifetime issues with impl Stream"
+)]
 pub fn discover_with_config(
     config: AirPlayConfig,
 ) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {

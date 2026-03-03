@@ -146,6 +146,10 @@ impl EncryptedChannel {
     /// # Errors
     ///
     /// Returns error if encryption fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if the encrypted message length exceeds `u16::MAX` (which is checked beforehand).
     pub fn encrypt_framed(
         &mut self,
         plaintext: &[u8],
@@ -156,8 +160,7 @@ impl EncryptedChannel {
                 "Message too long for framing".to_string(),
             ));
         }
-        #[allow(clippy::cast_possible_truncation)]
-        let len_u16 = encrypted.len() as u16;
+        let len_u16 = u16::try_from(encrypted.len()).unwrap();
 
         let mut output = Vec::with_capacity(2 + encrypted.len());
         output.extend_from_slice(&len_u16.to_le_bytes());

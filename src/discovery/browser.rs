@@ -164,7 +164,10 @@ impl DeviceBrowserStream {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Complex logic handling resolved mDNS services"
+    )]
     fn handle_resolved(
         &mut self,
         service_type: &str,
