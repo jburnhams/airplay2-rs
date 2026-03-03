@@ -1,7 +1,6 @@
 # Section 19: Multi-room Grouping
 
-> **NOTE**: Multi-room grouping is documented but `src/multiroom/` module does not exist.
-> This feature is planned but not yet implemented. Checked 2025-01-30.
+> **NOTE**: Multi-room grouping is implemented in the `src/group/` module.
 
 ## Dependencies
 - **Section 08**: mDNS Discovery (must be complete)
@@ -29,9 +28,9 @@ AirPlay 2 supports multi-room audio where multiple devices can be grouped to pla
 
 ### 19.1 Group Manager
 
-- [] **19.1.1** Implement device grouping
+- [x] **19.1.1** Implement device grouping
 
-**File:** `src/multiroom/group.rs`
+**File:** `src/group/group.rs`
 
 ```rust
 //! Multi-room group management
@@ -457,12 +456,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [] Groups can be created/deleted
-- [] Devices can be added/removed from groups
-- [] Per-device volume works
-- [] Group volume affects all members
-- [] Leader promotion works
-- [] All unit tests pass
+- [x] Groups can be created/deleted
+- [x] Devices can be added/removed from groups
+- [x] Per-device volume works
+- [x] Group volume affects all members
+- [x] Leader promotion works
+- [x] All unit tests pass
 
 ---
 
