@@ -2,9 +2,8 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use symphonia::core::audio::{AudioBufferRef, Signal};
+use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
-use symphonia::core::conv::IntoSample;
 use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
@@ -20,6 +19,7 @@ pub struct FileSource {
     buffer: Vec<i16>,
     buffer_pos: usize,
     audio_format: AudioFormat,
+    sample_buf: Option<SampleBuffer<i16>>,
 }
 
 impl FileSource {
@@ -95,6 +95,7 @@ impl FileSource {
                 channels: channel_config,
                 sample_format: SampleFormat::I16,
             },
+            sample_buf: None,
         })
     }
 }
@@ -160,41 +161,16 @@ impl AudioSource for FileSource {
                     // Note: spec says frames have N samples per channel.
                     // We need to interleave them: L, R, L, R...
                     let spec = *decoded.spec();
-                    let _duration = decoded.capacity() as u64; // capacity is number of frames usually?
+                    let capacity = decoded.capacity() as u64;
 
-                    // Helper to copy
-                    match decoded {
-                        AudioBufferRef::S16(buf) => {
-                            for frame in 0..buf.frames() {
-                                for channel in 0..spec.channels.count() {
-                                    let sample = buf.chan(channel)[frame];
-                                    self.buffer.push(sample);
-                                }
-                            }
-                        }
-                        AudioBufferRef::U8(buf) => {
-                            for frame in 0..buf.frames() {
-                                for channel in 0..spec.channels.count() {
-                                    let sample = buf.chan(channel)[frame].into_sample();
-                                    self.buffer.push(sample);
-                                }
-                            }
-                        }
-                        AudioBufferRef::F32(buf) => {
-                            for frame in 0..buf.frames() {
-                                for channel in 0..spec.channels.count() {
-                                    let sample = buf.chan(channel)[frame].into_sample();
-                                    self.buffer.push(sample);
-                                }
-                            }
-                        }
-                        _ => {
-                            // Implement others as needed
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                "Unsupported sample format",
-                            ));
-                        }
+                    if self.sample_buf.is_none() {
+                        self.sample_buf = Some(SampleBuffer::<i16>::new(capacity, spec));
+                    }
+
+                    if let Some(ref mut sample_buf) = self.sample_buf {
+                        sample_buf.copy_interleaved_ref(decoded);
+                        self.buffer.reserve(sample_buf.samples().len());
+                        self.buffer.extend_from_slice(sample_buf.samples());
                     }
                 }
                 Err(e) => {
