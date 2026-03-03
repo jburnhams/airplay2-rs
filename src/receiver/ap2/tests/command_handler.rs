@@ -60,14 +60,20 @@ fn test_parse_stop_command() {
 #[test]
 fn test_parse_skip_next_command() {
     let mut dict = HashMap::new();
-    dict.insert("type".to_string(), PlistValue::String("skipNext".to_string()));
+    dict.insert(
+        "type".to_string(),
+        PlistValue::String("skipNext".to_string()),
+    );
     let plist = PlistValue::Dictionary(dict);
 
     let cmd = PlaybackCommand::from_plist(&plist).unwrap();
     assert!(matches!(cmd, PlaybackCommand::SkipNext));
 
     let mut dict2 = HashMap::new();
-    dict2.insert("type".to_string(), PlistValue::String("nextItem".to_string()));
+    dict2.insert(
+        "type".to_string(),
+        PlistValue::String("nextItem".to_string()),
+    );
     let plist2 = PlistValue::Dictionary(dict2);
     let cmd2 = PlaybackCommand::from_plist(&plist2).unwrap();
     assert!(matches!(cmd2, PlaybackCommand::SkipNext));
@@ -76,14 +82,20 @@ fn test_parse_skip_next_command() {
 #[test]
 fn test_parse_skip_previous_command() {
     let mut dict = HashMap::new();
-    dict.insert("type".to_string(), PlistValue::String("skipPrevious".to_string()));
+    dict.insert(
+        "type".to_string(),
+        PlistValue::String("skipPrevious".to_string()),
+    );
     let plist = PlistValue::Dictionary(dict);
 
     let cmd = PlaybackCommand::from_plist(&plist).unwrap();
     assert!(matches!(cmd, PlaybackCommand::SkipPrevious));
 
     let mut dict2 = HashMap::new();
-    dict2.insert("type".to_string(), PlistValue::String("previousItem".to_string()));
+    dict2.insert(
+        "type".to_string(),
+        PlistValue::String("previousItem".to_string()),
+    );
     let plist2 = PlistValue::Dictionary(dict2);
     let cmd2 = PlaybackCommand::from_plist(&plist2).unwrap();
     assert!(matches!(cmd2, PlaybackCommand::SkipPrevious));
@@ -92,7 +104,10 @@ fn test_parse_skip_previous_command() {
 #[test]
 fn test_parse_set_rate_command() {
     let mut dict = HashMap::new();
-    dict.insert("type".to_string(), PlistValue::String("setPlaybackRate".to_string()));
+    dict.insert(
+        "type".to_string(),
+        PlistValue::String("setPlaybackRate".to_string()),
+    );
     dict.insert("rate".to_string(), PlistValue::Integer(1));
     let plist = PlistValue::Dictionary(dict);
 
@@ -103,7 +118,10 @@ fn test_parse_set_rate_command() {
 #[test]
 fn test_parse_set_rate_default() {
     let mut dict = HashMap::new();
-    dict.insert("type".to_string(), PlistValue::String("setPlaybackRate".to_string()));
+    dict.insert(
+        "type".to_string(),
+        PlistValue::String("setPlaybackRate".to_string()),
+    );
     let plist = PlistValue::Dictionary(dict);
 
     let cmd = PlaybackCommand::from_plist(&plist).unwrap();
@@ -113,7 +131,10 @@ fn test_parse_set_rate_default() {
 #[test]
 fn test_parse_unknown_command() {
     let mut dict = HashMap::new();
-    dict.insert("type".to_string(), PlistValue::String("customCommand".to_string()));
+    dict.insert(
+        "type".to_string(),
+        PlistValue::String("customCommand".to_string()),
+    );
     let plist = PlistValue::Dictionary(dict);
 
     let cmd = PlaybackCommand::from_plist(&plist).unwrap();
@@ -127,7 +148,10 @@ fn test_parse_unknown_command() {
 #[test]
 fn test_parse_seek_missing_position() {
     let mut dict = HashMap::new();
-    dict.insert("type".to_string(), PlistValue::String("seekToPosition".to_string()));
+    dict.insert(
+        "type".to_string(),
+        PlistValue::String("seekToPosition".to_string()),
+    );
     let plist = PlistValue::Dictionary(dict);
 
     let cmd = PlaybackCommand::from_plist(&plist);
