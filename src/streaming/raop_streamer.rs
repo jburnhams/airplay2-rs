@@ -46,8 +46,10 @@ pub struct RaopStreamer {
     cipher: Aes128Ctr,
     /// Packet buffer for retransmission
     buffer: PacketBuffer,
-    /// Encode buffer to avoid repeated allocations
-    encode_buffer: BytesMut,
+    /// Pool of encode buffers to avoid repeated allocations
+    encode_buffers: Vec<BytesMut>,
+    /// Index into the encode buffer pool
+    encode_buffer_index: usize,
     /// Timing synchronization
     timing: TimingSync,
     /// Is first packet after start/flush
@@ -78,13 +80,28 @@ impl RaopStreamer {
         let cipher =
             Aes128Ctr::new(keys.aes_key(), keys.aes_iv()).expect("Invalid session keys length");
 
+        let pool_size = if config.enable_retransmit {
+            // Pool size must be larger than retransmission buffer size
+            // to ensure buffers drop their references and can be reused without allocation.
+            PacketBuffer::DEFAULT_SIZE + 16
+        } else {
+            // Minimal pool if retransmit is disabled
+            2
+        };
+
+        // Initialize pool of buffers
+        let encode_buffers = (0..pool_size)
+            .map(|_| BytesMut::with_capacity(4096))
+            .collect();
+
         Self {
             config,
             sequence: 0,
             timestamp: 0,
             cipher,
             buffer: PacketBuffer::new(PacketBuffer::DEFAULT_SIZE),
-            encode_buffer: BytesMut::with_capacity(4096),
+            encode_buffers,
+            encode_buffer_index: 0,
             timing: TimingSync::new(),
             is_first_packet: true,
             last_sync: Instant::now(),
@@ -109,11 +126,15 @@ impl RaopStreamer {
     /// Audio should be encoded ALAC data (or raw PCM depending on codec)
     pub fn encode_frame(&mut self, audio_data: &[u8]) -> Bytes {
         let packet_size = RaopAudioPacket::HEADER_SIZE + audio_data.len();
-        self.encode_buffer.reserve(packet_size);
+
+        let encode_buffer = &mut self.encode_buffers[self.encode_buffer_index];
+        // clear() keeps the capacity and allows reuse of the allocation if unique
+        encode_buffer.clear();
+        encode_buffer.reserve(packet_size);
 
         // Write header directly
         RaopAudioPacket::write_header(
-            &mut self.encode_buffer,
+            encode_buffer,
             self.is_first_packet,
             self.sequence,
             self.timestamp,
@@ -125,16 +146,16 @@ impl RaopStreamer {
         }
 
         // Append audio data
-        self.encode_buffer.put_slice(audio_data);
+        encode_buffer.put_slice(audio_data);
 
         // Encrypt payload in place
         // The payload starts after HEADER_SIZE
         // Access the just-written part of the buffer
-        let len = self.encode_buffer.len();
+        let len = encode_buffer.len();
         let payload_start = len - audio_data.len();
 
         {
-            let data = &mut self.encode_buffer[payload_start..];
+            let data = &mut encode_buffer[payload_start..];
 
             // Seek to the correct keystream offset based on RTP timestamp
             // AirPlay 2 uses 16-bit stereo PCM (4 bytes/sample) for timing
@@ -145,7 +166,10 @@ impl RaopStreamer {
 
         // Extract the packet as Bytes
         // split() returns a new BytesMut containing [0, len), leaving self empty but with capacity
-        let encoded_bytes = self.encode_buffer.split().freeze();
+        let encoded_bytes = encode_buffer.split().freeze();
+
+        // Increment the buffer index
+        self.encode_buffer_index = (self.encode_buffer_index + 1) % self.encode_buffers.len();
 
         // Buffer for retransmission
         if self.config.enable_retransmit {
