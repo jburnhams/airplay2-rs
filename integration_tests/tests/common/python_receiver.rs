@@ -462,6 +462,9 @@ impl Drop for PythonReceiver {
         if !self.logs_written {
             self.write_logs();
         }
+        // Ensure child process is killed when the struct goes out of scope (e.g. test panic)
+        let _ = self.process.kill();
+        let _ = self.process.wait();
     }
 }
 

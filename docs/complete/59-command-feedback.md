@@ -185,11 +185,11 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Command parsing from binary plist
-- [ ] All command types handled
-- [ ] Feedback endpoint acknowledged
-- [ ] Events emitted for commands
-- [ ] All unit tests pass
+- [x] Command parsing from binary plist
+- [x] All command types handled
+- [x] Feedback endpoint acknowledged
+- [x] Events emitted for commands
+- [x] All unit tests pass
 
 ---
 

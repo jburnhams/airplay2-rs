@@ -94,6 +94,8 @@ pub trait PlistExt {
     fn get_dict(&self, key: &str) -> Option<&HashMap<String, PlistValue>>;
     /// Get an array from the dictionary
     fn get_array(&self, key: &str) -> Option<&Vec<PlistValue>>;
+    /// Get a float (real) value from the dictionary
+    fn get_f64(&self, key: &str) -> Option<f64>;
 }
 
 impl PlistExt for PlistValue {
@@ -110,6 +112,20 @@ impl PlistExt for PlistValue {
         if let PlistValue::Dictionary(dict) = self {
             if let Some(PlistValue::Integer(i)) = dict.get(key) {
                 return Some(*i);
+            }
+        }
+        None
+    }
+
+    fn get_f64(&self, key: &str) -> Option<f64> {
+        if let PlistValue::Dictionary(dict) = self {
+            match dict.get(key) {
+                Some(PlistValue::Real(r)) => return Some(*r),
+                Some(PlistValue::Integer(i)) => {
+                    #[allow(clippy::cast_precision_loss)]
+                    return Some(*i as f64);
+                }
+                _ => {}
             }
         }
         None
