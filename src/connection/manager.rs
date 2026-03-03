@@ -1321,7 +1321,10 @@ impl ConnectionManager {
     }
 
     /// Send pairing data to device
-    #[allow(clippy::too_many_lines, reason = "Refactored byte-by-byte read logic increases line count")]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Refactored byte-by-byte read logic increases line count"
+    )]
     async fn send_pairing_data(&self, data: &[u8], path: &str) -> Result<Vec<u8>, AirPlayError> {
         // Send as HTTP POST
         // Note: We need to include the standard RTSP/AirPlay headers here too,
