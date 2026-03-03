@@ -26,3 +26,13 @@ fn test_parse_seek_command() {
     let cmd = PlaybackCommand::from_plist(&plist).unwrap();
     assert!(matches!(cmd, PlaybackCommand::Seek { position_ms: 30000 }));
 }
+
+#[test]
+fn test_parse_missing_type() {
+    let mut dict = HashMap::new();
+    dict.insert("position".to_string(), PlistValue::Integer(30000));
+    let plist = PlistValue::Dictionary(dict);
+
+    let cmd = PlaybackCommand::from_plist(&plist);
+    assert!(cmd.is_none());
+}

@@ -86,7 +86,16 @@ pub fn handle_command(
     };
 
     // Extract command
-    let command = PlaybackCommand::from_plist(&plist);
+    let Some(command) = PlaybackCommand::from_plist(&plist) else {
+        return Ap2HandleResult {
+            response: Ap2ResponseBuilder::error(StatusCode::BAD_REQUEST)
+                .cseq(cseq)
+                .encode(),
+            new_state: None,
+            event: None,
+            error: Some("Failed to parse command: missing or invalid type".to_string()),
+        };
+    };
 
     tracing::debug!("Received command: {:?}", command);
 
@@ -111,8 +120,8 @@ pub fn handle_command(
         }
     };
 
-    let event = command.as_ref().map(|cmd| Ap2Event::CommandReceived {
-        command: format!("{cmd:?}"),
+    let event = Some(Ap2Event::CommandReceived {
+        command: format!("{command:?}"),
     });
 
     Ap2HandleResult {
