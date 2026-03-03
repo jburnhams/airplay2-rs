@@ -1,6 +1,6 @@
-use crate::receiver::ap2::password_auth::{FailedAttemptTracker, PasswordAuthManager};
-use crate::receiver::Ap2Config;
 use crate::protocol::crypto::Ed25519KeyPair;
+use crate::receiver::Ap2Config;
+use crate::receiver::ap2::password_auth::{FailedAttemptTracker, PasswordAuthManager};
 
 #[test]
 fn test_password_validation() {
@@ -16,9 +16,9 @@ fn test_password_validation() {
 #[test]
 fn test_lockout_tracking() {
     let mut tracker = FailedAttemptTracker::new_for_test();
-    //tracker.max_attempts = 3;
-    //tracker.window = std::time::Duration::from_secs(60);
-    //tracker.lockout_duration = std::time::Duration::from_secs(5);
+    // tracker.max_attempts = 3;
+    // tracker.window = std::time::Duration::from_secs(60);
+    // tracker.lockout_duration = std::time::Duration::from_secs(5);
 
     // First few attempts should not lock
     tracker.record_attempt_for_test(false);
@@ -38,11 +38,11 @@ fn test_successful_auth_clears_attempts() {
 
     tracker.record_attempt_for_test(false);
     tracker.record_attempt_for_test(false);
-    //assert_eq!(tracker.attempts.len(), 2);
+    // assert_eq!(tracker.attempts.len(), 2);
 
     // Successful attempt clears history
     tracker.record_attempt_for_test(true);
-    //assert_eq!(tracker.attempts.len(), 0);
+    // assert_eq!(tracker.attempts.len(), 0);
     assert!(!tracker.is_locked_for_test());
 }
 

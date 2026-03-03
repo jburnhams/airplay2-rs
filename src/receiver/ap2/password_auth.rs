@@ -28,7 +28,7 @@ pub struct PasswordAuthManager {
 }
 
 /// Track failed authentication attempts for rate limiting
-struct FailedAttemptTracker {
+pub(crate) struct FailedAttemptTracker {
     attempts: Vec<std::time::Instant>,
     max_attempts: usize,
     window: std::time::Duration,
@@ -359,32 +359,5 @@ impl FailedAttemptTracker {
     #[allow(dead_code)]
     pub(crate) fn lockout_remaining_for_test(&self) -> Option<std::time::Duration> {
         self.lockout_remaining()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::protocol::crypto::Ed25519KeyPair;
-
-    #[test]
-    fn test_manager_creation() {
-        let identity = Ed25519KeyPair::generate();
-        let manager = PasswordAuthManager::new(identity);
-
-        assert!(!manager.is_enabled());
-        assert!(!manager.is_locked_out());
-    }
-
-    #[test]
-    fn test_set_password_enables_auth() {
-        let identity = Ed25519KeyPair::generate();
-        let mut manager = PasswordAuthManager::new(identity);
-
-        manager.set_password("test1234".to_string());
-        assert!(manager.is_enabled());
-
-        manager.clear_password();
-        assert!(!manager.is_enabled());
     }
 }

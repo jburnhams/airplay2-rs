@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::receiver::ap2::metadata_handler::MetadataController;
     use crate::protocol::daap::{DmapEncoder, DmapTag, DmapValue};
+    use crate::receiver::ap2::metadata_handler::MetadataController;
 
     #[test]
     fn test_metadata_defaults() {
@@ -62,9 +62,10 @@ mod tests {
         controller.update_artwork(vec![1, 2, 3], "image/jpeg".into());
         let mut inner = DmapEncoder::new();
         inner.string(DmapTag::ItemName, "Song Title");
-        let inner_val = DmapValue::Container(vec![
-            (DmapTag::ItemName, DmapValue::String("Song Title".into())),
-        ]);
+        let inner_val = DmapValue::Container(vec![(
+            DmapTag::ItemName,
+            DmapValue::String("Song Title".into()),
+        )]);
         let mut encoder = DmapEncoder::new();
         encoder.encode_tag(DmapTag::ListingItem, &inner_val);
         controller.update_metadata(&encoder.finish()).unwrap();
