@@ -122,8 +122,8 @@ pub fn handle_command(
     Ap2HandleResult {
         response: Ap2ResponseBuilder::ok()
             .cseq(cseq)
-            .header("Content-Type", "application/x-apple-binary-plist")
             .binary_body(body)
+            .header("Content-Type", "application/x-apple-binary-plist")
             .encode(),
         new_state: None,
         event,

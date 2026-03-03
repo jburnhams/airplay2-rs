@@ -42,6 +42,10 @@ fn test_command_endpoint_success() {
 
     let response = parse_response(&result.response);
     assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(
+        response.headers.get("Content-Type"),
+        Some("application/x-apple-binary-plist")
+    );
 
     let resp_plist = parse_bplist_body(&response.body).unwrap();
     assert_eq!(resp_plist.get_int("status"), Some(0));
