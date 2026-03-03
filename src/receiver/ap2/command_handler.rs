@@ -144,7 +144,20 @@ pub fn handle_feedback(
     _context: &Ap2RequestContext,
 ) -> Ap2HandleResult {
     // Feedback is typically empty or contains timing info
-    let _plist = parse_bplist_body(&request.body);
+    // However, if the body is explicitly present and fails to parse, return BAD_REQUEST.
+    // An empty body is perfectly valid here, so we only error if parsing a non-empty body fails.
+    if !request.body.is_empty() {
+        if let Err(e) = parse_bplist_body(&request.body) {
+            return Ap2HandleResult {
+                response: Ap2ResponseBuilder::error(StatusCode::BAD_REQUEST)
+                    .cseq(cseq)
+                    .encode(),
+                new_state: None,
+                event: None,
+                error: Some(format!("Failed to parse feedback: {e}")),
+            };
+        }
+    }
 
     // Just acknowledge
     Ap2HandleResult {
