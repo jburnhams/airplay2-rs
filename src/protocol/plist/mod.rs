@@ -83,7 +83,11 @@ impl PlistValue {
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             PlistValue::Real(f) => Some(*f),
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "Loss of precision is acceptable for dates/real numbers converted from \
+                          i64"
+            )]
             PlistValue::Integer(i) => Some(*i as f64),
             _ => None,
         }

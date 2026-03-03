@@ -36,8 +36,10 @@ pub struct AirPlayDevice {
 
 /// Device capability flags parsed from `AirPlay` features
 #[derive(Debug, Clone, Default, PartialEq)]
-// AirPlay 2 capabilities are naturally represented as a collection of boolean flags
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "AirPlay 2 capabilities are naturally represented as a collection of boolean flags"
+)]
 pub struct DeviceCapabilities {
     /// Supports `AirPlay` 2 protocol
     pub airplay2: bool,
