@@ -1321,6 +1321,10 @@ impl ConnectionManager {
     }
 
     /// Send pairing data to device
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Refactored byte-by-byte read logic increases line count"
+    )]
     async fn send_pairing_data(&self, data: &[u8], path: &str) -> Result<Vec<u8>, AirPlayError> {
         // Send as HTTP POST
         // Note: We need to include the standard RTSP/AirPlay headers here too,
@@ -1390,26 +1394,28 @@ impl ConnectionManager {
 
         // Read headers
         let mut buf = Vec::new();
-        let mut temp_buf = [0u8; 1];
+        let mut chunk = [0u8; 1024];
         let mut body_start = 0;
 
-        // Read byte by byte until double CRLF (inefficient but simple for now)
-        // In a real implementation, use a buffered reader or proper parser
+        // Read chunks until double CRLF is found to optimize syscalls
         while body_start == 0 {
-            let n = stream.read(&mut temp_buf).await?;
+            let n = stream.read(&mut chunk).await?;
             if n == 0 {
                 return Err(AirPlayError::RtspError {
                     message: "Connection closed while reading headers".to_string(),
                     status_code: None,
                 });
             }
-            buf.push(temp_buf[0]);
 
-            if buf.len() >= 4 && buf.ends_with(b"\r\n\r\n") {
-                body_start = buf.len();
-            }
+            let start_search = buf.len().saturating_sub(3);
+            buf.extend_from_slice(&chunk[..n]);
 
-            if buf.len() > 4096 {
+            if let Some(pos) = buf[start_search..]
+                .windows(4)
+                .position(|w| w == b"\r\n\r\n")
+            {
+                body_start = start_search + pos + 4;
+            } else if buf.len() > 4096 {
                 return Err(AirPlayError::RtspError {
                     message: "Headers too large".to_string(),
                     status_code: None,
@@ -1436,8 +1442,20 @@ impl ConnectionManager {
         }
 
         // Read body
-        let mut body = vec![0u8; content_length];
-        stream.read_exact(&mut body).await?;
+        let mut body = Vec::with_capacity(content_length);
+
+        // Append any body data that was read into `buf` past the headers
+        let already_read_body = &buf[body_start..];
+        let bytes_to_copy = std::cmp::min(already_read_body.len(), content_length);
+        body.extend_from_slice(&already_read_body[..bytes_to_copy]);
+
+        // Read the remaining body bytes from the stream
+        if body.len() < content_length {
+            let remaining = content_length - body.len();
+            let mut remaining_buf = vec![0u8; remaining];
+            stream.read_exact(&mut remaining_buf).await?;
+            body.extend_from_slice(&remaining_buf);
+        }
 
         // Log pairing response body
         tracing::debug!(
