@@ -334,7 +334,6 @@ pub enum PasswordAuthError {
     PairingError(String),
 }
 
-
 #[cfg(test)]
 impl FailedAttemptTracker {
     #[allow(dead_code)]
