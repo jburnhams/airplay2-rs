@@ -217,7 +217,10 @@ fn test_depth_accuracy_with_partial_read() {
     // Remaining depth should be 1.5 frames (528 samples) ~11.9ms
     let expected_depth_partial = (528 * 1000 / 44100) as u32;
     // Allow slight rounding diff
-    #[allow(clippy::cast_possible_wrap)]
+    #[allow(
+        clippy::cast_possible_wrap,
+        reason = "Depth values are small enough to fit in i32"
+    )]
     {
         assert!(
             (buffer.depth_ms() as i32 - expected_depth_partial as i32).abs() <= 1,

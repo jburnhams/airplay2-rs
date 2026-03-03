@@ -151,7 +151,7 @@ impl JitterBuffer {
     ///
     /// Returns `sample_count` *frames* (e.g. 352), resulting in `sample_count * channels` samples.
     pub fn pull(&mut self, sample_count: usize) -> Vec<i16> {
-        let channels = self.config.channels as usize;
+        let channels = (self.config.channels as usize).max(1);
         let total_samples_needed = sample_count * channels;
 
         if self.state == BufferState::Buffering {
@@ -178,7 +178,7 @@ impl JitterBuffer {
                 if self.current_frame_offset >= frame.samples.len() {
                     // Advance playback position by frame duration (samples / channels)
                     // Assuming frame.samples.len() is multiple of channels
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[allow(clippy::cast_possible_truncation, reason = "Frame length fits in u32")]
                     let frame_duration = (frame.samples.len() / channels) as u32;
                     self.playback_position = self.playback_position.wrapping_add(frame_duration);
 
@@ -287,15 +287,15 @@ impl JitterBuffer {
     }
 
     fn update_depth(&mut self) {
-        let channels = self.config.channels as usize;
+        let channels = (self.config.channels as usize).max(1);
 
         // Determine the "end" timestamp (timestamp of the last sample + 1)
         let end_ts = if let Some((_, last_frame)) = self.frames.iter().next_back() {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Frame length fits in u32")]
             let duration = (last_frame.samples.len() / channels) as u32;
             last_frame.timestamp.wrapping_add(duration)
         } else if let Some(ref frame) = self.current_frame {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Frame length fits in u32")]
             let duration = (frame.samples.len() / channels) as u32;
             frame.timestamp.wrapping_add(duration)
         } else {
@@ -317,7 +317,7 @@ impl JitterBuffer {
         } else {
             // In playing/underrun, depth is relative to playback position
             // If we have a current frame, we are at playback_position + offset
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Frame length fits in u32")]
             let offset_duration = (self.current_frame_offset / channels) as u32;
             self.playback_position.wrapping_add(offset_duration)
         };

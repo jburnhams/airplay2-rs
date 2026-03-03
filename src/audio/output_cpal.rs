@@ -129,7 +129,10 @@ mod implementation {
                                 // Apply volume
                                 let vol = *volume.lock().unwrap();
                                 for sample in data.iter_mut() {
-                                    #[allow(clippy::cast_possible_truncation)]
+                                    #[allow(
+                                        clippy::cast_possible_truncation,
+                                        reason = "Scaled sample fits in i16"
+                                    )]
                                     {
                                         *sample = (f32::from(*sample) * vol) as i16;
                                     }
