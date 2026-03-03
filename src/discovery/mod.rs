@@ -55,11 +55,9 @@ pub use raop::RAOP_SERVICE_TYPE;
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-#[allow(clippy::missing_panics_doc, reason = "Standard initialization")]
-pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-    static DEFAULT_CONFIG: std::sync::LazyLock<AirPlayConfig> =
-        std::sync::LazyLock::new(AirPlayConfig::default);
-    discover_with_config(&DEFAULT_CONFIG)
+pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent> + 'static, AirPlayError> {
+    let browser = DeviceBrowser::new(&AirPlayConfig::default());
+    browser.browse()
 }
 
 /// Discover devices with custom configuration
@@ -69,7 +67,7 @@ pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
 /// Returns an error if the mDNS daemon cannot be initialized.
 pub fn discover_with_config(
     config: &AirPlayConfig,
-) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+) -> Result<impl Stream<Item = DiscoveryEvent> + 'static, AirPlayError> {
     let browser = DeviceBrowser::new(config);
     browser.browse()
 }
@@ -81,7 +79,7 @@ pub fn discover_with_config(
 /// Returns an error if the mDNS daemon cannot be initialized.
 pub fn discover_with_options(
     options: DiscoveryOptions,
-) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+) -> Result<impl Stream<Item = DiscoveryEvent> + 'static, AirPlayError> {
     let browser = DeviceBrowser::with_options(options);
     browser.browse()
 }

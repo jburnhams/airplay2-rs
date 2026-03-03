@@ -156,7 +156,10 @@ impl EncryptedChannel {
                 "Message too long for framing".to_string(),
             ));
         }
-        #[allow(clippy::cast_possible_truncation, reason = "Length is checked against u16::MAX above")]
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Length is checked against u16::MAX above"
+        )]
         let len_u16 = encrypted.len() as u16;
 
         let mut output = Vec::with_capacity(2 + encrypted.len());

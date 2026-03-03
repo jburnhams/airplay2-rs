@@ -16,7 +16,11 @@ fn test_concurrent_producer_consumer() {
     // Producer thread
     let producer = thread::spawn(move || {
         for i in 0..iteration_count {
-            let data = vec![u8::try_from(i % 255).unwrap(); chunk_size];
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Modulo 255 ensures value fits in u8"
+            )]
+            let data = vec![(i % 255) as u8; chunk_size];
             let mut total_written = 0;
             while total_written < chunk_size {
                 let written = buffer.write(&data[total_written..]);
@@ -41,7 +45,11 @@ fn test_concurrent_producer_consumer() {
                 for (j, byte) in temp_buf.iter().enumerate().take(read) {
                     let byte_index = total_read_bytes + j;
                     let chunk_index = byte_index / chunk_size;
-                    let expected_val = u8::try_from(chunk_index % 255).unwrap();
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "Modulo 255 ensures value fits in u8"
+                    )]
+                    let expected_val = (chunk_index % 255) as u8;
                     assert_eq!(*byte, expected_val, "Mismatch at byte {byte_index}");
                 }
                 total_read_bytes += read;
