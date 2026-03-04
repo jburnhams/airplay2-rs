@@ -29,7 +29,7 @@ async fn test_builder() {
 #[tokio::test]
 async fn test_start_stop() {
     let mut receiver = ReceiverBuilder::new("Test Speaker")
-        .port(7002)
+        .port(0)
         .build()
         .unwrap();
 
@@ -55,7 +55,7 @@ async fn test_start_stop() {
 #[tokio::test]
 async fn test_accept_connection() {
     let mut receiver = ReceiverBuilder::new("Test Speaker")
-        .port(7003)
+        .port(0)
         .build()
         .unwrap();
 
@@ -67,8 +67,12 @@ async fn test_accept_connection() {
     let event = events.recv().await.unwrap();
     assert!(matches!(event, ReceiverEvent::Started));
 
+    let port = receiver.config().server_port;
+
     // Connect to the receiver
-    let stream = TcpStream::connect("127.0.0.1:7003").await.unwrap();
+    let stream = TcpStream::connect(format!("127.0.0.1:{port}"))
+        .await
+        .unwrap();
 
     // Verify Connected event is emitted
     let event = tokio::time::timeout(Duration::from_secs(1), events.recv())

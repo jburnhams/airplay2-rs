@@ -173,6 +173,8 @@ impl AirPlay2Receiver {
             .await
             .map_err(ReceiverError::Io)?;
 
+        self.config.server_port = listener.local_addr().map_err(ReceiverError::Io)?.port();
+
         tracing::info!(
             "AirPlay 2 receiver listening on port {}",
             self.config.server_port
