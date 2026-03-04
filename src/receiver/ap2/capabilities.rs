@@ -10,7 +10,11 @@ use crate::receiver::ap2::features::{FeatureFlag, FeatureFlags};
 
 /// Device capabilities for /info response
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Device capabilities intrinsically require numerous boolean flags to represent \
+              supported features"
+)]
 pub struct DeviceCapabilities {
     /// Device identification
     pub device_id: String,

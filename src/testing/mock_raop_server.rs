@@ -1,7 +1,11 @@
 //! Mock RAOP server for testing
 
-#![allow(clippy::missing_panics_doc)]
-#![allow(clippy::missing_errors_doc)]
+#![allow(
+    clippy::missing_panics_doc,
+    clippy::missing_errors_doc,
+    reason = "Mock servers intended for test code do not strictly require thorough panic and \
+              error documentation"
+)]
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -155,7 +159,11 @@ impl MockRaopServer {
     }
 
     /// Start the server
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Server initialization sequentially binds multiple sockets and sets up listeners \
+                  in a single clear flow"
+    )]
     pub async fn start(&mut self) -> Result<(), MockServerError> {
         if self.running {
             return Ok(());

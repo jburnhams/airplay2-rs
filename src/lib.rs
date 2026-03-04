@@ -43,7 +43,11 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
+#![allow(
+    clippy::module_name_repetitions,
+    reason = "Module names frequently mirror core types leading to intentional repetition (e.g. \
+              error::AirPlayError)"
+)]
 
 // Public modules
 /// Error types
