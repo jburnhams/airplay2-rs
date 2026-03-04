@@ -769,16 +769,25 @@ impl ConnectionManager {
             tracing::info!("Skipping ANNOUNCE for PTP/Buffered Audio device");
         } else {
             tracing::debug!("Performing ANNOUNCE...");
+            let use_hires = self.should_use_hires().await;
             let sdp = match self.config.audio_codec {
-                AudioCodec::Alac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                     0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                     AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 \
-                                     44100\r\n"
-                    .to_string(),
-                AudioCodec::Pcm => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                    L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n"
-                    .to_string(),
+                AudioCodec::Alac => {
+                    let (sr, bit_depth) = if use_hires { (48000, 24) } else { (44100, 16) };
+                    format!(
+                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                         0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                         AppleLossless\r\na=fmtp:96 352 0 {bit_depth} 40 10 14 2 255 0 0 {sr}\r\n",
+                    )
+                }
+                AudioCodec::Pcm => {
+                    let (sr, bit_depth) = if use_hires { (48000, 24) } else { (44100, 16) };
+                    format!(
+                        "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
+                         0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                         L{bit_depth}/{sr}/2\r\na=fmtp:96 352 0 {bit_depth} 40 10 14 2 255 0 0 \
+                         {sr}\r\n",
+                    )
+                }
                 AudioCodec::Aac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
                                     0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
                                     mpeg4-generic/44100/2\r\na=fmtp:96 \
@@ -1055,11 +1064,26 @@ impl ConnectionManager {
         // realtime
         let stream_type = 96;
 
+        // Check if high-resolution audio (24-bit/48kHz) should be used.
+        let use_hires = self.should_use_hires().await;
+
         // Determine ct (compression type) and audioFormat
         // ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD
         let (ct, spf, audio_format) = match self.config.audio_codec {
-            AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
-            AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
+            AudioCodec::Pcm => {
+                if use_hires {
+                    (0x1, 352, 1 << 16) // Just a guess, might not matter if audioFormat is ignored
+                } else {
+                    (0x1, 352, 1 << 11) // PCM 44100/16/2 = 2048
+                }
+            }
+            AudioCodec::Alac => {
+                if use_hires {
+                    (0x2, 352, 1 << 16)
+                } else {
+                    (0x2, 352, 0x40000) // ALAC
+                }
+            }
             AudioCodec::Aac => (0x4, 1024, 1 << 22), // AAC_LC_44100_2
             AudioCodec::AacEld => {
                 let spf = crate::audio::AacEncoder::new(
@@ -1088,7 +1112,7 @@ impl ConnectionManager {
         // Let's use 1<<11 as a safe default for audioFormat if uncertain, as it defines the output
         // format?
 
-        let stream_entry = DictBuilder::new()
+        let mut stream_builder = DictBuilder::new()
             .insert("type", stream_type)
             .insert("ct", ct)
             .insert("audioFormat", audio_format)
@@ -1099,8 +1123,17 @@ impl ConnectionManager {
             .insert("controlPort", u64::from(ctrl_port))
             .insert("timingPort", u64::from(time_port))
             .insert("latencyMin", 11025) // 250ms in samples
-            .insert("latencyMax", 88200) // 2s in samples
-            .build();
+            .insert("latencyMax", 88200); // 2s in samples
+
+        // Add sample rate and bits per sample explicitly for hires
+        if use_hires {
+            stream_builder = stream_builder
+                .insert("sr", 48000_u64)
+                .insert("ss", 24_u64)
+                .insert("ch", 2_u64);
+        }
+
+        let stream_entry = stream_builder.build();
 
         let setup_plist_step2 = DictBuilder::new()
             .insert("streams", vec![stream_entry])
@@ -2144,6 +2177,17 @@ impl ConnectionManager {
     #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<ConnectionEvent> {
         self.event_tx.subscribe()
+    }
+
+    /// Determine if high resolution audio should be used.
+    async fn should_use_hires(&self) -> bool {
+        if !self.config.prefer_hires_audio {
+            return false;
+        }
+        let device_guard = self.device.read().await;
+        device_guard
+            .as_ref()
+            .is_some_and(|d| d.capabilities.supports_hires_audio)
     }
 
     /// Determine if PTP should be used based on config and device capabilities.

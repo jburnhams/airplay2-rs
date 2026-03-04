@@ -45,6 +45,10 @@ pub struct AirPlayConfig {
     /// Audio codec to use for streaming (default: PCM - uncompressed)
     pub audio_codec: AudioCodec,
 
+    /// Prefer high-resolution audio (24-bit/48kHz) if supported by the device.
+    /// Default is false (16-bit/44.1kHz).
+    pub prefer_hires_audio: bool,
+
     /// Optional PIN for pairing (if device requires one)
     pub pin: Option<String>,
 
@@ -72,6 +76,7 @@ impl Default for AirPlayConfig {
             audio_buffer_frames: 44100,
             pairing_storage_path: None,
             audio_codec: AudioCodec::Pcm, // Default to uncompressed PCM
+            prefer_hires_audio: false,
             pin: None,
             aac_bitrate: 128_000,
             timing_protocol: TimingProtocol::default(),
@@ -134,6 +139,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn audio_codec(mut self, codec: AudioCodec) -> Self {
         self.config.audio_codec = codec;
+        self
+    }
+
+    /// Prefer high-resolution audio (24-bit/48kHz) if supported by the device.
+    #[must_use]
+    pub fn prefer_hires_audio(mut self, prefer: bool) -> Self {
+        self.config.prefer_hires_audio = prefer;
         self
     }
 
