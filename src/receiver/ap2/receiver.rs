@@ -146,7 +146,8 @@ impl AirPlay2Receiver {
     /// Start the receiver
     ///
     /// # Errors
-    /// Returns an error if the receiver is already running, or if advertisement or TCP listener creation fails.
+    /// Returns an error if the receiver is already running, or if advertisement or TCP listener
+    /// creation fails.
     pub async fn start(&mut self) -> Result<(), ReceiverError> {
         let mut state = self.state.write().await;
         if *state != ReceiverState::Stopped {
@@ -217,7 +218,8 @@ impl AirPlay2Receiver {
     /// Stop the receiver
     ///
     /// # Errors
-    /// Returns an error if stopping fails (currently this always succeeds if it isn't already stopped).
+    /// Returns an error if stopping fails (currently this always succeeds if it isn't already
+    /// stopped).
     pub async fn stop(&mut self) -> Result<(), ReceiverError> {
         let mut state = self.state.write().await;
         if *state == ReceiverState::Stopped {

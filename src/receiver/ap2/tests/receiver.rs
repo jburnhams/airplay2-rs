@@ -1,4 +1,5 @@
 use std::time::Duration;
+
 use tokio::net::TcpStream;
 
 use crate::receiver::ap2::{
@@ -27,7 +28,10 @@ async fn test_builder() {
 
 #[tokio::test]
 async fn test_start_stop() {
-    let mut receiver = ReceiverBuilder::new("Test Speaker").port(7002).build().unwrap();
+    let mut receiver = ReceiverBuilder::new("Test Speaker")
+        .port(7002)
+        .build()
+        .unwrap();
 
     assert_eq!(receiver.state().await, ReceiverState::Stopped);
 
@@ -50,7 +54,10 @@ async fn test_start_stop() {
 
 #[tokio::test]
 async fn test_accept_connection() {
-    let mut receiver = ReceiverBuilder::new("Test Speaker").port(7003).build().unwrap();
+    let mut receiver = ReceiverBuilder::new("Test Speaker")
+        .port(7003)
+        .build()
+        .unwrap();
 
     let mut events = receiver.subscribe();
 
