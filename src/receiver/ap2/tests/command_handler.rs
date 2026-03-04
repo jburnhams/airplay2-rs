@@ -63,7 +63,10 @@ fn test_handle_command_success() {
     let response_str = String::from_utf8_lossy(&result.response);
     println!("Response string: {response_str}");
     assert!(response_str.starts_with("RTSP/1.0 200 OK"));
-    assert!(response_str.contains("application/x-apple-binary-plist") || response_str.contains("application/octet-stream"));
+    assert!(
+        response_str.contains("application/x-apple-binary-plist")
+            || response_str.contains("application/octet-stream")
+    );
 
     let header_end = result
         .response
