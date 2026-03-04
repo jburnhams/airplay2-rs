@@ -9,7 +9,7 @@ use crate::receiver::ap2::{
 #[tokio::test]
 async fn test_receiver_creation() {
     let config = Ap2Config::new("Test Speaker");
-    let receiver = AirPlay2Receiver::new(config).unwrap();
+    let receiver = AirPlay2Receiver::new(config);
 
     assert_eq!(receiver.state().await, ReceiverState::Stopped);
 }
@@ -19,8 +19,7 @@ async fn test_builder() {
     let receiver = ReceiverBuilder::new("Test Speaker")
         .password("secret")
         .port(7001)
-        .build()
-        .unwrap();
+        .build();
 
     assert_eq!(receiver.config().server_port, 7001);
     assert!(receiver.config().password.is_some());
@@ -28,10 +27,7 @@ async fn test_builder() {
 
 #[tokio::test]
 async fn test_start_stop() {
-    let mut receiver = ReceiverBuilder::new("Test Speaker")
-        .port(0)
-        .build()
-        .unwrap();
+    let mut receiver = ReceiverBuilder::new("Test Speaker").port(0).build();
 
     assert_eq!(receiver.state().await, ReceiverState::Stopped);
 
@@ -54,10 +50,7 @@ async fn test_start_stop() {
 
 #[tokio::test]
 async fn test_accept_connection() {
-    let mut receiver = ReceiverBuilder::new("Test Speaker")
-        .port(0)
-        .build()
-        .unwrap();
+    let mut receiver = ReceiverBuilder::new("Test Speaker").port(0).build();
 
     let mut events = receiver.subscribe();
 

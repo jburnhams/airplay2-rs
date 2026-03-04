@@ -20,7 +20,7 @@ use crate::protocol::crypto::Ed25519KeyPair;
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let config = Ap2Config::new("My Speaker").with_password("secret123");
 ///
-///     let mut receiver = AirPlay2Receiver::new(config)?;
+///     let mut receiver = AirPlay2Receiver::new(config);
 ///
 ///     // Subscribe to events
 ///     let mut events = receiver.subscribe();
@@ -123,14 +123,12 @@ pub enum ReceiverEvent {
 
 impl AirPlay2Receiver {
     /// Create a new receiver with the given configuration
-    ///
-    /// # Errors
-    /// Returns an error if the receiver identity cannot be generated.
-    pub fn new(config: Ap2Config) -> Result<Self, ReceiverError> {
+    #[must_use]
+    pub fn new(config: Ap2Config) -> Self {
         let identity = Ed25519KeyPair::generate();
         let (event_tx, _) = broadcast::channel(100);
 
-        Ok(Self {
+        Self {
             config,
             identity,
             state: Arc::new(RwLock::new(ReceiverState::Stopped)),
@@ -138,7 +136,7 @@ impl AirPlay2Receiver {
             shutdown_tx: None,
             advertiser: None,
             accept_task: None,
-        })
+        }
     }
 
     /// Subscribe to receiver events
@@ -325,10 +323,8 @@ impl ReceiverBuilder {
     }
 
     /// Build the receiver
-    ///
-    /// # Errors
-    /// Returns an error if the receiver identity cannot be generated.
-    pub fn build(self) -> Result<AirPlay2Receiver, ReceiverError> {
+    #[must_use]
+    pub fn build(self) -> AirPlay2Receiver {
         AirPlay2Receiver::new(self.config)
     }
 }
