@@ -45,7 +45,8 @@
 #![warn(clippy::pedantic)]
 #![allow(
     clippy::module_name_repetitions,
-    reason = "Module names frequently mirror core types leading to intentional repetition (e.g. error::AirPlayError)"
+    reason = "Module names frequently mirror core types leading to intentional repetition (e.g. \
+              error::AirPlayError)"
 )]
 
 // Public modules

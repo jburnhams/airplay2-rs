@@ -12,7 +12,8 @@ use crate::receiver::ap2::features::{FeatureFlag, FeatureFlags};
 #[derive(Debug, Clone)]
 #[allow(
     clippy::struct_excessive_bools,
-    reason = "Device capabilities intrinsically require numerous boolean flags to represent supported features"
+    reason = "Device capabilities intrinsically require numerous boolean flags to represent \
+              supported features"
 )]
 pub struct DeviceCapabilities {
     /// Device identification

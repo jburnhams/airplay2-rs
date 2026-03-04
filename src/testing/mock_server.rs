@@ -374,7 +374,8 @@ impl MockServer {
     /// Processes a request and generates a response.
     #[allow(
         clippy::too_many_lines,
-        reason = "Match statement over all RTSP methods necessitates a longer but highly cohesive function"
+        reason = "Match statement over all RTSP methods necessitates a longer but highly cohesive \
+                  function"
     )]
     async fn handle_request(
         request: &RtspRequest,
