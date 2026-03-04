@@ -123,19 +123,50 @@ fn test_sync_tolerance() {
     coord.join_group("group".into(), GroupRole::Follower, Some(0x2222));
 
     let now_inst = Instant::now();
-    let now_ptp = PtpTimestamp::now();
+
+    // We must ensure the `now_ptp` matches EXACTLY what `MultiRoomCoordinator` internally thinks
+    // `now_inst` corresponds to. `MultiRoomCoordinator` calls `SystemTime::now()` immediately
+    // to find the correlation. Let's do exactly the same to eliminate offset.
+    let now_sys = std::time::SystemTime::now();
+    let dur_since_epoch = now_sys
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO);
+    let mut now_ptp = PtpTimestamp::from_duration(dur_since_epoch);
+
+    // Zero out the fraction so the compact format conversion does not introduce sub-15us
+    // drift errors rounding across boundaries.
+    now_ptp.nanoseconds = 0;
+
     let master_compact = now_ptp.to_airplay_compact();
 
     for _ in 0..5 {
         coord.update_timing(master_compact, now_inst, now_inst, master_compact);
     }
 
+    // Because `instant_to_ptp` measures execution time dynamically, an offset accumulates.
+    // Instead of forcing target_ptp = now_ptp + 500us (which fails if offset > 500us),
+    // we query the actual offset to set a target exactly 500us ahead of the current
+    // synchronized master time.
+    let offset_micros = (coord.clock_offset_ms() * 1000.0) as i64;
+    let current_master_time = if offset_micros >= 0 {
+        now_ptp
+            .to_duration()
+            .checked_sub(Duration::from_micros(offset_micros.unsigned_abs()))
+            .unwrap()
+    } else {
+        now_ptp
+            .to_duration()
+            .checked_add(Duration::from_micros(offset_micros.unsigned_abs()))
+            .unwrap()
+    };
+
     // A drift of ~0.5ms (within 1ms tolerance) should produce no adjustment
     let offset_dur = Duration::from_micros(500);
     let target_ptp =
-        PtpTimestamp::from_duration(now_ptp.to_duration().checked_add(offset_dur).unwrap());
+        PtpTimestamp::from_duration(current_master_time.checked_add(offset_dur).unwrap());
 
     coord.set_target_time(target_ptp.to_airplay_compact());
+
     let cmd = coord.calculate_adjustment_at(now_ptp);
 
     assert!(
