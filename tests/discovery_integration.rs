@@ -1,4 +1,5 @@
 #[tokio::test]
+#[ignore] // Meant for local testing, can fail in CI
 async fn test_discover_real_devices() {
     use std::time::Duration;
 
