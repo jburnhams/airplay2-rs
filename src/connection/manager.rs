@@ -769,22 +769,28 @@ impl ConnectionManager {
             tracing::info!("Skipping ANNOUNCE for PTP/Buffered Audio device");
         } else {
             tracing::debug!("Performing ANNOUNCE...");
+            let sample_rate = self.config.audio_format.sample_rate.as_u32();
+            let bits = self.config.audio_format.sample_format.bits_per_sample();
+            let channels = self.config.audio_format.channels.channels();
             let sdp = match self.config.audio_codec {
-                AudioCodec::Alac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                     0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                     AppleLossless\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 \
-                                     44100\r\n"
-                    .to_string(),
-                AudioCodec::Pcm => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                    L16/44100/2\r\na=fmtp:96 352 0 16 40 10 14 2 255 0 0 44100\r\n"
-                    .to_string(),
-                AudioCodec::Aac => "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 \
-                                    0.0.0.0\r\nt=0 0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
-                                    mpeg4-generic/44100/2\r\na=fmtp:96 \
-                                    mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
-                                    constantDuration=1024\r\n"
-                    .to_string(),
+                AudioCodec::Alac => format!(
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
+                     0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 AppleLossless\r\na=fmtp:96 352 0 \
+                     {bits} 40 10 14 {channels} 255 0 0 {sample_rate}\r\n"
+                ),
+                AudioCodec::Pcm => format!(
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
+                     0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                     L{bits}/{sample_rate}/{channels}\r\na=fmtp:96 352 0 {bits} 40 10 14 \
+                     {channels} 255 0 0 {sample_rate}\r\n"
+                ),
+                AudioCodec::Aac => format!(
+                    "v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=airplay2-rs\r\nc=IN IP4 0.0.0.0\r\nt=0 \
+                     0\r\nm=audio 0 RTP/AVP 96\r\na=rtpmap:96 \
+                     mpeg4-generic/{sample_rate}/{channels}\r\na=fmtp:96 \
+                     mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;\
+                     constantDuration=1024\r\n"
+                ),
                 AudioCodec::Opus => {
                     return Err(AirPlayError::InvalidParameter {
                         name: "audio_codec".to_string(),
@@ -1057,14 +1063,19 @@ impl ConnectionManager {
 
         // Determine ct (compression type) and audioFormat
         // ct: 0x1 = PCM, 0x2 = ALAC, 0x4 = AAC_LC, 0x8 = AAC_ELD
+        let is_48k_24b = self.config.audio_format.sample_rate == crate::audio::SampleRate::Hz48000
+            && self.config.audio_format.sample_format == crate::audio::SampleFormat::I24;
+
         let (ct, spf, audio_format) = match self.config.audio_codec {
-            AudioCodec::Pcm => (0x1, 352, 1 << 11), // PCM 44100/16/2 = 2048
-            AudioCodec::Alac => (0x2, 352, 0x40000), // ALAC
+            AudioCodec::Pcm => (0x1, 352, if is_48k_24b { 1 << 17 } else { 1 << 11 }), /* PCM 48000/24/2 or 44100/16/2 */
+            AudioCodec::Alac => (0x2, 352, if is_48k_24b { 1 << 21 } else { 1 << 18 }), // ALAC
             AudioCodec::Aac => (0x4, 1024, 1 << 22), // AAC_LC_44100_2
             AudioCodec::AacEld => {
+                let sample_rate = self.config.audio_format.sample_rate.as_u32();
+                let channels = self.config.audio_format.channels.channels();
                 let spf = crate::audio::AacEncoder::new(
-                    44100,
-                    2,
+                    sample_rate,
+                    u32::from(channels),
                     64000,
                     fdk_aac::enc::AudioObjectType::Mpeg4EnhancedLowDelay,
                 )

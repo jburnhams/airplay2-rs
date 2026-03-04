@@ -409,10 +409,15 @@ impl PythonReceiver {
         let _ = self.process.wait().await;
 
         // Read output files
-        let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
-        let rtp_path = self.output_dir.join("rtp_packets.bin");
+        let mut audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
+        let mut audio_data = fs::read(&audio_path).ok();
 
-        let audio_data = fs::read(&audio_path).ok();
+        if audio_data.is_none() {
+            audio_path = self.output_dir.join("received_audio_48000_2ch.raw");
+            audio_data = fs::read(&audio_path).ok();
+        }
+
+        let rtp_path = self.output_dir.join("rtp_packets.bin");
         let rtp_data = fs::read(&rtp_path).ok();
 
         let log_path = self.write_logs();
@@ -702,6 +707,22 @@ pub struct TestSineSource {
 impl TestSineSource {
     pub fn new(frequency: f32, duration_secs: f32) -> Self {
         let format = airplay2::audio::AudioFormat::CD_QUALITY;
+        let max_samples = (format.sample_rate.as_u32() as f32 * duration_secs) as usize;
+
+        Self {
+            phase: 0.0,
+            frequency,
+            format,
+            samples_generated: 0,
+            max_samples,
+        }
+    }
+
+    pub fn new_with_format(
+        frequency: f32,
+        duration_secs: f32,
+        format: airplay2::audio::AudioFormat,
+    ) -> Self {
         let max_samples = (format.sample_rate.as_u32() as f32 * duration_secs) as usize;
 
         Self {

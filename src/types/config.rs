@@ -45,6 +45,9 @@ pub struct AirPlayConfig {
     /// Audio codec to use for streaming (default: PCM - uncompressed)
     pub audio_codec: AudioCodec,
 
+    /// Audio format to use for streaming (default: CD_QUALITY - 16-bit 44.1kHz stereo)
+    pub audio_format: crate::audio::AudioFormat,
+
     /// Optional PIN for pairing (if device requires one)
     pub pin: Option<String>,
 
@@ -72,6 +75,7 @@ impl Default for AirPlayConfig {
             audio_buffer_frames: 44100,
             pairing_storage_path: None,
             audio_codec: AudioCodec::Pcm, // Default to uncompressed PCM
+            audio_format: crate::audio::AudioFormat::CD_QUALITY, // Default to 16-bit 44.1kHz stereo
             pin: None,
             aac_bitrate: 128_000,
             timing_protocol: TimingProtocol::default(),
@@ -134,6 +138,13 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn audio_codec(mut self, codec: AudioCodec) -> Self {
         self.config.audio_codec = codec;
+        self
+    }
+
+    /// Set audio format for streaming
+    #[must_use]
+    pub fn audio_format(mut self, format: crate::audio::AudioFormat) -> Self {
+        self.config.audio_format = format;
         self
     }
 

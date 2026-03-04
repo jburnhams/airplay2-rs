@@ -462,7 +462,15 @@ class Audio:
     def init_audio_sink(self):
         codecLatencySec = 0
         self.pa = get_audio_backend()
-        self.sink = self.pa.open(format=self.pa.get_format_from_width(2),
+
+        # Determine format width based on sample size
+        width = 2
+        if self.sample_size == 24:
+            width = 3
+        elif self.sample_size == 32:
+            width = 4
+
+        self.sink = self.pa.open(format=self.pa.get_format_from_width(width),
                                  channels=self.channel_count,
                                  rate=self.sample_rate,
                                  output=True,
@@ -518,12 +526,35 @@ class Audio:
             else:
                 # For other channel counts, try to set layout by channel count
                 self.codecContext.layout = av.AudioLayout(self.channel_count)
-            self.codecContext.format = av.AudioFormat('s' + str(self.sample_size) + 'p')
+            try:
+                self.codecContext.format = av.AudioFormat('s' + str(self.sample_size) + 'p')
+            except ValueError:
+                # If s24p is not supported (often the case in FFmpeg/PyAV), fallback to s32p
+                print(f"[Audio] Format s{self.sample_size}p not supported by PyAV. Falling back to s32p")
+                self.codecContext.format = av.AudioFormat('s32p')
+                self.sample_size = 32 # Need to update this so sink understands 32-bit output
+
         if ed is not None:
             self.codecContext.extradata = ed
 
+        try:
+            target_format = av.AudioFormat('s' + str(self.sample_size)).packed
+        except ValueError:
+            print(f"[Audio] Packed format s{self.sample_size} not supported by PyAV. Falling back to s32")
+            target_format = av.AudioFormat('s32').packed
+            self.sample_size = 32
+            # Re-initialize the audio sink if we changed the sample_size
+            if hasattr(self, 'sink') and self.sink:
+                self.sink.close()
+            self.sink = self.pa.open(format=self.pa.get_format_from_width(self.sample_size // 8),
+                                     channels=self.channel_count,
+                                     rate=self.sample_rate,
+                                     output=True,
+                                     frames_per_buffer=4,
+                                     )
+
         self.resampler = av.AudioResampler(
-            format=av.AudioFormat('s' + str(self.sample_size)).packed,
+            format=target_format,
             layout='stereo',
             rate=self.sample_rate,
         )

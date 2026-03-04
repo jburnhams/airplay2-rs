@@ -658,14 +658,11 @@ impl AirPlayClient {
     ) -> Result<(), AirPlayError> {
         self.ensure_connected().await?;
 
-        // AirPlay 2 typically uses 44.1kHz, 16-bit, Stereo.
+        // AirPlay 2 typically uses 44.1kHz, 16-bit, Stereo, but we use the
+        // format specified in the config.
         // We configure the streamer with this target format so that it can
         // automatically resample/convert the source if needed.
-        let target_format = crate::audio::AudioFormat {
-            sample_rate: crate::audio::SampleRate::Hz44100,
-            channels: crate::audio::ChannelConfig::Stereo,
-            sample_format: crate::audio::SampleFormat::I16,
-        };
+        let target_format = self.config.audio_format;
 
         let streamer = Arc::new(PcmStreamer::new(
             self.connection.clone(),

@@ -120,6 +120,13 @@ impl AudioFormat {
         channels: ChannelConfig::Stereo,
     };
 
+    /// High-resolution audio format (24-bit 48kHz stereo)
+    pub const HI_RES: Self = Self {
+        sample_format: SampleFormat::I24,
+        sample_rate: SampleRate::Hz48000,
+        channels: ChannelConfig::Stereo,
+    };
+
     /// Create a new audio format
     #[must_use]
     pub fn new(

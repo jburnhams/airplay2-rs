@@ -52,11 +52,13 @@ impl ResamplingSource {
             }
         }
 
-        if output_format.sample_format != SampleFormat::I16 {
+        if output_format.sample_format != SampleFormat::I16
+            && output_format.sample_format != SampleFormat::I24
+        {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 format!(
-                    "Resampling only supports I16 output for now (got {:?})",
+                    "Resampling only supports I16/I24 output for now (got {:?})",
                     output_format.sample_format
                 ),
             ));
@@ -296,21 +298,36 @@ impl ResamplingSource {
         };
 
         // Convert to bytes
-        let output_bytes_needed = source_buffer.len() * 2;
+        let bytes_per_sample = self.output_format.sample_format.bytes_per_sample();
+        let output_bytes_needed = source_buffer.len() * bytes_per_sample;
         // Use mem::take to avoid borrow checker issues with self
         let mut output_bytes = std::mem::take(&mut self.output_bytes_buffer);
         output_bytes.clear();
         output_bytes.reserve(output_bytes_needed);
 
-        output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
-            let clamped = sample.clamp(-1.0, 1.0);
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Clamped float to i16 conversion is safe"
-            )]
-            let value = (clamped * f32::from(i16::MAX)) as i16;
-            value.to_le_bytes()
-        }));
+        if self.output_format.sample_format == SampleFormat::I24 {
+            output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
+                let clamped = sample.clamp(-1.0, 1.0);
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Clamped float to i32 conversion is safe"
+                )]
+                // 24-bit max is 8388607
+                let value = (clamped * 8_388_607.0) as i32;
+                let bytes = value.to_le_bytes();
+                [bytes[0], bytes[1], bytes[2]] // 24-bit packed little endian
+            }));
+        } else {
+            output_bytes.extend(source_buffer.iter().flat_map(|&sample| {
+                let clamped = sample.clamp(-1.0, 1.0);
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "Clamped float to i16 conversion is safe"
+                )]
+                let value = (clamped * f32::from(i16::MAX)) as i16;
+                value.to_le_bytes()
+            }));
+        }
 
         self.output_bytes_buffer = output_bytes;
         self.output_offset = 0;
