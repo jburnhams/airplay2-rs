@@ -149,9 +149,15 @@ fn test_sync_tolerance() {
     // synchronized master time.
     let offset_micros = (coord.clock_offset_ms() * 1000.0) as i64;
     let current_master_time = if offset_micros >= 0 {
-        now_ptp.to_duration().checked_sub(Duration::from_micros(offset_micros.unsigned_abs())).unwrap()
+        now_ptp
+            .to_duration()
+            .checked_sub(Duration::from_micros(offset_micros.unsigned_abs()))
+            .unwrap()
     } else {
-        now_ptp.to_duration().checked_add(Duration::from_micros(offset_micros.unsigned_abs())).unwrap()
+        now_ptp
+            .to_duration()
+            .checked_add(Duration::from_micros(offset_micros.unsigned_abs()))
+            .unwrap()
     };
 
     // A drift of ~0.5ms (within 1ms tolerance) should produce no adjustment
