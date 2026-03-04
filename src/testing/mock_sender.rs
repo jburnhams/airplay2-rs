@@ -208,7 +208,10 @@ impl MockSender {
     ///
     /// # Errors
     /// Returns `MockSenderError` if send fails.
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Sequence and timestamp naturally truncate into byte chunks for network serialization"
+    )]
     pub async fn send_audio(&mut self, audio_data: &[u8]) -> Result<(), MockSenderError> {
         let socket = self
             .audio_socket

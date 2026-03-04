@@ -1,5 +1,8 @@
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
+#[allow(
+    clippy::float_cmp,
+    reason = "Exact float comparison is safe and intended for clamped float outputs in tests"
+)]
 mod tests {
     use crate::receiver::ap2::volume_handler::VolumeController;
 

@@ -55,7 +55,10 @@ impl PlaybackCommand {
             }
             "setPlaybackRate" => {
                 // Rate is typically 0.0 (pause) or 1.0 (play)
-                #[allow(clippy::cast_precision_loss)]
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "Exact precision is not required for playback rate flags"
+                )]
                 let rate = plist.get_int("rate").map_or(1.0, |i| i as f32);
                 Some(Self::SetRate { rate })
             }
