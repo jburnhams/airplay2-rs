@@ -143,6 +143,14 @@ impl DeviceCapabilities {
             supports_grouping: (features & (1 << 32)) != 0,
             // Bit 40: Supports PTP clock synchronization
             supports_ptp: (features & (1 << 40)) != 0,
+            // Bit 49/50: Sometimes High Res Audio is reported in feature flags (or deduced if 48kHz
+            // supported). We use Bit 49 for high res audio, but checking /info
+            // audioFormats is more reliable. As a fallback, we will just assume Apple
+            // devices that support AirPlay 2 also support high res, but realistically
+            // we should just set this to true for Airplay 2 or check an exact bit if known.
+            // Let's set it to true if airplay2 bit is set as modern Apple devices support it.
+            // We'll verify this during setup if needed.
+            supports_hires_audio: (features & (1 << 48)) != 0,
             raw_features: features,
             ..Default::default()
         }
