@@ -110,3 +110,7 @@ harness = false
 coreaudio-rs = { version = "0.14", optional = true }
 [workspace]
 members = ["integration_tests"]
+
+[[bench]]
+name = "streaming_benchmarks"
+harness = false
