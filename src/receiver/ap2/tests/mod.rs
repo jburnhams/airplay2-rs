@@ -13,6 +13,7 @@ mod multi_room;
 mod pairing_server;
 pub mod password_auth;
 mod password_integration;
+mod receiver;
 mod request_handler;
 mod request_router;
 mod response_builder;
