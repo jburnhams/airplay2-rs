@@ -52,6 +52,7 @@ pub struct AirPlay2Receiver {
     event_tx: broadcast::Sender<ReceiverEvent>,
     shutdown_tx: Option<broadcast::Sender<()>>,
     advertiser: Option<Ap2ServiceAdvertiser>,
+    accept_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 /// Receiver state
@@ -136,6 +137,7 @@ impl AirPlay2Receiver {
             event_tx,
             shutdown_tx: None,
             advertiser: None,
+            accept_task: None,
         })
     }
 
@@ -192,7 +194,7 @@ impl AirPlay2Receiver {
         let event_tx_clone = self.event_tx.clone();
         let mut shutdown_rx = shutdown_tx.subscribe();
 
-        tokio::spawn(async move {
+        self.accept_task = Some(tokio::spawn(async move {
             loop {
                 tokio::select! {
                     accept_res = listener.accept() => {
@@ -216,7 +218,7 @@ impl AirPlay2Receiver {
                     }
                 }
             }
-        });
+        }));
 
         Ok(())
     }
@@ -242,6 +244,11 @@ impl AirPlay2Receiver {
         // Signal shutdown
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
+        }
+
+        // Wait for the accept loop to finish
+        if let Some(task) = self.accept_task.take() {
+            let _ = task.await;
         }
 
         *self.state.write().await = ReceiverState::Stopped;
