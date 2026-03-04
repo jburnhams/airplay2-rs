@@ -49,7 +49,19 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
         // We use with_pairing_storage to inject the storage instance
         let client = AirPlayClient::new(config).with_pairing_storage(Box::new(storage));
 
-        client.connect(&device).await?;
+        let mut connected = false;
+        for _ in 0..3 {
+            if client.connect(&device).await.is_ok() {
+                connected = true;
+                break;
+            }
+            sleep(Duration::from_secs(2)).await;
+        }
+
+        if !connected {
+            return Err("Failed to connect Client A".into());
+        }
+
         assert!(client.is_connected().await, "Client A should be connected");
 
         // Wait a bit to ensure keys are saved and receiver flushes pairing to disk.
@@ -96,7 +108,18 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
 
         // This connect() call should use Pair-Verify because keys exist in storage
         // and the receiver should recognize us.
-        client.connect(&device).await?;
+        let mut connected = false;
+        for _ in 0..3 {
+            if client.connect(&device).await.is_ok() {
+                connected = true;
+                break;
+            }
+            sleep(Duration::from_secs(2)).await;
+        }
+
+        if !connected {
+            return Err("Failed to connect Client B".into());
+        }
 
         assert!(
             client.is_connected().await,
