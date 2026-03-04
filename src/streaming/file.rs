@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use symphonia::core::audio::{SampleBuffer, SignalSpec};
+use symphonia::core::audio::{AudioBufferRef, SampleBuffer, SignalSpec};
 use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
 use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -184,9 +184,21 @@ impl AudioSource for FileSource {
                     }
 
                     if let Some(ref mut sample_buf) = self.sample_buf {
-                        sample_buf.copy_interleaved_ref(decoded);
-                        self.buffer.reserve(sample_buf.samples().len());
-                        self.buffer.extend_from_slice(sample_buf.samples());
+                        match decoded {
+                            AudioBufferRef::S16(_)
+                            | AudioBufferRef::U8(_)
+                            | AudioBufferRef::F32(_) => {
+                                sample_buf.copy_interleaved_ref(decoded);
+                                self.buffer.reserve(sample_buf.samples().len());
+                                self.buffer.extend_from_slice(sample_buf.samples());
+                            }
+                            _ => {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    "Unsupported sample format",
+                                ));
+                            }
+                        }
                     }
                 }
                 Err(e) => {
