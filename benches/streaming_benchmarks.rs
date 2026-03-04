@@ -1,9 +1,9 @@
-use std::borrow::Cow;
-
 use criterion::{Criterion, criterion_group, criterion_main};
 
 #[cfg(feature = "decoders")]
 fn benchmark_file_source_conversion(c: &mut Criterion) {
+    use std::borrow::Cow;
+
     use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Channels, SampleBuffer, Signal};
     use symphonia::core::conv::IntoSample;
 

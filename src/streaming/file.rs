@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use symphonia::core::audio::SampleBuffer;
+use symphonia::core::audio::{SampleBuffer, SignalSpec};
 use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
 use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -20,6 +20,7 @@ pub struct FileSource {
     buffer_pos: usize,
     audio_format: AudioFormat,
     sample_buf: Option<SampleBuffer<i16>>,
+    sample_spec: Option<SignalSpec>,
 }
 
 impl FileSource {
@@ -96,6 +97,7 @@ impl FileSource {
                 sample_format: SampleFormat::I16,
             },
             sample_buf: None,
+            sample_spec: None,
         })
     }
 }
@@ -163,8 +165,22 @@ impl AudioSource for FileSource {
                     let spec = *decoded.spec();
                     let capacity = decoded.capacity() as u64;
 
-                    if self.sample_buf.is_none() {
+                    // Ensure the sample buffer is allocated and matches the packet's spec and
+                    // capacity.
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        reason = "capacity fits in usize in realistic scenarios"
+                    )]
+                    let required_capacity = capacity as usize * spec.channels.count();
+                    let needs_new_buffer = self.sample_spec != Some(spec)
+                        || self
+                            .sample_buf
+                            .as_ref()
+                            .is_none_or(|buf| buf.capacity() < required_capacity);
+
+                    if needs_new_buffer {
                         self.sample_buf = Some(SampleBuffer::<i16>::new(capacity, spec));
+                        self.sample_spec = Some(spec);
                     }
 
                     if let Some(ref mut sample_buf) = self.sample_buf {
