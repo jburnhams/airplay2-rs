@@ -71,5 +71,9 @@ fn test_srp_invalid_password_fails() {
     let client_m1 = client_verifier.client_proof();
 
     // Verification should fail
-    assert!(server.verify_client(username, salt, client.public_key(), client_m1).is_err());
+    assert!(
+        server
+            .verify_client(username, salt, client.public_key(), client_m1)
+            .is_err()
+    );
 }
