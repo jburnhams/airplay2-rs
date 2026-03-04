@@ -8,12 +8,7 @@ fn test_srp_client_creation() {
     assert!(!client.public_key().is_empty());
 }
 
-// Note: This test is ignored because our SRP implementation uses the HomeKit/AirPlay 2
-// M1 calculation (M1 = H(H(N) ^ H(g), H(username), salt, A, B, K)) which differs from
-// the standard RFC 5054 implementation used by the `srp` crate. These are incompatible.
-// The actual pairing flow is tested in integration tests.
 #[test]
-#[ignore]
 fn test_srp_handshake() {
     // 1. Client setup
     let username = b"Pair-Setup";
@@ -24,40 +19,31 @@ fn test_srp_handshake() {
     // 2. Server setup (simulation)
     let salt = b"randomsalt";
 
-    // Use Client to compute verifier (simulating registration)
-    let helper_client = ::srp::Client::<::srp::groups::G3072, sha2::Sha512>::new();
-    let verifier = helper_client.compute_verifier(username, password, salt);
+    // Use Server to compute verifier (simulating registration)
+    let verifier = SrpServer::compute_verifier(username, password, salt, &SrpParams::RFC5054_3072);
 
-    let server = ::srp::Server::<::srp::groups::G3072, sha2::Sha512>::new();
+    let server = SrpServer::new(&verifier, &SrpParams::RFC5054_3072);
 
     // Server generates ephemeral B
-    let mut b_bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut b_bytes);
-    let server_b_pub = server.compute_public_ephemeral(&b_bytes, &verifier);
+    let server_b_pub = server.public_key();
 
     // 3. Client processes challenge
     let client_verifier = client
-        .process_challenge(username, password, salt, &server_b_pub)
+        .process_challenge(username, password, salt, server_b_pub)
         .expect("Client failed to process challenge");
 
     // 4. Client generates proof
     let client_m1 = client_verifier.client_proof();
 
     // 5. Server verifies client
-    let server_verifier = server
-        .process_reply(&b_bytes, &verifier, client_a, username, salt)
-        .expect("Server failed to process reply");
-
-    server_verifier
-        .verify_client(client_m1)
+    let (server_session, server_m2) = server
+        .verify_client(username, salt, client_a, client_m1)
         .expect("Server failed to verify client");
-    let server_key = server_verifier.key();
-
-    let server_m2 = server_verifier.proof();
+    let server_key = server_session.as_bytes();
 
     // 6. Client verifies server
     let client_key = client_verifier
-        .verify_server(server_m2)
+        .verify_server(&server_m2)
         .expect("Client failed to verify server");
 
     assert_eq!(client_key.as_bytes(), server_key);
@@ -71,26 +57,23 @@ fn test_srp_invalid_password_fails() {
     let salt = b"salt";
 
     // Helper for registration
-    let helper_client = ::srp::Client::<::srp::groups::G3072, sha2::Sha512>::new();
     // Server registered with "wrong" password
-    let verifier = helper_client.compute_verifier(username, b"wrong", salt);
+    let verifier = SrpServer::compute_verifier(username, b"wrong", salt, &SrpParams::RFC5054_3072);
 
-    let server = ::srp::Server::<::srp::groups::G3072, sha2::Sha512>::new();
-    let mut b_bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut b_bytes);
-    let server_b_pub = server.compute_public_ephemeral(&b_bytes, &verifier);
+    let server = SrpServer::new(&verifier, &SrpParams::RFC5054_3072);
+    let server_b_pub = server.public_key();
 
     // Client tries with "correct" password
     let client_verifier = client
-        .process_challenge(username, password, salt, &server_b_pub)
+        .process_challenge(username, password, salt, server_b_pub)
         .unwrap();
 
     let client_m1 = client_verifier.client_proof();
 
-    let server_verifier = server
-        .process_reply(&b_bytes, &verifier, client.public_key(), username, salt)
-        .unwrap();
-
     // Verification should fail
-    assert!(server_verifier.verify_client(client_m1).is_err());
+    assert!(
+        server
+            .verify_client(username, salt, client.public_key(), client_m1)
+            .is_err()
+    );
 }
