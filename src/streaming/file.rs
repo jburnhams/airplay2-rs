@@ -172,11 +172,15 @@ impl AudioSource for FileSource {
                         reason = "capacity fits in usize in realistic scenarios"
                     )]
                     let required_capacity = capacity as usize * spec.channels.count();
+                    #[allow(
+                        clippy::unnecessary_map_or,
+                        reason = "is_none_or requires rust 1.82 which may break MSRV"
+                    )]
                     let needs_new_buffer = self.sample_spec != Some(spec)
                         || self
                             .sample_buf
                             .as_ref()
-                            .is_none_or(|buf| buf.capacity() < required_capacity);
+                            .map_or(true, |buf| buf.capacity() < required_capacity);
 
                     if needs_new_buffer {
                         self.sample_buf = Some(SampleBuffer::<i16>::new(capacity, spec));
