@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use base64::Engine;
-use ed25519_dalek::SigningKey;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
@@ -213,14 +212,7 @@ pub struct Ap2ServiceAdvertiser {
     config: Ap2Config,
     daemon: ServiceDaemon,
     service_info: Arc<RwLock<Option<ServiceInfo>>>,
-    keypair: Ed25519Keypair,
-}
-
-/// Ed25519 keypair for pairing
-struct Ed25519Keypair {
-    public: [u8; 32],
-    #[allow(dead_code)]
-    secret: [u8; 32],
+    public_key: [u8; 32],
 }
 
 impl Ap2ServiceAdvertiser {
@@ -229,37 +221,16 @@ impl Ap2ServiceAdvertiser {
     /// # Errors
     ///
     /// Returns error if mDNS daemon initialization fails.
-    pub fn new(config: Ap2Config) -> Result<Self, AdvertisementError> {
+    pub fn new(config: Ap2Config, public_key: [u8; 32]) -> Result<Self, AdvertisementError> {
         let daemon =
             ServiceDaemon::new().map_err(|e| AdvertisementError::MdnsInit(e.to_string()))?;
-
-        // Generate or load keypair for this device
-        let keypair = Self::generate_keypair(&config.device_id);
 
         Ok(Self {
             config,
             daemon,
             service_info: Arc::new(RwLock::new(None)),
-            keypair,
+            public_key,
         })
-    }
-
-    /// Generate deterministic Ed25519 keypair from device ID
-    fn generate_keypair(device_id: &str) -> Ed25519Keypair {
-        // Derive seed from device ID (deterministic)
-        let mut hasher = Sha256::new();
-        hasher.update(device_id.as_bytes());
-        hasher.update(b"AirPlay2-Ed25519-Seed");
-        let seed: [u8; 32] = hasher.finalize().into();
-
-        // Generate Ed25519 keypair from seed
-        let signing_key = SigningKey::from_bytes(&seed);
-        let verifying_key = signing_key.verifying_key();
-
-        Ed25519Keypair {
-            public: verifying_key.to_bytes(),
-            secret: seed,
-        }
     }
 
     /// Start advertising the service
@@ -268,7 +239,7 @@ impl Ap2ServiceAdvertiser {
     ///
     /// Returns error if service creation or registration fails.
     pub async fn start(&self) -> Result<(), AdvertisementError> {
-        let txt = Ap2TxtRecord::from_config(&self.config, &self.keypair.public);
+        let txt = Ap2TxtRecord::from_config(&self.config, &self.public_key);
 
         // Get local hostname
         let hostname = hostname::get().map_or_else(
@@ -352,7 +323,7 @@ impl Ap2ServiceAdvertiser {
     /// Get the public key for pairing
     #[must_use]
     pub fn public_key(&self) -> &[u8; 32] {
-        &self.keypair.public
+        &self.public_key
     }
 
     /// Get the current configuration

@@ -47,10 +47,11 @@ use crate::protocol::crypto::Ed25519KeyPair;
 /// ```
 pub struct AirPlay2Receiver {
     config: Ap2Config,
-    _identity: Ed25519KeyPair,
+    identity: Ed25519KeyPair,
     state: Arc<RwLock<ReceiverState>>,
     event_tx: broadcast::Sender<ReceiverEvent>,
     shutdown_tx: Option<broadcast::Sender<()>>,
+    advertiser: Option<Ap2ServiceAdvertiser>,
 }
 
 /// Receiver state
@@ -130,10 +131,11 @@ impl AirPlay2Receiver {
 
         Ok(Self {
             config,
-            _identity: identity,
+            identity,
             state: Arc::new(RwLock::new(ReceiverState::Stopped)),
             event_tx,
             shutdown_tx: None,
+            advertiser: None,
         })
     }
 
@@ -161,12 +163,14 @@ impl AirPlay2Receiver {
         self.shutdown_tx = Some(shutdown_tx.clone());
 
         // Start mDNS advertisement
-        let advertiser = Ap2ServiceAdvertiser::new(self.config.clone())
+        let public_key = *self.identity.public_key().as_bytes();
+        let advertiser = Ap2ServiceAdvertiser::new(self.config.clone(), public_key)
             .map_err(|e| ReceiverError::Advertisement(e.to_string()))?;
         advertiser
             .start()
             .await
             .map_err(|e| ReceiverError::Advertisement(e.to_string()))?;
+        self.advertiser = Some(advertiser);
 
         // Start TCP listener
         let listener = TcpListener::bind(format!("0.0.0.0:{}", self.config.server_port))
@@ -229,6 +233,11 @@ impl AirPlay2Receiver {
         }
         *state = ReceiverState::Stopping;
         drop(state);
+
+        // Stop advertisement
+        if let Some(advertiser) = self.advertiser.take() {
+            let _ = advertiser.stop().await;
+        }
 
         // Signal shutdown
         if let Some(tx) = self.shutdown_tx.take() {
