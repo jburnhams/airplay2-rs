@@ -438,6 +438,156 @@ fn test_airplay_packet_sequence_id_bytes() {
     assert_eq!(encoded[3], 0x34);
 }
 
+// ===== transport_specific and logMessageInterval (Apple AirPlay 2 HomePod requirement) =====
+//
+// The HomePod uses transport_specific=1 in ALL its PTP messages.
+// If we send transport_specific=0 (the IEEE 1588 default), the HomePod silently
+// ignores our Delay_Req and never sends Delay_Resp — breaking PTP sync entirely.
+// These tests ensure the fix is permanent and regression-proof.
+
+#[test]
+fn test_default_transport_specific_is_1_for_all_message_types() {
+    // Every message type created via PtpHeader::new() must have transport_specific=1.
+    let source = PtpPortIdentity::new(0xDEAD_BEEF_CAFE_BABE, 1);
+
+    for (msg_type, name) in [
+        (PtpMessageType::Sync, "Sync"),
+        (PtpMessageType::DelayReq, "DelayReq"),
+        (PtpMessageType::FollowUp, "FollowUp"),
+        (PtpMessageType::DelayResp, "DelayResp"),
+        (PtpMessageType::Announce, "Announce"),
+    ] {
+        let header = PtpHeader::new(msg_type, source, 0);
+        assert_eq!(
+            header.transport_specific, 1,
+            "transport_specific must be 1 for {name} (Apple HomePod silently drops ts=0)"
+        );
+
+        // Also validate the encoded wire format: upper nibble of byte[0] must be 1.
+        let encoded = header.encode(10);
+        assert_eq!(
+            encoded[0] >> 4,
+            1,
+            "Byte[0] upper nibble must be 1 for {name}, got 0x{:02X}",
+            encoded[0]
+        );
+    }
+}
+
+#[test]
+fn test_delay_req_wire_byte0_is_0x11() {
+    // DelayReq wire byte[0] = (transport_specific=1 << 4) | (type=0x01) = 0x11.
+    // The HomePod sends 0x19 for DelayResp (ts=1, type=9); our Delay_Req must use
+    // the matching transport_specific=1 or the HomePod filters it out.
+    let source = PtpPortIdentity::new(0, 1);
+    let msg = PtpMessage::delay_req(source, 0, PtpTimestamp::ZERO);
+    let encoded = msg.encode();
+    assert_eq!(
+        encoded[0], 0x11,
+        "Delay_Req byte[0] must be 0x11 (ts=1, type=DelayReq=0x01)"
+    );
+}
+
+#[test]
+fn test_sync_wire_byte0_is_0x10() {
+    // Sync: transport_specific=1, type=0x00 → byte[0] = 0x10.
+    let source = PtpPortIdentity::new(0, 1);
+    let msg = PtpMessage::sync(source, 0, PtpTimestamp::ZERO);
+    let encoded = msg.encode();
+    assert_eq!(
+        encoded[0], 0x10,
+        "Sync byte[0] must be 0x10 (ts=1, type=Sync=0x00)"
+    );
+}
+
+#[test]
+fn test_follow_up_wire_byte0_is_0x18() {
+    // FollowUp: transport_specific=1, type=0x08 → byte[0] = 0x18.
+    let source = PtpPortIdentity::new(0, 1);
+    let msg = PtpMessage::follow_up(source, 0, PtpTimestamp::ZERO);
+    let encoded = msg.encode();
+    assert_eq!(
+        encoded[0], 0x18,
+        "FollowUp byte[0] must be 0x18 (ts=1, type=FollowUp=0x08)"
+    );
+}
+
+#[test]
+fn test_announce_wire_byte0_is_0x1b() {
+    // Announce: transport_specific=1, type=0x0B → byte[0] = 0x1B.
+    // HomePod sends Announce with first byte 0x1B; ours must match.
+    let source = PtpPortIdentity::new(0, 1);
+    let msg = PtpMessage::announce(source, 0, 0, 128, 128);
+    let encoded = msg.encode();
+    assert_eq!(
+        encoded[0], 0x1B,
+        "Announce byte[0] must be 0x1B (ts=1, type=Announce=0x0B)"
+    );
+}
+
+#[test]
+fn test_log_message_interval_delay_req_is_unspecified() {
+    // DelayReq must use logMessageInterval=0x7F (−1 as i8 wraps to 127 = "not applicable")
+    // per IEEE 1588-2008 §13.6.2.5. Using any other value is incorrect.
+    let source = PtpPortIdentity::new(0, 1);
+    let header = PtpHeader::new(PtpMessageType::DelayReq, source, 0);
+    assert_eq!(
+        header.log_message_interval as u8,
+        0x7F,
+        "DelayReq logMessageInterval must be 0x7F (unspecified)"
+    );
+    // Also check encoded wire byte (byte[33]).
+    let encoded = header.encode(10);
+    assert_eq!(encoded[33], 0x7F, "Wire byte[33] must be 0x7F for DelayReq");
+}
+
+#[test]
+fn test_log_message_interval_sync_is_minus3() {
+    // Apple AirPlay 2: HomePod sends Sync at 8 Hz (logMessageInterval = −3 = 2^−3 = 0.125s).
+    let source = PtpPortIdentity::new(0, 1);
+    let header = PtpHeader::new(PtpMessageType::Sync, source, 0);
+    assert_eq!(
+        header.log_message_interval, -3,
+        "Sync logMessageInterval must be −3 (8 Hz, per Apple AirPlay 2 protocol)"
+    );
+    // Check wire encoding: −3 as u8 = 0xFD.
+    let encoded = header.encode(10);
+    assert_eq!(
+        encoded[33], 0xFD,
+        "Wire byte[33] must be 0xFD (−3 as i8) for Sync"
+    );
+}
+
+#[test]
+fn test_log_message_interval_announce_is_minus2() {
+    // Announce at 4 Hz (logMessageInterval = −2 = 2^−2 = 0.25s).
+    let source = PtpPortIdentity::new(0, 1);
+    let header = PtpHeader::new(PtpMessageType::Announce, source, 0);
+    assert_eq!(
+        header.log_message_interval, -2,
+        "Announce logMessageInterval must be −2 (4 Hz)"
+    );
+    // Wire: −2 as u8 = 0xFE.
+    let encoded = header.encode(10);
+    assert_eq!(
+        encoded[33], 0xFE,
+        "Wire byte[33] must be 0xFE (−2 as i8) for Announce"
+    );
+}
+
+#[test]
+fn test_transport_specific_survives_encode_decode_roundtrip() {
+    // After encode + decode, transport_specific must still be 1.
+    let source = PtpPortIdentity::new(0x1234_5678_9ABC_DEF0, 1);
+    let msg = PtpMessage::delay_req(source, 42, PtpTimestamp::new(1_000_000, 500_000_000));
+    let encoded = msg.encode();
+    let decoded = PtpMessage::decode(&encoded).unwrap();
+    assert_eq!(
+        decoded.header.transport_specific, 1,
+        "transport_specific must be 1 after encode/decode roundtrip"
+    );
+}
+
 // ===== PtpParseError =====
 
 #[test]

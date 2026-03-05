@@ -699,6 +699,10 @@ impl ConnectionManager {
         let timing_protocol_str = if use_ptp { "PTP" } else { "NTP" };
         tracing::info!("Using timing protocol: {}", timing_protocol_str);
 
+        // Generate our PTP clock identity early so it can be included in SETUP
+        // timingPeerInfo AND in SETPEERS (required for HomePod to respond to Delay_Req).
+        let ptp_clock_id: u64 = if use_ptp { rand::random() } else { 0 };
+
         if !use_ptp {
             // For NTP/AirPlay 1 devices, send a preliminary Session SETUP
             tracing::debug!("Performing Session SETUP (NTP)...");
@@ -796,6 +800,11 @@ impl ConnectionManager {
             }
             .unwrap_or_else(|| "0.0.0.0".to_string());
 
+            // Include our PTP ClockID so the HomePod can match our Delay_Req
+            // sourcePortIdentity to an authorised peer. Use Integer format to
+            // match the format the HomePod uses for its own ClockID.
+            #[allow(clippy::cast_possible_wrap)]
+            let clock_id_as_i64 = ptp_clock_id as i64;
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
                 .insert(
@@ -807,6 +816,7 @@ impl ConnectionManager {
                         .map(|s| s.client_session_id().to_string())
                         .unwrap_or_default(),
                 )
+                .insert("ClockID", clock_id_as_i64)
                 .build();
 
             DictBuilder::new()
@@ -855,14 +865,13 @@ impl ConnectionManager {
             );
         }
 
-        // Parse Event/Timing ports from Step 1
-        let (server_event_port, server_timing_port) = match crate::protocol::plist::decode(
-            &response_step1.body,
-        ) {
-            Ok(plist) => {
-                tracing::info!("SETUP Step 1 plist: {:#?}", plist);
-                if let Some(dict) = plist.as_dict() {
-                    let ep = dict
+        // Parse Event/Timing ports and device ClockID from Step 1
+        let (server_event_port, server_timing_port, _device_clock_id) =
+            match crate::protocol::plist::decode(&response_step1.body) {
+                Ok(plist) => {
+                    tracing::info!("SETUP Step 1 plist: {:#?}", plist);
+                    if let Some(dict) = plist.as_dict() {
+                        let ep = dict
                             .get("eventPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
@@ -875,7 +884,7 @@ impl ConnectionManager {
                                     i as u16
                                 }
                             });
-                    let tp = dict
+                        let tp = dict
                             .get("timingPort")
                             .and_then(crate::protocol::plist::PlistValue::as_i64)
                             .map(|i| {
@@ -888,25 +897,36 @@ impl ConnectionManager {
                                     i as u16
                                 }
                             });
-                    tracing::info!(
-                        "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
-                        ep,
-                        tp
-                    );
-                    // Also log timingPeerInfo from device
-                    if let Some(tpi) = dict.get("timingPeerInfo") {
-                        tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                        tracing::info!(
+                            "SETUP Step 1 ports: eventPort={:?}, timingPort={:?}",
+                            ep,
+                            tp
+                        );
+                        // Extract device ClockID from timingPeerInfo.
+                        // The HomePod encodes ClockID as an integer (8-byte signed),
+                        // NOT as a Data blob — use as_u64() to retrieve it.
+                        let dev_clock_id: Option<u64> = dict
+                            .get("timingPeerInfo")
+                            .and_then(|tpi| tpi.as_dict())
+                            .and_then(|tpi_dict| tpi_dict.get("ClockID"))
+                            .and_then(crate::protocol::plist::PlistValue::as_u64);
+                        if let Some(tpi) = dict.get("timingPeerInfo") {
+                            tracing::info!("Device timingPeerInfo: {:#?}", tpi);
+                        }
+                        tracing::info!(
+                            "Device ClockID: {:?}",
+                            dev_clock_id.map(|id| format!("0x{id:016X}"))
+                        );
+                        (ep, tp, dev_clock_id)
+                    } else {
+                        (None, None, None)
                     }
-                    (ep, tp)
-                } else {
-                    (None, None)
                 }
-            }
-            Err(e) => {
-                tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
-                (None, None)
-            }
-        };
+                Err(e) => {
+                    tracing::warn!("Failed to decode SETUP Step 1 plist: {}", e);
+                    (None, None, None)
+                }
+            };
 
         // 5. Stream Setup (SETUP Step 2: Audio/Control)
         tracing::debug!("Performing Stream SETUP (Step 2)...");
@@ -1139,12 +1159,16 @@ impl ConnectionManager {
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
-                // Send SETPEERS to tell device about PTP timing peers
-                if let Err(e) = self.send_set_peers(device_ip).await {
+                // Send SETPEERS to register our IP as a timing peer.
+                // Our ClockID is already communicated via SETUP Step 1 timingPeerInfo.
+                if let Err(e) = self
+                    .send_set_peers(device_ip, ptp_clock_id, None)
+                    .await
+                {
                     tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
                 }
 
-                self.start_ptp_master(&time_sock, device_ip, server_time_port)
+                self.start_ptp_master(&time_sock, device_ip, server_time_port, ptp_clock_id)
                     .await;
             }
 
@@ -1417,8 +1441,17 @@ impl ConnectionManager {
     ///
     /// Returns error if RTSP request fails
     /// Send SETPEERS to tell the device about PTP timing peers.
-    /// This is required for `AirPlay` 2 PTP timing.
-    async fn send_set_peers(&self, device_ip: std::net::IpAddr) -> Result<(), AirPlayError> {
+    ///
+    /// Uses the simple IP-address array format which is universally accepted by
+    /// AirPlay 2 devices. Our PTP clock identity is communicated to the device
+    /// through the `ClockID` field in the SETUP Step 1 `timingPeerInfo` dict
+    /// (not here), so the device can match incoming `Delay_Req` messages to us.
+    async fn send_set_peers(
+        &self,
+        device_ip: std::net::IpAddr,
+        our_clock_id: u64,
+        _device_clock_id: Option<&[u8]>,
+    ) -> Result<(), AirPlayError> {
         use crate::protocol::plist::PlistValue;
 
         // Get our local IP from the connected stream
@@ -1432,19 +1465,25 @@ impl ConnectionManager {
         }
         .unwrap_or_else(|| "0.0.0.0".to_string());
 
-        // Build peer list: array of IP address strings [our_ip, device_ip]
+        // AirPlay 2 SETPEERS: simple IP-string array is the accepted format.
+        // The HomePod rejects dict-based peer lists (causes disconnect).
         let peer_list = PlistValue::Array(vec![
             PlistValue::String(local_ip.clone()),
             PlistValue::String(device_ip.to_string()),
         ]);
+
+        tracing::info!(
+            "Sending SETPEERS: our_ip={} (clock_id=0x{:016X}), device_ip={}",
+            local_ip,
+            our_clock_id,
+            device_ip,
+        );
 
         let body =
             crate::protocol::plist::encode(&peer_list).map_err(|e| AirPlayError::RtspError {
                 message: format!("Failed to encode SETPEERS plist: {e}"),
                 status_code: None,
             })?;
-
-        tracing::info!("Sending SETPEERS with peers: [{}, {}]", local_ip, device_ip);
 
         let request = {
             let mut session_guard = self.rtsp_session.lock().await;
@@ -1518,20 +1557,20 @@ impl ConnectionManager {
         rtp_timestamp: u32,
         sample_rate: u32,
     ) -> Result<(), AirPlayError> {
-        let (ptp_time, clock_id) = {
+        let (ptp_nanos, clock_id) = {
             let clock_guard = self.ptp_clock.lock().await;
             if let Some(clock) = clock_guard.as_ref() {
                 let clock = clock.read().await;
-                (
-                    crate::protocol::ptp::timestamp::PtpTimestamp::now(),
-                    clock.clock_id(),
-                )
+                let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+                // Convert our local time to the grandmaster (device) clock domain:
+                // device_time = local_time - offset  (offset = slave - master)
+                let device_nanos = local_now.to_nanos() - clock.offset_nanos();
+                let ptp_nanos = u64::try_from(device_nanos.max(0)).unwrap_or(0);
+                (ptp_nanos, clock.clock_id())
             } else {
                 return Ok(()); // PTP not active, skip
             }
         };
-
-        let ptp_nanos = u64::try_from(ptp_time.to_nanos()).unwrap_or(0);
 
         let packet = crate::protocol::rtp::ControlPacket::TimeAnnouncePtp {
             rtp_timestamp,
@@ -1783,6 +1822,25 @@ impl ConnectionManager {
         }
     }
 
+    /// Bind a UDP socket to a specific port with `SO_REUSEADDR` so we can share
+    /// the port with other processes (e.g. a previous run or Windows Time service).
+    ///
+    /// Uses the `socket2` crate to set socket options before binding.
+    async fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
+        use socket2::{Domain, Protocol, Socket, Type};
+        use std::net::SocketAddr;
+
+        let addr: SocketAddr = format!("0.0.0.0:{port}").parse().unwrap();
+        let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+        // Allow binding even if another process already holds the port.
+        sock.set_reuse_address(true)?;
+        // Non-blocking is required for tokio.
+        sock.set_nonblocking(true)?;
+        sock.bind(&addr.into())?;
+        let std_sock: std::net::UdpSocket = sock.into();
+        UdpSocket::from_std(std_sock)
+    }
+
     /// Try to bind a UDP socket to an ephemeral port, trying multiple addresses.
     ///
     /// This helper attempts to bind to:
@@ -1824,24 +1882,31 @@ impl ConnectionManager {
         _timing_socket: &UdpSocket,
         device_ip: std::net::IpAddr,
         _server_timing_port: u16,
+        clock_id: u64,
     ) {
         use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT};
         use crate::protocol::ptp::node::PtpNode;
 
-        let clock_id: u64 = rand::random();
+        // clock_id is now passed in (generated before SETUP/SETPEERS so it matches)
         let clock = create_shared_clock(clock_id, PtpRole::Master);
 
-        // Bind to standard PTP event port (319) — privileged, requires admin
-        let ptp_event_socket = match UdpSocket::bind(("0.0.0.0", PTP_EVENT_PORT)).await {
+        // Bind to standard PTP event port (319).
+        // Use SO_REUSEADDR so we can bind even when another process (e.g. Windows Time
+        // or a previous run) already holds the port.  This is safe here because we are
+        // the only consumer of PTP in this application.
+        let ptp_event_socket = match Self::bind_ptp_port(PTP_EVENT_PORT).await {
             Ok(sock) => {
                 tracing::info!("PTP event socket bound to port {}", PTP_EVENT_PORT);
                 sock
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. (Run as root for standard PTP)",
+                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. \
+                     NOTE: Delay_Resp will NOT be received — PTP will not sync! \
+                     Stop any process using port {} (e.g. Windows Time service).",
                     PTP_EVENT_PORT,
-                    e
+                    e,
+                    PTP_EVENT_PORT
                 );
                 match Self::bind_ephemeral_socket().await {
                     Ok(sock) => sock,
@@ -1853,8 +1918,8 @@ impl ConnectionManager {
             }
         };
 
-        // Bind to standard PTP general port (320) — privileged, requires admin
-        let ptp_general_socket = match UdpSocket::bind(("0.0.0.0", PTP_GENERAL_PORT)).await {
+        // Bind to standard PTP general port (320).
+        let ptp_general_socket = match Self::bind_ptp_port(PTP_GENERAL_PORT).await {
             Ok(sock) => {
                 tracing::info!("PTP general socket bound to port {}", PTP_GENERAL_PORT);
                 Some(Arc::new(sock))
@@ -1879,12 +1944,16 @@ impl ConnectionManager {
 
         let config = PtpNodeConfig {
             clock_id,
-            priority1: 128, // Default priority; HomePod sends 248 (lower priority)
-            priority2: 128,
+            // AirPlay 2 devices (HomePod/Apple TV) act as PTP grandmaster with priority1=248.
+            // In IEEE 1588 BMCA, the clock with the LOWEST priority1 wins (becomes grandmaster).
+            // We must use priority1=255 (worst possible) so the AirPlay device always wins
+            // and we correctly act as slave, enabling clock synchronization via Delay_Req.
+            priority1: 255,
+            priority2: 255,
             sync_interval: std::time::Duration::from_secs(1),
-            delay_req_interval: std::time::Duration::from_secs(1),
+            delay_req_interval: std::time::Duration::from_millis(200),
             announce_interval: std::time::Duration::from_secs(2),
-            recv_buf_size: 256,
+            recv_buf_size: 512,
             use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP (44-byte messages)
         };
 

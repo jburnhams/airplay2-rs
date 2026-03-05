@@ -84,6 +84,9 @@ struct RemoteMaster {
     last_announce: tokio::time::Instant,
 }
 
+/// Timeout after which an unanswered Delay_Req is considered lost.
+const DELAY_REQ_TIMEOUT: Duration = Duration::from_millis(1000);
+
 /// Unified PTP node supporting bidirectional synchronization.
 ///
 /// Runs a single event loop that handles both master and slave message
@@ -116,6 +119,8 @@ pub struct PtpNode {
     pending_t2: Option<PtpTimestamp>,
     /// Pending Delay_Req T3 (slave role).
     pending_t3: Option<PtpTimestamp>,
+    /// When the most recent Delay_Req was sent (for timeout/retry).
+    delay_req_sent_at: Option<tokio::time::Instant>,
     /// The current remote master we are slaving to (if any).
     remote_master: Option<RemoteMaster>,
     /// Announce timeout: if no Announce from the remote master within
@@ -148,6 +153,7 @@ impl PtpNode {
             pending_t1: None,
             pending_t2: None,
             pending_t3: None,
+            delay_req_sent_at: None,
             remote_master: None,
             announce_timeout: Duration::from_secs(6),
         }
@@ -213,6 +219,11 @@ impl PtpNode {
                 result = self.event_socket.recv_from(&mut event_buf) => {
                     match result {
                         Ok((len, src)) => {
+                            tracing::info!(
+                                "PTP event RX: {} bytes from {} (first byte: {:02X})",
+                                len, src,
+                                event_buf.first().copied().unwrap_or(0)
+                            );
                             self.handle_event_packet(&event_buf[..len], src).await?;
                         }
                         Err(e) if Self::is_transient_udp_error(&e) => {
@@ -233,7 +244,12 @@ impl PtpNode {
                 } => {
                     match result {
                         Ok((len, src)) => {
-                            self.handle_general_packet(&general_buf[..len], src).await;
+                            tracing::info!(
+                                "PTP general RX: {} bytes from {} (first byte: {:02X})",
+                                len, src,
+                                general_buf.first().copied().unwrap_or(0)
+                            );
+                            self.handle_general_packet(&general_buf[..len], src).await?;
                         }
                         Err(e) if Self::is_transient_udp_error(&e) => {
                             tracing::debug!("PTP node: transient general socket error: {}", e);
@@ -249,16 +265,27 @@ impl PtpNode {
                     }
                 }
 
-                // Periodic Delay_Req: send when we have a pending Sync (T1/T2)
-                // but haven't yet sent Delay_Req (no pending T3).
+                // Periodic Delay_Req: retry if we have T1/T2 but no Delay_Resp yet.
                 // In BMCA mode this only fires when role==Slave; in AirPlay
                 // compact format (no BMCA) we always respond to received Syncs.
                 _ = delay_req_timer.tick() => {
-                    let should_send = self.pending_t1.is_some()
-                        && self.pending_t3.is_none()
-                        && (self.role == EffectiveRole::Slave || self.config.use_airplay_format);
-                    if should_send {
-                        self.send_delay_req().await?;
+                    let in_slave_mode = self.role == EffectiveRole::Slave
+                        || self.config.use_airplay_format;
+                    if in_slave_mode && self.pending_t1.is_some() {
+                        // If a previous Delay_Req went unanswered, clear the stale
+                        // T3 so the retry can proceed.
+                        let timed_out = self.delay_req_sent_at
+                            .map_or(false, |t| t.elapsed() > DELAY_REQ_TIMEOUT);
+                        if timed_out {
+                            tracing::debug!(
+                                "PTP: Delay_Req timed out (no Delay_Resp), clearing T3 for retry"
+                            );
+                            self.pending_t3 = None;
+                            self.delay_req_sent_at = None;
+                        }
+                        if self.pending_t3.is_none() {
+                            self.send_delay_req().await?;
+                        }
                     }
                 }
 
@@ -360,9 +387,10 @@ impl PtpNode {
                 PtpMessageBody::Sync { origin_timestamp } => {
                     let two_step = msg.header.flags & 0x0200 != 0;
                     tracing::debug!(
-                        "PTP node: Received Sync from {} seq={}, two_step={}, T1={}",
+                        "PTP node: Received Sync from {} seq={} domain={} two_step={} T1={}",
                         src,
                         msg.header.sequence_id,
+                        msg.header.domain_number,
                         two_step,
                         origin_timestamp
                     );
@@ -394,10 +422,11 @@ impl PtpNode {
                     receive_timestamp, ..
                 } => {
                     // Delay_Resp sometimes arrives on event port.
-                    tracing::debug!(
-                        "PTP node: DelayResp (event port) seq={}, T4={}",
+                    tracing::info!(
+                        "PTP node: DelayResp (event port) seq={} T4={} from {}",
                         msg.header.sequence_id,
-                        receive_timestamp
+                        receive_timestamp,
+                        src
                     );
                     self.process_delay_resp(*receive_timestamp).await;
                 }
@@ -423,9 +452,13 @@ impl PtpNode {
     }
 
     /// Handle incoming packet on general port (320).
-    async fn handle_general_packet(&mut self, data: &[u8], src: SocketAddr) {
+    async fn handle_general_packet(
+        &mut self,
+        data: &[u8],
+        src: SocketAddr,
+    ) -> Result<(), std::io::Error> {
         if self.config.use_airplay_format {
-            return;
+            return Ok(());
         }
 
         match PtpMessage::decode(data) {
@@ -440,12 +473,20 @@ impl PtpNode {
                         src
                     );
                     self.pending_t1 = Some(*precise_origin_timestamp);
+                    // As slave: send Delay_Req immediately after Follow_Up finalises T1.
+                    // Always clear stale T3 from a previous unanswered Delay_Req so we
+                    // can issue a fresh one for this Sync cycle.
+                    if self.role == EffectiveRole::Slave && self.pending_t2.is_some() {
+                        self.pending_t3 = None;
+                        self.delay_req_sent_at = None;
+                        self.send_delay_req().await?;
+                    }
                 }
                 PtpMessageBody::DelayResp {
                     receive_timestamp, ..
                 } => {
-                    tracing::debug!(
-                        "PTP node: DelayResp (general port) seq={}, T4={}, from {}",
+                    tracing::info!(
+                        "PTP node: DelayResp (general port) seq={} T4={} from {}",
                         msg.header.sequence_id,
                         receive_timestamp,
                         src
@@ -473,7 +514,16 @@ impl PtpNode {
                     );
                 }
                 PtpMessageBody::Signaling => {
-                    tracing::debug!("PTP node: Signaling from {}", src);
+                    // Log raw bytes after the 34-byte header to decode TLVs manually.
+                    let body = &data[34..];
+                    // The first 10 bytes of Signaling body are targetPortIdentity.
+                    let hex: Vec<String> = body.iter().map(|b| format!("{b:02X}")).collect();
+                    tracing::info!(
+                        "PTP node: Signaling from {} ({} body bytes): [{}]",
+                        src,
+                        body.len(),
+                        hex.join(" ")
+                    );
                 }
                 _ => {
                     tracing::debug!(
@@ -493,6 +543,7 @@ impl PtpNode {
                 );
             }
         }
+        Ok(())
     }
 
     /// Process a Delay_Resp (from either event or general port) to update the clock.
@@ -504,13 +555,21 @@ impl PtpNode {
             let mut clock = self.clock.write().await;
             clock.process_timing(t1, t2_saved, t3, t4);
             tracing::info!(
-                "PTP node: Clock synced (offset={:.3}ms, measurements={})",
+                "PTP node: Clock synced! offset={:.3}ms, measurements={}",
                 clock.offset_millis(),
                 clock.measurement_count()
             );
             self.pending_t1 = None;
             self.pending_t2 = None;
             self.pending_t3 = None;
+            self.delay_req_sent_at = None;
+        } else {
+            tracing::debug!(
+                "PTP node: Delay_Resp received but no pending T1/T2/T3 (t1={:?}, t2={:?}, t3={:?})",
+                self.pending_t1.is_some(),
+                self.pending_t2.is_some(),
+                self.pending_t3.is_some()
+            );
         }
     }
 
@@ -602,6 +661,7 @@ impl PtpNode {
                 self.pending_t1 = None;
                 self.pending_t2 = None;
                 self.pending_t3 = None;
+                self.delay_req_sent_at = None;
             }
         }
     }
@@ -696,12 +756,14 @@ impl PtpNode {
             msg.encode()
         };
 
-        tracing::debug!(
-            "PTP node: Sending Delay_Req seq={} to {}",
+        tracing::info!(
+            "PTP node: Sending Delay_Req seq={} to {} (T3={})",
             self.delay_req_sequence,
-            dest
+            dest,
+            t3
         );
         self.event_socket.send_to(&data, dest).await?;
+        self.delay_req_sent_at = Some(tokio::time::Instant::now());
         self.delay_req_sequence = self.delay_req_sequence.wrapping_add(1);
         Ok(())
     }
@@ -769,4 +831,295 @@ pub fn create_client_node(
         ..Default::default()
     };
     PtpNode::new(event_socket, general_socket, clock, config)
+}
+
+/// Unit tests for the BMCA logic (compare_priority, process_announce,
+/// check_announce_timeout). These tests live inside the module so they
+/// can access private fields and methods without making them pub.
+#[cfg(test)]
+mod tests_unit {
+    use std::net::SocketAddr;
+    use std::str::FromStr;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use super::{EffectiveRole, PtpNode, PtpNodeConfig};
+    use crate::protocol::ptp::clock::PtpRole;
+    use crate::protocol::ptp::handler::create_shared_clock;
+
+    /// Build a minimal PtpNode bound to an ephemeral loopback port.
+    async fn make_node(our_priority1: u8, our_clock_id: u64) -> PtpNode {
+        let sock = Arc::new(
+            tokio::net::UdpSocket::bind("127.0.0.1:0")
+                .await
+                .unwrap(),
+        );
+        let clock = create_shared_clock(our_clock_id, PtpRole::Master);
+        let config = PtpNodeConfig {
+            clock_id: our_clock_id,
+            priority1: our_priority1,
+            priority2: 128,
+            ..Default::default()
+        };
+        PtpNode::new(sock, None, clock, config)
+    }
+
+    // ── compare_priority ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_compare_priority_remote_wins_lower_p1() {
+        // We have p1=255 (worst possible), remote has p1=128 → remote is better.
+        let node = make_node(255, 0xAAAA).await;
+        assert!(
+            node.compare_priority(128, 128, 0xBBBB),
+            "Remote with lower priority1 must win"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compare_priority_we_win_with_lower_p1() {
+        // We have p1=64, remote has p1=128 → we are better.
+        let node = make_node(64, 0xAAAA).await;
+        assert!(
+            !node.compare_priority(128, 128, 0xBBBB),
+            "Remote with higher priority1 must NOT win"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compare_priority_equal_p1_remote_wins_lower_p2() {
+        // Both p1=128. Remote p2=64 < our p2=128 → remote wins on priority2.
+        let node = make_node(128, 0xAAAA).await;
+        assert!(
+            node.compare_priority(128, 64, 0xBBBB),
+            "Remote with lower priority2 (tie on p1) must win"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compare_priority_equal_p1_we_win_higher_remote_p2() {
+        // Both p1=128. Remote p2=200 > our p2=128 → we win.
+        let node = make_node(128, 0xAAAA).await;
+        assert!(
+            !node.compare_priority(128, 200, 0xBBBB),
+            "Remote with higher priority2 (tie on p1) must NOT win"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compare_priority_tiebreak_on_lower_clock_id() {
+        // Both p1=128, p2=128. Remote clock_id=0x0001 < ours=0xAAAA → remote wins.
+        let node = make_node(128, 0xAAAA).await;
+        assert!(
+            node.compare_priority(128, 128, 0x0001),
+            "Remote with lower clock_id (tie on both priorities) must win"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compare_priority_tiebreak_on_higher_clock_id_we_win() {
+        // Both p1=128, p2=128. Remote clock_id=0xFFFF > ours=0xAAAA → we win.
+        let node = make_node(128, 0xAAAA).await;
+        assert!(
+            !node.compare_priority(128, 128, 0xFFFF),
+            "Remote with higher clock_id (tie on both priorities) must NOT win"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_compare_priority_identical_parameters_is_false() {
+        // If remote and local have the exact same values, remote does not win
+        // (since `remote_clock_id < self.config.clock_id` is false when equal).
+        let node = make_node(128, 0xAAAA).await;
+        assert!(
+            !node.compare_priority(128, 128, 0xAAAA),
+            "Identical parameters must not trigger a role switch"
+        );
+    }
+
+    // ── process_announce ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_process_announce_switches_to_slave_when_remote_better() {
+        let mut node = make_node(255, 0xAAAA).await;
+        assert_eq!(node.role, EffectiveRole::Master);
+
+        let src = SocketAddr::from_str("192.168.1.100:320").unwrap();
+        // Remote p1=128 < our p1=255 → remote is better.
+        node.process_announce(0xBBBB_CCCC_DDDD_EEEE, 128, 128, src);
+
+        assert_eq!(
+            node.role,
+            EffectiveRole::Slave,
+            "Should switch to Slave when a better-priority Announce arrives"
+        );
+        assert!(
+            node.remote_master.is_some(),
+            "remote_master must be populated after switching to Slave"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_announce_stays_master_when_remote_worse() {
+        let mut node = make_node(64, 0xAAAA).await;
+        assert_eq!(node.role, EffectiveRole::Master);
+
+        let src = SocketAddr::from_str("192.168.1.100:320").unwrap();
+        // Remote p1=128 > our p1=64 → we are better, stay Master.
+        node.process_announce(0xBBBB_CCCC_DDDD_EEEE, 128, 128, src);
+
+        assert_eq!(
+            node.role,
+            EffectiveRole::Master,
+            "Should stay Master when we have better priority"
+        );
+        assert!(
+            node.remote_master.is_none(),
+            "remote_master must remain None when we stay Master"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_announce_ignores_own_clock_id() {
+        // Even if the priority would be better, an Announce with our own clock_id
+        // (e.g. a reflected packet) must be silently dropped.
+        let our_clock_id = 0xAAAA_BBBB_CCCC_DDDD;
+        let mut node = make_node(255, our_clock_id).await;
+        let src = SocketAddr::from_str("192.168.1.100:320").unwrap();
+
+        node.process_announce(our_clock_id, 1, 1, src); // perfect priority but our ID
+
+        assert_eq!(
+            node.role,
+            EffectiveRole::Master,
+            "Own clock_id in Announce must be ignored"
+        );
+        assert!(
+            node.remote_master.is_none(),
+            "remote_master must not be set after ignoring own Announce"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_announce_updates_last_announce_when_staying_master() {
+        // When we receive an Announce from a known (but worse) remote, the
+        // remote_master record's last_announce must be refreshed (if it exists).
+        let mut node = make_node(64, 0xAAAA).await;
+
+        // First announce that doesn't switch us (remote is worse).
+        let src = SocketAddr::from_str("192.168.1.100:320").unwrap();
+        node.process_announce(0xBBBB, 128, 128, src);
+        // Still master, no remote_master entry.
+        assert!(node.remote_master.is_none());
+
+        // Now manually install a remote_master so we start as Slave.
+        node.role = EffectiveRole::Slave;
+        node.remote_master = Some(super::RemoteMaster {
+            grandmaster_identity: 0xBBBB,
+            priority1: 128,
+            priority2: 128,
+            event_addr: SocketAddr::from_str("192.168.1.100:319").unwrap(),
+            general_addr: src,
+            last_announce: tokio::time::Instant::now(),
+        });
+        // Tweak our priority to make the remote worse so this Announce won't re-trigger slave.
+        node.config.priority1 = 64;
+
+        // Re-process same remote with same clock_id while we have it tracked.
+        node.process_announce(0xBBBB, 128, 128, src);
+        // remote_master entry is still there (we refreshed it).
+        assert!(
+            node.remote_master.is_some(),
+            "remote_master entry must be preserved when remote sends a new Announce"
+        );
+    }
+
+    // ── check_announce_timeout ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_announce_timeout_reverts_to_master() {
+        let mut node = make_node(255, 0xAAAA).await;
+
+        // First become Slave via Announce.
+        let src = SocketAddr::from_str("192.168.1.100:320").unwrap();
+        node.process_announce(0xBBBB, 128, 128, src);
+        assert_eq!(node.role, EffectiveRole::Slave);
+
+        // Set a very short timeout so it triggers immediately.
+        node.announce_timeout = Duration::from_nanos(1);
+
+        // Sleep a tiny amount so last_announce.elapsed() > 1ns.
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        node.check_announce_timeout();
+
+        assert_eq!(
+            node.role,
+            EffectiveRole::Master,
+            "Must revert to Master after announce timeout"
+        );
+        assert!(
+            node.remote_master.is_none(),
+            "remote_master must be cleared after timeout"
+        );
+        // All pending slave state must be cleared.
+        assert!(node.pending_t1.is_none(), "pending_t1 must be cleared");
+        assert!(node.pending_t2.is_none(), "pending_t2 must be cleared");
+        assert!(node.pending_t3.is_none(), "pending_t3 must be cleared");
+        assert!(
+            node.delay_req_sent_at.is_none(),
+            "delay_req_sent_at must be cleared"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_announce_timeout_does_not_fire_when_recent() {
+        let mut node = make_node(255, 0xAAAA).await;
+
+        let src = SocketAddr::from_str("192.168.1.100:320").unwrap();
+        node.process_announce(0xBBBB, 128, 128, src);
+        assert_eq!(node.role, EffectiveRole::Slave);
+
+        // Very long timeout — must NOT fire right after the Announce.
+        node.announce_timeout = Duration::from_secs(60);
+        node.check_announce_timeout();
+
+        assert_eq!(
+            node.role,
+            EffectiveRole::Slave,
+            "Must stay Slave when announce has not timed out"
+        );
+        assert!(
+            node.remote_master.is_some(),
+            "remote_master must remain set when announce is recent"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_announce_timeout_is_no_op_when_no_remote_master() {
+        // Already Master with no remote_master — calling check_announce_timeout
+        // must be a no-op and must not panic.
+        let mut node = make_node(128, 0xAAAA).await;
+        assert_eq!(node.role, EffectiveRole::Master);
+        assert!(node.remote_master.is_none());
+
+        node.announce_timeout = Duration::from_nanos(1);
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        node.check_announce_timeout(); // must not panic
+
+        assert_eq!(node.role, EffectiveRole::Master);
+    }
+
+    // ── Delay_Req timeout / retry (DELAY_REQ_TIMEOUT) ────────────────────────
+
+    /// Verify the DELAY_REQ_TIMEOUT constant matches the expected 1-second value.
+    /// This value was tuned to balance responsiveness and avoiding spurious retries.
+    #[test]
+    fn test_delay_req_timeout_constant_is_one_second() {
+        assert_eq!(
+            super::DELAY_REQ_TIMEOUT,
+            Duration::from_millis(1000),
+            "DELAY_REQ_TIMEOUT must be 1 second"
+        );
+    }
 }

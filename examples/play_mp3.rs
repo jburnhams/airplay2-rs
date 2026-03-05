@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up logging
     if std::env::var("RUST_LOG").is_err() {
         unsafe {
-            std::env::set_var("RUST_LOG", "debug");
+            std::env::set_var("RUST_LOG", "info");
         }
     }
     tracing_subscriber::fmt::init();
@@ -65,80 +65,101 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // --- PTP Sync Verification ---
+    println!("\n=== Checking PTP timing status ===");
+    let client = player.client().clone();
+    if client.is_ptp_active().await {
+        println!("PTP is active. Waiting for clock synchronization...");
+        let mut ptp_synced = false;
+        for attempt in 0..20 {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            if let Some((synced, offset_ms, measurements)) = client.ptp_status().await {
+                println!(
+                    "  PTP [{}/20]: synced={}, offset={:.3}ms, measurements={}",
+                    attempt + 1,
+                    synced,
+                    offset_ms,
+                    measurements
+                );
+                if synced {
+                    println!(
+                        "✓ PTP synchronized! offset={:.3}ms after {} measurements",
+                        offset_ms, measurements
+                    );
+                    ptp_synced = true;
+                    break;
+                }
+            } else {
+                println!("  PTP [{}/20]: no status available yet", attempt + 1);
+            }
+        }
+        if !ptp_synced {
+            eprintln!("✗ WARNING: PTP did not synchronize within 5 seconds!");
+            eprintln!("  Audio may not play correctly without clock sync.");
+        }
+    } else {
+        println!("PTP is not active (device may use NTP or another timing method).");
+    }
+    println!("=================================\n");
+
     let file_path = "Eels - 01 - Susan's House.mp3";
     println!("Playing file: {}", file_path);
 
     // Stop previous playback if any
     let _ = player.stop().await;
 
-    // Play file (this blocks until playback is finished or error)
-    // Note: stream_audio currently blocks the caller in the loop.
-    // In a real player, we might want to spawn this.
-    // But for this example, blocking is fine.
-
-    // We need to use a separate task to handle Ctrl+C or user input if we want to stop early?
-    // Actually stream_audio returns when EOF.
-
     #[cfg(feature = "decoders")]
     {
         println!("Starting playback...");
-        println!(
-            "Note: Setting volume to 25% (-12dB) after playback starts to work around HomePod 455 error."
-        );
 
-        // Clone client for volume control (AirPlayPlayer is not Clone, but Client is)
-        let volume_client = player.client().clone();
+        // Clone client for monitoring (AirPlayPlayer is not Clone, but Client is)
+        let monitor_client = player.client().clone();
 
         // Spawn playback in a separate task
-        // We move player into the task
         let play_task = tokio::spawn(async move { player.play_file(file_path).await });
 
-        // Wait for playback to likely have started (RTSP negotiation takes ~1-2s)
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        // Wait for playback to start
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
-        // Attempt to set volume with retries
-        println!("Setting volume...");
-        let mut volume_set = false;
-        for i in 0..5 {
-            match volume_client.set_volume(0.25).await {
-                Ok(_) => {
-                    println!("Volume set successfully.");
-                    volume_set = true;
-                    break;
-                }
-                Err(e) => {
-                    eprintln!("Failed to set volume (attempt {}/5): {}", i + 1, e);
-                    if i < 4 {
-                        tokio::time::sleep(Duration::from_secs(2)).await;
-                    }
-                }
+        // --- Verify playback is active ---
+        println!("\n=== Verifying playback state ===");
+        // Check local state
+        let state = monitor_client.playback_state().await;
+        println!(
+            "Local playback state: playing={}, position={:.1}s",
+            state.is_playing, state.position_secs
+        );
+
+        // Check PTP sync status during playback
+        if let Some((synced, offset_ms, measurements)) = monitor_client.ptp_status().await {
+            println!(
+                "PTP during playback: synced={}, offset={:.3}ms, measurements={}",
+                synced, offset_ms, measurements
+            );
+            if !synced {
+                eprintln!("✗ WARNING: PTP still not synchronized during playback!");
+            } else {
+                println!("✓ PTP is synchronized during playback.");
             }
         }
 
-        if !volume_set {
-            eprintln!(
-                "Warning: Could not set volume after multiple attempts. Audio might be silent."
-            );
-        }
-
-        // Query playback info to confirm device state difference (Debug only)
-        /*
+        // Try to get playback info from device
         println!("Querying device playback status...");
-        match volume_client.get_playback_info().await {
-            Ok(info_bytes) => {
-                println!("Playback Info Response ({} bytes):", info_bytes.len());
-                // Try to parse as string, otherwise hex
+        match monitor_client.get_playback_info().await {
+            Ok(info_bytes) if !info_bytes.is_empty() => {
+                println!("Device playback info ({} bytes):", info_bytes.len());
                 if let Ok(s) = String::from_utf8(info_bytes.clone()) {
                     println!("{}", s.trim());
                 } else {
-                    // Truncate long binary data for display
                     let display_len = std::cmp::min(info_bytes.len(), 64);
-                    println!("{:02X?}...", &info_bytes[..display_len]);
+                    println!("(binary) {:02X?}...", &info_bytes[..display_len]);
                 }
             }
-            Err(e) => eprintln!("Failed to get playback info: {}", e),
+            Ok(_) => println!("Device returned empty playback info."),
+            Err(e) => println!("Could not get device playback info: {}", e),
         }
-        */
+
+        println!("================================\n");
 
         // Wait for playback to finish
         match play_task.await {

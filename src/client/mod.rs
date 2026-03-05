@@ -534,6 +534,28 @@ impl AirPlayClient {
             .await
     }
 
+    /// Check if PTP timing is active for the current connection.
+    pub async fn is_ptp_active(&self) -> bool {
+        self.connection.is_ptp_active().await
+    }
+
+    /// Get PTP clock synchronization status.
+    ///
+    /// Returns `None` if PTP is not active.
+    /// Returns `Some((is_synchronized, offset_ms, measurement_count))` otherwise.
+    pub async fn ptp_status(&self) -> Option<(bool, f64, usize)> {
+        if let Some(clock) = self.connection.ptp_clock().await {
+            let clock = clock.read().await;
+            Some((
+                clock.is_synchronized(),
+                clock.offset_millis(),
+                clock.measurement_count(),
+            ))
+        } else {
+            None
+        }
+    }
+
     /// Stream raw PCM audio from a source
     ///
     /// # Errors
