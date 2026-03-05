@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::crypto::{Ed25519KeyPair, X25519KeyPair};
 use crate::protocol::pairing::tlv::{TlvEncoder, TlvType};
 use crate::protocol::plist::PlistValue;

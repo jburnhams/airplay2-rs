@@ -8,7 +8,13 @@ use crate::receiver::ap2::{AirPlay2Receiver, Ap2Config};
 /// Panics if a free port cannot be picked.
 #[must_use]
 pub fn create_test_receiver() -> (AirPlay2Receiver, u16) {
-    let port = 0; // Use ephemeral port
+    // Bind to a system-assigned port and retrieve it, then release it
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind to free port");
+    let port = listener
+        .local_addr()
+        .expect("Failed to get local addr")
+        .port();
+    drop(listener);
 
     let config = Ap2Config::new("Test Receiver").with_port(port);
 

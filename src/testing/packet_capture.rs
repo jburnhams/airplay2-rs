@@ -97,6 +97,7 @@ pub struct CaptureReplay {
     packets: Vec<CapturedPacket>,
     current_index: usize,
     start_time: Option<std::time::Instant>,
+    base_timestamp_us: Option<u64>,
 }
 
 impl CaptureReplay {
@@ -107,6 +108,7 @@ impl CaptureReplay {
             packets,
             current_index: 0,
             start_time: None,
+            base_timestamp_us: None,
         }
     }
 
@@ -135,13 +137,17 @@ impl CaptureReplay {
 
         // Wait for correct time
         if let Some(start) = self.start_time {
-            let target = Duration::from_micros(packet.timestamp_us);
-            let elapsed = start.elapsed();
-            if target > elapsed {
-                tokio::time::sleep(target.checked_sub(elapsed).unwrap()).await;
+            if let Some(base) = self.base_timestamp_us {
+                let relative_target_us = packet.timestamp_us.saturating_sub(base);
+                let target = Duration::from_micros(relative_target_us);
+                let elapsed = start.elapsed();
+                if target > elapsed {
+                    tokio::time::sleep(target.checked_sub(elapsed).unwrap()).await;
+                }
             }
         } else {
             self.start_time = Some(std::time::Instant::now());
+            self.base_timestamp_us = Some(packet.timestamp_us);
         }
 
         self.current_index += 1;
@@ -152,6 +158,7 @@ impl CaptureReplay {
     pub fn reset(&mut self) {
         self.current_index = 0;
         self.start_time = None;
+        self.base_timestamp_us = None;
     }
 }
 
