@@ -88,7 +88,7 @@ struct RemoteMaster {
     last_announce: tokio::time::Instant,
 }
 
-/// Timeout after which an unanswered Delay_Req is considered lost.
+/// Timeout after which an unanswered `Delay_Req` is considered lost.
 const DELAY_REQ_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// Unified PTP node supporting bidirectional synchronization.
@@ -965,11 +965,7 @@ mod tests_unit {
 
     /// Build a minimal PtpNode bound to an ephemeral loopback port.
     async fn make_node(our_priority1: u8, our_clock_id: u64) -> PtpNode {
-        let sock = Arc::new(
-            tokio::net::UdpSocket::bind("127.0.0.1:0")
-                .await
-                .unwrap(),
-        );
+        let sock = Arc::new(tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap());
         let clock = create_shared_clock(our_clock_id, PtpRole::Master);
         let config = PtpNodeConfig {
             clock_id: our_clock_id,

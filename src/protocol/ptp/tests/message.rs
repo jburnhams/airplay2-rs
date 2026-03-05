@@ -532,8 +532,7 @@ fn test_log_message_interval_delay_req_is_unspecified() {
     let source = PtpPortIdentity::new(0, 1);
     let header = PtpHeader::new(PtpMessageType::DelayReq, source, 0);
     assert_eq!(
-        header.log_message_interval as u8,
-        0x7F,
+        header.log_message_interval as u8, 0x7F,
         "DelayReq logMessageInterval must be 0x7F (unspecified)"
     );
     // Also check encoded wire byte (byte[33]).

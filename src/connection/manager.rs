@@ -1325,15 +1325,18 @@ impl ConnectionManager {
             if use_ptp {
                 // Send SETPEERS to register our IP as a timing peer.
                 // Our ClockID is already communicated via SETUP Step 1 timingPeerInfo.
-                if let Err(e) = self
-                    .send_set_peers(device_ip, ptp_clock_id, None)
-                    .await
-                {
+                if let Err(e) = self.send_set_peers(device_ip, ptp_clock_id, None).await {
                     tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
                 }
 
-                self.start_ptp_master(&time_sock, device_ip, server_time_port, ptp_clock_id, device_clock_port)
-                    .await;
+                self.start_ptp_master(
+                    &time_sock,
+                    device_ip,
+                    server_time_port,
+                    ptp_clock_id,
+                    device_clock_port,
+                )
+                .await;
             }
 
             *self.sockets.lock().await = Some(UdpSockets {
@@ -1647,7 +1650,7 @@ impl ConnectionManager {
     /// Send SETPEERS to tell the device about PTP timing peers.
     ///
     /// Uses the simple IP-address array format which is universally accepted by
-    /// AirPlay 2 devices. Our PTP clock identity is communicated to the device
+    /// `AirPlay` 2 devices. Our PTP clock identity is communicated to the device
     /// through the `ClockID` field in the SETUP Step 1 `timingPeerInfo` dict
     /// (not here), so the device can match incoming `Delay_Req` messages to us.
     async fn send_set_peers(
@@ -2246,7 +2249,7 @@ impl ConnectionManager {
     /// `net.ipv6.bindv6only=1`, IPv6 is disabled, or we are on a system that does
     /// not support dual-stack), it falls back to an IPv4-only socket bound to
     /// `0.0.0.0`. No `unwrap()` calls are used — all error paths propagate via `?`.
-    async fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
+    fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
         use socket2::{Domain, Protocol, Socket, Type};
         use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
@@ -2338,7 +2341,7 @@ impl ConnectionManager {
         // Use SO_REUSEADDR so we can bind even when another process (e.g. Windows Time
         // or a previous run) already holds the port.  This is safe here because we are
         // the only consumer of PTP in this application.
-        let ptp_event_socket = match Self::bind_ptp_port(PTP_EVENT_PORT).await {
+        let ptp_event_socket = match Self::bind_ptp_port(PTP_EVENT_PORT) {
             Ok(sock) => {
                 tracing::info!("PTP event socket bound to port {}", PTP_EVENT_PORT);
                 sock
@@ -2363,7 +2366,7 @@ impl ConnectionManager {
         };
 
         // Bind to standard PTP general port (320).
-        let ptp_general_socket = match Self::bind_ptp_port(PTP_GENERAL_PORT).await {
+        let ptp_general_socket = match Self::bind_ptp_port(PTP_GENERAL_PORT) {
             Ok(sock) => {
                 tracing::info!("PTP general socket bound to port {}", PTP_GENERAL_PORT);
                 Some(Arc::new(sock))

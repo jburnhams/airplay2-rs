@@ -164,10 +164,9 @@ impl PtpHeader {
         // If we send with transportSpecific=0, the device ignores our Delay_Req.
         // logMessageInterval=0x7F means "not applicable" (unspecified) for event msgs.
         let log_message_interval: i8 = match message_type {
-            PtpMessageType::DelayReq => 0x7F,
             PtpMessageType::Sync => -3,     // 8 Hz (2^-3 = 0.125s)
             PtpMessageType::Announce => -2, // 4 Hz (2^-2 = 0.25s)
-            _ => 0x7F,
+            _ => 0x7F, // 0x7F = "not applicable" (unspecified) for all other msg types
         };
         Self {
             transport_specific: 1,

@@ -843,11 +843,6 @@ impl AirPlayClient {
         self.state.subscribe()
     }
 
-    /// Check if PTP timing is active for the current connection.
-    pub async fn is_ptp_active(&self) -> bool {
-        self.connection.is_ptp_active().await
-    }
-
     /// Get the shared PTP clock, if PTP timing is active.
     pub async fn ptp_clock(&self) -> Option<crate::protocol::ptp::handler::SharedPtpClock> {
         self.connection.ptp_clock().await
