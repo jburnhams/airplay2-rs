@@ -2243,36 +2243,17 @@ impl ConnectionManager {
     ///
     /// Uses the `socket2` crate to set socket options before binding.
     ///
-    /// Attempts a dual-stack (IPv4 + IPv6) bind first by creating an IPv6 wildcard
-    /// socket with `IPV6_V6ONLY` disabled. This lets the socket receive packets from
-    /// both IPv4 and IPv6 peers. If dual-stack is unavailable (e.g. the OS has
-    /// `net.ipv6.bindv6only=1`, IPv6 is disabled, or we are on a system that does
-    /// not support dual-stack), it falls back to an IPv4-only socket bound to
-    /// `0.0.0.0`. No `unwrap()` calls are used — all error paths propagate via `?`.
+    /// Binds an IPv4 wildcard socket (`0.0.0.0:{port}`).  PTP for `AirPlay` 2 is
+    /// exclusively over IPv4, so there is no benefit to a dual-stack IPv6 socket
+    /// here, and on Windows a dual-stack socket cannot call `send_to` with a plain
+    /// `SocketAddr::V4` address (it would need the IPv4-mapped form `::ffff:x.x.x.x`),
+    /// which would require changes throughout every send site.  Using IPv4 directly
+    /// is correct and portable.  No `unwrap()` calls are used — `SocketAddr` is
+    /// constructed directly and all error paths propagate via `?`.
     fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
         use socket2::{Domain, Protocol, Socket, Type};
-        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-        // --- Attempt 1: dual-stack IPv6 wildcard socket -----------------------
-        // `set_only_v6(false)` enables IPv4-mapped IPv6 addresses so a single
-        // socket can service both address families.
-        let dual_stack = (|| -> std::io::Result<UdpSocket> {
-            let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port);
-            let sock = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
-            sock.set_only_v6(false)?; // dual-stack: accept IPv4-mapped addresses too
-            sock.set_reuse_address(true)?;
-            sock.set_nonblocking(true)?;
-            sock.bind(&addr.into())?;
-            let std_sock: std::net::UdpSocket = sock.into();
-            UdpSocket::from_std(std_sock)
-        })();
-
-        if let Ok(sock) = dual_stack {
-            return Ok(sock);
-        }
-
-        // --- Attempt 2: IPv4-only fallback ------------------------------------
-        // Used when the OS does not support dual-stack or IPv6 is not available.
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
         // Allow binding even if another process already holds the port.
