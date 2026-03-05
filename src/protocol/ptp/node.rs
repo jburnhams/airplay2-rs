@@ -504,9 +504,23 @@ impl PtpNode {
                     // As slave: send Delay_Req immediately after Follow_Up finalises T1,
                     // unless we are in one-way fallback mode.
                     if self.role == EffectiveRole::Slave && self.pending_t2.is_some() {
+                        // If a Delay_Req we sent earlier is still pending (pending_t3 is
+                        // set) when the *next* sync round arrives, it means the master
+                        // never answered it.  Count it as unanswered now so the fallback
+                        // counter advances correctly — otherwise resetting delay_req_sent_at
+                        // on every Follow_Up would prevent the timer-based timeout from ever
+                        // accumulating the required two missed responses.
+                        if self.pending_t3.is_some() {
+                            self.delay_req_unanswered += 1;
+                            tracing::debug!(
+                                "PTP node: Delay_Req unanswered when next sync arrived \
+                                 (unanswered={})",
+                                self.delay_req_unanswered
+                            );
+                        }
+                        self.pending_t3 = None;
+                        self.delay_req_sent_at = None;
                         if self.delay_req_unanswered < 2 {
-                            self.pending_t3 = None;
-                            self.delay_req_sent_at = None;
                             self.send_delay_req().await?;
                         } else {
                             // In one-way fallback mode, process immediately.
