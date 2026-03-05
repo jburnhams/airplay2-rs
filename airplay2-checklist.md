@@ -1,5 +1,11 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 12):**
+- **High-Resolution Audio**:
+  - ✅ **VERIFIED**: `hires_audio_integration` test verifies 24-bit/48kHz streaming capability.
+  - Implemented `prefer_hires_audio` config flag to toggle high-res streaming.
+  - Negotiates proper `audioFormat` bitmask, sample rate, and bit depth in RTSP SETUP based on codec.
+
 **Work Done (Session 11):**
 - **Encrypted Key Storage**:
   - ✅ **VERIFIED**: `test_encrypted_storage` verifies encryption and decryption works correctly.
@@ -119,7 +125,8 @@
 ### Sample Rate and Bit Depth Support
 - [x] **Standard**: 16-bit/44.1 kHz stereo (minimum)
   - *Status*: Verified. This is the format used in `examples/connect_to_receiver.rs`.
-- [ ] **High-resolution**: 24-bit/48 kHz (where device supports)
+- [x] **High-resolution**: 24-bit/48 kHz (where device supports)
+  - ✅ **VERIFIED**: `hires_audio_integration` test passes. Configurable via `prefer_hires_audio`.
 - [x] Sample rate conversion/resampling if needed
   - ✅ **VERIFIED**: Implemented robust linear interpolation in `ResamplingSource`.
   - Verified with `resampling_integration` test.
