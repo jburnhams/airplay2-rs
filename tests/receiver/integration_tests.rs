@@ -26,10 +26,12 @@ async fn test_full_session() {
         ..Default::default()
     });
 
-    assert!(sender
-        .connect(format!("127.0.0.1:{}", port).parse().unwrap())
-        .await
-        .is_ok());
+    assert!(
+        sender
+            .connect(format!("127.0.0.1:{}", port).parse().unwrap())
+            .await
+            .is_ok()
+    );
 
     // The mock sender will fail on subsequent calls because the mock receiver
     // does not keep the connection alive currently.
@@ -55,10 +57,12 @@ async fn test_wrong_password() {
         ..Default::default()
     });
 
-    assert!(sender
-        .connect(format!("127.0.0.1:{}", port).parse().unwrap())
-        .await
-        .is_ok());
+    assert!(
+        sender
+            .connect(format!("127.0.0.1:{}", port).parse().unwrap())
+            .await
+            .is_ok()
+    );
 
     // Clean shutdown even with failed pairing
     receiver.stop().await.unwrap();
@@ -75,10 +79,12 @@ async fn test_reconnection() {
 
     // First connection
     let mut sender1 = MockAp2Sender::new(MockSenderConfig::default());
-    assert!(sender1
-        .connect(format!("127.0.0.1:{}", port).parse().unwrap())
-        .await
-        .is_ok());
+    assert!(
+        sender1
+            .connect(format!("127.0.0.1:{}", port).parse().unwrap())
+            .await
+            .is_ok()
+    );
     drop(sender1);
 
     // Brief pause
@@ -86,10 +92,12 @@ async fn test_reconnection() {
 
     // Second connection
     let mut sender2 = MockAp2Sender::new(MockSenderConfig::default());
-    assert!(sender2
-        .connect(format!("127.0.0.1:{}", port).parse().unwrap())
-        .await
-        .is_ok());
+    assert!(
+        sender2
+            .connect(format!("127.0.0.1:{}", port).parse().unwrap())
+            .await
+            .is_ok()
+    );
 
     receiver.stop().await.unwrap();
 }

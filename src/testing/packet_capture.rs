@@ -55,16 +55,14 @@ impl CaptureLoader {
                 continue;
             }
 
-            let timestamp_us: u64 = parts[0].parse()
-                .map_err(|_| CaptureError::InvalidFormat)?;
+            let timestamp_us: u64 = parts[0].parse().map_err(|_| CaptureError::InvalidFormat)?;
             let inbound = parts[1] == "IN";
             let protocol = match parts[2] {
                 "TCP" => CaptureProtocol::Tcp,
                 "UDP" => CaptureProtocol::Udp,
                 _ => continue,
             };
-            let data = hex::decode(parts[3])
-                .map_err(|_| CaptureError::InvalidHex)?;
+            let data = hex::decode(parts[3]).map_err(|_| CaptureError::InvalidHex)?;
 
             packets.push(CapturedPacket {
                 timestamp_us,
@@ -132,8 +130,9 @@ impl CaptureReplay {
             if target > elapsed {
                 tokio::time::sleep(
                     #[allow(clippy::unchecked_time_subtraction, reason = "Checked above")]
-                    (target - elapsed)
-                ).await;
+                    (target - elapsed),
+                )
+                .await;
             }
         } else {
             self.start_time = Some(std::time::Instant::now());

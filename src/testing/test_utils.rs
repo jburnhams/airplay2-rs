@@ -63,11 +63,7 @@ pub fn samples_match(a: &[i16], b: &[i16], tolerance: i16) -> bool {
 }
 
 /// Wait for condition with timeout
-pub async fn wait_for<F>(
-    condition: F,
-    timeout_ms: u64,
-    check_interval_ms: u64,
-) -> bool
+pub async fn wait_for<F>(condition: F, timeout_ms: u64, check_interval_ms: u64) -> bool
 where
     F: Fn() -> bool,
 {

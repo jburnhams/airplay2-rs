@@ -1,13 +1,14 @@
 //! Tests using captured real traffic
 
-use airplay2::testing::packet_capture::{CaptureLoader, CaptureReplay, CaptureProtocol};
-use airplay2::receiver::ap2::request_router::{Ap2RequestType, Ap2Endpoint};
-use airplay2::protocol::rtsp::server_codec::RtspServerCodec;
 use std::path::Path;
+
+use airplay2::protocol::rtsp::server_codec::RtspServerCodec;
+use airplay2::receiver::ap2::request_router::{Ap2Endpoint, Ap2RequestType};
+use airplay2::testing::packet_capture::{CaptureLoader, CaptureProtocol, CaptureReplay};
 
 /// Test parsing real /info response capture
 #[test]
-#[ignore]  // Requires capture file
+#[ignore] // Requires capture file
 fn test_captured_info_request() {
     let capture_path = Path::new("tests/captures/info_request.hex");
 
@@ -30,13 +31,16 @@ fn test_captured_info_request() {
     if let Some(request) = codec.decode().unwrap() {
         let request_type = Ap2RequestType::classify(&request);
         // Verify classification
-        assert!(matches!(request_type, Ap2RequestType::Endpoint(Ap2Endpoint::Info)));
+        assert!(matches!(
+            request_type,
+            Ap2RequestType::Endpoint(Ap2Endpoint::Info)
+        ));
     }
 }
 
 /// Test parsing real pairing exchange capture
 #[test]
-#[ignore]  // Requires capture file
+#[ignore] // Requires capture file
 fn test_captured_pairing() {
     let capture_path = Path::new("tests/captures/pairing_exchange.hex");
 
@@ -67,9 +71,8 @@ fn test_capture_file_format() {
     //
     // Fields: timestamp_us direction protocol hex_data
 
-    let example_data = "# Test capture\n\
-                        0 IN TCP 4f5054494f4e53202a20525453502f312e300d0a\n\
-                        1000 OUT TCP 525453502f312e3020323030204f4b0d0a\n";
+    let example_data = "# Test capture\n0 IN TCP 4f5054494f4e53202a20525453502f312e300d0a\n1000 \
+                        OUT TCP 525453502f312e3020323030204f4b0d0a\n";
 
     use std::io::Write;
     let mut temp = tempfile::NamedTempFile::new().unwrap();

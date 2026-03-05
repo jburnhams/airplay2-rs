@@ -3,18 +3,17 @@
 //! Simulates an iOS/macOS device connecting to our receiver,
 //! performing pairing, and streaming audio.
 
-use crate::protocol::rtsp::{RtspRequest, Method, Headers};
-use crate::protocol::plist::PlistValue;
-use crate::protocol::pairing::tlv::TlvEncoder;
-use crate::protocol::crypto::{
-    Ed25519KeyPair,
-    X25519KeyPair,
-};
-use crate::receiver::ap2::body_handler::encode_bplist_body;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+
 use tokio::net::TcpStream;
+
 use crate::net::{AsyncReadExt, AsyncWriteExt};
+use crate::protocol::crypto::{Ed25519KeyPair, X25519KeyPair};
+use crate::protocol::pairing::tlv::TlvEncoder;
+use crate::protocol::plist::PlistValue;
+use crate::protocol::rtsp::{Headers, Method, RtspRequest};
+use crate::receiver::ap2::body_handler::encode_bplist_body;
 
 /// Mock sender configuration
 #[derive(Debug, Clone)]
@@ -131,7 +130,7 @@ impl MockAp2Sender {
         let request = self.build_request(Method::Get, "/info", None);
         let _response = self.send_request(&request).await?;
         // Parse response body as plist
-        Ok(PlistValue::Dictionary(HashMap::new()))  // Simplified
+        Ok(PlistValue::Dictionary(HashMap::new())) // Simplified
     }
 
     /// Perform pair-setup (M1-M4)
@@ -172,7 +171,7 @@ impl MockAp2Sender {
 
         // Complete verify exchange...
         // Return derived encryption key
-        Ok([0u8; 32])  // Placeholder
+        Ok([0u8; 32]) // Placeholder
     }
 
     /// SETUP phase 1 (timing)
@@ -185,15 +184,22 @@ impl MockAp2Sender {
 
         let body = encode_bplist_body(&PlistValue::Dictionary({
             let mut d = HashMap::new();
-            d.insert("streams".to_string(), PlistValue::Array(vec![PlistValue::Dictionary(streams)]));
-            d.insert("timingProtocol".to_string(), PlistValue::String("PTP".into()));
+            d.insert(
+                "streams".to_string(),
+                PlistValue::Array(vec![PlistValue::Dictionary(streams)]),
+            );
+            d.insert(
+                "timingProtocol".to_string(),
+                PlistValue::String("PTP".into()),
+            );
             d
-        })).map_err(|e| MockSenderError::Protocol(e.to_string()))?;
+        }))
+        .map_err(|e| MockSenderError::Protocol(e.to_string()))?;
 
         let request = self.build_request(Method::Setup, "/setup", Some(body));
         let _response = self.send_request(&request).await?;
 
-        Ok((7011, 7010))  // Placeholder ports
+        Ok((7011, 7010)) // Placeholder ports
     }
 
     /// SETUP phase 2 (audio)
@@ -203,21 +209,25 @@ impl MockAp2Sender {
     pub async fn setup_audio(&mut self) -> Result<(u16, u16), MockSenderError> {
         let mut streams = HashMap::new();
         streams.insert("type".to_string(), PlistValue::Integer(96)); // Audio
-        streams.insert("ct".to_string(), PlistValue::Integer(100));  // PCM
+        streams.insert("ct".to_string(), PlistValue::Integer(100)); // PCM
         streams.insert("sr".to_string(), PlistValue::Integer(44100));
         streams.insert("ch".to_string(), PlistValue::Integer(2));
         streams.insert("ss".to_string(), PlistValue::Integer(16));
 
         let body = encode_bplist_body(&PlistValue::Dictionary({
             let mut d = HashMap::new();
-            d.insert("streams".to_string(), PlistValue::Array(vec![PlistValue::Dictionary(streams)]));
+            d.insert(
+                "streams".to_string(),
+                PlistValue::Array(vec![PlistValue::Dictionary(streams)]),
+            );
             d
-        })).map_err(|e| MockSenderError::Protocol(e.to_string()))?;
+        }))
+        .map_err(|e| MockSenderError::Protocol(e.to_string()))?;
 
         let request = self.build_request(Method::Setup, "/setup", Some(body));
         let _response = self.send_request(&request).await?;
 
-        Ok((7100, 7101))  // Placeholder ports
+        Ok((7100, 7101)) // Placeholder ports
     }
 
     /// Send RECORD
@@ -234,7 +244,10 @@ impl MockAp2Sender {
     ///
     /// # Errors
     /// Returns `MockSenderError` on protocol or connection failures.
-    #[allow(clippy::unused_async, reason = "Mock signature to match real implementations")]
+    #[allow(
+        clippy::unused_async,
+        reason = "Mock signature to match real implementations"
+    )]
     pub async fn send_audio(
         &self,
         _samples: &[i16],
@@ -267,7 +280,10 @@ impl MockAp2Sender {
 
         if let Some(ref b) = body {
             headers.insert("Content-Length".to_string(), b.len().to_string());
-            headers.insert("Content-Type".to_string(), "application/x-apple-binary-plist".to_string());
+            headers.insert(
+                "Content-Type".to_string(),
+                "application/x-apple-binary-plist".to_string(),
+            );
         }
 
         RtspRequest {
@@ -279,8 +295,7 @@ impl MockAp2Sender {
     }
 
     async fn send_request(&mut self, request: &RtspRequest) -> Result<Vec<u8>, MockSenderError> {
-        let stream = self.stream.as_mut()
-            .ok_or(MockSenderError::NotConnected)?;
+        let stream = self.stream.as_mut().ok_or(MockSenderError::NotConnected)?;
 
         // Serialize and send request
         let request_bytes = Self::serialize_request(request);
@@ -288,7 +303,7 @@ impl MockAp2Sender {
         // Optionally encrypt if key is set
         let to_send = if let Some(_key) = self.encryption_key {
             // Encrypt with HAP framing
-            request_bytes  // Simplified
+            request_bytes // Simplified
         } else {
             request_bytes
         };
@@ -308,7 +323,7 @@ impl MockAp2Sender {
 
         // Request line
         output.extend_from_slice(
-            format!("{} {} RTSP/1.0\r\n", request.method.as_str(), request.uri).as_bytes()
+            format!("{} {} RTSP/1.0\r\n", request.method.as_str(), request.uri).as_bytes(),
         );
 
         // Headers

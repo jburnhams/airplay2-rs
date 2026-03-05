@@ -1,8 +1,9 @@
 //! Audio Quality Tests
 
-use airplay2::receiver::ap2::jitter_buffer::{JitterBuffer, JitterBufferConfig, BufferState};
-use airplay2::receiver::ap2::rtp_receiver::AudioFrame;
 use std::time::Instant;
+
+use airplay2::receiver::ap2::jitter_buffer::{BufferState, JitterBuffer, JitterBufferConfig};
+use airplay2::receiver::ap2::rtp_receiver::AudioFrame;
 
 /// Test jitter buffer maintains audio continuity
 #[test]
@@ -21,7 +22,7 @@ fn test_jitter_buffer_continuity() {
         let frame = AudioFrame {
             sequence: i,
             timestamp: i as u32 * 352,
-            samples: vec![i as i16; 704],  // 352 stereo samples
+            samples: vec![i as i16; 704], // 352 stereo samples
             receive_time: Instant::now(),
         };
         buffer.push(frame);
@@ -31,7 +32,7 @@ fn test_jitter_buffer_continuity() {
 
     // Pull samples and verify continuity
     let samples = buffer.pull(352);
-    assert_eq!(samples.len(), 704);  // Stereo
+    assert_eq!(samples.len(), 704); // Stereo
 }
 
 /// Test jitter buffer handles packet loss
