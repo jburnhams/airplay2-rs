@@ -1,7 +1,10 @@
+pub mod mock_ap2_sender;
 pub mod mock_raop_server;
 pub mod mock_sender;
 pub mod mock_server;
 pub mod network_sim;
+pub mod packet_capture;
+pub mod test_utils;
 #[cfg(test)]
 /// Unit tests for the mock server.
 pub mod tests;

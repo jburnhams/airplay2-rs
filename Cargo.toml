@@ -89,6 +89,8 @@ tempfile = "3.10.1"
 # Integration test dependencies
 chrono = "0.4"
 nix = { version = "0.29", features = ["signal"] }
+portpicker = "0.1.1"
+hex = "0.4.3"
 
 [[bench]]
 name = "protocol_benchmarks"
