@@ -677,12 +677,12 @@ mod tests {
 
 ## Acceptance Criteria
 
-- [ ] Mock sender connects and performs session
-- [ ] Packet capture loading works
-- [ ] Capture replay maintains timing
-- [ ] Test utilities simplify test writing
-- [ ] All unit tests pass
-- [ ] Can run tests without real devices
+- [x] Mock sender connects and performs session
+- [x] Packet capture loading works
+- [x] Capture replay maintains timing
+- [x] Test utilities simplify test writing
+- [x] All unit tests pass
+- [x] Can run tests without real devices
 
 ---
 
