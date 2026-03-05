@@ -75,6 +75,8 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 fdk-aac = "0.8.0"
 symphonia = { version = "0.5.5", optional = true, features = ["mp3", "aac", "alac", "pcm", "isomp4"] }
+hex = "0.4.3"
+portpicker = "0.1.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = { version = "0.9", optional = true }
@@ -89,6 +91,8 @@ tempfile = "3.10.1"
 # Integration test dependencies
 chrono = "0.4"
 nix = { version = "0.29", features = ["signal"] }
+portpicker = "0.1.1"
+hex = "0.4.3"
 
 [[bench]]
 name = "protocol_benchmarks"
