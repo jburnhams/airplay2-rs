@@ -1,5 +1,6 @@
-use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use std::time::Duration;
+
+use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 
 #[tokio::test]
 async fn test_receiver_start_stop() {

@@ -1,6 +1,7 @@
+use thiserror::Error;
+
 use super::packet::{RtpDecodeError, RtpHeader, RtpPacket};
 use crate::protocol::crypto::{Aes128Ctr, ChaCha20Poly1305Cipher, Nonce};
-use thiserror::Error;
 
 /// RTP codec errors
 #[derive(Debug, Error)]
@@ -187,8 +188,9 @@ impl RtpCodec {
                 if let (Some(key), Some(iv)) = (&self.aes_key, &self.aes_iv) {
                     let mut cipher = Aes128Ctr::new(key, iv)
                         .map_err(|_| RtpCodecError::EncryptionNotInitialized)?;
-                    // NOTE: AES-CTR seek might need adjustment for variable packet sizes if sequence is frame-based
-                    // For now assuming frame-based seeking works or this is only used for fixed PCM in legacy mode.
+                    // NOTE: AES-CTR seek might need adjustment for variable packet sizes if
+                    // sequence is frame-based For now assuming frame-based
+                    // seeking works or this is only used for fixed PCM in legacy mode.
                     let expected_size = self.frames_per_packet as usize * 4;
                     // Seek based on frame count, assuming 1:1 mapping if it was PCM.
                     // For ALAC, this logic might need review if legacy AirPlay 1 uses ALAC.

@@ -5,9 +5,9 @@
 //! 2. Connect using transient pairing (default)
 //! 3. Stream PCM audio (Sine Wave)
 
+use airplay2::AirPlayPlayer;
+use airplay2::audio::AudioFormat;
 use airplay2::streaming::source::SliceSource;
-use airplay2::{AirPlayPlayer, audio::AudioFormat};
-
 use tokio::io::{self, AsyncBufReadExt};
 
 #[tokio::main]

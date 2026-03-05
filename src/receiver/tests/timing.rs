@@ -1,5 +1,6 @@
-use crate::receiver::timing::{ClockSync, NtpTimestamp};
 use std::time::Duration;
+
+use crate::receiver::timing::{ClockSync, NtpTimestamp};
 
 #[test]
 fn test_ntp_timestamp_now() {
@@ -49,8 +50,8 @@ fn test_clock_sync_update() {
         fraction: 0,
     };
 
-    // t2: Our receive time = 1000.5s (offset +0.5s, assuming delay is negligible for first part of calc)
-    // 0x8000_0000 is exactly 0.5s in NTP fraction
+    // t2: Our receive time = 1000.5s (offset +0.5s, assuming delay is negligible for first part of
+    // calc) 0x8000_0000 is exactly 0.5s in NTP fraction
     let receive = NtpTimestamp {
         seconds: 1000,
         fraction: 0x8000_0000,

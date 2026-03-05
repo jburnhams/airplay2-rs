@@ -1,10 +1,11 @@
-use airplay2::audio::AudioFormat;
-use airplay2::streaming::AudioSource;
-use airplay2::{AirPlayClient, AirPlayConfig, AirPlayDevice, DeviceCapabilities, scan};
 use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
+
+use airplay2::audio::AudioFormat;
+use airplay2::streaming::AudioSource;
+use airplay2::{AirPlayClient, AirPlayConfig, AirPlayDevice, DeviceCapabilities, scan};
 
 /// Stereo test source: 440Hz Left, 880Hz Right
 struct StereoSource {

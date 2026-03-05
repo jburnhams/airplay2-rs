@@ -1,4 +1,1 @@
-mod artwork;
-mod dmap;
-mod metadata;
-mod progress;
+mod parser_tests;

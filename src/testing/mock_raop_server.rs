@@ -1,17 +1,23 @@
 //! Mock RAOP server for testing
 
-#![allow(clippy::missing_panics_doc)]
-#![allow(clippy::missing_errors_doc)]
+#![allow(
+    clippy::missing_panics_doc,
+    clippy::missing_errors_doc,
+    reason = "Mock servers intended for test code do not strictly require thorough panic and \
+              error documentation"
+)]
+
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+
+use tokio::net::{TcpListener, UdpSocket};
+use tokio::sync::broadcast;
 
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 #[cfg(feature = "raop")]
 use crate::protocol::crypto::RaopRsaPrivateKey;
 use crate::protocol::rtsp::{Headers, Method, RtspRequest};
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use tokio::net::{TcpListener, UdpSocket};
-use tokio::sync::broadcast;
 
 /// Mock RAOP server state
 #[derive(Debug, Clone, Default)]
@@ -153,7 +159,11 @@ impl MockRaopServer {
     }
 
     /// Start the server
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Server initialization sequentially binds multiple sockets and sets up listeners \
+                  in a single clear flow"
+    )]
     pub async fn start(&mut self) -> Result<(), MockServerError> {
         if self.running {
             return Ok(());
@@ -445,7 +455,11 @@ impl MockRaopServer {
 
         let mut headers = Headers::new();
         headers.insert("CSeq", request.headers.cseq().unwrap_or(0).to_string());
-        headers.insert("Public", "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER");
+        headers.insert(
+            "Public",
+            "ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, \
+             SET_PARAMETER",
+        );
 
         // Handle Apple-Challenge if present
         if config.require_challenge {
@@ -517,8 +531,9 @@ impl MockRaopServer {
         state: &Arc<Mutex<MockRaopState>>,
         config: &MockRaopConfig,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
         use rand::Rng;
+
+        use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
         let session_id = format!("{:016X}", rand::thread_rng().r#gen::<u64>());
 

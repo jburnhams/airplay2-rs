@@ -1,5 +1,6 @@
-use super::{CryptoError, lengths};
 use x25519_dalek::{PublicKey, StaticSecret};
+
+use super::{CryptoError, lengths};
 
 /// X25519 key pair for Diffie-Hellman key exchange
 pub struct X25519KeyPair {

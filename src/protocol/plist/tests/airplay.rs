@@ -1,4 +1,5 @@
-use crate::protocol::plist::{PlistValue, airplay::track_info_to_plist};
+use crate::protocol::plist::PlistValue;
+use crate::protocol::plist::airplay::track_info_to_plist;
 use crate::types::TrackInfo;
 
 #[test]

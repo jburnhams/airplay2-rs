@@ -111,11 +111,7 @@ async fn test_kitchen_device_ptp_sync() {
         EffectiveRole::Master,
         "Kitchen should be Master (better priority)"
     );
-    assert_eq!(
-        client_role,
-        EffectiveRole::Slave,
-        "Client should be Slave"
-    );
+    assert_eq!(client_role, EffectiveRole::Slave, "Client should be Slave");
 
     // Verify client clock converged
     let client_clk = client_clock.read().await;
@@ -250,11 +246,12 @@ async fn test_kitchen_bedroom_bmca_negotiation() {
 /// Kitchen should be grandmaster. Both Client and Bedroom should sync to it.
 #[tokio::test]
 async fn test_three_node_multi_room_sync() {
-    let mk_pair =
-        || async { (
+    let mk_pair = || async {
+        (
             Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap()),
             Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap()),
-        ) };
+        )
+    };
 
     let (kitchen_event, kitchen_general) = mk_pair().await;
     let (bedroom_event, bedroom_general) = mk_pair().await;
@@ -291,9 +288,16 @@ async fn test_three_node_multi_room_sync() {
     let kc = kitchen_clock.clone();
     let bk = barrier.clone();
     let k_handle = tokio::spawn(async move {
-        let mut n = PtpNode::new(kitchen_event, Some(kitchen_general), kc, mk_config(0x0001, 64));
-        n.add_slave(be); n.add_general_slave(bg);
-        n.add_slave(ce); n.add_general_slave(cg);
+        let mut n = PtpNode::new(
+            kitchen_event,
+            Some(kitchen_general),
+            kc,
+            mk_config(0x0001, 64),
+        );
+        n.add_slave(be);
+        n.add_general_slave(bg);
+        n.add_slave(ce);
+        n.add_general_slave(cg);
         bk.wait().await;
         n.run(k_rx).await.unwrap();
         n.role()
@@ -303,9 +307,16 @@ async fn test_three_node_multi_room_sync() {
     let bc = bedroom_clock.clone();
     let bb = barrier.clone();
     let b_handle = tokio::spawn(async move {
-        let mut n = PtpNode::new(bedroom_event, Some(bedroom_general), bc, mk_config(0x0002, 96));
-        n.add_slave(ke); n.add_general_slave(kg);
-        n.add_slave(ce); n.add_general_slave(cg);
+        let mut n = PtpNode::new(
+            bedroom_event,
+            Some(bedroom_general),
+            bc,
+            mk_config(0x0002, 96),
+        );
+        n.add_slave(ke);
+        n.add_general_slave(kg);
+        n.add_slave(ce);
+        n.add_general_slave(cg);
         bb.wait().await;
         n.run(b_rx).await.unwrap();
         n.role()
@@ -315,9 +326,16 @@ async fn test_three_node_multi_room_sync() {
     let cc = client_clock.clone();
     let cb = barrier.clone();
     let c_handle = tokio::spawn(async move {
-        let mut n = PtpNode::new(client_event, Some(client_general), cc, mk_config(0x0003, 128));
-        n.add_slave(ke); n.add_general_slave(kg);
-        n.add_slave(be); n.add_general_slave(bg);
+        let mut n = PtpNode::new(
+            client_event,
+            Some(client_general),
+            cc,
+            mk_config(0x0003, 128),
+        );
+        n.add_slave(ke);
+        n.add_general_slave(kg);
+        n.add_slave(be);
+        n.add_general_slave(bg);
         cb.wait().await;
         n.run(c_rx).await.unwrap();
         n.role()
@@ -329,20 +347,41 @@ async fn test_three_node_multi_room_sync() {
     b_tx.send(true).unwrap();
     c_tx.send(true).unwrap();
 
-    let k_role = tokio::time::timeout(Duration::from_secs(2), k_handle).await.unwrap().unwrap();
-    let b_role = tokio::time::timeout(Duration::from_secs(2), b_handle).await.unwrap().unwrap();
-    let c_role = tokio::time::timeout(Duration::from_secs(2), c_handle).await.unwrap().unwrap();
+    let k_role = tokio::time::timeout(Duration::from_secs(2), k_handle)
+        .await
+        .unwrap()
+        .unwrap();
+    let b_role = tokio::time::timeout(Duration::from_secs(2), b_handle)
+        .await
+        .unwrap()
+        .unwrap();
+    let c_role = tokio::time::timeout(Duration::from_secs(2), c_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
-    assert_eq!(k_role, EffectiveRole::Master, "Kitchen should be grandmaster");
+    assert_eq!(
+        k_role,
+        EffectiveRole::Master,
+        "Kitchen should be grandmaster"
+    );
     assert_eq!(b_role, EffectiveRole::Slave, "Bedroom should be slave");
     assert_eq!(c_role, EffectiveRole::Slave, "Client should be slave");
 
     // Both bedroom and client should be synced
     let bed = bedroom_clock.read().await;
     assert!(bed.is_synchronized(), "Bedroom should be synced");
-    assert!(bed.measurement_count() >= 3, "Bedroom should have >= 3 measurements (got {})", bed.measurement_count());
+    assert!(
+        bed.measurement_count() >= 3,
+        "Bedroom should have >= 3 measurements (got {})",
+        bed.measurement_count()
+    );
 
     let cli = client_clock.read().await;
     assert!(cli.is_synchronized(), "Client should be synced");
-    assert!(cli.measurement_count() >= 3, "Client should have >= 3 measurements (got {})", cli.measurement_count());
+    assert!(
+        cli.measurement_count() >= 3,
+        "Client should have >= 3 measurements (got {})",
+        cli.measurement_count()
+    );
 }

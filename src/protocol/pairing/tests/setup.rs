@@ -1,8 +1,6 @@
+use crate::protocol::pairing::PairingError;
 use crate::protocol::pairing::setup::PairSetup;
-use crate::protocol::pairing::{
-    PairingError,
-    tlv::{TlvEncoder, TlvType, errors},
-};
+use crate::protocol::pairing::tlv::{TlvEncoder, TlvType, errors};
 
 #[test]
 fn test_pair_setup_failures() {

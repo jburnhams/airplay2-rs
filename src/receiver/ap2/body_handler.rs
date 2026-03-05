@@ -3,8 +3,9 @@
 //! `AirPlay` 2 uses binary plist (bplist00) format for most request and
 //! response bodies. This module provides parsing and generation utilities.
 
-use crate::protocol::plist::{self, PlistValue};
 use std::collections::HashMap;
+
+use crate::protocol::plist::{self, PlistValue};
 
 /// Content types used in `AirPlay` 2
 pub mod content_types {

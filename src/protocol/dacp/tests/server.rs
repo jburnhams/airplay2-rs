@@ -1,7 +1,8 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::protocol::dacp::commands::{CommandResult, DacpCommand};
 use crate::protocol::dacp::server::{DacpHandler, DacpServer};
 use crate::protocol::dacp::service::DacpServiceConfig;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 struct TestHandler {
     token: String,

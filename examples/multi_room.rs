@@ -1,7 +1,8 @@
 //! Example: Create a multi-room group
 
-use airplay2::{GroupManager, scan};
 use std::time::Duration;
+
+use airplay2::{GroupManager, scan};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,5 +1,6 @@
-use crate::receiver::session::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+use crate::receiver::session::*;
 
 fn test_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345)

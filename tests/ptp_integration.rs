@@ -13,7 +13,6 @@ use airplay2::protocol::ptp::message::{
     AirPlayTimingPacket, PtpMessage, PtpMessageBody, PtpMessageType, PtpParseError, PtpPortIdentity,
 };
 use airplay2::protocol::ptp::timestamp::PtpTimestamp;
-
 use tokio::net::UdpSocket;
 
 // ===== Full IEEE 1588 two-step exchange =====

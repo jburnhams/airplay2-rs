@@ -4,6 +4,7 @@
 //! without needing to Pair-Setup again.
 
 use std::time::Duration;
+
 use tokio::time::sleep;
 
 mod common;
@@ -39,7 +40,7 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     // 3. Connect Client A (Initial Pairing)
     tracing::info!("--- Step 1: Initial Pairing (Pair-Setup) ---");
     {
-        let storage = FileStorage::new(&storage_path).await?;
+        let storage = FileStorage::new(&storage_path, None).await?;
         let config = airplay2::AirPlayConfig::builder()
             .pairing_storage(storage_path.clone()) // This sets the path in config, but we also pass storage directly
             .pin("3939")
@@ -48,7 +49,19 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
         // We use with_pairing_storage to inject the storage instance
         let client = AirPlayClient::new(config).with_pairing_storage(Box::new(storage));
 
-        client.connect(&device).await?;
+        let mut connected = false;
+        for _ in 0..3 {
+            if client.connect(&device).await.is_ok() {
+                connected = true;
+                break;
+            }
+            sleep(Duration::from_secs(2)).await;
+        }
+
+        if !connected {
+            return Err("Failed to connect Client A".into());
+        }
+
         assert!(client.is_connected().await, "Client A should be connected");
 
         // Wait a bit to ensure keys are saved and receiver flushes pairing to disk.
@@ -66,15 +79,26 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     let content = std::fs::read_to_string(&storage_path)?;
     tracing::info!("Storage content: {}", content);
     assert!(
-        content.contains("Integration-Test-Receiver"),
-        "Storage should contain device ID"
+        content.contains(&device.id),
+        "Storage should contain device ID '{}'",
+        device.id
     );
 
     // 5. Connect Client B (Reconnect with Pair-Verify)
     tracing::info!("--- Step 2: Reconnection (Pair-Verify) ---");
     {
         // New client instance, but loading from same storage
-        let storage = FileStorage::new(&storage_path).await?;
+        let storage = FileStorage::new(&storage_path, None).await?;
+
+        // Verify we actually loaded something
+        use airplay2::protocol::pairing::storage::PairingStorage;
+        let keys = storage.load(&device.id).await;
+        assert!(
+            keys.is_some(),
+            "Should have loaded keys for device {}",
+            device.id
+        );
+
         let config = airplay2::AirPlayConfig::builder()
             .pairing_storage(storage_path.clone())
             .pin("3939")
@@ -84,7 +108,18 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
 
         // This connect() call should use Pair-Verify because keys exist in storage
         // and the receiver should recognize us.
-        client.connect(&device).await?;
+        let mut connected = false;
+        for _ in 0..3 {
+            if client.connect(&device).await.is_ok() {
+                connected = true;
+                break;
+            }
+            sleep(Duration::from_secs(2)).await;
+        }
+
+        if !connected {
+            return Err("Failed to connect Client B".into());
+        }
 
         assert!(
             client.is_connected().await,

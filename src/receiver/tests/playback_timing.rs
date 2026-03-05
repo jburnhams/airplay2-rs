@@ -1,9 +1,11 @@
+use std::sync::Arc;
+use std::time::Instant;
+
+use tokio::sync::RwLock;
+
 use crate::receiver::control_receiver::SyncPacket;
 use crate::receiver::playback_timing::PlaybackTiming;
 use crate::receiver::timing::{ClockSync, NtpTimestamp};
-use std::sync::Arc;
-use std::time::Instant;
-use tokio::sync::RwLock;
 
 #[tokio::test]
 async fn test_playback_timing() {
@@ -86,10 +88,11 @@ async fn test_playback_timing_negative_diff() {
         // Correct delay is approx 1.5s.
         assert!(
             delay.as_secs() < 10,
-            "Delay is too large: {delay:?}. Likely due to unsigned wrapping of negative timestamp difference.",
+            "Delay is too large: {delay:?}. Likely due to unsigned wrapping of negative timestamp \
+             difference.",
         );
     } else {
-        // If playback is already past (e.g. debugging slow test), it's definitely not 27 hours in future.
-        // This is fine.
+        // If playback is already past (e.g. debugging slow test), it's definitely not 27 hours in
+        // future. This is fine.
     }
 }

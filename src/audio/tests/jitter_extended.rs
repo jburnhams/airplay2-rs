@@ -1,6 +1,7 @@
+use std::time::Instant;
+
 use crate::audio::jitter::{BufferState, JitterBuffer, JitterBufferConfig};
 use crate::receiver::rtp_receiver::AudioPacket;
-use std::time::Instant;
 
 fn make_packet(seq: u16, timestamp: u32) -> AudioPacket {
     AudioPacket {

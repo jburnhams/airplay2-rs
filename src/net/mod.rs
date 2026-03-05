@@ -15,18 +15,16 @@ mod tokio_impl;
 #[cfg(test)]
 mod tests;
 
-pub use traits::{
-    AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Flush, Read, ReadExact, WriteAll,
-};
+// #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
+// pub use async_std_impl::*;
+use std::future::Future;
 
 // Re-export the active runtime's types
 #[cfg(feature = "tokio-runtime")]
 pub use tokio_impl::*;
-
-// #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-// pub use async_std_impl::*;
-
-use std::future::Future;
+pub use traits::{
+    AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Flush, Read, ReadExact, WriteAll,
+};
 
 /// Runtime abstraction for common operations
 pub struct Runtime;
@@ -38,12 +36,10 @@ impl Runtime {
         tokio::time::sleep(duration).await;
     }
 
-    /*
-    #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-    pub async fn sleep(duration: std::time::Duration) {
-        async_std::task::sleep(duration).await
-    }
-    */
+    // #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
+    // pub async fn sleep(duration: std::time::Duration) {
+    // async_std::task::sleep(duration).await
+    // }
 
     /// Run a future with a timeout
     ///
@@ -60,17 +56,15 @@ impl Runtime {
             .map_err(|_| TimeoutError)
     }
 
-    /*
-    #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
-    pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T, TimeoutError>
-    where
-        F: Future<Output = T>,
-    {
-        async_std::future::timeout(duration, future)
-            .await
-            .map_err(|_| TimeoutError)
-    }
-    */
+    // #[cfg(all(feature = "async-std-runtime", not(feature = "tokio-runtime")))]
+    // pub async fn timeout<F, T>(duration: std::time::Duration, future: F) -> Result<T,
+    // TimeoutError> where
+    // F: Future<Output = T>,
+    // {
+    // async_std::future::timeout(duration, future)
+    // .await
+    // .map_err(|_| TimeoutError)
+    // }
 
     /// Get current timestamp
     #[must_use]

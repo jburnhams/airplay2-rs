@@ -2,13 +2,13 @@
 //!
 //! Returns device capabilities to connecting senders.
 
+use std::sync::Arc;
+
 use super::body_handler::encode_bplist_body;
 use super::capabilities::DeviceCapabilities;
 use super::request_handler::{Ap2HandleResult, Ap2RequestContext};
 use super::response_builder::Ap2ResponseBuilder;
-use crate::protocol::rtsp::RtspRequest;
-use crate::protocol::rtsp::StatusCode;
-use std::sync::Arc;
+use crate::protocol::rtsp::{RtspRequest, StatusCode};
 
 /// Handler for GET /info endpoint
 pub struct InfoEndpoint {

@@ -1,5 +1,6 @@
-use super::super::*;
 use ::rsa::traits::PublicKeyParts;
+
+use super::super::*;
 
 #[test]
 fn test_rsa_key_generation() {
@@ -21,10 +22,11 @@ fn test_oaep_encrypt_decrypt() {
     let public = private.public_key();
 
     // Encrypt with public key
-    use crate::protocol::crypto::CompatibleOsRng;
     use ::rsa::Oaep;
     use rand::rngs::OsRng;
     use sha1::Sha1;
+
+    use crate::protocol::crypto::CompatibleOsRng;
 
     let padding = Oaep::<Sha1>::new();
     let mut rng = CompatibleOsRng(OsRng);

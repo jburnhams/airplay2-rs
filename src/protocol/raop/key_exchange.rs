@@ -1,8 +1,9 @@
 //! AES key exchange for RAOP audio encryption
 
-use super::super::crypto::AppleRsaPublicKey;
-use super::super::crypto::CryptoError;
-use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
+
+use super::super::crypto::{AppleRsaPublicKey, CryptoError};
 
 /// AES key size (128 bits)
 pub const AES_KEY_SIZE: usize = 16;

@@ -3,11 +3,13 @@
 use super::format::{ChannelConfig, SampleFormat};
 
 /// Convert between sample formats
-// Precision loss and truncation are expected when converting between integer and float formats for audio
+// Precision loss and truncation are expected when converting between integer and float formats for
+// audio
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    reason = "Precision loss and truncation are expected when converting between integer and float formats for audio"
+    reason = "Precision loss and truncation are expected when converting between integer and \
+              float formats for audio"
 )]
 #[must_use]
 pub fn convert_samples(
@@ -189,12 +191,14 @@ pub fn convert_channels_into(
 /// Simple sample rate conversion (linear interpolation)
 ///
 /// For production use, consider a proper resampler like rubato
-// Linear resampling involves floating point calculations and index casting that may lose precision or truncate
+// Linear resampling involves floating point calculations and index casting that may lose precision
+// or truncate
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
-    reason = "Linear resampling involves floating point calculations and index casting that may lose precision or truncate"
+    reason = "Linear resampling involves floating point calculations and index casting that may \
+              lose precision or truncate"
 )]
 #[must_use]
 pub fn resample_linear(input: &[f32], input_rate: u32, output_rate: u32, channels: u8) -> Vec<f32> {

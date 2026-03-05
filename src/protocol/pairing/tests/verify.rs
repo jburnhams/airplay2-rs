@@ -1,10 +1,8 @@
 use crate::protocol::crypto::{
     ChaCha20Poly1305Cipher, Ed25519KeyPair, Ed25519Signature, HkdfSha512, Nonce, X25519KeyPair,
 };
-use crate::protocol::pairing::{
-    PairVerify, PairingError, PairingKeys, PairingStepResult,
-    tlv::{TlvDecoder, TlvEncoder, TlvType},
-};
+use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType};
+use crate::protocol::pairing::{PairVerify, PairingError, PairingKeys, PairingStepResult};
 
 #[test]
 fn test_pair_verify_flow() {

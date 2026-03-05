@@ -1,15 +1,16 @@
 //! Playback control for `AirPlay`
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::sync::RwLock;
+
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::daap::{DmapProgress, TrackMetadata};
 use crate::protocol::plist::DictBuilder;
 use crate::protocol::rtsp::Method;
 use crate::types::{PlaybackState, RepeatMode};
-
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::RwLock;
 
 /// Shuffle mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -57,17 +58,50 @@ impl PlaybackController {
 
     /// Play (resume if paused, start if stopped)
     ///
+    /// Sends `SetRateAnchorTime` with `rate=1.0` and an RTP/PTP anchor mapping.
+    /// When PTP timing is active, includes `networkTimeSecs`, `networkTimeFrac`,
+    /// and `networkTimeTimelineID` so the device can map RTP timestamps to its
+    /// PTP clock domain and know exactly when to start rendering audio.
+    ///
     /// # Errors
     ///
     /// Returns error if state is invalid or network fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if the fractional portion of the PTP network time overflows a `u32` when converted
+    /// back to nanoseconds for display formatting. This should never happen.
     pub async fn play(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
         if !state.is_playing {
-            let body = DictBuilder::new()
-                .insert("rate", 1.0)
-                .insert("rtpTime", 0u64)
-                .build();
+            let mut builder = DictBuilder::new()
+                .insert("rate", 1i64)
+                .insert("rtpTime", 0u64);
+
+            // Include PTP anchor timestamps so the device knows when to render
+            if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
+                tracing::info!(
+                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} \
+                     (timeline=0x{:016X})",
+                    secs,
+                    // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
+                    u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
+                        .expect("PTP time fraction conversion should fit in u32"),
+                    timeline_id,
+                );
+                builder = builder
+                    .insert("networkTimeSecs", secs)
+                    .insert("networkTimeFrac", frac)
+                    .insert("networkTimeTimelineID", timeline_id);
+            } else {
+                tracing::warn!(
+                    "SetRateAnchorTime: PTP clock not available or not synchronized — sending \
+                     without networkTime fields (device may not render audio)"
+                );
+            }
+
+            let body = builder.build();
             let encoded =
                 crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
                     message: format!("Failed to encode plist: {e}"),
@@ -95,26 +129,26 @@ impl PlaybackController {
     pub async fn pause(&self) -> Result<(), AirPlayError> {
         let mut state = self.state.write().await;
 
-        if state.is_playing {
-            let body = DictBuilder::new()
-                .insert("rate", 0.0)
-                .insert("rtpTime", 0u64)
-                .build();
-            let encoded =
-                crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-                    message: format!("Failed to encode plist: {e}"),
-                    status_code: None,
-                })?;
+        // Send pause unconditionally. We might have started a stream in another task
+        // and the state might not be synchronized, but it's safe to send a pause command.
+        let body = DictBuilder::new()
+            .insert("rate", 0i64)
+            .insert("rtpTime", 0u64)
+            .build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
 
-            self.connection
-                .send_command(
-                    Method::SetRateAnchorTime,
-                    Some(encoded),
-                    Some("application/x-apple-binary-plist".to_string()),
-                )
-                .await?;
-            state.is_playing = false;
-        }
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+        state.is_playing = false;
 
         Ok(())
     }
@@ -315,13 +349,33 @@ impl PlaybackController {
         Ok(())
     }
 
+    /// Set artwork
+    ///
+    /// # Errors
+    ///
+    /// Returns error if network fails
+    pub async fn set_artwork(&self, data: &[u8], mime_type: &str) -> Result<(), AirPlayError> {
+        self.connection
+            .send_command(
+                Method::SetParameter,
+                Some(data.to_vec()),
+                Some(mime_type.to_string()),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Internal: send scrub command
     async fn send_scrub(&self, position: f64) -> Result<(), AirPlayError> {
         // AirPlay 2 uses progress parameter for scrub
         // We need a base RTP timestamp. For now we use a dummy one if not provided,
         // but high-quality implementations should track the actual RTP base.
         let base_rtp: u32 = 0;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "Samples fit in u32"
+        )]
         let pos_samples = (position * 44100.0) as u32;
         // We don't know duration here, so we use current for end as well or a large value
         let progress = DmapProgress::new(

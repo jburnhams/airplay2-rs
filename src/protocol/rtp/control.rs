@@ -84,7 +84,8 @@ impl ControlPacket {
     pub fn encode(&self) -> Vec<u8> {
         match self {
             ControlPacket::RetransmitRequest(req) => req.encode(0), // SSRC 0 placeholder?
-            ControlPacket::Sync { .. } => Vec::new(), // Not implemented for encoding yet
+            ControlPacket::Sync { .. } => Vec::new(),               // Not implemented for
+            // encoding yet
             ControlPacket::TimeAnnouncePtp {
                 rtp_timestamp,
                 ptp_timestamp,

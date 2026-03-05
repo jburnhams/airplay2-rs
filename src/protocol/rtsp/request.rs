@@ -1,4 +1,5 @@
-use super::{Headers, Method, headers::names};
+use super::headers::names;
+use super::{Headers, Method};
 
 /// An RTSP request message
 #[derive(Debug, Clone)]

@@ -87,7 +87,10 @@ impl Concealer {
 
         // Process one frame at a time
         for i in 0..frame_count {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "Precision loss is acceptable for audio fade calculation"
+            )]
             let fade = 1.0 - (i as f32 / frame_count as f32);
 
             let frame_start = i * self.bytes_per_sample;
@@ -98,7 +101,7 @@ impl Concealer {
             for sample_idx in (frame_start..frame_end).step_by(2) {
                 if sample_idx + 1 < output.len() {
                     let sample = i16::from_le_bytes([output[sample_idx], output[sample_idx + 1]]);
-                    #[allow(clippy::cast_possible_truncation)]
+                    #[allow(clippy::cast_possible_truncation, reason = "Audio sample fits in i16")]
                     let faded = (f32::from(sample) * fade) as i16;
                     let bytes = faded.to_le_bytes();
                     output[sample_idx] = bytes[0];

@@ -1,5 +1,6 @@
-use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
 use std::collections::HashMap;
+
+use super::{MediaDescription, SdpConnection, SdpOrigin, SessionDescription};
 
 /// Builder for SDP session descriptions
 pub struct SdpBuilder {

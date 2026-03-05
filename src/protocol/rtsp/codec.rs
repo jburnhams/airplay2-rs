@@ -1,5 +1,6 @@
-use super::{Headers, RtspResponse, StatusCode};
 use thiserror::Error;
+
+use super::{Headers, RtspResponse, StatusCode};
 
 /// Errors during RTSP parsing
 #[derive(Debug, Error)]

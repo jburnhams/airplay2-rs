@@ -1,14 +1,14 @@
-//! DAAP/DMAP metadata protocol for RAOP
+//! DAAP/DMAP protocol support
 
-mod artwork;
-mod dmap;
-mod metadata;
-mod progress;
+pub mod artwork;
+pub mod dmap;
+pub mod metadata;
+pub mod progress;
 
 #[cfg(test)]
 mod tests;
 
-pub use artwork::{Artwork, ArtworkFormat};
-pub use dmap::{DmapEncoder, DmapTag};
-pub use metadata::{MetadataBuilder, TrackMetadata};
-pub use progress::PlaybackProgress as DmapProgress;
+pub use artwork::*;
+pub use dmap::*;
+pub use metadata::*;
+pub use progress::*;

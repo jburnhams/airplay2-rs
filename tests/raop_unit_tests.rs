@@ -1,9 +1,10 @@
 //! RAOP unit test collection
 
 mod discovery_tests {
+    use std::collections::HashMap;
+
     use airplay2::discovery::raop::*;
     use airplay2::types::{RaopCapabilities, RaopCodec};
-    use std::collections::HashMap;
 
     #[test]
     fn test_parse_raop_capabilities() {

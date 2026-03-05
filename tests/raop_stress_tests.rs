@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
 use airplay2::testing::mock_raop_server::{MockRaopConfig, MockRaopServer};
 use airplay2::types::{DeviceCapabilities, RaopCapabilities, TrackInfo};
 use airplay2::{AirPlayDevice, ClientConfig, PreferredProtocol, UnifiedAirPlayClient};
-use std::collections::HashMap;
-use std::time::Duration;
 
 async fn setup_mock_server() -> MockRaopServer {
     let config = MockRaopConfig {

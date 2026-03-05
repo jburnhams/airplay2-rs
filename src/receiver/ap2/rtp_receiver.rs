@@ -2,11 +2,12 @@
 //!
 //! Receives RTP packets on the allocated UDP port and processes them.
 
-use super::rtp_decryptor::{Ap2RtpDecryptor, AudioDecoder, DecryptionError};
-use crate::protocol::rtp::RtpPacket;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
+
+use super::rtp_decryptor::{Ap2RtpDecryptor, AudioDecoder, DecryptionError};
+use crate::protocol::rtp::RtpPacket;
 
 /// Received audio frame containing decoded PCM samples
 #[derive(Debug)]
@@ -146,7 +147,8 @@ impl RtpReceiver {
                 std::cmp::Ordering::Less => {
                     // Late packet (reordered) - do not update last_sequence
                     // Just log if needed
-                    // debug!("Late packet: expected {}, got {}", expected_seq, packet.header.sequence);
+                    // debug!("Late packet: expected {}, got {}", expected_seq,
+                    // packet.header.sequence);
                 }
                 std::cmp::Ordering::Equal => {
                     // Exact match

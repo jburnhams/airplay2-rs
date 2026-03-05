@@ -1,9 +1,10 @@
-use super::CryptoError;
 use num_bigint::{BigUint, RandomBits};
 use num_traits::One;
 use rand::Rng;
 use sha2::{Digest, Sha512};
 use zeroize::Zeroize;
+
+use super::CryptoError;
 
 /// SRP-6a Parameters
 #[derive(Clone, Debug)]

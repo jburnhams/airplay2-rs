@@ -9,13 +9,14 @@ pub mod raop;
 #[cfg(test)]
 mod tests;
 
+use std::time::Duration;
+
 pub use browser::{DeviceBrowser, DeviceFilter, DiscoveryEvent, DiscoveryOptions};
+use futures::Stream;
 pub use parser::parse_txt_records;
 
 use crate::error::AirPlayError;
 use crate::types::{AirPlayConfig, AirPlayDevice};
-use futures::Stream;
-use std::time::Duration;
 
 /// Service type for `AirPlay` discovery
 pub const AIRPLAY_SERVICE_TYPE: &str = "_airplay._tcp.local.";
@@ -30,7 +31,7 @@ pub use raop::RAOP_SERVICE_TYPE;
 /// # Example
 ///
 /// ```rust,no_run
-/// use airplay2::discovery::{discover, DiscoveryEvent};
+/// use airplay2::discovery::{DiscoveryEvent, discover};
 /// use futures::StreamExt;
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
@@ -54,8 +55,9 @@ pub use raop::RAOP_SERVICE_TYPE;
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-    discover_with_config(AirPlayConfig::default())
+pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent> + 'static, AirPlayError> {
+    let browser = DeviceBrowser::new(&AirPlayConfig::default());
+    browser.browse()
 }
 
 /// Discover devices with custom configuration
@@ -63,11 +65,10 @@ pub fn discover() -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
 /// # Errors
 ///
 /// Returns an error if the mDNS daemon cannot be initialized.
-#[allow(clippy::needless_pass_by_value)] // Value is needed to avoid lifetime issues with impl Stream
 pub fn discover_with_config(
-    config: AirPlayConfig,
-) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
-    let browser = DeviceBrowser::new(&config);
+    config: &AirPlayConfig,
+) -> Result<impl Stream<Item = DiscoveryEvent> + 'static, AirPlayError> {
+    let browser = DeviceBrowser::new(config);
     browser.browse()
 }
 
@@ -78,7 +79,7 @@ pub fn discover_with_config(
 /// Returns an error if the mDNS daemon cannot be initialized.
 pub fn discover_with_options(
     options: DiscoveryOptions,
-) -> Result<impl Stream<Item = DiscoveryEvent>, AirPlayError> {
+) -> Result<impl Stream<Item = DiscoveryEvent> + 'static, AirPlayError> {
     let browser = DeviceBrowser::with_options(options);
     browser.browse()
 }
@@ -94,8 +95,9 @@ pub fn discover_with_options(
 /// # Example
 ///
 /// ```rust,no_run
-/// use airplay2::discovery::scan;
 /// use std::time::Duration;
+///
+/// use airplay2::discovery::scan;
 ///
 /// # async fn example() -> Result<(), airplay2::AirPlayError> {
 /// let devices = scan(Duration::from_secs(5)).await?;
@@ -123,8 +125,9 @@ pub async fn scan_with_config(
     timeout: Duration,
     config: AirPlayConfig,
 ) -> Result<Vec<AirPlayDevice>, AirPlayError> {
-    use futures::StreamExt;
     use std::collections::HashMap;
+
+    use futures::StreamExt;
 
     let browser = DeviceBrowser::new(&config);
     let stream = browser.browse()?;
@@ -166,8 +169,9 @@ pub async fn scan_with_config(
 pub async fn scan_with_options(
     options: DiscoveryOptions,
 ) -> Result<Vec<AirPlayDevice>, AirPlayError> {
-    use futures::StreamExt;
     use std::collections::HashMap;
+
+    use futures::StreamExt;
 
     let timeout = options.timeout;
     let browser = DeviceBrowser::with_options(options);

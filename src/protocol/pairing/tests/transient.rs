@@ -1,7 +1,5 @@
-use crate::protocol::pairing::{
-    PairingError, PairingStepResult, TransientPairing,
-    tlv::{TlvDecoder, TlvEncoder, TlvType, errors},
-};
+use crate::protocol::pairing::tlv::{TlvDecoder, TlvEncoder, TlvType, errors};
+use crate::protocol::pairing::{PairingError, PairingStepResult, TransientPairing};
 
 #[test]
 fn test_transient_start() {

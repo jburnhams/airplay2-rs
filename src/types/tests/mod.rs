@@ -1,7 +1,8 @@
 mod raop;
 
-use super::*;
 use std::time::Duration;
+
+use super::*;
 
 // --- config.rs tests ---
 

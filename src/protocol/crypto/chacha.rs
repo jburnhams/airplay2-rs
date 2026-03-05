@@ -1,8 +1,7 @@
+use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::{ChaCha20Poly1305 as ChaChaImpl, Nonce as ChaChaNonce};
+
 use super::{CryptoError, lengths};
-use chacha20poly1305::{
-    ChaCha20Poly1305 as ChaChaImpl, Nonce as ChaChaNonce,
-    aead::{Aead, KeyInit},
-};
 
 /// 12-byte nonce for ChaCha20-Poly1305
 #[derive(Clone, Copy)]

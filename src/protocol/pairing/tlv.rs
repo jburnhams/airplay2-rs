@@ -1,6 +1,7 @@
 //! TLV8 encoding for `HomeKit` pairing protocol
 
 use std::collections::HashMap;
+
 use thiserror::Error;
 
 /// TLV type codes used in `HomeKit` pairing
@@ -108,7 +109,10 @@ impl TlvEncoder {
         // For larger values, we need to fragment across multiple TLVs
         for chunk in value.chunks(255) {
             self.buffer.push(tlv_type as u8);
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Chunks are explicitly bounded to 255"
+            )]
             self.buffer.push(chunk.len() as u8);
             self.buffer.extend_from_slice(chunk);
         }

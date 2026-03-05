@@ -1,16 +1,18 @@
 //! Integration tests for AirPlay 2 service advertisement
 
+use std::time::Duration;
+
 use airplay2::discovery;
 use airplay2::receiver::ap2::{Ap2Config, Ap2ServiceAdvertiser};
-use std::time::Duration;
 
 /// Test that we can advertise and discover our own service
 #[tokio::test]
 #[ignore] // Integration tests often fail in restricted CI environments due to mDNS networking
 async fn test_advertise_and_discover() {
     let config = Ap2Config::new("Integration Test Speaker");
+    let public_key = [0u8; 32];
     let advertiser =
-        Ap2ServiceAdvertiser::new(config.clone()).expect("Failed to create advertiser");
+        Ap2ServiceAdvertiser::new(config.clone(), public_key).expect("Failed to create advertiser");
 
     // Start advertising
     advertiser
@@ -47,7 +49,9 @@ async fn test_advertise_and_discover() {
 #[ignore] // Integration tests often fail in restricted CI environments due to mDNS networking
 async fn test_name_update() {
     let config = Ap2Config::new("Original Name");
-    let mut advertiser = Ap2ServiceAdvertiser::new(config).expect("Failed to create advertiser");
+    let public_key = [0u8; 32];
+    let mut advertiser =
+        Ap2ServiceAdvertiser::new(config, public_key).expect("Failed to create advertiser");
 
     advertiser.start().await.expect("Failed to start");
 
@@ -74,8 +78,9 @@ async fn test_name_update() {
 #[tokio::test]
 async fn test_stop_removes_service() {
     let config = Ap2Config::new("Disappearing Speaker");
+    let public_key = [0u8; 32];
     let advertiser =
-        Ap2ServiceAdvertiser::new(config.clone()).expect("Failed to create advertiser");
+        Ap2ServiceAdvertiser::new(config.clone(), public_key).expect("Failed to create advertiser");
 
     advertiser.start().await.expect("Failed to start");
     tokio::time::sleep(Duration::from_millis(500)).await;

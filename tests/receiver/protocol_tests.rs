@@ -1,8 +1,9 @@
 //! Protocol conformance tests for AirPlay receiver
 
+use std::time::Duration;
+
 use airplay2::receiver::{AirPlayReceiver, ReceiverConfig, ReceiverEvent};
 use airplay2::testing::mock_sender::{MockSender, MockSenderConfig};
-use std::time::Duration;
 
 /// Test complete session negotiation
 #[tokio::test]

@@ -3,11 +3,13 @@
 //! Provides ChaCha20-Poly1305 encryption for RTSP control sessions
 //! after successful SRP pairing.
 
-use crate::error::AirPlayError;
 use byteorder::{ByteOrder, LittleEndian};
 #[allow(deprecated)]
 use chacha20poly1305::aead::AeadInPlace;
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, Tag, aead::KeyInit};
+use chacha20poly1305::aead::KeyInit;
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, Tag};
+
+use crate::error::AirPlayError;
 
 /// HAP secure session state
 pub struct HapSecureSession {

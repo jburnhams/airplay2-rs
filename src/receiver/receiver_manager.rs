@@ -3,14 +3,16 @@
 //! Manages all three UDP receive loops and coordinates
 //! packet flow to the audio pipeline.
 
+use std::sync::Arc;
+
+use tokio::net::UdpSocket;
+use tokio::sync::{RwLock, mpsc};
+use tokio::task::JoinHandle;
+
 use super::control_receiver::{ControlEvent, ControlReceiver};
 use super::rtp_receiver::{AudioPacket, RtpAudioReceiver};
 use super::sequence_tracker::SequenceTracker;
 use crate::receiver::session::StreamParameters;
-use std::sync::Arc;
-use tokio::net::UdpSocket;
-use tokio::sync::{RwLock, mpsc};
-use tokio::task::JoinHandle;
 
 /// Receiver manager configuration
 #[derive(Debug, Clone)]

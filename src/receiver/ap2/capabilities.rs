@@ -3,13 +3,18 @@
 //! These structures define what our receiver advertises to senders
 //! via the /info endpoint.
 
+use std::collections::HashMap;
+
 use crate::protocol::plist::PlistValue;
 use crate::receiver::ap2::features::{FeatureFlag, FeatureFlags};
-use std::collections::HashMap;
 
 /// Device capabilities for /info response
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Device capabilities intrinsically require numerous boolean flags to represent \
+              supported features"
+)]
 pub struct DeviceCapabilities {
     /// Device identification
     pub device_id: String,
@@ -261,7 +266,8 @@ impl DeviceCapabilities {
         let hash = hasher.finalize();
 
         format!(
-            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:\
+             02x}{:02x}{:02x}",
             hash[0],
             hash[1],
             hash[2],

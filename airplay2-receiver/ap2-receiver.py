@@ -3,6 +3,7 @@ import argparse
 import multiprocessing
 import random
 import tempfile  # noqa
+import os
 from threading import current_thread
 
 import pprint
@@ -54,6 +55,8 @@ MDNS_OBJ = None
 HK_ACL_LEVEL = 0
 # HomeKit assigned password (numeric PIN) to access
 HK_PW = None
+# Global port variable to ensure mDNS uses correct port
+PORT = 7000
 
 """
 # SERVER_VERSION; presence/absence, and value dictates client behaviours
@@ -134,9 +137,9 @@ def update_status_flags(flag=None, on=False, push=True):
     # If push is false, we skip pushing out the update.
     if push:
         if IPV6 is not None:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN, IP6ADDR_BIN], PORT)
         else:
-            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN])
+            MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP4ADDR_BIN], PORT)
 
 
 def setup_global_structs(args, isDebug=False):
@@ -704,13 +707,15 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
             if content_len > 0:
                 body = self.rfile.read(content_len)
 
-                """
                 fname = None
-                with tempfile.NamedTemporaryFile(prefix="artwork", dir=".", delete=False, suffix=".jpg") as f:
-                    f.write(self.rfile.read(content_len))
-                    fname = f.name
-                self.logger.info(f"Artwork saved to {fname}")
-                """
+                try:
+                    with tempfile.NamedTemporaryFile(prefix="artwork", delete=False, suffix=".jpg") as f:
+                        f.write(body)
+                        fname = f.name
+                    self.logger.info(f"Artwork saved to {fname}")
+                finally:
+                    if fname and os.path.exists(fname):
+                        os.remove(fname)
         elif content_type == HTTP_CT_DMAP:
             if content_len > 0:
                 self.logger.info(parse_dxxp(self.rfile.read(content_len)))
@@ -1199,14 +1204,14 @@ class AP2Handler(http.server.BaseHTTPRequestHandler):
         self.logger.debug("----- ENCRYPTED CHANNEL -----")
 
 
-def register_mdns(mac, receiver_name, addresses):
+def register_mdns(mac, receiver_name, addresses, port=7000):
     global MDNS_OBJ
 
     info = ServiceInfo(
         "_airplay._tcp.local.",
         f"{receiver_name}._airplay._tcp.local.",
         addresses=addresses,
-        port=7000,
+        port=port,
         properties=mdns_props,
         server=f"{mac.replace(':', '')}@{receiver_name}._airplay.local.",
     )
@@ -1217,7 +1222,9 @@ def register_mdns(mac, receiver_name, addresses):
 
     if zeroconf is None:
         try:
-            zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
+            # Restrict to the chosen interface to avoid "No route to host" errors on other interfaces
+            interfaces = [IPV4] if IPV4 else None
+            zeroconf = Zeroconf(ip_version=IPVersion.V4Only, interfaces=interfaces)
         except OSError as e:
             SCR_LOG.error(f'mDNS exception during initialization: {repr(e)}')
             return None
@@ -1340,6 +1347,7 @@ if __name__ == "__main__":
     mutexgroup = parser.add_mutually_exclusive_group()
 
     parser.add_argument("-fm", "--fakemac", help="Generate and use a random MAC for ethernet address.", action='store_true')
+    parser.add_argument("--mac", help="Specific MAC address to use (overrides detection)", default=None)
     parser.add_argument("-m", "--mdns", help="mDNS name to announce", default="myap2")
     parser.add_argument("-n", "--netiface", help="Network interface to bind to. Use the --list-interfaces option to list available interfaces.")
     parser.add_argument("-p", "--port", help="Port to bind to (default: 7000, use 0 for dynamic)", type=int, default=7000)
@@ -1450,7 +1458,9 @@ if __name__ == "__main__":
     DEVICE_ID = None
     IPV4 = None
     IPV6 = None
-    if ifen.get(ni.AF_LINK):
+    if args.mac:
+        DEVICE_ID = args.mac
+    elif ifen.get(ni.AF_LINK):
         if args.fakemac:
             DEVICE_ID = generate_fake_mac()
             while DEVICE_ID == ifen[ni.AF_LINK][0]["addr"]:
@@ -1490,12 +1500,18 @@ if __name__ == "__main__":
 
     SCR_LOG.info("Starting RTSP server, press Ctrl-C to exit...")
     try:
+        # Update global PORT from args
         PORT = args.port
         if IPV6 and not IPV4:
             with AP2Server((IPV6, PORT), AP2Handler) as httpd:
                 IPADDR_BIN = IP6ADDR_BIN
                 IPADDR = IPV6
                 PORT = httpd.server_address[1]
+                # Re-register mDNS with actual port
+                if MDNS_OBJ:
+                    unregister_mdns(*MDNS_OBJ)
+                    MDNS_OBJ = None
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, [IP6ADDR_BIN], PORT)
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
         else:  # i.e. (IPV4 and not IPV6) or (IPV6 and IPV4)
@@ -1503,6 +1519,14 @@ if __name__ == "__main__":
                 IPADDR_BIN = IP4ADDR_BIN
                 IPADDR = IPV4
                 PORT = httpd.server_address[1]
+                # Re-register mDNS with actual port
+                if MDNS_OBJ:
+                    unregister_mdns(*MDNS_OBJ)
+                    MDNS_OBJ = None
+                addrs_to_register = [IP4ADDR_BIN]
+                if IPV6:
+                    addrs_to_register.append(IP6ADDR_BIN)
+                MDNS_OBJ = register_mdns(DEVICE_ID, DEV_NAME, addrs_to_register, PORT)
                 SCR_LOG.info(f"serving on {IPADDR}:{PORT}")
                 httpd.serve_forever()
 

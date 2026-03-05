@@ -13,8 +13,9 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use airplay2::{discover, AirPlayClient};
 //! use std::time::Duration;
+//!
+//! use airplay2::{AirPlayClient, discover};
 //!
 //! # async fn example() -> Result<(), airplay2::AirPlayError> {
 //! // Discover devices
@@ -42,7 +43,11 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
+#![allow(
+    clippy::module_name_repetitions,
+    reason = "Module names frequently mirror core types leading to intentional repetition (e.g. \
+              error::AirPlayError)"
+)]
 
 // Public modules
 /// Error types
@@ -67,7 +72,7 @@ mod client;
 pub mod connection;
 pub mod control;
 pub mod discovery;
-mod group;
+pub mod group;
 pub mod net;
 mod player;
 pub mod protocol;
@@ -86,9 +91,9 @@ pub use error::AirPlayError;
 pub use group::{DeviceGroup, GroupId, GroupManager};
 pub use player::{AirPlayPlayer, PlayerBuilder, quick_connect, quick_connect_to, quick_play};
 pub use state::{ClientEvent, ClientState};
-pub use types::RepeatMode;
 pub use types::{
-    AirPlayConfig, AirPlayDevice, DeviceCapabilities, PlaybackState, TimingProtocol, TrackInfo,
+    AirPlayConfig, AirPlayDevice, DeviceCapabilities, PlaybackState, RepeatMode, TimingProtocol,
+    TrackInfo,
 };
 
 /// Library version
@@ -98,19 +103,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 /// Convenient re-exports
 pub mod prelude {
-    pub use crate::AirPlayClient;
-    pub use crate::AirPlayConfig;
-    pub use crate::AirPlayDevice;
-    pub use crate::AirPlayError;
-    pub use crate::AirPlayPlayer;
-    pub use crate::AudioFormat;
-    pub use crate::PlaybackState;
-    pub use crate::TrackInfo;
-    pub use crate::Volume;
-
-    pub use crate::discover;
-    pub use crate::quick_connect;
-    pub use crate::quick_connect_to;
-    pub use crate::quick_play;
-    pub use crate::scan;
+    pub use crate::{
+        AirPlayClient, AirPlayConfig, AirPlayDevice, AirPlayError, AirPlayPlayer, AudioFormat,
+        PlaybackState, TrackInfo, Volume, discover, quick_connect, quick_connect_to, quick_play,
+        scan,
+    };
 }

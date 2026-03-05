@@ -3,7 +3,8 @@
 //! Processes ANNOUNCE requests and configures session stream parameters.
 
 use crate::protocol::rtsp::RtspRequest;
-use crate::protocol::sdp::{SdpParseError, SdpParser, raop::extract_stream_parameters};
+use crate::protocol::sdp::raop::extract_stream_parameters;
+use crate::protocol::sdp::{SdpParseError, SdpParser};
 use crate::receiver::session::{ReceiverSession, StreamParameters};
 
 /// Errors from ANNOUNCE handling

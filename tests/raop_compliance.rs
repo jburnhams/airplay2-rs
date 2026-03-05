@@ -1,6 +1,7 @@
+use std::time::Duration;
+
 use airplay2::testing::create_test_device;
 use airplay2::{AirPlayClient, AirPlayConfig};
-use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -56,11 +57,9 @@ async fn test_raop_handshake_compliance() {
     // RAOP requires Apple-Challenge in response for auth, but we can simulate success or continue
     // If we don't send Apple-Challenge, client might skip auth or fail if strict.
     // Let's send a standard response.
-    let response = "RTSP/1.0 200 OK\r\n\
-                    CSeq: 1\r\n\
-                    Public: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\n\
-                    Apple-Jack-Status: connected; type=analog\r\n\
-                    \r\n";
+    let response = "RTSP/1.0 200 OK\r\nCSeq: 1\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                    TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
+                    GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n";
     stream.write_all(response.as_bytes()).await.unwrap();
 
     // --- Step 2: ANNOUNCE ---
@@ -69,16 +68,14 @@ async fn test_raop_handshake_compliance() {
 
     println!("Received request 2: {}", request);
 
-    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client double checks)
-    // The client implementation might differ, so we should be robust.
+    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
+    // double checks) The client implementation might differ, so we should be robust.
     // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
 
     if request.starts_with("ANNOUNCE") {
         assert!(request.contains("Content-Type: application/sdp"));
 
-        let response = "RTSP/1.0 200 OK\r\n\
-                        CSeq: 2\r\n\
-                        \r\n";
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
 
         // --- Step 3: SETUP ---
@@ -89,11 +86,9 @@ async fn test_raop_handshake_compliance() {
         assert!(request.starts_with("SETUP"));
         assert!(request.contains("Transport: RTP/AVP/UDP"));
 
-        let response = "RTSP/1.0 200 OK\r\n\
-                        CSeq: 3\r\n\
-                        Session: CAFEBABE\r\n\
-                        Transport: RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;timing_port=6002\r\n\
-                        \r\n";
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nSession: CAFEBABE\r\nTransport: \
+                        RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                        timing_port=6002\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
 
         // --- Step 4: RECORD ---
@@ -105,10 +100,7 @@ async fn test_raop_handshake_compliance() {
         assert!(request.contains("Session: CAFEBABE"));
         assert!(request.contains("Range: npt=0-"));
 
-        let response = "RTSP/1.0 200 OK\r\n\
-                        CSeq: 4\r\n\
-                        Audio-Latency: 2205\r\n\
-                        \r\n";
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
     } else if request.starts_with("POST") {
         // Maybe pairing?

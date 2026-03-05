@@ -4,10 +4,9 @@
 //! Handlers are pure functions that take a request and session state,
 //! returning a response. No I/O is performed.
 
-use crate::protocol::rtsp::{
-    Method, RtspRequest, RtspResponse, StatusCode, server_codec::ResponseBuilder,
-    transport::TransportHeader,
-};
+use crate::protocol::rtsp::server_codec::ResponseBuilder;
+use crate::protocol::rtsp::transport::TransportHeader;
+use crate::protocol::rtsp::{Method, RtspRequest, RtspResponse, StatusCode};
 use crate::receiver::announce_handler;
 use crate::receiver::session::{ReceiverSession, SessionState, StreamParameters};
 use crate::receiver::set_parameter_handler::{self, ParameterUpdate};

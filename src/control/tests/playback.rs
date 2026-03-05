@@ -1,8 +1,9 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::connection::ConnectionManager;
 use crate::control::playback::{PlaybackProgress, ShuffleMode};
 use crate::types::AirPlayConfig;
-use std::sync::Arc;
-use std::time::Duration;
 
 #[tokio::test]
 async fn test_playback_controller_creation() {

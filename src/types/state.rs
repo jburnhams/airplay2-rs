@@ -91,15 +91,19 @@ impl From<&PlaybackState> for PlaybackInfo {
                 .and_then(|i| u32::try_from(i).ok())
                 .unwrap_or(0),
             // Position is in seconds, convert to ms. u32 holds ~1193 hours of ms.
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "Position in seconds fits in u32 ms"
+            )]
             position_ms: (state.position_secs * 1000.0) as u32,
             is_playing: state.is_playing,
             items: state
                 .queue
                 .iter()
                 .map(|item| {
-                    #[allow(clippy::cast_possible_truncation)]
-                    (item.track.clone(), item.id.0 as i32)
+                    // The cast from u64 to i32 is unsafe. Using try_from is safer.
+                    (item.track.clone(), i32::try_from(item.id.0).unwrap_or(-1))
                 })
                 .collect(),
         }

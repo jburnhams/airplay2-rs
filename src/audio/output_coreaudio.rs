@@ -4,11 +4,12 @@
 
 #[cfg(all(target_os = "macos", feature = "audio-coreaudio"))]
 mod implementation {
+    use std::time::Duration;
+
     use super::super::output::{
         AudioCallback, AudioDevice, AudioOutput, AudioOutputError, OutputState,
     };
     use crate::audio::format::{AudioFormat, SampleRate};
-    use std::time::Duration;
 
     // Note: This is a skeleton. Full implementation would use coreaudio-rs crate.
 

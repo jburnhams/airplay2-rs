@@ -1,11 +1,12 @@
 //! Volume control for `AirPlay` devices
 
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
+
 use crate::connection::ConnectionManager;
 use crate::error::AirPlayError;
 use crate::protocol::rtsp::Method;
-
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Volume level (0.0 = silent, 1.0 = max)
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -33,7 +34,11 @@ impl Volume {
 
     /// Get as percentage (0 - 100)
     #[must_use]
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "Volume percentage fits in u8"
+    )]
     pub fn as_percent(&self) -> u8 {
         (self.0 * 100.0).round() as u8
     }

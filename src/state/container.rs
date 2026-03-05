@@ -1,7 +1,8 @@
 //! Centralized state management
 
-use crate::types::{AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
 use tokio::sync::{RwLock, watch};
+
+use crate::types::{AirPlayDevice, PlaybackState, RepeatMode, TrackInfo};
 
 /// Overall client state
 #[derive(Debug, Clone)]

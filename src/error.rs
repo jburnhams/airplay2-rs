@@ -1,4 +1,5 @@
 use std::io;
+
 use thiserror::Error;
 
 /// RAOP-specific errors

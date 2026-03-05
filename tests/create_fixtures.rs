@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use airplay2::plist_dict;
-    use airplay2::protocol::plist::{self, PlistValue};
     use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
+
+    use airplay2::plist_dict;
+    use airplay2::protocol::plist::{self, PlistValue};
 
     #[test]
     fn generate_plist_fixtures() {

@@ -1,10 +1,12 @@
 //! RTP timestamp to playback time mapping
 
-use super::control_receiver::SyncPacket;
-use super::timing::{ClockSync, NtpTimestamp};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
 use tokio::sync::RwLock;
+
+use super::control_receiver::SyncPacket;
+use super::timing::{ClockSync, NtpTimestamp};
 
 /// Maps RTP timestamps to wall-clock time for playback scheduling
 pub struct PlaybackTiming {
@@ -70,14 +72,20 @@ impl PlaybackTiming {
     /// Returns the Instant at which the audio with this RTP timestamp
     /// should be sent to the audio device.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "Precision loss acceptable for playback time calculation"
+    )]
     pub fn playback_time(&self, rtp_timestamp: u32) -> Option<Instant> {
         let ref_rtp = self.ref_rtp_timestamp?;
         let ref_local = self.ref_local_time?;
 
         // Calculate samples since reference
         // Cast to i32 to handle wrapping (negative difference)
-        #[allow(clippy::cast_possible_wrap)]
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "RTP timestamp wrapping handled as i32"
+        )]
         let samples_diff = i64::from(rtp_timestamp.wrapping_sub(ref_rtp) as i32);
 
         // Add target latency

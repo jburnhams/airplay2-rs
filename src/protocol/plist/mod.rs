@@ -2,18 +2,21 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(missing_docs)]
-#![allow(clippy::all)]
-#![allow(clippy::pedantic)]
-#![allow(clippy::nursery)]
+#![allow(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    reason = "Legacy module"
+)]
 
 pub mod airplay;
 pub mod decode;
 pub mod encode;
 
+use std::collections::HashMap;
+
 pub use decode::{PlistDecodeError, decode};
 pub use encode::{PlistEncodeError, encode};
-
-use std::collections::HashMap;
 
 /// A property list value
 #[derive(Debug, Clone, PartialEq)]
@@ -80,7 +83,11 @@ impl PlistValue {
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             PlistValue::Real(f) => Some(*f),
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "Loss of precision is acceptable for dates/real numbers converted from \
+                          i64"
+            )]
             PlistValue::Integer(i) => Some(*i as f64),
             _ => None,
         }

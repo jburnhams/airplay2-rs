@@ -1,6 +1,7 @@
+use base64::Engine;
+
 use crate::receiver::ap2::advertisement::{Ap2TxtRecord, txt_keys};
 use crate::receiver::ap2::config::Ap2Config;
-use base64::Engine;
 
 #[test]
 fn test_txt_record_contains_required_fields() {

@@ -16,6 +16,8 @@ pub mod pairing_handlers;
 pub mod pairing_server;
 pub mod password_auth;
 pub mod password_integration;
+/// High level receiver module.
+pub mod receiver;
 pub mod request_handler;
 pub mod request_router;
 pub mod response_builder;
@@ -24,11 +26,12 @@ pub mod rtp_receiver;
 pub mod session_state;
 pub mod setup_handler;
 pub mod stream;
-// pub mod receiver;
 // pub mod ptp_clock;
-// pub mod command_handler;
+pub mod command_handler;
 // pub mod feedback_handler;
-// pub mod multi_room;
+pub mod metadata_handler;
+pub mod multi_room;
+pub mod volume_handler;
 
 #[cfg(test)]
 mod tests;
@@ -42,7 +45,10 @@ pub use info_endpoint::InfoEndpoint;
 pub use pairing_server::PairingServer;
 pub use password_auth::{PasswordAuthError, PasswordAuthManager};
 pub use password_integration::{AuthMode, AuthenticationHandler};
+pub use receiver::{
+    AirPlay2Receiver, ReceiverBuilder, ReceiverError, ReceiverEvent, ReceiverState,
+};
 pub use session_state::Ap2SessionState;
 pub use setup_handler::SetupHandler;
 pub use stream::StreamType;
-// pub use receiver::AirPlay2Receiver;
+pub mod jitter_buffer;

@@ -1,10 +1,11 @@
 //! Example: Streaming raw sine wave audio
 
+use std::f32::consts::PI;
+use std::time::Duration;
+
 use airplay2::audio::AudioFormat;
 use airplay2::streaming::AudioSource;
 use airplay2::{AirPlayClient, scan};
-use std::f32::consts::PI;
-use std::time::Duration;
 
 // Sine wave generator
 struct SineSource {

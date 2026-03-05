@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use crate::protocol::plist::PlistValue;
 use crate::receiver::ap2::response_builder::Ap2ResponseBuilder;
-use std::collections::HashMap;
 
 #[test]
 fn test_bplist_response() {

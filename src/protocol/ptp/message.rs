@@ -201,7 +201,10 @@ impl PtpHeader {
         buf[20..30].copy_from_slice(&port_id);
         buf[30..32].copy_from_slice(&self.sequence_id.to_be_bytes());
         buf[32] = self.control_field;
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(
+            clippy::cast_sign_loss,
+            reason = "log_message_interval is defined as i8 but encoded as u8"
+        )]
         {
             buf[33] = self.log_message_interval as u8;
         }
@@ -238,7 +241,10 @@ impl PtpHeader {
             source_port_identity,
             sequence_id: u16::from_be_bytes([data[30], data[31]]),
             control_field: data[32],
-            #[allow(clippy::cast_possible_wrap)]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "log_message_interval is defined as i8 but encoded as u8"
+            )]
             log_message_interval: data[33] as i8,
         })
     }

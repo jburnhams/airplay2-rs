@@ -1,6 +1,7 @@
-use super::mock_server::{MockServer, MockServerConfig};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+
+use super::mock_server::{MockServer, MockServerConfig};
 
 fn test_config() -> MockServerConfig {
     MockServerConfig {
@@ -61,7 +62,8 @@ async fn test_setup() {
     let addr = server.start().await.unwrap();
 
     let mut stream = TcpStream::connect(addr).await.unwrap();
-    let request = "SETUP rtsp://localhost/stream RTSP/1.0\r\nCSeq: 1\r\nTransport: RTP/AVP/UDP;unicast;mode=record\r\n\r\n";
+    let request = "SETUP rtsp://localhost/stream RTSP/1.0\r\nCSeq: 1\r\nTransport: \
+                   RTP/AVP/UDP;unicast;mode=record\r\n\r\n";
     stream.write_all(request.as_bytes()).await.unwrap();
 
     let mut buf = [0u8; 1024];
@@ -81,7 +83,8 @@ async fn test_record_pause() {
     let mut server = MockServer::new(test_config());
     let addr = server.start().await.unwrap();
 
-    // SETUP first to get session (though mock doesn't strictly enforce sequence for simple tests, it's good practice)
+    // SETUP first to get session (though mock doesn't strictly enforce sequence for simple tests,
+    // it's good practice)
     let mut stream = TcpStream::connect(addr).await.unwrap();
 
     // RECORD

@@ -1,7 +1,8 @@
 //! Event bus for client events
 
-use crate::types::{AirPlayDevice, PlaybackState, TrackInfo};
 use tokio::sync::broadcast;
+
+use crate::types::{AirPlayDevice, PlaybackState, TrackInfo};
 
 /// Client events
 #[derive(Debug, Clone)]

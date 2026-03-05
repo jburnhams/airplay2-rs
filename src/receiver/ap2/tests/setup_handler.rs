@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::protocol::plist::PlistValue;
 use crate::protocol::rtsp::{Method, RtspRequest};
 use crate::receiver::ap2::body_handler::{encode_bplist_body, parse_bplist_body};
@@ -5,7 +7,6 @@ use crate::receiver::ap2::request_handler::{Ap2Event, Ap2RequestContext};
 use crate::receiver::ap2::session_state::Ap2SessionState;
 use crate::receiver::ap2::setup_handler::{PortAllocator, SetupHandler, SetupPhase};
 use crate::receiver::ap2::stream::{EncryptionType, TimingProtocol};
-use std::collections::HashMap;
 
 fn create_setup_request(body: &[u8]) -> RtspRequest {
     RtspRequest::builder(Method::Setup, "rtsp://localhost/stream")

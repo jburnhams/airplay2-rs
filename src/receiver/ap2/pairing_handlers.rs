@@ -2,12 +2,13 @@
 //!
 //! These handlers integrate the `PairingServer` with the RTSP request framework.
 
+use std::sync::{Arc, Mutex};
+
 use super::pairing_server::{EncryptionKeys, PairingResult, PairingServer, PairingServerState};
 use super::request_handler::{Ap2Event, Ap2HandleResult, Ap2RequestContext, HandlerFn};
 use super::response_builder::Ap2ResponseBuilder;
 use super::session_state::Ap2SessionState;
 use crate::protocol::rtsp::{RtspRequest, StatusCode};
-use std::sync::{Arc, Mutex};
 
 /// Handler state for pairing operations
 pub struct PairingHandler {

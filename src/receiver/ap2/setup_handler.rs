@@ -3,6 +3,11 @@
 //! Handles the two-phase SETUP process that configures event, timing,
 //! and audio channels.
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use tracing::{error, info, warn};
+
 use super::body_handler::{encode_bplist_body, parse_bplist_body};
 use super::request_handler::{Ap2Event, Ap2HandleResult, Ap2RequestContext};
 use super::response_builder::Ap2ResponseBuilder;
@@ -12,9 +17,6 @@ use super::stream::{
 };
 use crate::protocol::plist::PlistValue;
 use crate::protocol::rtsp::{RtspRequest, StatusCode};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tracing::{error, info, warn};
 
 /// Parsed SETUP request
 #[derive(Debug, Clone)]
@@ -467,7 +469,10 @@ impl SetupResponse {
                     "type".to_string(),
                     PlistValue::Integer(i64::from(s.stream_type)),
                 );
-                #[allow(clippy::cast_possible_wrap)]
+                #[allow(
+                    clippy::cast_possible_wrap,
+                    reason = "Stream IDs defined as u64 safely map to i64 within protocol limits"
+                )]
                 stream_dict.insert(
                     "streamID".to_string(),
                     PlistValue::Integer(s.stream_id as i64),

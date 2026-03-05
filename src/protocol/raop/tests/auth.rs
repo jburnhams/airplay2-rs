@@ -1,7 +1,10 @@
+use std::net::IpAddr;
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
+
 use super::*;
 use crate::protocol::crypto::RaopRsaPrivateKey;
-use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
-use std::net::IpAddr;
 
 #[test]
 fn test_challenge_generation() {
@@ -102,10 +105,11 @@ fn test_session_key_generation() {
 #[test]
 fn test_session_keys_with_test_keypair() {
     // Generate AES key and IV
-    use crate::protocol::crypto::CompatibleOsRng;
     use rand::rngs::OsRng;
     use rsa::Oaep;
     use sha1::Sha1;
+
+    use crate::protocol::crypto::CompatibleOsRng;
 
     // Generate test key pair
     let private = RaopRsaPrivateKey::generate().unwrap();

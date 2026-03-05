@@ -1,11 +1,12 @@
 //! Unified PTP node that participates in both master and slave roles.
 //!
 //! A `PtpNode` can simultaneously:
-//! - Send Sync/Follow_Up and respond to Delay_Req (master behaviour)
-//! - Process incoming Sync/Follow_Up, send Delay_Req, and process Delay_Resp (slave behaviour)
+//! - Send `Sync`/`Follow_Up` and respond to `Delay_Req` (master behaviour)
+//! - Process incoming `Sync`/`Follow_Up`, send `Delay_Req`, and process `Delay_Resp` (slave
+//!   behaviour)
 //! - Evaluate Announce messages and switch roles via a simplified BMCA
 //!
-//! This is needed because AirPlay 2 devices (e.g. HomePod) may act as
+//! This is needed because `AirPlay` 2 devices (e.g. `HomePod`) may act as
 //! grandmaster clock, and the client must be able to sync to them. The
 //! role is determined by comparing clock priorities from Announce messages.
 
@@ -32,13 +33,13 @@ pub struct PtpNodeConfig {
     pub priority2: u8,
     /// Interval between Sync messages when acting as master.
     pub sync_interval: Duration,
-    /// Interval between Delay_Req messages when acting as slave.
+    /// Interval between `Delay_Req` messages when acting as slave.
     pub delay_req_interval: Duration,
     /// Interval between Announce messages.
     pub announce_interval: Duration,
     /// Maximum receive buffer size.
     pub recv_buf_size: usize,
-    /// Use AirPlay compact packet format instead of IEEE 1588.
+    /// Use `AirPlay` compact packet format instead of IEEE 1588.
     pub use_airplay_format: bool,
 }
 
@@ -68,7 +69,10 @@ pub enum EffectiveRole {
 
 /// State tracked about a remote master discovered via Announce.
 #[derive(Debug, Clone)]
-#[allow(dead_code, reason = "Fields retained for diagnostics and future BMCA extensions")]
+#[allow(
+    dead_code,
+    reason = "Fields retained for diagnostics and future BMCA extensions"
+)]
 struct RemoteMaster {
     /// Clock identity of the grandmaster.
     grandmaster_identity: u64,
@@ -93,9 +97,9 @@ const DELAY_REQ_TIMEOUT: Duration = Duration::from_millis(1000);
 /// flows on the same sockets. Uses a simplified BMCA to determine
 /// whether this node should act as master or slave.
 pub struct PtpNode {
-    /// Event socket (port 319 or AirPlay timing port).
+    /// Event socket (port 319 or `AirPlay` timing port).
     event_socket: Arc<UdpSocket>,
-    /// General socket (port 320), optional if using AirPlay format.
+    /// General socket (port 320), optional if using `AirPlay` format.
     general_socket: Option<Arc<UdpSocket>>,
     /// Shared clock state.
     clock: SharedPtpClock,
@@ -105,22 +109,24 @@ pub struct PtpNode {
     role: EffectiveRole,
     /// Next Sync sequence ID (master).
     sync_sequence: u16,
-    /// Next Delay_Req sequence ID (slave).
+    /// Next `Delay_Req` sequence ID (slave).
     delay_req_sequence: u16,
     /// Next Announce sequence ID.
     announce_sequence: u16,
     /// Known slave addresses for Sync broadcasts (master role).
     known_slaves: Vec<SocketAddr>,
-    /// Known slave general addresses for Follow_Up (master role).
+    /// Known slave general addresses for `Follow_Up` (master role).
     known_general_slaves: Vec<SocketAddr>,
     /// Pending Sync T1 (slave role).
     pending_t1: Option<PtpTimestamp>,
     /// T2 corresponding to pending T1 (slave role).
     pending_t2: Option<PtpTimestamp>,
-    /// Pending Delay_Req T3 (slave role).
+    /// Pending `Delay_Req` T3 (slave role).
     pending_t3: Option<PtpTimestamp>,
-    /// When the most recent Delay_Req was sent (for timeout/retry).
+    /// When the pending `Delay_Req` was sent (for timeout).
     delay_req_sent_at: Option<tokio::time::Instant>,
+    /// Number of consecutive `Delay_Req` without response.
+    delay_req_unanswered: u32,
     /// The current remote master we are slaving to (if any).
     remote_master: Option<RemoteMaster>,
     /// Announce timeout: if no Announce from the remote master within
@@ -154,6 +160,7 @@ impl PtpNode {
             pending_t2: None,
             pending_t3: None,
             delay_req_sent_at: None,
+            delay_req_unanswered: 0,
             remote_master: None,
             announce_timeout: Duration::from_secs(6),
         }
@@ -170,7 +177,7 @@ impl PtpNode {
         }
     }
 
-    /// Add a known slave general address for Follow_Up messages.
+    /// Add a known slave general address for `Follow_Up` messages.
     ///
     /// Must be called after `add_slave` for the same peer to maintain
     /// parallel index alignment.
@@ -199,7 +206,10 @@ impl PtpNode {
     ///
     /// # Errors
     /// Returns `std::io::Error` if socket operations fail.
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Centralized protocol logic requires multiple steps"
+    )]
     pub async fn run(
         &mut self,
         mut shutdown: tokio::sync::watch::Receiver<bool>,
@@ -269,23 +279,24 @@ impl PtpNode {
                 // In BMCA mode this only fires when role==Slave; in AirPlay
                 // compact format (no BMCA) we always respond to received Syncs.
                 _ = delay_req_timer.tick() => {
-                    let in_slave_mode = self.role == EffectiveRole::Slave
-                        || self.config.use_airplay_format;
-                    if in_slave_mode && self.pending_t1.is_some() {
-                        // If a previous Delay_Req went unanswered, clear the stale
-                        // T3 so the retry can proceed.
-                        let timed_out = self.delay_req_sent_at
-                            .map_or(false, |t| t.elapsed() > DELAY_REQ_TIMEOUT);
-                        if timed_out {
-                            tracing::debug!(
-                                "PTP: Delay_Req timed out (no Delay_Resp), clearing T3 for retry"
-                            );
-                            self.pending_t3 = None;
-                            self.delay_req_sent_at = None;
-                        }
-                        if self.pending_t3.is_none() {
-                            self.send_delay_req().await?;
-                        }
+                    // Check for Delay_Req timeout (no Delay_Resp received).
+                    self.check_delay_req_timeout().await;
+
+                    // Don't send more Delay_Req once we've fallen back to one-way mode.
+                    let in_fallback = self.delay_req_unanswered >= 2;
+                    let should_send = self.pending_t1.is_some()
+                        && self.pending_t3.is_none()
+                        && !in_fallback
+                        && (self.role == EffectiveRole::Slave || self.config.use_airplay_format);
+                    if should_send {
+                        tracing::info!(
+                            "PTP node: Sending Delay_Req (role={:?}, unanswered={}, pending_t1={}, pending_t3={})",
+                            self.role,
+                            self.delay_req_unanswered,
+                            self.pending_t1.is_some(),
+                            self.pending_t3.is_some()
+                        );
+                        self.send_delay_req().await?;
                     }
                 }
 
@@ -342,6 +353,10 @@ impl PtpNode {
     }
 
     /// Handle incoming packet on event port (319).
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Complex logic function with multiple match arms"
+    )]
     async fn handle_event_packet(
         &mut self,
         data: &[u8],
@@ -386,14 +401,25 @@ impl PtpNode {
             Ok(msg) => match &msg.body {
                 PtpMessageBody::Sync { origin_timestamp } => {
                     let two_step = msg.header.flags & 0x0200 != 0;
-                    tracing::debug!(
-                        "PTP node: Received Sync from {} seq={} domain={} two_step={} T1={}",
-                        src,
-                        msg.header.sequence_id,
-                        msg.header.domain_number,
-                        two_step,
-                        origin_timestamp
-                    );
+                    if msg.header.sequence_id % 64 == 0 {
+                        tracing::info!(
+                            "PTP node: Received Sync from {} seq={}, two_step={}, T1={} \
+                             (role={:?})",
+                            src,
+                            msg.header.sequence_id,
+                            two_step,
+                            origin_timestamp,
+                            self.role
+                        );
+                    } else {
+                        tracing::debug!(
+                            "PTP node: Received Sync from {} seq={}, two_step={}, T1={}",
+                            src,
+                            msg.header.sequence_id,
+                            two_step,
+                            origin_timestamp
+                        );
+                    }
                     // Store T1/T2 for slave-side processing.
                     self.pending_t1 = Some(*origin_timestamp);
                     self.pending_t2 = Some(receive_time);
@@ -408,6 +434,8 @@ impl PtpNode {
                         precise_origin_timestamp
                     );
                     self.pending_t1 = Some(*precise_origin_timestamp);
+                    // In one-way fallback mode, process immediately.
+                    self.try_one_way_sync().await;
                 }
                 PtpMessageBody::DelayReq { .. } => {
                     tracing::debug!(
@@ -473,13 +501,17 @@ impl PtpNode {
                         src
                     );
                     self.pending_t1 = Some(*precise_origin_timestamp);
-                    // As slave: send Delay_Req immediately after Follow_Up finalises T1.
-                    // Always clear stale T3 from a previous unanswered Delay_Req so we
-                    // can issue a fresh one for this Sync cycle.
+                    // As slave: send Delay_Req immediately after Follow_Up finalises T1,
+                    // unless we are in one-way fallback mode.
                     if self.role == EffectiveRole::Slave && self.pending_t2.is_some() {
-                        self.pending_t3 = None;
-                        self.delay_req_sent_at = None;
-                        self.send_delay_req().await?;
+                        if self.delay_req_unanswered < 2 {
+                            self.pending_t3 = None;
+                            self.delay_req_sent_at = None;
+                            self.send_delay_req().await?;
+                        } else {
+                            // In one-way fallback mode, process immediately.
+                            self.try_one_way_sync().await;
+                        }
                     }
                 }
                 PtpMessageBody::DelayResp {
@@ -546,7 +578,7 @@ impl PtpNode {
         Ok(())
     }
 
-    /// Process a Delay_Resp (from either event or general port) to update the clock.
+    /// Process a `Delay_Resp` (from either event or general port) to update the clock.
     async fn process_delay_resp(&mut self, receive_timestamp: PtpTimestamp) {
         if let (Some(t1), Some(t2_saved), Some(t3)) =
             (self.pending_t1, self.pending_t2, self.pending_t3)
@@ -563,6 +595,7 @@ impl PtpNode {
             self.pending_t2 = None;
             self.pending_t3 = None;
             self.delay_req_sent_at = None;
+            self.delay_req_unanswered = 0;
         } else {
             tracing::debug!(
                 "PTP node: Delay_Resp received but no pending T1/T2/T3 (t1={:?}, t2={:?}, t3={:?})",
@@ -573,10 +606,82 @@ impl PtpNode {
         }
     }
 
+    /// Check if a pending `Delay_Req` has timed out.
+    ///
+    /// After 2 consecutive unanswered `Delay_Req`, falls back to one-way
+    /// offset estimation (using just Sync T1/T2). This handles `AirPlay`
+    /// devices that act as PTP master but don't respond to `Delay_Req`.
+    async fn check_delay_req_timeout(&mut self) {
+        const MAX_UNANSWERED_BEFORE_FALLBACK: u32 = 2;
+
+        if let Some(sent_at) = self.delay_req_sent_at {
+            if sent_at.elapsed() > DELAY_REQ_TIMEOUT {
+                self.delay_req_unanswered += 1;
+                tracing::info!(
+                    "PTP node: Delay_Req timed out (unanswered={}, elapsed={:.1}s)",
+                    self.delay_req_unanswered,
+                    sent_at.elapsed().as_secs_f64()
+                );
+
+                // Clear pending state to allow retry.
+                self.pending_t3 = None;
+                self.delay_req_sent_at = None;
+
+                // After enough unanswered requests, fall back to one-way estimation.
+                if self.delay_req_unanswered >= MAX_UNANSWERED_BEFORE_FALLBACK {
+                    if let (Some(t1), Some(t2)) = (self.pending_t1, self.pending_t2) {
+                        let mut clock = self.clock.write().await;
+                        clock.process_one_way(t1, t2);
+                        tracing::info!(
+                            "PTP node: One-way sync fallback (offset={:.3}ms, measurements={})",
+                            clock.offset_millis(),
+                            clock.measurement_count()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Process one-way sync if we're in fallback mode and have T1/T2.
+    ///
+    /// Called after receiving `Follow_Up` with precise T1. Only processes
+    /// if we've given up on `Delay_Req` (unanswered >= 2) and aren't waiting
+    /// for a `Delay_Resp`.
+    async fn try_one_way_sync(&mut self) {
+        const MAX_UNANSWERED_BEFORE_FALLBACK: u32 = 2;
+
+        if self.delay_req_unanswered >= MAX_UNANSWERED_BEFORE_FALLBACK
+            && self.pending_t3.is_none()
+            && self.role == EffectiveRole::Slave
+        {
+            if let (Some(t1), Some(t2)) = (self.pending_t1, self.pending_t2) {
+                let mut clock = self.clock.write().await;
+                clock.process_one_way(t1, t2);
+                let count = clock.measurement_count();
+                // Log every 64th measurement at INFO, rest at DEBUG
+                if count <= 3 || count % 64 == 0 {
+                    tracing::info!(
+                        "PTP node: One-way sync (offset={:.3}ms, T1={}, T2={}, measurements={})",
+                        clock.offset_millis(),
+                        t1,
+                        t2,
+                        count
+                    );
+                } else {
+                    tracing::debug!(
+                        "PTP node: One-way sync (offset={:.3}ms)",
+                        clock.offset_millis()
+                    );
+                }
+            }
+        }
+    }
+
     /// Simplified BMCA: compare remote Announce with our own priority.
     ///
     /// Lower priority1 wins. If equal, lower priority2 wins.
-    /// If still equal, lower clock_id wins.
+    /// If still equal, lower `clock_id` wins.
     fn process_announce(
         &mut self,
         grandmaster_identity: u64,
@@ -599,9 +704,7 @@ impl PtpNode {
             .iter()
             .find(|a| a.ip() == src.ip())
             .copied()
-            .unwrap_or_else(|| {
-                SocketAddr::new(src.ip(), super::handler::PTP_EVENT_PORT)
-            });
+            .unwrap_or_else(|| SocketAddr::new(src.ip(), super::handler::PTP_EVENT_PORT));
         let general_addr = SocketAddr::new(src.ip(), src.port());
 
         if remote_is_better {
@@ -615,9 +718,14 @@ impl PtpNode {
                 general_addr,
                 last_announce: tokio::time::Instant::now(),
             });
+            // Store the remote master's clock ID so TimeAnnounce can use it.
+            if let Ok(mut clock) = self.clock.try_write() {
+                clock.set_remote_master_clock_id(grandmaster_identity);
+            }
             if old_role != EffectiveRole::Slave {
                 tracing::info!(
-                    "PTP BMCA: Switching to SLAVE (remote GM 0x{:016X} p1={} is better than our p1={})",
+                    "PTP BMCA: Switching to SLAVE (remote GM 0x{:016X} p1={} is better than our \
+                     p1={})",
                     grandmaster_identity,
                     priority1,
                     self.config.priority1
@@ -635,7 +743,8 @@ impl PtpNode {
         }
     }
 
-    /// Compare our priority with a remote's. Returns `true` if the remote is better (higher priority).
+    /// Compare our priority with a remote's. Returns `true` if the remote is better (higher
+    /// priority).
     fn compare_priority(&self, remote_p1: u8, remote_p2: u8, remote_clock_id: u64) -> bool {
         if remote_p1 != self.config.priority1 {
             return remote_p1 < self.config.priority1;
@@ -643,7 +752,7 @@ impl PtpNode {
         if remote_p2 != self.config.priority2 {
             return remote_p2 < self.config.priority2;
         }
-        // Tie-break on clock ID (lower wins).
+        // Tie-break on `clock_id` (lower wins).
         remote_clock_id < self.config.clock_id
     }
 
@@ -741,6 +850,7 @@ impl PtpNode {
 
         let t3 = PtpTimestamp::now();
         self.pending_t3 = Some(t3);
+        self.delay_req_sent_at = Some(tokio::time::Instant::now());
 
         let data = if self.config.use_airplay_format {
             let pkt = AirPlayTimingPacket {
@@ -792,6 +902,12 @@ impl PtpNode {
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
         let t4 = PtpTimestamp::now();
+        tracing::info!(
+            "PTP node: Received Delay_Req from {} seq={}, responding with Delay_Resp (T4={})",
+            src,
+            msg.header.sequence_id,
+            t4
+        );
         let source = PtpPortIdentity::new(self.config.clock_id, 1);
         let resp = PtpMessage::delay_resp(
             source,
@@ -813,7 +929,7 @@ impl PtpNode {
     }
 }
 
-/// Create a `PtpNode` with standard configuration for the AirPlay client role.
+/// Create a `PtpNode` with standard configuration for the `AirPlay` client role.
 ///
 /// The client starts as master (priority1=128) and will switch to slave
 /// if a device announces with a better priority.

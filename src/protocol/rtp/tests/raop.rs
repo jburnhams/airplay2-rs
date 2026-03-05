@@ -1,7 +1,8 @@
+use bytes::Bytes;
+
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer, PacketLossDetector};
 use crate::protocol::rtp::raop::{RaopAudioPacket, RaopPayloadType, RetransmitRequest, SyncPacket};
 use crate::protocol::rtp::timing::NtpTimestamp;
-use bytes::Bytes;
 
 #[test]
 fn test_sync_packet_encode_decode() {
@@ -98,7 +99,10 @@ fn test_buffer_overflow() {
 fn test_buffer_range() {
     let mut buffer = PacketBuffer::new(10);
 
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Test constants fit in expected sizes"
+    )]
     for i in 0..5 {
         buffer.push(BufferedPacket {
             sequence: i,

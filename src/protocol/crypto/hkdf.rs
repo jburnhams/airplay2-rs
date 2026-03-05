@@ -1,6 +1,7 @@
-use super::CryptoError;
 use hkdf::Hkdf;
 use sha2::Sha512;
+
+use super::CryptoError;
 
 /// HKDF-SHA512 for key derivation
 pub struct HkdfSha512 {

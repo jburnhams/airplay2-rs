@@ -1,7 +1,8 @@
 //! Audio source abstraction
 
-use crate::audio::AudioFormat;
 use std::io;
+
+use crate::audio::AudioFormat;
 
 /// Audio source that provides PCM samples
 pub trait AudioSource: Send {

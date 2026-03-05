@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use airplay2::receiver::rtp_receiver::RtpAudioReceiver;
 use airplay2::receiver::session::StreamParameters;
-use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 

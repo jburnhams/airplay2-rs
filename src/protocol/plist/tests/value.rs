@@ -14,7 +14,7 @@ fn test_plist_value_from_conversions() {
     assert!(matches!(PlistValue::from(42i64), PlistValue::Integer(42)));
     // Approximate float comparison
     match PlistValue::from(std::f64::consts::PI) {
-        #[allow(clippy::approx_constant)]
+        #[allow(clippy::approx_constant, reason = "Testing constant logic explicitly")]
         PlistValue::Real(f) => assert!((f - std::f64::consts::PI).abs() < f64::EPSILON),
         _ => panic!("Expected Real"),
     }

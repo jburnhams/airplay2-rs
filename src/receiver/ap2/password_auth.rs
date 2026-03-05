@@ -4,10 +4,11 @@
 //! `HomeKit` PIN-based pairing. It uses the same SRP-6a protocol but
 //! with a user-configured password.
 
+use std::sync::{Arc, RwLock};
+
 use super::config::Ap2Config;
 use super::pairing_server::{EncryptionKeys, PairingError, PairingServer, PairingServerState};
 use crate::protocol::crypto::Ed25519KeyPair;
-use std::sync::{Arc, RwLock};
 
 /// Password authentication manager
 ///
@@ -27,7 +28,7 @@ pub struct PasswordAuthManager {
 }
 
 /// Track failed authentication attempts for rate limiting
-struct FailedAttemptTracker {
+pub(crate) struct FailedAttemptTracker {
     attempts: Vec<std::time::Instant>,
     max_attempts: usize,
     window: std::time::Duration,
@@ -334,71 +335,29 @@ pub enum PasswordAuthError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_password_validation() {
-        // Valid passwords
-        assert!(Ap2Config::validate_password("1234").is_ok());
-        assert!(Ap2Config::validate_password("password123").is_ok());
-
-        // Invalid passwords
-        assert!(Ap2Config::validate_password("").is_err());
-        assert!(Ap2Config::validate_password("123").is_err()); // Too short
-    }
-
-    #[test]
-    fn test_lockout_tracking() {
-        let mut tracker = FailedAttemptTracker::new();
+impl FailedAttemptTracker {
+    #[allow(dead_code)]
+    pub(crate) fn new_for_test() -> Self {
+        let mut tracker = Self::new();
+        // Customize values for testing if needed
         tracker.max_attempts = 3;
         tracker.window = std::time::Duration::from_secs(60);
         tracker.lockout_duration = std::time::Duration::from_secs(5);
-
-        // First few attempts should not lock
-        tracker.record_attempt(false);
-        assert!(!tracker.is_locked());
-        tracker.record_attempt(false);
-        assert!(!tracker.is_locked());
-
-        // Third attempt should lock
-        tracker.record_attempt(false);
-        assert!(tracker.is_locked());
-        assert!(tracker.lockout_remaining().is_some());
+        tracker
     }
 
-    #[test]
-    fn test_successful_auth_clears_attempts() {
-        let mut tracker = FailedAttemptTracker::new();
-
-        tracker.record_attempt(false);
-        tracker.record_attempt(false);
-        assert_eq!(tracker.attempts.len(), 2);
-
-        // Successful attempt clears history
-        tracker.record_attempt(true);
-        assert_eq!(tracker.attempts.len(), 0);
-        assert!(!tracker.is_locked());
+    #[allow(dead_code)]
+    pub(crate) fn record_attempt_for_test(&mut self, success: bool) {
+        self.record_attempt(success);
     }
 
-    #[test]
-    fn test_manager_creation() {
-        let identity = Ed25519KeyPair::generate();
-        let manager = PasswordAuthManager::new(identity);
-
-        assert!(!manager.is_enabled());
-        assert!(!manager.is_locked_out());
+    #[allow(dead_code)]
+    pub(crate) fn is_locked_for_test(&self) -> bool {
+        self.is_locked()
     }
 
-    #[test]
-    fn test_set_password_enables_auth() {
-        let identity = Ed25519KeyPair::generate();
-        let mut manager = PasswordAuthManager::new(identity);
-
-        manager.set_password("test1234".to_string());
-        assert!(manager.is_enabled());
-
-        manager.clear_password();
-        assert!(!manager.is_enabled());
+    #[allow(dead_code)]
+    pub(crate) fn lockout_remaining_for_test(&self) -> Option<std::time::Duration> {
+        self.lockout_remaining()
     }
 }

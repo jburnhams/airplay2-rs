@@ -1,12 +1,13 @@
 //! Unified session abstraction
 
+use async_trait::async_trait;
+use tokio::net::{TcpStream, UdpSocket};
+
 use crate::client::AirPlayClient;
 use crate::error::AirPlayError;
 use crate::net::{AsyncReadExt, AsyncWriteExt};
 use crate::protocol::rtsp::{Method, RtspCodec, RtspRequest, RtspResponse};
 use crate::types::{AirPlayConfig, AirPlayDevice, PlaybackState, TrackInfo};
-use async_trait::async_trait;
-use tokio::net::{TcpStream, UdpSocket};
 
 /// Common session operations for both `AirPlay` 1 and 2
 #[async_trait]
@@ -389,7 +390,12 @@ impl AirPlaySession for RaopSessionImpl {
                 } else if ms < 0.0 {
                     0
                 } else {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        reason = "Duration in seconds * 1000 fits in u32 (max ~49 days) and is \
+                                  checked for bounds"
+                    )]
                     {
                         ms as u32
                     }
@@ -459,8 +465,8 @@ impl AirPlaySession for AirPlay2SessionImpl {
         // But the method in AirPlayClient is async.
         // The trait method is synchronous.
         // We might need to change the trait or use a workaround.
-        // Since AirPlayClient uses Arc<StateContainer>, we can't easily peek synchronously if we need lock.
-        // But wait, AirPlayClient::is_connected() is async.
+        // Since AirPlayClient uses Arc<StateContainer>, we can't easily peek synchronously if we
+        // need lock. But wait, AirPlayClient::is_connected() is async.
         // The trait defines `fn is_connected(&self) -> bool;` (sync).
 
         // As a workaround, we can't block_on here if we are in async context.

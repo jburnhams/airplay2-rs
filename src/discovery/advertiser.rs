@@ -1,8 +1,9 @@
 //! RAOP service advertisement for AirPlay 1 receiver
 
-use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use mdns_sd::{Error as MdnsError, ServiceDaemon, ServiceInfo};
 use tokio::sync::{Mutex, RwLock, mpsc};
 
 /// Errors from service advertisement
@@ -136,7 +137,10 @@ pub(crate) fn parse_mac_string(mac: &str) -> Result<[u8; 6], AdvertiserError> {
 }
 
 // Intentionally extracting bytes from hash
-#[allow(clippy::cast_possible_truncation)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Hash extraction safely truncates to expected mac byte sizes"
+)]
 pub(crate) fn generate_stable_mac() -> [u8; 6] {
     // Generate from machine-id or hostname hash for stability across restarts
     use std::collections::hash_map::DefaultHasher;
@@ -220,7 +224,10 @@ impl Default for RaopCapabilities {
 /// Status flags for the receiver
 #[derive(Debug, Clone, Copy, Default)]
 // Fields map directly to RAOP status bitmask
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Struct accurately models domain logic bools representing RAOP status bitmask"
+)]
 pub struct ReceiverStatusFlags {
     /// Problem detected (e.g., audio device error)
     pub problem: bool,
