@@ -55,7 +55,7 @@ fn test_adjustment_synced() {
     coord.set_target_time(now_compact);
 
     // Calculate adjustment
-    let cmd = coord.calculate_adjustment();
+    let cmd = coord.calculate_adjustment_at(now_ptp);
 
     if let Some(PlaybackCommand::StartAt { .. }) = cmd {
         panic!("Should not require hard sync with 0 offset");
