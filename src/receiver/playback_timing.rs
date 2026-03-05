@@ -15,12 +15,12 @@ pub struct PlaybackTiming {
     /// Reference RTP timestamp (from sync packet)
     ref_rtp_timestamp: Option<u32>,
     /// Reference NTP timestamp (from sync packet)
-    #[allow(dead_code)] // Stored for debugging
+    #[allow(dead_code, reason = "Stored for debugging")]
     ref_ntp_timestamp: Option<NtpTimestamp>,
     /// Reference local time
     ref_local_time: Option<Instant>,
     /// Clock sync for offset
-    #[allow(dead_code)] // Used for future drift compensation
+    #[allow(dead_code, reason = "Used for future drift compensation")]
     clock_sync: Arc<RwLock<ClockSync>>,
     /// Target latency in samples
     target_latency_samples: u32,

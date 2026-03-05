@@ -98,7 +98,7 @@ impl PairingStorage for MemoryStorage {
 
 /// File-based pairing storage
 pub struct FileStorage {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     path: std::path::PathBuf,
     cache: HashMap<String, PairingKeys>,
     encryption_key: Option<[u8; 32]>,

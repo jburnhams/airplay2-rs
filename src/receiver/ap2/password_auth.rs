@@ -336,7 +336,7 @@ pub enum PasswordAuthError {
 
 #[cfg(test)]
 impl FailedAttemptTracker {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for testing or future auth methods")]
     pub(crate) fn new_for_test() -> Self {
         let mut tracker = Self::new();
         // Customize values for testing if needed
@@ -346,17 +346,17 @@ impl FailedAttemptTracker {
         tracker
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for testing or future auth methods")]
     pub(crate) fn record_attempt_for_test(&mut self, success: bool) {
         self.record_attempt(success);
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for testing or future auth methods")]
     pub(crate) fn is_locked_for_test(&self) -> bool {
         self.is_locked()
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for testing or future auth methods")]
     pub(crate) fn lockout_remaining_for_test(&self) -> Option<std::time::Duration> {
         self.lockout_remaining()
     }

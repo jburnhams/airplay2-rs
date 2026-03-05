@@ -111,7 +111,7 @@ pub struct ClockSync {
     /// Moving average of offset
     offset_avg: f64,
     /// Drift rate (microseconds per second)
-    #[allow(dead_code)] // Reserved for future use
+    #[allow(dead_code, reason = "Reserved for future use")]
     drift_rate: f64,
 }
 
@@ -204,7 +204,7 @@ impl Default for ClockSync {
 pub struct TimingHandler {
     socket: Arc<UdpSocket>,
     clock_sync: Arc<RwLock<ClockSync>>,
-    #[allow(dead_code)] // Reserved for potential future use or debugging
+    #[allow(dead_code, reason = "Reserved for potential future use or debugging")]
     sender_addr: Option<SocketAddr>,
 }
 

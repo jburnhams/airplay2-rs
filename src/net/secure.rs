@@ -4,7 +4,7 @@
 //! after successful SRP pairing.
 
 use byteorder::{ByteOrder, LittleEndian};
-#[allow(deprecated)]
+#[allow(deprecated, reason = "Legacy compatibility")]
 use chacha20poly1305::aead::AeadInPlace;
 use chacha20poly1305::aead::KeyInit;
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, Tag};
@@ -53,7 +53,7 @@ impl HapSecureSession {
             let nonce = Nonce::from(nonce_bytes);
 
             let mut buffer = chunk.to_vec();
-            #[allow(deprecated)]
+            #[allow(deprecated, reason = "Legacy compatibility")]
             let tag = self
                 .encrypt_cipher
                 .encrypt_in_place_detached(&nonce, &len_bytes, &mut buffer)
@@ -109,7 +109,7 @@ impl HapSecureSession {
             }
         })?;
 
-        #[allow(deprecated)]
+        #[allow(deprecated, reason = "Legacy compatibility")]
         self.decrypt_cipher
             .decrypt_in_place_detached(&nonce, &data[0..2], &mut buffer, &tag)
             .map_err(|_| AirPlayError::AuthenticationFailed {

@@ -561,7 +561,7 @@ impl PortAllocator {
     }
 
     /// Release all ports
-    #[allow(dead_code)] // May be unused in some contexts
+    #[allow(dead_code, reason = "May be unused in some contexts")]
     pub fn release_all(&mut self) {
         self.allocated.clear();
     }
@@ -594,10 +594,10 @@ pub enum SetupPhase {
     #[default]
     None,
     /// Phase 1 complete (event/timing)
-    #[allow(dead_code)] // Used in tests
+    #[allow(dead_code, reason = "Used in tests")]
     Phase1Complete,
     /// Phase 2 complete (audio)
-    #[allow(dead_code)] // Used in tests
+    #[allow(dead_code, reason = "Used in tests")]
     Phase2Complete,
 }
 

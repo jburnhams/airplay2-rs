@@ -41,7 +41,7 @@ pub struct RtpReceiverConfig {
 
 /// RTP receiver
 pub struct RtpReceiver {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     config: RtpReceiverConfig,
     decryptor: Ap2RtpDecryptor,
     decoder: Box<dyn AudioDecoder>,
