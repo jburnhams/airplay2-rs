@@ -160,8 +160,16 @@ impl PtpHeader {
             PtpMessageType::DelayResp => 0x03,
             PtpMessageType::Announce | PtpMessageType::Signaling => 0x05,
         };
+        // Apple AirPlay 2 HomePod uses transportSpecific=1 in all its PTP messages.
+        // If we send with transportSpecific=0, the device ignores our Delay_Req.
+        // logMessageInterval=0x7F means "not applicable" (unspecified) for event msgs.
+        let log_message_interval: i8 = match message_type {
+            PtpMessageType::Sync => -3,     // 8 Hz (2^-3 = 0.125s)
+            PtpMessageType::Announce => -2, // 4 Hz (2^-2 = 0.25s)
+            _ => 0x7F, // 0x7F = "not applicable" (unspecified) for all other msg types
+        };
         Self {
-            transport_specific: 0,
+            transport_specific: 1,
             message_type,
             version: Self::PTP_VERSION_2,
             message_length: 0, // filled in on encode
@@ -171,7 +179,7 @@ impl PtpHeader {
             source_port_identity: source,
             sequence_id,
             control_field,
-            log_message_interval: 0,
+            log_message_interval,
         }
     }
 

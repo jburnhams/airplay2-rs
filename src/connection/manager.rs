@@ -735,6 +735,10 @@ impl ConnectionManager {
         let timing_protocol_str = if use_ptp { "PTP" } else { "NTP" };
         tracing::info!("Using timing protocol: {}", timing_protocol_str);
 
+        // Generate our PTP clock identity early so it can be included in SETUP
+        // timingPeerInfo AND in SETPEERS (required for HomePod to respond to Delay_Req).
+        let ptp_clock_id: u64 = if use_ptp { rand::random() } else { 0 };
+
         if !use_ptp {
             // For NTP/AirPlay 1 devices, send a preliminary Session SETUP
             tracing::debug!("Performing Session SETUP (NTP)...");
@@ -885,6 +889,11 @@ impl ConnectionManager {
             }
             .unwrap_or_else(|| "0.0.0.0".to_string());
 
+            // Include our PTP ClockID so the HomePod can match our Delay_Req
+            // sourcePortIdentity to an authorised peer. Use Integer format to
+            // match the format the HomePod uses for its own ClockID.
+            #[allow(clippy::cast_possible_wrap)]
+            let clock_id_as_i64 = ptp_clock_id as i64;
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
                 .insert(
@@ -896,6 +905,7 @@ impl ConnectionManager {
                         .map(|s| s.client_session_id().to_string())
                         .unwrap_or_default(),
                 )
+                .insert("ClockID", clock_id_as_i64)
                 .build();
 
             DictBuilder::new()
@@ -944,7 +954,7 @@ impl ConnectionManager {
             );
         }
 
-        // Parse Event/Timing ports from Step 1
+        // Parse Event/Timing ports, device ClockID and ClockPorts from Step 1
         let (server_event_port, server_timing_port, device_clock_port) =
             match crate::protocol::plist::decode(&response_step1.body) {
                 Ok(plist) => {
@@ -985,6 +995,7 @@ impl ConnectionManager {
                         );
                         // Extract ClockPorts and ClockID from timingPeerInfo for PTP.
                         // HomePod advertises a non-standard port for PTP via ClockPorts.
+                        // The HomePod encodes ClockID as an integer (8-byte signed).
                         let mut clock_port: Option<u16> = None;
                         if let Some(tpi) = dict.get("timingPeerInfo") {
                             tracing::info!("Device timingPeerInfo: {:#?}", tpi);
@@ -1315,13 +1326,20 @@ impl ConnectionManager {
 
             // 7b. Send SETPEERS and start PTP master handler if using PTP timing
             if use_ptp {
-                // Send SETPEERS to tell device about PTP timing peers
-                if let Err(e) = self.send_set_peers(device_ip).await {
+                // Send SETPEERS to register our IP as a timing peer.
+                // Our ClockID is already communicated via SETUP Step 1 timingPeerInfo.
+                if let Err(e) = self.send_set_peers(device_ip, ptp_clock_id, None).await {
                     tracing::warn!("SETPEERS failed (continuing anyway): {}", e);
                 }
 
-                self.start_ptp_master(&time_sock, device_ip, server_time_port, device_clock_port)
-                    .await;
+                self.start_ptp_master(
+                    &time_sock,
+                    device_ip,
+                    server_time_port,
+                    ptp_clock_id,
+                    device_clock_port,
+                )
+                .await;
             }
 
             *self.sockets.lock().await = Some(UdpSockets {
@@ -1633,8 +1651,17 @@ impl ConnectionManager {
     ///
     /// Returns error if RTSP request fails
     /// Send SETPEERS to tell the device about PTP timing peers.
-    /// This is required for `AirPlay` 2 PTP timing.
-    async fn send_set_peers(&self, device_ip: std::net::IpAddr) -> Result<(), AirPlayError> {
+    ///
+    /// Uses the simple IP-address array format which is universally accepted by
+    /// `AirPlay` 2 devices. Our PTP clock identity is communicated to the device
+    /// through the `ClockID` field in the SETUP Step 1 `timingPeerInfo` dict
+    /// (not here), so the device can match incoming `Delay_Req` messages to us.
+    async fn send_set_peers(
+        &self,
+        device_ip: std::net::IpAddr,
+        our_clock_id: u64,
+        _device_clock_id: Option<&[u8]>,
+    ) -> Result<(), AirPlayError> {
         use crate::protocol::plist::PlistValue;
 
         // Get our local IP from the connected stream
@@ -1648,19 +1675,25 @@ impl ConnectionManager {
         }
         .unwrap_or_else(|| "0.0.0.0".to_string());
 
-        // Build peer list: array of IP address strings [our_ip, device_ip]
+        // AirPlay 2 SETPEERS: simple IP-string array is the accepted format.
+        // The HomePod rejects dict-based peer lists (causes disconnect).
         let peer_list = PlistValue::Array(vec![
             PlistValue::String(local_ip.clone()),
             PlistValue::String(device_ip.to_string()),
         ]);
+
+        tracing::info!(
+            "Sending SETPEERS: our_ip={} (clock_id=0x{:016X}), device_ip={}",
+            local_ip,
+            our_clock_id,
+            device_ip,
+        );
 
         let body =
             crate::protocol::plist::encode(&peer_list).map_err(|e| AirPlayError::RtspError {
                 message: format!("Failed to encode SETPEERS plist: {e}"),
                 status_code: None,
             })?;
-
-        tracing::info!("Sending SETPEERS with peers: [{}, {}]", local_ip, device_ip);
 
         let request = {
             let mut session_guard = self.rtsp_session.lock().await;
@@ -2208,6 +2241,52 @@ impl ConnectionManager {
         }
     }
 
+    /// Bind a UDP socket to a specific port with `SO_REUSEADDR` so we can share
+    /// the port with other processes (e.g. a previous run or Windows Time service).
+    ///
+    /// Uses the `socket2` crate to set socket options before binding.
+    ///
+    /// Attempts a dual-stack (IPv4 + IPv6) bind first by creating an IPv6 wildcard
+    /// socket with `IPV6_V6ONLY` disabled. This lets the socket receive packets from
+    /// both IPv4 and IPv6 peers. If dual-stack is unavailable (e.g. the OS has
+    /// `net.ipv6.bindv6only=1`, IPv6 is disabled, or we are on a system that does
+    /// not support dual-stack), it falls back to an IPv4-only socket bound to
+    /// `0.0.0.0`. No `unwrap()` calls are used — all error paths propagate via `?`.
+    fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
+        use socket2::{Domain, Protocol, Socket, Type};
+        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+
+        // --- Attempt 1: dual-stack IPv6 wildcard socket -----------------------
+        // `set_only_v6(false)` enables IPv4-mapped IPv6 addresses so a single
+        // socket can service both address families.
+        let dual_stack = (|| -> std::io::Result<UdpSocket> {
+            let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port);
+            let sock = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
+            sock.set_only_v6(false)?; // dual-stack: accept IPv4-mapped addresses too
+            sock.set_reuse_address(true)?;
+            sock.set_nonblocking(true)?;
+            sock.bind(&addr.into())?;
+            let std_sock: std::net::UdpSocket = sock.into();
+            UdpSocket::from_std(std_sock)
+        })();
+
+        if let Ok(sock) = dual_stack {
+            return Ok(sock);
+        }
+
+        // --- Attempt 2: IPv4-only fallback ------------------------------------
+        // Used when the OS does not support dual-stack or IPv6 is not available.
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
+        let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+        // Allow binding even if another process already holds the port.
+        sock.set_reuse_address(true)?;
+        // Non-blocking is required for tokio.
+        sock.set_nonblocking(true)?;
+        sock.bind(&addr.into())?;
+        let std_sock: std::net::UdpSocket = sock.into();
+        UdpSocket::from_std(std_sock)
+    }
+
     /// Try to bind a UDP socket to an ephemeral port, trying multiple addresses.
     ///
     /// This helper attempts to bind to:
@@ -2250,27 +2329,34 @@ impl ConnectionManager {
         _timing_socket: &UdpSocket,
         device_ip: std::net::IpAddr,
         _server_timing_port: u16,
+        clock_id: u64,
         device_clock_port: Option<u16>,
     ) {
         use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpSlaveHandler};
 
-        let clock_id: u64 = rand::random();
-        // We act as PTP slave — the HomePod acts as master and sends Sync/Follow_Up.
-        // This lets us measure the offset between our clock and the HomePod's clock.
+        // clock_id is passed in (generated before SETUP/SETPEERS so it matches the SETUP
+        // timingPeerInfo ClockID). We act as PTP slave — the HomePod acts as master and
+        // sends Sync/Follow_Up. This lets us measure the offset between our clock and the
+        // HomePod's clock.
         let clock = create_shared_clock(clock_id, PtpRole::Slave);
 
-        // Bind to standard PTP event port (319) — privileged, requires admin
-        let ptp_event_socket = match UdpSocket::bind(("0.0.0.0", PTP_EVENT_PORT)).await {
+        // Bind to standard PTP event port (319).
+        // Use SO_REUSEADDR so we can bind even when another process (e.g. Windows Time
+        // or a previous run) already holds the port.  This is safe here because we are
+        // the only consumer of PTP in this application.
+        let ptp_event_socket = match Self::bind_ptp_port(PTP_EVENT_PORT) {
             Ok(sock) => {
                 tracing::info!("PTP event socket bound to port {}", PTP_EVENT_PORT);
                 sock
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. (Run \
-                     as root for standard PTP)",
+                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. \
+                     NOTE: Delay_Resp will NOT be received — PTP will not sync! \
+                     Stop any process using port {} (e.g. Windows Time service).",
                     PTP_EVENT_PORT,
-                    e
+                    e,
+                    PTP_EVENT_PORT
                 );
                 match Self::bind_ephemeral_socket().await {
                     Ok(sock) => sock,
@@ -2282,8 +2368,8 @@ impl ConnectionManager {
             }
         };
 
-        // Bind to standard PTP general port (320) — privileged, requires admin
-        let ptp_general_socket = match UdpSocket::bind(("0.0.0.0", PTP_GENERAL_PORT)).await {
+        // Bind to standard PTP general port (320).
+        let ptp_general_socket = match Self::bind_ptp_port(PTP_GENERAL_PORT) {
             Ok(sock) => {
                 tracing::info!("PTP general socket bound to port {}", PTP_GENERAL_PORT);
                 Some(Arc::new(sock))
@@ -2308,10 +2394,11 @@ impl ConnectionManager {
 
         let config = PtpHandlerConfig {
             clock_id,
+            // We act as PTP slave — the HomePod acts as grandmaster.
             role: PtpRole::Slave,
             sync_interval: std::time::Duration::from_secs(1),
-            delay_req_interval: std::time::Duration::from_secs(1),
-            recv_buf_size: 256,
+            delay_req_interval: std::time::Duration::from_millis(200),
+            recv_buf_size: 512,
             use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP (44-byte messages)
         };
 
