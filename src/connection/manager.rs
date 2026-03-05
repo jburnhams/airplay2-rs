@@ -2253,8 +2253,9 @@ impl ConnectionManager {
     /// not support dual-stack), it falls back to an IPv4-only socket bound to
     /// `0.0.0.0`. No `unwrap()` calls are used — all error paths propagate via `?`.
     fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
-        use socket2::{Domain, Protocol, Socket, Type};
         use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+
+        use socket2::{Domain, Protocol, Socket, Type};
 
         // --- Attempt 1: dual-stack IPv6 wildcard socket -----------------------
         // `set_only_v6(false)` enables IPv4-mapped IPv6 addresses so a single
@@ -2351,9 +2352,9 @@ impl ConnectionManager {
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. \
-                     NOTE: Delay_Resp will NOT be received — PTP will not sync! \
-                     Stop any process using port {} (e.g. Windows Time service).",
+                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. NOTE: \
+                     Delay_Resp will NOT be received — PTP will not sync! Stop any process using \
+                     port {} (e.g. Windows Time service).",
                     PTP_EVENT_PORT,
                     e,
                     PTP_EVENT_PORT
