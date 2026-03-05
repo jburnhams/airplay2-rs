@@ -1,5 +1,5 @@
 //! Connection manager for `AirPlay` devices
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Reserved for future use")]
 
 use std::fmt::Write;
 use std::sync::Arc;
@@ -1007,7 +1007,10 @@ impl ConnectionManager {
                                             if let Some(port_val) = val.as_i64() {
                                                 #[allow(
                                                     clippy::cast_possible_truncation,
-                                                    clippy::cast_sign_loss
+                                                    clippy::cast_sign_loss,
+                                                    reason = "Ports are u16, plist uses i64. \
+                                                              Truncation is acceptable as ports \
+                                                              fit in u16."
                                                 )]
                                                 let port = port_val as u16;
                                                 tracing::info!(

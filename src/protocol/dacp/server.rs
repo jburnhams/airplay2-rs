@@ -19,10 +19,10 @@ pub struct DacpServer<H: DacpHandler> {
     /// Handler for commands
     handler: Arc<H>,
     /// Expected Active-Remote token
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     expected_token: String,
     /// Server port
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     port: u16,
     /// Running state
     running: bool,

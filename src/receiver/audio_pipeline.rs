@@ -10,7 +10,7 @@ use crate::audio::output::{AudioCallback, AudioOutput, AudioOutputError};
 pub struct AudioPipeline {
     jitter_buffer: Arc<Mutex<JitterBuffer>>,
     output: Box<dyn AudioOutput>,
-    #[allow(dead_code)] // Decoder logic to be implemented later
+    #[allow(dead_code, reason = "Decoder logic to be implemented later")]
     decoder: Option<AudioDecoder>,
     format: AudioFormat,
 }

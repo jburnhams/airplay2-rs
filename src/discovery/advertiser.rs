@@ -118,7 +118,7 @@ fn get_mac_windows() -> Result<[u8; 6], AdvertiserError> {
     ))
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Reserved for future use")]
 pub(crate) fn parse_mac_string(mac: &str) -> Result<[u8; 6], AdvertiserError> {
     let parts: Vec<&str> = mac.split(':').collect();
     if parts.len() != 6 {

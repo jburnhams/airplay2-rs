@@ -34,7 +34,7 @@ impl Default for ReceiverConfig {
 
 /// Manages all RTP receive operations
 pub struct ReceiverManager {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     config: ReceiverConfig,
     audio_rx: mpsc::Receiver<AudioPacket>,
     control_rx: mpsc::Receiver<ControlEvent>,

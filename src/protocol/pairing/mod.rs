@@ -90,7 +90,7 @@ impl SessionKeys {
 pub struct EncryptedChannel {
     cipher: ChaCha20Poly1305Cipher,
     nonce_counter: u64,
-    #[allow(dead_code)] // Reserved for future use
+    #[allow(dead_code, reason = "Reserved for future use")]
     is_sender: bool,
 }
 

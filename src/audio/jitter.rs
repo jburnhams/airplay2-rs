@@ -116,7 +116,7 @@ pub struct JitterBuffer {
     /// Statistics
     stats: JitterStats,
     /// Last packet receive time
-    #[allow(dead_code)] // Useful for debugging/future use
+    #[allow(dead_code, reason = "Useful for debugging/future use")]
     last_receive: Option<Instant>,
 }
 

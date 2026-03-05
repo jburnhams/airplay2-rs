@@ -23,7 +23,7 @@ pub struct Concealer {
     /// Previous packet audio data (for repeat)
     previous_audio: Option<Vec<u8>>,
     /// Sample rate
-    #[allow(dead_code)] // Will be used for more advanced concealment
+    #[allow(dead_code, reason = "Will be used for more advanced concealment")]
     sample_rate: u32,
     /// Bytes per sample (e.g., 4 for 16-bit stereo)
     bytes_per_sample: usize,
