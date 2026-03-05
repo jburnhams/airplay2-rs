@@ -214,6 +214,8 @@ impl ResamplingSource {
     )]
     fn resample_planar(&mut self, frames_read: usize) {
         let channels = self.input_format.channels.channels() as usize;
+        let ratio = self.ratio;
+        let mut phase = self.input_phase;
 
         // Clear output planar buffers
         for ch in 0..channels {
@@ -221,36 +223,41 @@ impl ResamplingSource {
         }
 
         // Process while phase < 0 (using last_samples)
-        while self.input_phase < 0.0 {
-            let frac = (self.input_phase - self.input_phase.floor()) as f32; // frac part
-
+        while phase < 0.0 {
             if frames_read == 0 {
                 break;
             }
 
+            let floor = phase.floor();
+            let frac = (phase - floor) as f32; // frac part
+            let one_minus_frac = 1.0 - frac;
+
             for ch in 0..channels {
                 let s0 = self.last_samples[ch];
                 let s1 = self.input_planar[ch][0];
-                let val = s0 * (1.0 - frac) + s1 * frac;
+                let val = s0 * one_minus_frac + s1 * frac;
                 self.output_planar[ch].push(val);
             }
-            self.input_phase += self.ratio;
+            phase += ratio;
         }
 
         // Process phase >= 0
-        // We cast to usize safely here because input_phase is non-negative
-        while (self.input_phase.floor() as usize) + 1 < frames_read {
-            let idx = self.input_phase.floor();
-            let frac = (self.input_phase - idx) as f32;
+        // We cast to usize safely here because phase is non-negative
+        // Pre-calculate limit to avoid floor() and usize cast in loop condition
+        let limit = (frames_read.saturating_sub(1)) as f64;
+        while phase >= 0.0 && phase < limit {
+            let idx = phase.floor();
+            let frac = (phase - idx) as f32;
+            let one_minus_frac = 1.0 - frac;
             let idx_usize = idx as usize;
 
             for ch in 0..channels {
                 let s0 = self.input_planar[ch][idx_usize];
                 let s1 = self.input_planar[ch][idx_usize + 1];
-                let val = s0 * (1.0 - frac) + s1 * frac;
+                let val = s0 * one_minus_frac + s1 * frac;
                 self.output_planar[ch].push(val);
             }
-            self.input_phase += self.ratio;
+            phase += ratio;
         }
 
         // Update last_samples for next chunk
@@ -261,7 +268,7 @@ impl ResamplingSource {
         }
 
         // Wrap phase
-        self.input_phase -= frames_read as f64;
+        self.input_phase = phase - frames_read as f64;
     }
 
     fn interleave_and_convert_output(&mut self) {
