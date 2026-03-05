@@ -531,8 +531,15 @@ fn test_log_message_interval_delay_req_is_unspecified() {
     // per IEEE 1588-2008 §13.6.2.5. Using any other value is incorrect.
     let source = PtpPortIdentity::new(0, 1);
     let header = PtpHeader::new(PtpMessageType::DelayReq, source, 0);
+    #[allow(
+        clippy::cast_sign_loss,
+        reason = "PTP logMessageInterval is i8 logically but encoded as u8; 0x7F is the valid \
+                  unspecified marker"
+    )]
+    let interval = header.log_message_interval as u8;
+
     assert_eq!(
-        header.log_message_interval as u8, 0x7F,
+        interval, 0x7F,
         "DelayReq logMessageInterval must be 0x7F (unspecified)"
     );
     // Also check encoded wire byte (byte[33]).

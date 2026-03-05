@@ -89,7 +89,7 @@ struct RemoteMaster {
 }
 
 /// Timeout after which an unanswered `Delay_Req` is considered lost.
-const DELAY_REQ_TIMEOUT: Duration = Duration::from_millis(1000);
+const DELAY_REQ_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Unified PTP node supporting bidirectional synchronization.
 ///
@@ -963,8 +963,8 @@ pub fn create_client_node(
     PtpNode::new(event_socket, general_socket, clock, config)
 }
 
-/// Unit tests for the BMCA logic (compare_priority, process_announce,
-/// check_announce_timeout). These tests live inside the module so they
+/// Unit tests for the BMCA logic (`compare_priority`, `process_announce`,
+/// `check_announce_timeout`). These tests live inside the module so they
 /// can access private fields and methods without making them pub.
 #[cfg(test)]
 mod tests_unit {
@@ -977,7 +977,7 @@ mod tests_unit {
     use crate::protocol::ptp::clock::PtpRole;
     use crate::protocol::ptp::handler::create_shared_clock;
 
-    /// Build a minimal PtpNode bound to an ephemeral loopback port.
+    /// Build a minimal `PtpNode` bound to an ephemeral loopback port.
     async fn make_node(our_priority1: u8, our_clock_id: u64) -> PtpNode {
         let sock = Arc::new(tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap());
         let clock = create_shared_clock(our_clock_id, PtpRole::Master);
@@ -1238,13 +1238,13 @@ mod tests_unit {
 
     // ── Delay_Req timeout / retry (DELAY_REQ_TIMEOUT) ────────────────────────
 
-    /// Verify the DELAY_REQ_TIMEOUT constant matches the expected 1-second value.
+    /// Verify the `DELAY_REQ_TIMEOUT` constant matches the expected 1-second value.
     /// This value was tuned to balance responsiveness and avoiding spurious retries.
     #[test]
     fn test_delay_req_timeout_constant_is_one_second() {
         assert_eq!(
             super::DELAY_REQ_TIMEOUT,
-            Duration::from_millis(1000),
+            Duration::from_secs(1),
             "DELAY_REQ_TIMEOUT must be 1 second"
         );
     }
