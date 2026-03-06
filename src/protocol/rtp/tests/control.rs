@@ -156,3 +156,45 @@ fn test_control_packet_time_announce_ptp() {
         panic!("Expected TimeAnnouncePtp packet");
     }
 }
+
+#[test]
+fn test_control_packet_time_announce_ntp() {
+    let packet = ControlPacket::TimeAnnounceNtp {
+        rtp_timestamp: 0xAABB_CCDD,
+        ntp_timestamp: 0x1122_3344_5566_7788,
+        rtp_timestamp_next: 0xEEFF_0011,
+    };
+
+    let encoded = packet.encode();
+    assert_eq!(encoded.len(), 32);
+
+    // Header
+    assert_eq!(encoded[0], 0x80);
+    assert_eq!(encoded[1], 0xD4); // 212
+    assert_eq!(encoded[2], 0x00);
+    assert_eq!(encoded[3], 0x07); // length 7
+
+    // Payload
+    assert_eq!(encoded[4..8], [0xAA, 0xBB, 0xCC, 0xDD]);
+    assert_eq!(
+        encoded[8..16],
+        [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+    );
+    assert_eq!(encoded[16..20], [0xEE, 0xFF, 0x00, 0x11]);
+    assert_eq!(encoded[20..32], [0x00; 12]);
+
+    // Decode back
+    let decoded = ControlPacket::decode(&encoded).unwrap();
+    if let ControlPacket::TimeAnnounceNtp {
+        rtp_timestamp,
+        ntp_timestamp,
+        rtp_timestamp_next,
+    } = decoded
+    {
+        assert_eq!(rtp_timestamp, 0xAABB_CCDD);
+        assert_eq!(ntp_timestamp, 0x1122_3344_5566_7788);
+        assert_eq!(rtp_timestamp_next, 0xEEFF_0011);
+    } else {
+        panic!("Expected TimeAnnounceNtp packet");
+    }
+}
