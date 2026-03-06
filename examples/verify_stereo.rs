@@ -55,13 +55,19 @@ impl AudioSource for StereoSource {
 
             // Left Channel (440Hz)
             let sample_l = (self.phase_l * 2.0 * PI).sin();
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Safe cast as value is within bounds"
+            )]
             let value_l = (sample_l * i16::MAX as f32 * 0.5) as i16;
             let bytes_l = value_l.to_ne_bytes();
 
             // Right Channel (880Hz)
             let sample_r = (self.phase_r * 2.0 * PI).sin();
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Safe cast as value is within bounds"
+            )]
             let value_r = (sample_r * i16::MAX as f32 * 0.5) as i16;
             let bytes_r = value_r.to_ne_bytes();
 

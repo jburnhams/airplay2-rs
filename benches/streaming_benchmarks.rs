@@ -18,9 +18,8 @@ fn benchmark_file_source_conversion(c: &mut Criterion) {
     buf.render_reserved(Some(frames));
     for c in 0..2 {
         let chan = buf.chan_mut(c);
-        #[allow(clippy::needless_range_loop)]
-        for f in 0..frames {
-            chan[f] = ((f + c) % 32000) as f32 / 32000.0;
+        for (f, sample) in chan.iter_mut().enumerate().take(frames) {
+            *sample = ((f + c) % 32000) as f32 / 32000.0;
         }
     }
 

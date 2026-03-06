@@ -75,9 +75,6 @@ mod tests {
         assert!(date_val.abs() < f64::EPSILON); // 0.0
 
         let real_val = dict.get("real").and_then(PlistValue::as_f64).unwrap();
-        #[allow(clippy::approx_constant)]
-        {
-            assert!((real_val - 3.14159).abs() < 1e-5);
-        }
+        assert!((real_val - std::f64::consts::PI).abs() < 1e-5);
     }
 }
