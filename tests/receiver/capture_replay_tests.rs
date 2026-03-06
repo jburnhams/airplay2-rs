@@ -8,7 +8,6 @@ use airplay2::testing::packet_capture::{CaptureLoader, CaptureProtocol, CaptureR
 
 /// Test parsing real /info response capture
 #[test]
-#[ignore] // Requires capture file
 fn test_captured_info_request() {
     let capture_path = Path::new("tests/captures/info_request.hex");
 
@@ -40,7 +39,6 @@ fn test_captured_info_request() {
 
 /// Test parsing real pairing exchange capture
 #[test]
-#[ignore] // Requires capture file
 fn test_captured_pairing() {
     let capture_path = Path::new("tests/captures/pairing_exchange.hex");
 
