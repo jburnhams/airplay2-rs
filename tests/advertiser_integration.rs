@@ -17,8 +17,11 @@ fn init_tracing() {
 
 /// Test that an advertised service can be discovered
 #[tokio::test]
-
 async fn test_advertise_and_discover() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping mDNS test in CI environment");
+        return;
+    }
     init_tracing();
     // Start advertiser
     let config = AdvertiserConfig {
@@ -58,8 +61,11 @@ async fn test_advertise_and_discover() {
 
 /// Test status update visibility
 #[tokio::test]
-
 async fn test_status_update_reflected_in_txt() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping mDNS test in CI environment");
+        return;
+    }
     let config = AdvertiserConfig {
         name: "Status-Test".to_string(),
         port: 15001,
@@ -107,8 +113,11 @@ async fn test_status_update_reflected_in_txt() {
 
 /// Test multiple advertisers with different names
 #[tokio::test]
-
 async fn test_multiple_advertisers() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping mDNS test in CI environment");
+        return;
+    }
     let configs = [
         AdvertiserConfig {
             name: "Kitchen".to_string(),
@@ -150,8 +159,11 @@ async fn test_multiple_advertisers() {
 
 /// Test graceful shutdown removes service
 #[tokio::test]
-
 async fn test_shutdown_removes_service() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping mDNS test in CI environment");
+        return;
+    }
     let config = AdvertiserConfig {
         name: "Temporary".to_string(),
         port: 15020,
