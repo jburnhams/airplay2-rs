@@ -892,7 +892,10 @@ impl ConnectionManager {
             // Include our PTP ClockID so the HomePod can match our Delay_Req
             // sourcePortIdentity to an authorised peer. Use Integer format to
             // match the format the HomePod uses for its own ClockID.
-            #[allow(clippy::cast_possible_wrap, reason = "PTP ClockID needs to be encoded as an integer")]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "PTP ClockID needs to be encoded as an integer"
+            )]
             let clock_id_as_i64 = ptp_clock_id as i64;
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
