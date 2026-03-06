@@ -17,12 +17,12 @@ fn init_tracing() {
 
 /// Test that an advertised service can be discovered
 #[tokio::test]
-#[ignore]
+#[ignore = "mDNS discovery is unreliable in CI environments"]
 async fn test_advertise_and_discover() {
     init_tracing();
     // Start advertiser
     let config = AdvertiserConfig {
-        name: "Test Receiver".to_string(),
+        name: "Test-Receiver".to_string(),
         port: 15000, // Use high port to avoid conflicts
         mac_override: Some([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01]),
         ..Default::default()
@@ -44,7 +44,7 @@ async fn test_advertise_and_discover() {
     let services = scan_with_options(options).await.unwrap();
 
     // Find our service
-    let found = services.iter().find(|s| s.name.contains("Test Receiver"));
+    let found = services.iter().find(|s| s.name.contains("Test-Receiver"));
     assert!(found.is_some(), "Service should be discoverable");
 
     let service = found.unwrap();
@@ -58,10 +58,10 @@ async fn test_advertise_and_discover() {
 
 /// Test status update visibility
 #[tokio::test]
-#[ignore]
+#[ignore = "mDNS discovery is unreliable in CI environments"]
 async fn test_status_update_reflected_in_txt() {
     let config = AdvertiserConfig {
-        name: "Status Test".to_string(),
+        name: "Status-Test".to_string(),
         port: 15001,
         mac_override: Some([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x02]),
         ..Default::default()
@@ -85,13 +85,13 @@ async fn test_status_update_reflected_in_txt() {
     let options = DiscoveryOptions {
         discover_airplay2: false,
         discover_raop: true,
-        timeout: Duration::from_secs(3),
+        timeout: Duration::from_secs(5),
         ..Default::default()
     };
 
     let services = scan_with_options(options).await.unwrap();
 
-    let found = services.iter().find(|s| s.name.contains("Status Test"));
+    let found = services.iter().find(|s| s.name.contains("Status-Test"));
     assert!(found.is_some(), "Service should be discoverable");
 
     if let Some(service) = found {
@@ -107,7 +107,7 @@ async fn test_status_update_reflected_in_txt() {
 
 /// Test multiple advertisers with different names
 #[tokio::test]
-#[ignore]
+#[ignore = "mDNS discovery is unreliable in CI environments"]
 async fn test_multiple_advertisers() {
     let configs = [
         AdvertiserConfig {
@@ -150,7 +150,7 @@ async fn test_multiple_advertisers() {
 
 /// Test graceful shutdown removes service
 #[tokio::test]
-#[ignore]
+#[ignore = "mDNS discovery is unreliable in CI environments"]
 async fn test_shutdown_removes_service() {
     let config = AdvertiserConfig {
         name: "Temporary".to_string(),
@@ -166,7 +166,7 @@ async fn test_shutdown_removes_service() {
     let options = DiscoveryOptions {
         discover_airplay2: false,
         discover_raop: true,
-        timeout: Duration::from_secs(3),
+        timeout: Duration::from_secs(5),
         ..Default::default()
     };
     let services = scan_with_options(options.clone()).await.unwrap();
