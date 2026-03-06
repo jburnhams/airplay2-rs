@@ -206,4 +206,13 @@ async fn test_player_disconnected_errors() {
 
     let res = player.set_volume(0.5).await;
     assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
+
+    let res = player.stop().await;
+    assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
+
+    let res = player.skip().await;
+    assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
+
+    let res = player.seek(10.0).await;
+    assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
 }
