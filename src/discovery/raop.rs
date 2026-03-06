@@ -12,7 +12,7 @@ pub fn parse_raop_service_name(name: &str) -> Option<(String, String)> {
     let parts: Vec<&str> = name.splitn(2, '@').collect();
     if parts.len() == 2 {
         let mac = parts[0].to_uppercase();
-        let device_name = parts[1].to_string();
+        let device_name = parts[1].split("._raop._tcp.local.").next().unwrap_or(parts[1]).to_string();
 
         // Validate MAC address format (12 hex characters)
         if mac.len() == 12 && mac.chars().all(|c| c.is_ascii_hexdigit()) {
