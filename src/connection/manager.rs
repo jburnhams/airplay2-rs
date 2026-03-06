@@ -59,19 +59,21 @@ pub struct ConnectionManager {
     /// This happens when RECORD times out during `connect()`. The deferred response
     /// must be consumed before sending the next RTSP command.
     pending_record_response: Mutex<bool>,
+    /// Counter for Time Announce packets to avoid log spam
+    time_announce_count: std::sync::atomic::AtomicU64,
 }
 
 /// UDP sockets for streaming
-struct UdpSockets {
-    audio: UdpSocket,
-    control: UdpSocket,
-    timing: UdpSocket,
+pub(crate) struct UdpSockets {
+    pub(crate) audio: UdpSocket,
+    pub(crate) control: UdpSocket,
+    pub(crate) timing: UdpSocket,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
-    server_audio_port: u16,
+    pub(crate) server_audio_port: u16,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
-    server_control_port: u16,
+    pub(crate) server_control_port: u16,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
-    server_timing_port: u16,
+    pub(crate) server_timing_port: u16,
 }
 
 impl ConnectionManager {
@@ -99,6 +101,7 @@ impl ConnectionManager {
             ptp_active: RwLock::new(false),
             device_clock_id: Mutex::new(None),
             pending_record_response: Mutex::new(false),
+            time_announce_count: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -107,6 +110,12 @@ impl ConnectionManager {
     pub fn with_pairing_storage(mut self, storage: Box<dyn PairingStorage>) -> Self {
         self.pairing_storage = Mutex::new(Some(storage));
         self
+    }
+
+    /// Test helper to set UDP sockets
+    #[cfg(test)]
+    pub(crate) async fn set_sockets_for_test(&self, sockets: UdpSockets) {
+        *self.sockets.lock().await = Some(sockets);
     }
 
     /// Get current connection state
@@ -1902,35 +1911,68 @@ impl ConnectionManager {
         rtp_timestamp: u32,
         sample_rate: u32,
     ) -> Result<(), AirPlayError> {
-        let (ptp_nanos, clock_id) = {
-            let clock_guard = self.ptp_clock.lock().await;
-            if let Some(clock) = clock_guard.as_ref() {
-                let clock = clock.read().await;
-                // Convert our local time to the master's PTP time domain.
-                // When we are slave, offset = (slave - master), so
-                // master_time = local_time - offset, which is remote_to_local().
-                let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
-                let master_time = clock.remote_to_local(local_now);
-                let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
-                // Use the remote master's clock ID if available, otherwise our own.
-                let id = clock
-                    .remote_master_clock_id()
-                    .unwrap_or_else(|| clock.clock_id());
-                (nanos, id)
-            } else {
-                return Ok(()); // PTP not active, skip
-            }
-        };
+        let (ptp_nanos, clock_id) =
+            {
+                let clock_guard = self.ptp_clock.lock().await;
+                if let Some(clock) = clock_guard.as_ref() {
+                    let clock = clock.read().await;
+                    // Convert our local time to the master's PTP time domain.
+                    // When we are slave, offset = (slave - master), so
+                    // master_time = local_time - offset, which is remote_to_local().
+                    let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+                    let master_time = clock.remote_to_local(local_now);
+                    let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
+                    // Use the remote master's clock ID if available, otherwise our own.
+                    let id = clock
+                        .remote_master_clock_id()
+                        .unwrap_or_else(|| clock.clock_id());
+                    (nanos, id)
+                } else {
+                    // PTP not active, fallback to NTP
+                    let ntp_time = crate::protocol::rtp::NtpTimestamp::now();
+                    let ntp_timestamp_64 =
+                        (u64::from(ntp_time.seconds) << 32) | u64::from(ntp_time.fraction);
+
+                    let count = self
+                        .time_announce_count
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if count < 3 || count % 10 == 0 {
+                        tracing::info!(
+                            "TimeAnnounce: rtp_ts={}, ntp_time={}.{:09} (#{count})",
+                            rtp_timestamp,
+                            ntp_time.seconds,
+                            ntp_time.fraction,
+                        );
+                    }
+
+                    let packet = crate::protocol::rtp::ControlPacket::TimeAnnounceNtp {
+                        rtp_timestamp,
+                        ntp_timestamp: ntp_timestamp_64,
+                        rtp_timestamp_next: rtp_timestamp.wrapping_add(sample_rate),
+                    };
+
+                    let encoded = packet.encode();
+
+                    let sockets = self.sockets.lock().await;
+                    if let Some(ref socks) = *sockets {
+                        socks.control.send(&encoded).await.map_err(|e| {
+                            AirPlayError::RtspError {
+                                message: format!("Failed to send NTP TimeAnnounce: {e}"),
+                                status_code: None,
+                            }
+                        })?;
+                    }
+                    return Ok(());
+                }
+            };
 
         let ptp_secs = ptp_nanos / 1_000_000_000;
         let ptp_subsec_nanos = (ptp_nanos % 1_000_000_000) as u32;
 
         // Log first few and then every 10th to avoid spam
-        let count = {
-            use std::sync::atomic::{AtomicU64, Ordering};
-            static ANNOUNCE_COUNT: AtomicU64 = AtomicU64::new(0);
-            ANNOUNCE_COUNT.fetch_add(1, Ordering::Relaxed)
-        };
+        let count = self
+            .time_announce_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if count < 3 || count % 10 == 0 {
             tracing::info!(
                 "TimeAnnounce: rtp_ts={}, ptp_time={}.{:09}, clock=0x{:016X} (#{count})",

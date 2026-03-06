@@ -76,6 +76,12 @@ pub enum ControlPacket {
         rtp_timestamp_next: u32,
         clock_identity: u64,
     },
+    /// NTP Time Announce packet (legacy `AirPlay` 1)
+    TimeAnnounceNtp {
+        rtp_timestamp: u32,
+        ntp_timestamp: u64,
+        rtp_timestamp_next: u32,
+    },
 }
 
 impl ControlPacket {
@@ -103,6 +109,27 @@ impl ControlPacket {
                 buf.extend_from_slice(&ptp_timestamp.to_be_bytes());
                 buf.extend_from_slice(&rtp_timestamp_next.to_be_bytes());
                 buf.extend_from_slice(&clock_identity.to_be_bytes());
+
+                buf
+            }
+            ControlPacket::TimeAnnounceNtp {
+                rtp_timestamp,
+                ntp_timestamp,
+                rtp_timestamp_next,
+            } => {
+                let mut buf = Vec::with_capacity(32);
+                // Header (V=2, P=0, RC=0, PT=212 (0xD4), Length=7)
+                // 7 + 1 = 8 dwords = 32 bytes
+                buf.push(0x80);
+                buf.push(0xD4);
+                buf.extend_from_slice(&7u16.to_be_bytes());
+
+                // Payload
+                buf.extend_from_slice(&rtp_timestamp.to_be_bytes());
+                buf.extend_from_slice(&ntp_timestamp.to_be_bytes());
+                buf.extend_from_slice(&rtp_timestamp_next.to_be_bytes());
+                // Pad with zeros to 32 bytes (12 bytes of padding)
+                buf.extend_from_slice(&[0u8; 12]);
 
                 buf
             }
@@ -144,6 +171,35 @@ impl ControlPacket {
                 clock_identity: u64::from_be_bytes([
                     buf[20], buf[21], buf[22], buf[23], buf[24], buf[25], buf[26], buf[27],
                 ]),
+            });
+        }
+
+        if payload_type_full == 0xD4 {
+            // TimeAnnounceNtp (212)
+            if buf.len() < 20 {
+                return Err(RtpDecodeError::BufferTooSmall {
+                    needed: 20,
+                    have: buf.len(),
+                });
+            }
+
+            // Check length field to handle 20 or 32 byte versions
+            let plen = u16::from_be_bytes([buf[2], buf[3]]);
+            let expected_len = (plen as usize + 1) * 4;
+
+            if buf.len() < expected_len {
+                return Err(RtpDecodeError::BufferTooSmall {
+                    needed: expected_len,
+                    have: buf.len(),
+                });
+            }
+
+            return Ok(ControlPacket::TimeAnnounceNtp {
+                rtp_timestamp: u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]),
+                ntp_timestamp: u64::from_be_bytes([
+                    buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15],
+                ]),
+                rtp_timestamp_next: u32::from_be_bytes([buf[16], buf[17], buf[18], buf[19]]),
             });
         }
 

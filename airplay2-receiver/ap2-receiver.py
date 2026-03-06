@@ -1372,8 +1372,11 @@ if __name__ == "__main__":
         help="Bitwise XOR toggle individual Airplay feature bits from the default. Use 0 for help.")
     parser.add_argument("--list-interfaces", help="Prints available network interfaces and exits.", action='store_true')
     parser.add_argument("--debug", help="Prints extra debug message e.g. HTTP headers.", action='store_true')
+    parser.add_argument("--server-version", help="Override the server version string.", default="366.0")
 
     args = parser.parse_args()
+
+    SERVER_VERSION = args.server_version
 
     DEBUG = args.debug
     if DEBUG:
