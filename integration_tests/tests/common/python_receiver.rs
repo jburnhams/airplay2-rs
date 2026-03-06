@@ -218,12 +218,13 @@ impl PythonReceiver {
                                     line.trim()
                                 );
                                 found_serving = true;
-                                #[allow(clippy::collapsible_if)]
-                                if let Some(port_str) = line.split(':').next_back() {
-                                    if let Ok(p) = port_str.trim().parse::<u16>() {
-                                        actual_port = p;
-                                        tracing::info!("Detected receiver port: {}", actual_port);
-                                    }
+                                if let Some(Ok(p)) = line
+                                    .split(':')
+                                    .next_back()
+                                    .map(|port_str| port_str.trim().parse::<u16>())
+                                {
+                                    actual_port = p;
+                                    tracing::info!("Detected receiver port: {}", actual_port);
                                 }
                                 break;
                             }

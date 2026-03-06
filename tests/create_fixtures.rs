@@ -54,8 +54,7 @@ mod tests {
             PlistValue::Data(vec![0xCA, 0xFE, 0xBA, 0xBE]),
         );
         data_map.insert("date".to_string(), PlistValue::Date(0.0)); // 2001-01-01
-        #[allow(clippy::approx_constant)]
-        data_map.insert("real".to_string(), PlistValue::Real(3.14159));
+        data_map.insert("real".to_string(), PlistValue::Real(std::f64::consts::PI));
         let types_dict = PlistValue::Dictionary(data_map);
         save_fixture(fixtures_dir, "types.bplist", &types_dict);
 

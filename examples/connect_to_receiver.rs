@@ -54,7 +54,7 @@ impl AudioSource for SineWaveSource {
             }
 
             let sample = (self.phase * 2.0 * PI).sin();
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, reason = "Safe cast as value is within bounds")]
             let value = (sample * i16::MAX as f32 * 0.5) as i16; // 50% volume
             let bytes = value.to_be_bytes();
 

@@ -43,6 +43,10 @@ pub struct NtpTimestamp {
 impl NtpTimestamp {
     /// Create from current system time
     #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "NTP fraction and seconds fit in u32"
+    )]
     pub fn now() -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -51,11 +55,9 @@ impl NtpTimestamp {
         let seconds = now.as_secs() + NTP_EPOCH_OFFSET;
         let nanos = now.subsec_nanos();
         // Convert nanoseconds to NTP fraction (2^32 / 10^9)
-        #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u32")]
         let fraction = ((u64::from(nanos) * 0x1_0000_0000_u64) / 1_000_000_000) as u32;
 
         Self {
-            #[allow(clippy::cast_possible_truncation, reason = "Seconds fit in u32")]
             seconds: seconds as u32,
             fraction,
         }
@@ -63,11 +65,13 @@ impl NtpTimestamp {
 
     /// Create from 64-bit NTP timestamp
     #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "Value is correctly shifted and masked into 32-bit components"
+    )]
     pub fn from_u64(value: u64) -> Self {
         Self {
-            #[allow(clippy::cast_possible_truncation, reason = "Seconds shift fits in u32")]
             seconds: (value >> 32) as u32,
-            #[allow(clippy::cast_possible_truncation, reason = "Fraction fits in u32")]
             fraction: value as u32,
         }
     }

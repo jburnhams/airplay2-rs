@@ -892,7 +892,7 @@ impl ConnectionManager {
             // Include our PTP ClockID so the HomePod can match our Delay_Req
             // sourcePortIdentity to an authorised peer. Use Integer format to
             // match the format the HomePod uses for its own ClockID.
-            #[allow(clippy::cast_possible_wrap)]
+            #[allow(clippy::cast_possible_wrap, reason = "PTP ClockID needs to be encoded as an integer")]
             let clock_id_as_i64 = ptp_clock_id as i64;
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
@@ -1748,6 +1748,7 @@ impl ConnectionManager {
         // Get current network time. The HomePod's PTP clock uses its own epoch.
         // We send the master clock time (HomePod's PTP time = local - offset).
         let now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+        #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
         let (network_secs, network_frac) = {
             let clock_opt = self.ptp_clock().await;
             if let Some(ref clock_arc) = clock_opt {
@@ -1761,11 +1762,9 @@ impl ConnectionManager {
                     crate::protocol::ptp::timestamp::PtpTimestamp::from_nanos(remote_nanos)
                 };
                 // NTP-style 64-bit fraction: (nanoseconds / 1e9) * 2^64
-                #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
                 let frac = ((u128::from(remote.nanoseconds) << 64) / 1_000_000_000) as u64;
                 (remote.seconds, frac)
             } else {
-                #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
                 let frac = ((u128::from(now.nanoseconds) << 64) / 1_000_000_000) as u64;
                 (now.seconds, frac)
             }

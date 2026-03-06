@@ -163,9 +163,7 @@ impl MultiRoomCoordinator {
         // Calculate drift from target
         // drift = current_ptp - target
 
-        #[allow(clippy::cast_lossless, reason = "u64 fits in i128")]
         let current_ptp_i128 = i128::from(current_ptp);
-        #[allow(clippy::cast_lossless, reason = "u64 fits in i128")]
         let target_i128 = i128::from(target);
 
         // 1/65536 sec units to nanoseconds: * 1_000_000_000 / 65536
