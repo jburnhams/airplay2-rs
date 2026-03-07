@@ -108,8 +108,12 @@ pub fn reserve_port_range(count: usize) -> Result<PortRange, PortError> {
         }
 
         // Bind to port 0 to get a random base port from the OS
-        let base_listener = TcpListener::bind("127.0.0.1:0").map_err(PortError::AllocationFailed)?;
-        let base_port = base_listener.local_addr().map_err(PortError::AllocationFailed)?.port();
+        let base_listener =
+            TcpListener::bind("127.0.0.1:0").map_err(PortError::AllocationFailed)?;
+        let base_port = base_listener
+            .local_addr()
+            .map_err(PortError::AllocationFailed)?
+            .port();
         drop(base_listener); // Drop it immediately to reuse the base port
 
         let mut consecutive = true;
