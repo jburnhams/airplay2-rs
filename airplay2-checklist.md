@@ -1,5 +1,11 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 13):**
+- **NTP Fallback/Client Sync**:
+  - ✅ **VERIFIED**: `ntp_client_integration` test verifies the standard RFC 5905 timing logic.
+  - Implemented `NtpClient` to fetch remote NTP offset using standard IEEE 1588 UDP port 123.
+  - Updated `ConnectionManager` to query receiver's NTP offset on setup and apply to RTP fallback `TimeAnnounceNtp` timing sync packets when PTP is unavailable.
+
 **Work Done (Session 12):**
 - **High-Resolution Audio**:
   - ✅ **VERIFIED**: `hires_audio_integration` test verifies 24-bit/48kHz streaming capability.
@@ -308,8 +314,8 @@
   - ✅ **VERIFIED**: `ptp_integration` confirms SETPEERS and port negotiation (319/320).
 
 ### NTP Fallback (Legacy Compatibility)
-- [ ] Implement NTP client (RFC 5905)
-- [ ] Fallback to NTP if PTP unavailable
+- [x] Implement NTP client (RFC 5905)
+- [x] Fallback to NTP if PTP unavailable
 
 ## Audio Buffering and Playback
 

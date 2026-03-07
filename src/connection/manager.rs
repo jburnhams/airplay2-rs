@@ -55,6 +55,7 @@ pub struct ConnectionManager {
     ptp_active: RwLock<bool>,
     /// Device's PTP clock ID (from SETUP Step 1 timingPeerInfo.ClockID)
     device_clock_id: Mutex<Option<u64>>,
+    ntp_offset: std::sync::atomic::AtomicI64,
     /// Whether a RECORD request was sent but its response hasn't been consumed yet.
     /// This happens when RECORD times out during `connect()`. The deferred response
     /// must be consumed before sending the next RTSP command.
@@ -100,6 +101,7 @@ impl ConnectionManager {
             ptp_shutdown_tx: Mutex::new(None),
             ptp_active: RwLock::new(false),
             device_clock_id: Mutex::new(None),
+            ntp_offset: std::sync::atomic::AtomicI64::new(0),
             pending_record_response: Mutex::new(false),
             time_announce_count: std::sync::atomic::AtomicU64::new(0),
         }
@@ -1352,6 +1354,20 @@ impl ConnectionManager {
                     device_clock_port,
                 )
                 .await;
+            } else {
+                // Fetch NTP offset using RFC 5905 client
+                let device_addr = format!("{}:123", device_ip);
+                let client = crate::protocol::rtp::ntp_client::NtpClient::new(
+                    device_addr,
+                    std::time::Duration::from_secs(2),
+                );
+                if let Ok(offset) = client.get_offset().await {
+                    tracing::info!("NTP offset fetched: {} us", offset);
+                    self.ntp_offset
+                        .store(offset, std::sync::atomic::Ordering::Relaxed);
+                } else {
+                    tracing::warn!("Failed to fetch NTP offset from {}:123", device_ip);
+                }
             }
 
             *self.sockets.lock().await = Some(UdpSockets {
@@ -1929,7 +1945,27 @@ impl ConnectionManager {
                     (nanos, id)
                 } else {
                     // PTP not active, fallback to NTP
-                    let ntp_time = crate::protocol::rtp::NtpTimestamp::now();
+                    let offset_micros = self.ntp_offset.load(std::sync::atomic::Ordering::Relaxed);
+                    let mut ntp_time = crate::protocol::rtp::NtpTimestamp::now();
+                    if offset_micros != 0 {
+                        let mut micros = ntp_time.to_micros();
+                        if offset_micros > 0 {
+                            #[allow(clippy::cast_sign_loss, reason = "Checked > 0")]
+                            let offset_u64 = offset_micros as u64;
+                            micros += offset_u64;
+                        } else {
+                            micros = micros.saturating_sub(offset_micros.unsigned_abs());
+                        }
+                        ntp_time = crate::protocol::rtp::NtpTimestamp {
+                            #[allow(clippy::cast_possible_truncation, reason = "NTP seconds")]
+                            seconds: (micros / 1_000_000) as u32,
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                reason = "Fraction fits in 32 bits"
+                            )]
+                            fraction: (((micros % 1_000_000) << 32) / 1_000_000) as u32,
+                        };
+                    }
                     let ntp_timestamp_64 =
                         (u64::from(ntp_time.seconds) << 32) | u64::from(ntp_time.fraction);
 
