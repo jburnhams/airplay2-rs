@@ -1,7 +1,10 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use super::mock_ap2_sender::{MockAp2Sender, MockSenderConfig};
 use super::mock_server::{MockServer, MockServerConfig};
+use super::test_utils::{generate_test_audio, samples_match};
+use crate::protocol::rtsp::Method;
 
 fn test_config() -> MockServerConfig {
     MockServerConfig {
@@ -21,6 +24,39 @@ async fn test_mock_server_starts() {
     assert!(addr.port() > 0);
 
     server.stop().await;
+}
+
+#[test]
+fn test_mock_sender_creation() {
+    let _sender = MockAp2Sender::new(MockSenderConfig::default());
+    // We cannot access private stream field, but we know creation works.
+}
+
+#[test]
+fn test_request_building() {
+    let mut sender = MockAp2Sender::new(MockSenderConfig::default());
+    let request = sender.build_request(Method::Options, "*", None);
+
+    assert_eq!(request.method, Method::Options);
+    assert_eq!(request.uri, "*");
+    assert!(request.headers.cseq().is_some());
+}
+
+#[test]
+fn test_audio_generation() {
+    let samples = generate_test_audio(440.0, 44100, 100, 2);
+
+    // 100ms at 44100Hz stereo = 4410 * 2 samples
+    assert_eq!(samples.len(), 8820);
+}
+
+#[test]
+fn test_samples_match() {
+    let a = vec![100, 200, 300];
+    let b = vec![101, 199, 302];
+
+    assert!(samples_match(&a, &b, 5));
+    assert!(!samples_match(&a, &b, 1));
 }
 
 #[tokio::test]

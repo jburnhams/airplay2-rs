@@ -80,25 +80,3 @@ where
 
     false
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_audio_generation() {
-        let samples = generate_test_audio(440.0, 44100, 100, 2);
-
-        // 100ms at 44100Hz stereo = 4410 * 2 samples
-        assert_eq!(samples.len(), 8820);
-    }
-
-    #[test]
-    fn test_samples_match() {
-        let a = vec![100, 200, 300];
-        let b = vec![101, 199, 302];
-
-        assert!(samples_match(&a, &b, 5));
-        assert!(!samples_match(&a, &b, 1));
-    }
-}

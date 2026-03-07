@@ -134,6 +134,43 @@ async fn test_client_integration_flow() {
 }
 
 #[tokio::test]
+async fn test_client_connect_failure() {
+    let client = AirPlayClient::default_client();
+    let _events = client.subscribe_events();
+
+    // Use a port that is highly unlikely to be open
+    let device = AirPlayDevice {
+        id: "mock_device_failure".to_string(),
+        name: "Mock Device Failure".to_string(),
+        model: Some("MockModel".to_string()),
+        addresses: vec!["127.0.0.1".parse().unwrap()],
+        port: 65534,
+        capabilities: Default::default(),
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+    };
+
+    let result = timeout(Duration::from_secs(2), client.connect(&device)).await;
+
+    // We expect the connection to either timeout (if OS drops) or return an error (Connection
+    // refused)
+    match result {
+        Ok(Err(_e)) => {
+            // Connection failed as expected
+        }
+        Ok(Ok(_)) => {
+            panic!("Connection succeeded when it should have failed");
+        }
+        Err(_) => {
+            // Timeout is also an acceptable failure mode depending on OS
+        }
+    }
+
+    assert!(!client.is_connected().await);
+}
+
+#[tokio::test]
 async fn test_client_reconnect_logic() {
     // This test verifies that we can disconnect and reconnect
     let config = MockServerConfig {

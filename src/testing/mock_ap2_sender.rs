@@ -267,7 +267,13 @@ impl MockAp2Sender {
         Ok(())
     }
 
-    fn build_request(&mut self, method: Method, uri: &str, body: Option<Vec<u8>>) -> RtspRequest {
+    /// Build a request for testing
+    pub fn build_request(
+        &mut self,
+        method: Method,
+        uri: &str,
+        body: Option<Vec<u8>>,
+    ) -> RtspRequest {
         self.cseq += 1;
 
         let mut headers = Headers::new();
@@ -368,25 +374,4 @@ pub enum MockSenderError {
     /// Pairing failed
     #[error("Pairing failed: {0}")]
     PairingFailed(String),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_mock_sender_creation() {
-        let sender = MockAp2Sender::new(MockSenderConfig::default());
-        assert!(sender.stream.is_none());
-    }
-
-    #[test]
-    fn test_request_building() {
-        let mut sender = MockAp2Sender::new(MockSenderConfig::default());
-        let request = sender.build_request(Method::Options, "*", None);
-
-        assert_eq!(request.method, Method::Options);
-        assert_eq!(request.uri, "*");
-        assert!(request.headers.cseq().is_some());
-    }
 }

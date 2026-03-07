@@ -51,6 +51,39 @@ fn test_peek() {
 }
 
 #[test]
+fn test_buffer_clear_and_wrap() {
+    let buffer = AudioRingBuffer::new(10);
+    // Write 8 bytes
+    buffer.write(&[1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(buffer.available(), 8);
+
+    // Read 6 bytes to advance the read pointer, causing the next write to wrap
+    let mut out = vec![0u8; 6];
+    buffer.read(&mut out);
+    assert_eq!(out, vec![1, 2, 3, 4, 5, 6]);
+    assert_eq!(buffer.available(), 2);
+
+    // Write 5 bytes, this should wrap around the end of the buffer
+    let written = buffer.write(&[9, 10, 11, 12, 13]);
+    assert_eq!(written, 5);
+    assert_eq!(buffer.available(), 7);
+
+    // Clear the buffer
+    buffer.clear();
+    assert_eq!(buffer.available(), 0);
+    assert_eq!(buffer.free(), 9); // capacity 10 - 1 = 9
+
+    // Write again after clear
+    let written = buffer.write(&[100, 101, 102]);
+    assert_eq!(written, 3);
+    assert_eq!(buffer.available(), 3);
+
+    let mut out = vec![0u8; 3];
+    buffer.read(&mut out);
+    assert_eq!(out, vec![100, 101, 102]);
+}
+
+#[test]
 fn test_buffer_wrapping_randomized() {
     use rand::Rng;
 
