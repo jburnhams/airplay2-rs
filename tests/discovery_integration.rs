@@ -28,7 +28,8 @@ async fn test_discover_timeout_handling() {
     // Use a very short timeout to test that discovery times out gracefully
     let devices = scan(Duration::from_millis(1)).await;
 
-    // The scan function shouldn't error, just return whatever it found (likely an empty list, but we mainly care it doesn't panic)
+    // The scan function shouldn't error, just return whatever it found (likely an empty list, but
+    // we mainly care it doesn't panic)
     assert!(devices.is_ok());
     let devices_list = devices.unwrap();
 
