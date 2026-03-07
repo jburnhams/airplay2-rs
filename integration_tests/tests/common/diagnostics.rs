@@ -31,8 +31,8 @@ pub fn save_test_logs(
         .join(test_name)
         .join(timestamp.to_string());
 
-    if !log_dir.exists() {
-        let _ = fs::create_dir_all(&log_dir);
+    if let Err(e) = fs::create_dir_all(&log_dir) {
+        tracing::warn!("Failed to create diagnostic directory {:?}: {}", log_dir, e);
     }
 
     let log_content = logs
@@ -41,10 +41,19 @@ pub fn save_test_logs(
         .collect::<Vec<_>>()
         .join("\n");
     let log_file_path = log_dir.join("test.log");
-    let _ = fs::write(&log_file_path, log_content);
+    if let Err(e) = fs::write(&log_file_path, log_content) {
+        tracing::warn!(
+            "Failed to write diagnostic logs to {:?}: {}",
+            log_file_path,
+            e
+        );
+    }
 
     for (filename, content) in extra_files {
-        let _ = fs::write(log_dir.join(filename), content);
+        let extra_path = log_dir.join(filename);
+        if let Err(e) = fs::write(&extra_path, content) {
+            tracing::warn!("Failed to write extra file {:?}: {}", extra_path, e);
+        }
     }
 
     log_file_path
