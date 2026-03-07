@@ -149,7 +149,12 @@ impl PythonReceiver {
             }
             #[allow(clippy::collapsible_if)]
             if log.line.contains("serving on") {
-                if let Some(Ok(p)) = log.line.split(':').next_back().map(|s| s.trim().parse::<u16>()) {
+                if let Some(Ok(p)) = log
+                    .line
+                    .split(':')
+                    .next_back()
+                    .map(|s| s.trim().parse::<u16>())
+                {
                     actual_port = p;
                 }
             }
@@ -208,7 +213,6 @@ impl PythonReceiver {
             if let Some(handle) = &self.handle {
                 if handle.logs().iter().any(|log| log.line.contains(pattern)) {
                     return Ok(());
-                }
                 }
             }
 

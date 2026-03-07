@@ -40,13 +40,14 @@ pub fn save_test_logs(
         .map(format_log_line)
         .collect::<Vec<_>>()
         .join("\n");
-    let _ = fs::write(log_dir.join("test.log"), log_content);
+    let log_file_path = log_dir.join("test.log");
+    let _ = fs::write(&log_file_path, log_content);
 
     for (filename, content) in extra_files {
         let _ = fs::write(log_dir.join(filename), content);
     }
 
-    log_dir
+    log_file_path
 }
 
 #[allow(dead_code)]

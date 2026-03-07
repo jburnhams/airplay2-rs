@@ -231,6 +231,9 @@ impl PythonReceiver {
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
         let rtp_path = self.output_dir.join("rtp_packets.bin");
 
+        // Sometimes file is not fully flushed? Wait a small moment just in case
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
         let audio_data = fs::read(&audio_path).ok();
         let rtp_data = fs::read(&rtp_path).ok();
 
