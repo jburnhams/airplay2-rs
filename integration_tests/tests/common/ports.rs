@@ -10,17 +10,49 @@ pub enum PortError {
 }
 
 #[allow(dead_code)]
-pub fn reserve_port() -> Result<u16, PortError> {
+#[derive(Debug)]
+pub struct ReservedPort {
+    pub port: u16,
+    _listener: Option<TcpListener>,
+}
+
+impl ReservedPort {
+    #[allow(dead_code)]
+    pub fn free(mut self) -> u16 {
+        self._listener.take();
+        self.port
+    }
+}
+
+#[allow(dead_code)]
+pub fn reserve_port() -> Result<ReservedPort, PortError> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(PortError::AllocationFailed)?;
     let port = listener
         .local_addr()
         .map_err(PortError::AllocationFailed)?
         .port();
-    Ok(port)
+    Ok(ReservedPort {
+        port,
+        _listener: Some(listener),
+    })
 }
 
 #[allow(dead_code)]
-pub fn reserve_ports(count: usize) -> Result<Vec<u16>, PortError> {
+pub struct ReservedPorts {
+    pub ports: Vec<u16>,
+    _listeners: Vec<TcpListener>,
+}
+
+impl ReservedPorts {
+    #[allow(dead_code)]
+    pub fn free(mut self) -> Vec<u16> {
+        self._listeners.clear();
+        self.ports.clone()
+    }
+}
+
+#[allow(dead_code)]
+pub fn reserve_ports(count: usize) -> Result<ReservedPorts, PortError> {
     let mut listeners = Vec::with_capacity(count);
     let mut ports = Vec::with_capacity(count);
 
@@ -34,7 +66,10 @@ pub fn reserve_ports(count: usize) -> Result<Vec<u16>, PortError> {
         ports.push(port);
     }
 
-    Ok(ports)
+    Ok(ReservedPorts {
+        ports,
+        _listeners: listeners,
+    })
 }
 
 #[allow(dead_code)]
@@ -42,6 +77,7 @@ pub fn reserve_ports(count: usize) -> Result<Vec<u16>, PortError> {
 pub struct PortRange {
     pub base: u16,
     pub ports: Vec<u16>,
+    _listeners: Vec<TcpListener>,
 }
 
 impl PortRange {
@@ -54,6 +90,12 @@ impl PortRange {
     pub fn iter(&self) -> impl Iterator<Item = u16> + '_ {
         self.ports.iter().copied()
     }
+
+    #[allow(dead_code)]
+    pub fn free(mut self) -> Self {
+        self._listeners.clear();
+        self
+    }
 }
 
 #[allow(dead_code)]
@@ -65,7 +107,11 @@ pub fn reserve_port_range(count: usize) -> Result<PortRange, PortError> {
             return Err(PortError::ConsecutiveAllocationFailed { count, attempts });
         }
 
-        let base_port = reserve_port()?;
+        // Bind to port 0 to get a random base port from the OS
+        let base_listener = TcpListener::bind("127.0.0.1:0").map_err(PortError::AllocationFailed)?;
+        let base_port = base_listener.local_addr().map_err(PortError::AllocationFailed)?.port();
+        drop(base_listener); // Drop it immediately to reuse the base port
+
         let mut consecutive = true;
         let mut listeners = Vec::with_capacity(count);
         let mut ports = Vec::with_capacity(count);
@@ -85,6 +131,7 @@ pub fn reserve_port_range(count: usize) -> Result<PortRange, PortError> {
             return Ok(PortRange {
                 base: base_port,
                 ports,
+                _listeners: listeners,
             });
         }
     }

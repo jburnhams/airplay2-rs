@@ -89,7 +89,8 @@ async fn test_subprocess_ready_timeout() {
 
 #[test]
 fn test_reserve_ports_no_collisions() {
-    let ports = reserve_ports(10).unwrap();
+    let reserved = reserve_ports(10).unwrap();
+    let ports = reserved.ports.clone();
     assert_eq!(ports.len(), 10);
     let mut sorted = ports.clone();
     sorted.sort_unstable();
