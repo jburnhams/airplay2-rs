@@ -1356,7 +1356,7 @@ impl ConnectionManager {
                 .await;
             } else {
                 // Fetch NTP offset using RFC 5905 client
-                let device_addr = format!("{}:123", device_ip);
+                let device_addr = format!("{device_ip}:123");
                 let client = crate::protocol::rtp::ntp_client::NtpClient::new(
                     device_addr,
                     std::time::Duration::from_secs(2),

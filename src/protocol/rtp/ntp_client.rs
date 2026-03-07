@@ -1,7 +1,9 @@
+use std::time::Duration;
+
+use tokio::net::UdpSocket;
+
 use super::timing::NtpTimestamp;
 use crate::error::AirPlayError;
-use std::time::Duration;
-use tokio::net::UdpSocket;
 
 /// Standard NTP request packet size
 const NTP_PACKET_SIZE: usize = 48;

@@ -1,5 +1,6 @@
-use airplay2::protocol::rtp::ntp_client::NtpClient;
 use std::time::Duration;
+
+use airplay2::protocol::rtp::ntp_client::NtpClient;
 use tokio;
 
 #[tokio::test]
