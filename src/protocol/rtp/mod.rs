@@ -2,6 +2,7 @@
 
 mod codec;
 mod control;
+pub mod ntp_client;
 mod packet;
 pub mod packet_buffer;
 pub mod raop;
