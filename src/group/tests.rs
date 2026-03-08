@@ -280,13 +280,13 @@ fn test_effective_volume_rounding() {
     let mut group = DeviceGroup::new("Round Test");
     group.add_member(test_device("d1"));
 
-    // Set group to 50%, member to 50%
+    // Set group to 50%, member to 15%
     group.set_volume(Volume::from_percent(50));
-    group.set_member_volume("d1", Volume::from_percent(50));
+    group.set_member_volume("d1", Volume::from_percent(15));
 
-    // 0.5 * 0.5 = 0.25 -> 25%
+    // 0.5 * 0.15 = 0.075 -> 7.5%, which should round to 8%
     let effective = group.effective_volume("d1");
-    assert_eq!(effective.as_percent(), 25);
+    assert_eq!(effective.as_percent(), 8);
 }
 
 #[tokio::test]
