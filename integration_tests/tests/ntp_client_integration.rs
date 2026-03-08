@@ -1,5 +1,6 @@
-use airplay2::protocol::rtp::ntp_client::NtpClient;
 use std::time::Duration;
+
+use airplay2::protocol::rtp::ntp_client::NtpClient;
 use tokio;
 
 #[tokio::test]
@@ -16,5 +17,6 @@ async fn test_ntp_client_against_public_server() {
 
     let offset = offset_result.unwrap();
     println!("Got NTP offset: {} us", offset);
-    // As long as the request returns a valid offset, we know packet encoding/decoding works correctly.
+    // As long as the request returns a valid offset, we know packet encoding/decoding works
+    // correctly.
 }
