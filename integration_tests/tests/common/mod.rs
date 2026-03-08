@@ -5,10 +5,10 @@ pub mod subprocess;
 
 use std::sync::Once;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 static INIT: Once = Once::new();
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub fn init_logging() {
     INIT.call_once(|| {
         let _ = tracing_subscriber::fmt()
