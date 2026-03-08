@@ -38,7 +38,7 @@ impl NtpClient {
 
         // Format packet: standard NTP v4 client request
         let mut req = [0u8; NTP_PACKET_SIZE];
-        req[0] = 0x1B; // LI=0, VN=3, Mode=3 (Client)
+        req[0] = 0x23; // LI=0, VN=4, Mode=3 (Client)
 
         let t1 = NtpTimestamp::now();
         let t1_bytes = t1.encode();
@@ -50,15 +50,53 @@ impl NtpClient {
             .map_err(AirPlayError::NetworkError)?;
 
         let mut buf = [0u8; NTP_PACKET_SIZE];
-        let (len, _) = tokio::time::timeout(self.timeout, socket.recv_from(&mut buf))
-            .await
-            .map_err(|_| AirPlayError::Timeout)?
-            .map_err(AirPlayError::NetworkError)?;
 
-        if len < NTP_PACKET_SIZE {
-            return Err(AirPlayError::CodecError {
-                message: format!("Invalid NTP response size: {len}"),
-            });
+        let end_time = std::time::Instant::now() + self.timeout;
+        let mut valid_response = false;
+
+        // Resolve server_addr to an IP for matching against peer_addr
+        let target_addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host(&self.server_addr)
+            .await
+            .map_err(|_| {
+                AirPlayError::NetworkError(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Failed to resolve NTP server address",
+                ))
+            })?
+            .collect();
+
+        // Loop until a valid response is received or timeout occurs
+        while std::time::Instant::now() < end_time {
+            let remaining = end_time - std::time::Instant::now();
+            let result = tokio::time::timeout(remaining, socket.recv_from(&mut buf)).await;
+
+            match result {
+                Ok(Ok((bytes_read, peer_addr))) => {
+                    // Verify IP matches
+                    if !target_addrs.contains(&peer_addr) {
+                        continue;
+                    }
+
+                    if bytes_read < NTP_PACKET_SIZE {
+                        continue;
+                    }
+
+                    // Verify Origin Timestamp matches what we sent
+                    let origin_ts_bytes = &buf[24..32];
+                    if origin_ts_bytes != t1_bytes {
+                        continue;
+                    }
+
+                    valid_response = true;
+                    break;
+                }
+                Ok(Err(_)) => {}                             // Ignore socket errors
+                Err(_) => return Err(AirPlayError::Timeout), // Timeout
+            }
+        }
+
+        if !valid_response {
+            return Err(AirPlayError::Timeout);
         }
 
         let t4 = NtpTimestamp::now();
