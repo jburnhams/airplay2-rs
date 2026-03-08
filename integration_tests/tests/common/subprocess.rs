@@ -41,7 +41,10 @@ pub enum ReadyStrategy {
     LogPattern(String),
     TcpPort(u16),
     Delay(Duration),
-    #[allow(clippy::type_complexity, reason = "Custom strategy needs complex callback signature")]
+    #[allow(
+        clippy::type_complexity,
+        reason = "Custom strategy needs complex callback signature"
+    )]
     Custom(Box<dyn Fn() -> Pin<Box<dyn Future<Output = bool>>> + Send + Sync>),
 }
 
