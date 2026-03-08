@@ -10,11 +10,11 @@ use crate::common::diagnostics::TestDiagnostics;
 use crate::common::subprocess::{ReadyStrategy, SubprocessConfig, SubprocessHandle};
 
 /// Python receiver wrapper for testing
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct PythonReceiver {
     handle: Option<SubprocessHandle>,
     output_dir: PathBuf,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     interface: String,
     // Keep temp dir alive until receiver is dropped
     _temp_dir: Option<TempDir>,
@@ -26,7 +26,7 @@ pub struct PythonReceiver {
     name: String,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl PythonReceiver {
     /// Start the Python receiver
     pub async fn start() -> Result<Self, Box<dyn std::error::Error>> {
@@ -201,7 +201,7 @@ impl PythonReceiver {
     }
 
     /// Wait for a log pattern to appear in stdout/stderr
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub async fn wait_for_log(&self, pattern: &str, timeout: Duration) -> Result<(), String> {
         let start = std::time::Instant::now();
         loop {
@@ -305,15 +305,15 @@ impl Drop for PythonReceiver {
 }
 
 /// Output from the Python receiver
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct ReceiverOutput {
     pub audio_data: Option<Vec<u8>>,
     pub rtp_data: Option<Vec<u8>>,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub log_path: PathBuf,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl ReceiverOutput {
     /// Verify audio data meets minimum requirements
     pub fn verify_audio_received(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -466,7 +466,7 @@ impl ReceiverOutput {
     }
 
     /// Detailed audio analysis (for debugging)
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn analyze_audio_detailed(&self) -> Result<AudioAnalysis, Box<dyn std::error::Error>> {
         let audio = self
             .audio_data
@@ -519,7 +519,7 @@ impl ReceiverOutput {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct AudioAnalysis {
     pub num_samples: usize,
     pub duration: f32,
@@ -540,7 +540,7 @@ pub struct TestSineSource {
     max_samples: usize,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl TestSineSource {
     pub fn new(frequency: f32, duration_secs: f32) -> Self {
         let format = airplay2::audio::AudioFormat::CD_QUALITY;
@@ -555,7 +555,7 @@ impl TestSineSource {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn new_with_sample_rate(frequency: f32, duration_secs: f32, sample_rate: u32) -> Self {
         let format = airplay2::audio::AudioFormat {
             sample_rate: match sample_rate {

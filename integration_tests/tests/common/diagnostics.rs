@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::common::subprocess::TimestampedLogLine;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub fn save_test_logs(
     test_name: &str,
     logs: &[TimestampedLogLine],
@@ -59,7 +59,7 @@ pub fn save_test_logs(
     log_file_path
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub fn format_log_line(line: &TimestampedLogLine) -> String {
     let elapsed = line.timestamp.elapsed();
     format!(
@@ -70,7 +70,7 @@ pub fn format_log_line(line: &TimestampedLogLine) -> String {
     )
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct TestDiagnostics {
     pub test_name: String,
     pub subprocess_logs: HashMap<String, Vec<TimestampedLogLine>>,
@@ -78,7 +78,7 @@ pub struct TestDiagnostics {
     pub rtp_captures: Vec<(String, Vec<u8>)>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl TestDiagnostics {
     pub fn new(test_name: &str) -> Self {
         Self {

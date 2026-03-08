@@ -29,19 +29,19 @@ impl std::fmt::Display for LogStream {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct TimestampedLogLine {
     pub timestamp: std::time::Instant,
     pub stream: LogStream,
     pub line: String,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub enum ReadyStrategy {
     LogPattern(String),
     TcpPort(u16),
     Delay(Duration),
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, reason = "Custom strategy needs complex callback signature")]
     Custom(Box<dyn Fn() -> Pin<Box<dyn Future<Output = bool>>> + Send + Sync>),
 }
 
@@ -77,7 +77,7 @@ impl Default for SubprocessConfig {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct SubprocessHandle {
     process: Child,
     config: SubprocessConfig,
@@ -86,14 +86,14 @@ pub struct SubprocessHandle {
     pub ports: Vec<u16>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct SubprocessOutput {
     pub exit_status: Option<ExitStatus>,
     pub logs: Vec<TimestampedLogLine>,
     pub duration: Duration,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 #[derive(Debug, thiserror::Error)]
 pub enum SubprocessError {
     #[error("Spawn failed for {command}: {source}")]
@@ -353,12 +353,12 @@ impl SubprocessHandle {
         })
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn pid(&self) -> Option<u32> {
         self.process.id()
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn elapsed(&self) -> Duration {
         self.started_at.elapsed()
     }
@@ -367,7 +367,7 @@ impl SubprocessHandle {
         self.log_lines.lock().unwrap().clone()
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub async fn is_running(&mut self) -> bool {
         match self.process.try_wait() {
             Ok(Some(_)) => false,
@@ -422,7 +422,7 @@ pub async fn wait_for_tcp_port(addr: SocketAddr, timeout: Duration) -> Result<()
     })
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub async fn wait_for_port_bound(port: u16, timeout: Duration) -> Result<(), SubprocessError> {
     let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
     wait_for_tcp_port(addr, timeout).await

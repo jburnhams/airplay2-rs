@@ -1,6 +1,6 @@
 use std::net::TcpListener;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 #[derive(Debug, thiserror::Error)]
 pub enum PortError {
     #[error("Failed to allocate port: {0}")]
@@ -9,7 +9,7 @@ pub enum PortError {
     ConsecutiveAllocationFailed { count: usize, attempts: usize },
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 #[derive(Debug)]
 pub struct ReservedPort {
     pub port: u16,
@@ -17,14 +17,14 @@ pub struct ReservedPort {
 }
 
 impl ReservedPort {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn free(mut self) -> u16 {
         self._listener.take();
         self.port
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub fn reserve_port() -> Result<ReservedPort, PortError> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(PortError::AllocationFailed)?;
     let port = listener
@@ -37,21 +37,21 @@ pub fn reserve_port() -> Result<ReservedPort, PortError> {
     })
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct ReservedPorts {
     pub ports: Vec<u16>,
     _listeners: Vec<TcpListener>,
 }
 
 impl ReservedPorts {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn free(mut self) -> Vec<u16> {
         self._listeners.clear();
         self.ports.clone()
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub fn reserve_ports(count: usize) -> Result<ReservedPorts, PortError> {
     let mut listeners = Vec::with_capacity(count);
     let mut ports = Vec::with_capacity(count);
@@ -72,7 +72,7 @@ pub fn reserve_ports(count: usize) -> Result<ReservedPorts, PortError> {
     })
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 #[derive(Debug)]
 pub struct PortRange {
     pub base: u16,
@@ -81,24 +81,24 @@ pub struct PortRange {
 }
 
 impl PortRange {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn get(&self, index: usize) -> u16 {
         self.ports[index]
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn iter(&self) -> impl Iterator<Item = u16> + '_ {
         self.ports.iter().copied()
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn free(mut self) -> Self {
         self._listeners.clear();
         self
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub fn reserve_port_range(count: usize) -> Result<PortRange, PortError> {
     let mut attempts = 0;
     loop {
