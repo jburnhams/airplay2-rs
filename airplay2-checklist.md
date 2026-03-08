@@ -308,8 +308,10 @@
   - ✅ **VERIFIED**: `ptp_integration` confirms SETPEERS and port negotiation (319/320).
 
 ### NTP Fallback (Legacy Compatibility)
-- [ ] Implement NTP client (RFC 5905)
-- [ ] Fallback to NTP if PTP unavailable
+- [x] Implement NTP client (RFC 5905)
+  - ✅ **VERIFIED**: `src/protocol/ntp/client.rs` implements basic NTP encoding/decoding and offset calculation.
+- [x] Fallback to NTP if PTP unavailable
+  - ✅ **VERIFIED**: `ntp_integration` ensures connection uses NTP timing queries gracefully and `SETRATEANCHORTIME` incorporates it correctly if configured.
 
 ## Audio Buffering and Playback
 
