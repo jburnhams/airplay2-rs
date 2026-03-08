@@ -250,3 +250,50 @@ async fn test_invalid_device_not_found() {
         .await;
     assert!(result.is_err());
 }
+
+#[test]
+fn test_device_group_with_leader() {
+    let leader = test_device("leader");
+    let group = DeviceGroup::with_leader("Leader Group", leader);
+
+    assert_eq!(group.name, "Leader Group");
+    assert_eq!(group.member_count(), 1);
+
+    let member = group.member("leader").unwrap();
+    assert!(member.is_leader);
+    assert_eq!(member.volume, Volume::MAX); // Default individual volume
+
+    // Group volume should be default
+    assert_eq!(group.volume(), Volume::DEFAULT);
+}
+
+#[tokio::test]
+async fn test_group_manager_default() {
+    let manager = GroupManager::default();
+
+    let groups = manager.all_groups().await;
+    assert!(groups.is_empty());
+}
+
+#[test]
+fn test_effective_volume_rounding() {
+    let mut group = DeviceGroup::new("Round Test");
+    group.add_member(test_device("d1"));
+
+    // Set group to 50%, member to 50%
+    group.set_volume(Volume::from_percent(50));
+    group.set_member_volume("d1", Volume::from_percent(50));
+
+    // 0.5 * 0.5 = 0.25 -> 25%
+    let effective = group.effective_volume("d1");
+    assert_eq!(effective.as_percent(), 25);
+}
+
+#[tokio::test]
+async fn test_remove_device_from_group_not_found() {
+    let manager = GroupManager::new();
+
+    // Removing a device that is not in any group should return Ok(()) gracefully
+    let result = manager.remove_device_from_group("nonexistent_device").await;
+    assert!(result.is_ok());
+}
