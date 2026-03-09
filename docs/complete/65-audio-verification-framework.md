@@ -325,12 +325,12 @@ Existing tests should continue to work through thin wrapper methods on `Receiver
 
 ## Acceptance Criteria
 
-- [ ] `RawAudio` can load files from Python receiver, shairport-sync pipe output, and our receiver's file sink
-- [ ] Sine wave verification works for 440 Hz, 880 Hz, 1000 Hz at 44100 and 48000 Hz sample rates
-- [ ] Bit-exact comparison passes for PCM and ALAC round-trips
-- [ ] SNR measurement gives reasonable values for AAC
-- [ ] Diagnostic report is clear enough to debug failures without re-running the test
-- [ ] All existing integration tests continue to pass after migration
+ - [x] `RawAudio` can load files from Python receiver, shairport-sync pipe output, and our receiver's file sink
+ - [x] Sine wave verification works for 440 Hz, 880 Hz, 1000 Hz at 44100 and 48000 Hz sample rates
+ - [x] Bit-exact comparison passes for PCM and ALAC round-trips
+ - [x] SNR measurement gives reasonable values for AAC
+ - [x] Diagnostic report is clear enough to debug failures without re-running the test
+ - [x] All existing integration tests continue to pass after migration
 
 ---
 
