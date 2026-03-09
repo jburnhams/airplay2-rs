@@ -141,14 +141,11 @@ impl PythonReceiver {
         let mut actual_mac = None;
 
         for log in handle.logs() {
-            #[allow(clippy::collapsible_if)]
             if log.line.contains("[Receiver]: Mac:") {
                 if let Some(mac) = log.line.split("Mac:").nth(1) {
                     actual_mac = Some(mac.trim().to_string());
                 }
-            }
-            #[allow(clippy::collapsible_if)]
-            if log.line.contains("serving on") {
+            } else if log.line.contains("serving on") {
                 if let Some(Ok(p)) = log
                     .line
                     .split(':')
@@ -209,11 +206,8 @@ impl PythonReceiver {
                 return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
             }
 
-            #[allow(clippy::collapsible_if)]
-            if let Some(handle) = &self.handle {
-                if handle.logs().iter().any(|log| log.line.contains(pattern)) {
-                    return Ok(());
-                }
+            if self.handle.as_ref().is_some_and(|handle| handle.logs().iter().any(|log| log.line.contains(pattern))) {
+                return Ok(());
             }
 
             sleep(Duration::from_millis(100)).await;
