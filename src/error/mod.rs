@@ -268,3 +268,6 @@ impl AirPlayError {
 
 /// Result type alias for `AirPlay` operations
 pub type Result<T> = std::result::Result<T, AirPlayError>;
+
+#[cfg(test)]
+mod tests;
