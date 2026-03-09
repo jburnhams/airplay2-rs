@@ -172,11 +172,11 @@ impl SubprocessHandle {
                         });
                     }
                 }
-                #[allow(clippy::collapsible_if)]
-                if let Some(pattern) = &ready_pattern_out {
-                    if line.contains(pattern) {
-                        let _ = ready_tx_out.send(()).await;
-                    }
+                if ready_pattern_out
+                    .as_ref()
+                    .is_some_and(|pattern| line.contains(pattern))
+                {
+                    let _ = ready_tx_out.send(()).await;
                 }
             }
         });
@@ -204,11 +204,11 @@ impl SubprocessHandle {
                         });
                     }
                 }
-                #[allow(clippy::collapsible_if)]
-                if let Some(pattern) = &ready_pattern_err {
-                    if line.contains(pattern) {
-                        let _ = ready_tx_err.send(()).await;
-                    }
+                if ready_pattern_err
+                    .as_ref()
+                    .is_some_and(|pattern| line.contains(pattern))
+                {
+                    let _ = ready_tx_err.send(()).await;
                 }
             }
         });
