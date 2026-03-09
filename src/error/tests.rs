@@ -223,13 +223,20 @@ fn test_error_is_recoverable() {
             .is_recoverable()
     );
 
-    // Non-recoverable errors
-    let auth_err = AirPlayError::AuthenticationFailed {
-        message: "bad pin".to_string(),
-        recoverable: false, /* The `recoverable` field itself does not affect `is_recoverable()`
-                             * function in current impl */
+    // AuthenticationFailed respects its recoverable field
+    let auth_err_recoverable = AirPlayError::AuthenticationFailed {
+        message: "wait".to_string(),
+        recoverable: true,
     };
-    assert!(!auth_err.is_recoverable());
+    assert!(auth_err_recoverable.is_recoverable());
+
+    let auth_err_fatal = AirPlayError::AuthenticationFailed {
+        message: "bad pin".to_string(),
+        recoverable: false,
+    };
+    assert!(!auth_err_fatal.is_recoverable());
+
+    // Non-recoverable errors
     assert!(
         !AirPlayError::Disconnected {
             device_name: "test".to_string()
