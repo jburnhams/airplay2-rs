@@ -206,7 +206,11 @@ impl PythonReceiver {
                 return Err(format!("Timeout waiting for log pattern: '{}'", pattern));
             }
 
-            if self.handle.as_ref().is_some_and(|handle| handle.logs().iter().any(|log| log.line.contains(pattern))) {
+            if self
+                .handle
+                .as_ref()
+                .is_some_and(|handle| handle.logs().iter().any(|log| log.line.contains(pattern)))
+            {
                 return Ok(());
             }
 

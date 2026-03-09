@@ -172,7 +172,10 @@ impl SubprocessHandle {
                         });
                     }
                 }
-                if ready_pattern_out.as_ref().is_some_and(|pattern| line.contains(pattern)) {
+                if ready_pattern_out
+                    .as_ref()
+                    .is_some_and(|pattern| line.contains(pattern))
+                {
                     let _ = ready_tx_out.send(()).await;
                 }
             }
@@ -201,7 +204,10 @@ impl SubprocessHandle {
                         });
                     }
                 }
-                if ready_pattern_err.as_ref().is_some_and(|pattern| line.contains(pattern)) {
+                if ready_pattern_err
+                    .as_ref()
+                    .is_some_and(|pattern| line.contains(pattern))
+                {
                     let _ = ready_tx_err.send(()).await;
                 }
             }
