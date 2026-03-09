@@ -1,3 +1,6 @@
+pub mod audio_verify;
+#[cfg(test)]
+pub mod audio_verify_tests;
 pub mod diagnostics;
 pub mod ports;
 pub mod python_receiver;
