@@ -141,10 +141,9 @@ impl PythonReceiver {
         let mut actual_mac = None;
 
         for log in handle.logs() {
-            if log.line.contains("[Receiver]: Mac:") {
-                if let Some(mac) = log.line.split("Mac:").nth(1) {
-                    actual_mac = Some(mac.trim().to_string());
-                }
+            if let Some(idx) = log.line.find("[Receiver]: Mac:") {
+                let mac = &log.line[idx + 16..];
+                actual_mac = Some(mac.trim().to_string());
             } else if log.line.contains("serving on") {
                 if let Some(Ok(p)) = log
                     .line
