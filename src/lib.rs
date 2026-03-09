@@ -52,8 +52,6 @@
 // Public modules
 /// Error types
 pub mod error;
-#[cfg(test)]
-mod error_tests;
 
 /// State management
 pub mod state;
