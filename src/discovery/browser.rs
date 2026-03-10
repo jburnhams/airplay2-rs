@@ -100,7 +100,7 @@ struct DeviceBrowserStream {
     // Map full service name to device ID
     fullname_map: HashMap<String, String>,
     // Timer for pruning stale devices
-    prune_interval: tokio::time::Interval,
+    prune_interval: Option<tokio::time::Interval>,
 }
 
 impl DeviceBrowserStream {
@@ -143,16 +143,13 @@ impl DeviceBrowserStream {
 
         let stream = futures::stream::select_all(streams);
 
-        let mut prune_interval = tokio::time::interval(std::time::Duration::from_secs(10));
-        prune_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
         Ok(Self {
             options,
             mdns,
             stream: Box::pin(stream),
             known_devices: HashMap::new(),
             fullname_map: HashMap::new(),
-            prune_interval,
+            prune_interval: None,
         })
     }
 
@@ -373,9 +370,21 @@ impl Stream for DeviceBrowserStream {
     type Item = DiscoveryEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if self.prune_interval.is_none() {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            self.prune_interval = Some(interval);
+        }
+
         loop {
             // Check for stale devices first
-            if self.prune_interval.poll_tick(cx).is_ready() {
+            if self
+                .prune_interval
+                .as_mut()
+                .unwrap()
+                .poll_tick(cx)
+                .is_ready()
+            {
                 let stale_timeout = std::time::Duration::from_secs(360); // 3 missed 120s heartbeats
                 let now = std::time::Instant::now();
                 let stale_ids: Vec<String> = self
