@@ -68,10 +68,12 @@ impl RawAudio {
     }
 
     pub fn samples_i16(&self) -> Vec<i16> {
-        // Assume LE for tests
         let mut out = Vec::with_capacity(self.data.len() / 2);
         for chunk in self.data.chunks_exact(2) {
-            let val = i16::from_le_bytes([chunk[0], chunk[1]]);
+            let val = match self.endianness {
+                Endianness::Little => i16::from_le_bytes([chunk[0], chunk[1]]),
+                Endianness::Big => i16::from_be_bytes([chunk[0], chunk[1]]),
+            };
             out.push(val);
         }
         out

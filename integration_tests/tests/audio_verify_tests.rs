@@ -14,7 +14,10 @@ fn dummy_raw_audio(
     for i in 0..num_frames {
         let t = i as f32 / format.sample_rate as f32;
         let sample = (amplitude as f32 * (2.0 * std::f32::consts::PI * frequency * t).sin()) as i16;
-        let bytes = sample.to_le_bytes();
+        let bytes = match format.endianness {
+            Endianness::Little => sample.to_le_bytes(),
+            Endianness::Big => sample.to_be_bytes(),
+        };
         for _ in 0..format.channels {
             data.extend_from_slice(&bytes);
         }
