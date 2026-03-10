@@ -29,5 +29,6 @@ pub fn create_test_device(id: &str, name: &str, address: IpAddr, port: u16) -> A
         raop_port: None,
         raop_capabilities: None,
         txt_records: HashMap::new(),
+        last_seen: None,
     }
 }

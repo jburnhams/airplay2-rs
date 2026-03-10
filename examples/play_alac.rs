@@ -94,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 raop_port: None,
                 raop_capabilities: None,
                 txt_records: std::collections::HashMap::new(),
+                last_seen: None,
             }
         });
 

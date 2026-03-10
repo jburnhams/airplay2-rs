@@ -198,6 +198,7 @@ async fn test_group_manager_integration() {
             raop_port: None,
             raop_capabilities: None,
             txt_records: HashMap::default(),
+            last_seen: None,
         }
     }
 

@@ -100,6 +100,7 @@ fn test_airplay_device_methods() {
         raop_port: None,
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     assert!(device.supports_airplay2());
@@ -125,6 +126,7 @@ fn test_device_discovered_volume() {
         raop_port: None,
         raop_capabilities: None,
         txt_records: txt,
+        last_seen: None,
     };
 
     assert_eq!(device.discovered_volume(), Some(2.0));
@@ -187,6 +189,7 @@ fn test_device_supports_ptp_method() {
         raop_port: None,
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
     assert!(device.supports_ptp());
 }
