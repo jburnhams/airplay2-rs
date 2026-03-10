@@ -169,6 +169,8 @@ pub enum CaptureError {
     UnsupportedFormat,
 }
 
+// **DO NOT MOVE THIS MODULE:** These tests live inside the module to
+// verify internal test structs natively without making them `pub`.
 #[cfg(test)]
 mod tests {
     use super::*;
