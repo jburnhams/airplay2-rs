@@ -1,10 +1,11 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use airplay2::AirPlayConfig;
 use airplay2::audio::AudioCodec;
 use airplay2::connection::ConnectionManager;
 use airplay2::streaming::PcmStreamer;
 use common::python_receiver::{PythonReceiver, TestSineSource};
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::time::sleep;
 
 mod common;

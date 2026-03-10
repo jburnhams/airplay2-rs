@@ -50,9 +50,10 @@ impl RtpSender for MockRtpSender {
 
 #[tokio::test]
 async fn test_pcm_streamer_retransmit() {
+    use std::time::Duration;
+
     use crate::audio::{ChannelConfig, SampleFormat, SampleRate};
     use crate::streaming::source::SliceSource;
-    use std::time::Duration;
 
     let format = AudioFormat {
         sample_rate: SampleRate::Hz44100,
