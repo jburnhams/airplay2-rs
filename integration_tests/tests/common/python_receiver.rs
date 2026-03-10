@@ -145,6 +145,7 @@ impl PythonReceiver {
                 let mac = &log.line[idx + 16..];
                 actual_mac = Some(mac.trim().to_string());
             } else if log.line.contains("serving on") {
+                #[allow(clippy::collapsible_if, reason = "Keeping it clear")]
                 if let Some(Ok(p)) = log
                     .line
                     .split(':')
@@ -342,176 +343,79 @@ impl ReceiverOutput {
         expected_frequency: f32,
         check_frequency: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let audio = self
+        let audio_data = self
             .audio_data
             .as_ref()
-            .ok_or("No audio data for verification")?;
+            .ok_or("No audio data available for verification")?;
 
-        // Basic sanity checks
-        if audio.len() < 10000 {
-            return Err(format!("Audio too short: {} bytes", audio.len()).into());
-        }
+        let format = crate::common::audio_verify::RawAudioFormat {
+            sample_rate: 44100, // Hardcoded fallback or we extract from filename if needed
+            channels: 2,
+            bits_per_sample: 16,
+            endianness: crate::common::audio_verify::Endianness::Little,
+            signed: true,
+        };
 
-        // Parse as 16-bit stereo samples (44100 Hz, 2 channels, 16-bit)
-        let mut samples = Vec::new();
-        let mut min_sample = i16::MAX;
-        let mut max_sample = i16::MIN;
-        let mut zero_crossings = 0;
-        let mut prev_sample = 0i16;
+        let raw_audio =
+            crate::common::audio_verify::RawAudio::from_bytes(audio_data.clone(), format);
 
-        for chunk in audio.chunks_exact(4) {
-            if chunk.len() == 4 {
-                let left = i16::from_le_bytes([chunk[0], chunk[1]]);
-                samples.push(left as f32);
-                min_sample = min_sample.min(left);
-                max_sample = max_sample.max(left);
-
-                // Count zero crossings
-                if (prev_sample < 0 && left >= 0) || (prev_sample >= 0 && left < 0) {
-                    zero_crossings += 1;
-                }
-                prev_sample = left;
-            }
-        }
-
-        let num_samples = samples.len();
-        let sample_rate = 44100.0;
-        let duration = num_samples as f32 / sample_rate;
-
-        tracing::info!(
-            "Audio stats - samples: {}, duration: {:.2}s, min: {}, max: {}, range: {}",
-            num_samples,
-            duration,
-            min_sample,
-            max_sample,
-            (max_sample as i32) - (min_sample as i32)
-        );
-
-        // 1. Verify amplitude range
-        let amplitude_range = (max_sample as i32) - (min_sample as i32);
-        if amplitude_range < 20000 {
-            return Err(format!(
-                "Audio amplitude too low: {} (expected >20000 for full-scale sine wave)",
-                amplitude_range
-            )
-            .into());
-        }
-
-        // 2. Verify dynamic range (should use most of 16-bit range)
-        if max_sample.abs() < 25000 || min_sample.abs() < 25000 {
-            tracing::warn!(
-                "Audio not using full dynamic range: max={}, min={}",
-                max_sample,
-                min_sample
-            );
-        }
-
-        // 3. Estimate frequency from zero crossings
-        // Zero crossings per second = frequency * 2 (one crossing per half cycle)
-        let estimated_frequency = (zero_crossings as f32 / duration) / 2.0;
-        let frequency_error = (estimated_frequency - expected_frequency).abs();
-        let frequency_tolerance = expected_frequency * 0.05; // 5% tolerance
-
-        tracing::info!(
-            "Frequency analysis - expected: {}Hz, estimated: {:.1}Hz, error: {:.1}Hz, tolerance: \
-             {:.1}Hz",
+        let check = crate::common::audio_verify::SineWaveCheck {
             expected_frequency,
-            estimated_frequency,
-            frequency_error,
-            frequency_tolerance
-        );
+            check_frequency,
+            ..Default::default()
+        };
 
-        if check_frequency && frequency_error > frequency_tolerance {
-            return Err(format!(
-                "Frequency mismatch: expected {}Hz, got {:.1}Hz (error: {:.1}Hz > {:.1}Hz \
-                 tolerance)",
-                expected_frequency, estimated_frequency, frequency_error, frequency_tolerance
-            )
-            .into());
-        }
+        let result = check
+            .verify(&raw_audio)
+            .map_err(|e| Box::new(std::io::Error::other(e.0)) as Box<dyn std::error::Error>)?;
 
-        // 4. Check for continuity (shouldn't have long runs of zeros)
-        let mut max_zero_run = 0;
-        let mut current_zero_run = 0;
+        result
+            .assert_passed()
+            .map_err(|e| Box::new(std::io::Error::other(e.0)) as Box<dyn std::error::Error>)?;
 
-        for &sample in &samples {
-            if sample.abs() < 100.0 {
-                // Near-zero threshold
-                current_zero_run += 1;
-                max_zero_run = max_zero_run.max(current_zero_run);
-            } else {
-                current_zero_run = 0;
-            }
-        }
-
-        if max_zero_run > (sample_rate as usize / 10) {
-            return Err(format!(
-                "Found suspicious silence: {} consecutive near-zero samples",
-                max_zero_run
-            )
-            .into());
-        }
-
-        // 5. Simple FFT-based frequency verification (optional, more accurate)
-        // For now, zero-crossing is sufficient and doesn't require additional deps
-
-        tracing::info!(
-            "✓ Audio quality verified: {}Hz sine wave with good amplitude and continuity",
-            expected_frequency
-        );
         Ok(())
     }
 
     /// Detailed audio analysis (for debugging)
     #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn analyze_audio_detailed(&self) -> Result<AudioAnalysis, Box<dyn std::error::Error>> {
-        let audio = self
+        let audio_data = self
             .audio_data
             .as_ref()
-            .ok_or("No audio data for analysis")?;
+            .ok_or("No audio data available for analysis")?;
 
-        let mut samples = Vec::new();
-        for chunk in audio.chunks_exact(4) {
-            if chunk.len() == 4 {
-                let left = i16::from_le_bytes([chunk[0], chunk[1]]);
-                samples.push(left as f32);
-            }
-        }
+        let format = crate::common::audio_verify::RawAudioFormat {
+            sample_rate: 44100,
+            channels: 2,
+            bits_per_sample: 16,
+            endianness: crate::common::audio_verify::Endianness::Little,
+            signed: true,
+        };
 
-        let num_samples = samples.len();
-        let sample_rate = 44100.0;
+        let raw_audio =
+            crate::common::audio_verify::RawAudio::from_bytes(audio_data.clone(), format);
 
-        // Calculate RMS (loudness)
-        let rms = (samples.iter().map(|&s| s * s).sum::<f32>() / num_samples as f32).sqrt();
+        let check = crate::common::audio_verify::SineWaveCheck {
+            expected_frequency: 0.0,
+            check_frequency: false,
+            check_amplitude: false,
+            check_continuity: false,
+            ..Default::default()
+        };
 
-        // Calculate peak amplitude
-        let peak = samples.iter().map(|&s| s.abs()).fold(0.0f32, f32::max);
-
-        // Calculate crest factor (peak/rms ratio)
-        let crest_factor = if rms > 0.0 { peak / rms } else { 0.0 };
-
-        // Count zero crossings for frequency estimation
-        let mut zero_crossings = 0;
-        for i in 1..samples.len() {
-            if (samples[i - 1] < 0.0 && samples[i] >= 0.0)
-                || (samples[i - 1] >= 0.0 && samples[i] < 0.0)
-            {
-                zero_crossings += 1;
-            }
-        }
-
-        let duration = num_samples as f32 / sample_rate;
-        let estimated_frequency = (zero_crossings as f32 / duration) / 2.0;
+        let result = check
+            .verify(&raw_audio)
+            .map_err(|e| Box::new(std::io::Error::other(e.0)) as Box<dyn std::error::Error>)?;
 
         Ok(AudioAnalysis {
-            num_samples,
-            duration,
-            sample_rate,
-            rms,
-            peak,
-            crest_factor,
-            estimated_frequency,
-            zero_crossings,
+            num_samples: result.num_frames,
+            duration: result.duration.as_secs_f32(),
+            sample_rate: 44100.0,
+            rms: result.rms,
+            peak: result.peak,
+            crest_factor: result.crest_factor,
+            estimated_frequency: result.measured_frequency,
+            zero_crossings: 0,
         })
     }
 }

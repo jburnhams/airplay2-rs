@@ -964,7 +964,9 @@ pub fn create_client_node(
 }
 
 /// Unit tests for the BMCA logic (`compare_priority`, `process_announce`,
-/// `check_announce_timeout`). These tests live inside the module so they
+/// `check_announce_timeout`).
+///
+/// **DO NOT MOVE THIS MODULE:** These tests live inside the module so they
 /// can access private fields and methods without making them pub.
 #[cfg(test)]
 mod tests_unit {
