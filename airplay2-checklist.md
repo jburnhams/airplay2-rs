@@ -158,8 +158,8 @@
   - ✅ **VERIFIED**: Handled by `mdns-sd` library, successfully receives announcements
 - [x] Handle TTL refresh (4500 seconds standard)
   - ⚠️ **PARTIAL**: Handled by library, not tested in long-running sessions
-- [ ] Detect device presence heartbeat (re-announcements every 120 seconds)
-  - ❌ **NOT VERIFIED**: Not tested in long-running sessions
+- [x] Detect device presence heartbeat (re-announcements every 120 seconds)
+  - ✅ **VERIFIED**: Tracking `last_seen` via mdns-sd `ServiceResolved` updates and periodic pruning in `DeviceBrowserStream`. Verified by `heartbeat_integration` test.
 
 ### TXT Record Parsing
 - [x] Extract `md` (model/friendly name)

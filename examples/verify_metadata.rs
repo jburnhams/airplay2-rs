@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         capabilities: DeviceCapabilities::default(),
         raop_port: None,
         raop_capabilities: None,
-        txt_records: HashMap::new(),
+        txt_records: HashMap::new(), last_seen: None,
     };
 
     let config = AirPlayConfig::default();

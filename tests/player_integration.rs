@@ -32,7 +32,7 @@ async fn test_player_integration() {
         },
         raop_port: None,
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(),
+        txt_records: std::collections::HashMap::new(), last_seen: None,
     };
 
     // 4. Connect
@@ -134,7 +134,7 @@ async fn test_player_advanced_controls() {
         },
         raop_port: None,
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(),
+        txt_records: std::collections::HashMap::new(), last_seen: None,
     };
 
     player.connect(&device).await.expect("Connect failed");
