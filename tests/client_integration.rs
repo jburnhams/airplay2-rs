@@ -52,7 +52,8 @@ async fn test_client_integration_flow() {
         },
         raop_port: None,
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(), last_seen: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     // 4. Connect
@@ -148,7 +149,8 @@ async fn test_client_connect_failure() {
         capabilities: Default::default(),
         raop_port: None,
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(), last_seen: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     let result = timeout(Duration::from_secs(2), client.connect(&device)).await;
@@ -190,7 +192,8 @@ async fn test_client_reconnect_logic() {
         capabilities: Default::default(),
         raop_port: None,
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(), last_seen: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     // First connection

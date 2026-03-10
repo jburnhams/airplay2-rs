@@ -14,7 +14,8 @@ fn test_device(id: &str) -> AirPlayDevice {
         capabilities: DeviceCapabilities::default(),
         raop_port: None,
         raop_capabilities: None,
-        txt_records: HashMap::default(), last_seen: None,
+        txt_records: HashMap::default(),
+        last_seen: None,
     }
 }
 

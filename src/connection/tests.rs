@@ -47,7 +47,8 @@ mod ptp_integration_tests {
             },
             raop_port: None,
             raop_capabilities: None,
-            txt_records: HashMap::new(), last_seen: None,
+            txt_records: HashMap::new(),
+            last_seen: None,
         }
     }
 

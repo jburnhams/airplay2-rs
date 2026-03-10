@@ -154,7 +154,8 @@ async fn test_client_connect_fails_without_device_ptp() {
         },
         raop_port: None,
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(), last_seen: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     let result = client.connect(&device).await;

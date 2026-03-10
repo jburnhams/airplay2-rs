@@ -41,7 +41,8 @@ async fn test_full_raop_session() {
         capabilities: DeviceCapabilities::default(),
         raop_port: Some(server.config.rtsp_port),
         raop_capabilities: Some(RaopCapabilities::default()),
-        txt_records: HashMap::new(), last_seen: None,
+        txt_records: HashMap::new(),
+        last_seen: None,
     };
 
     // Connect
@@ -83,7 +84,8 @@ async fn test_raop_audio_streaming() {
         capabilities: DeviceCapabilities::default(),
         raop_port: Some(server.config.rtsp_port),
         raop_capabilities: Some(RaopCapabilities::default()),
-        txt_records: HashMap::new(), last_seen: None,
+        txt_records: HashMap::new(),
+        last_seen: None,
     };
 
     client.connect(device).await.expect("connection failed");
@@ -126,7 +128,8 @@ async fn test_raop_metadata() {
         capabilities: DeviceCapabilities::default(),
         raop_port: Some(server.config.rtsp_port),
         raop_capabilities: Some(RaopCapabilities::default()),
-        txt_records: HashMap::new(), last_seen: None,
+        txt_records: HashMap::new(),
+        last_seen: None,
     };
 
     client.connect(device).await.expect("connection failed");

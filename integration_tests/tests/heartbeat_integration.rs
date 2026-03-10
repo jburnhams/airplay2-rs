@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use airplay2::discovery::{discover, DiscoveryEvent};
+use airplay2::discovery::{DiscoveryEvent, discover};
 use futures_util::stream::StreamExt;
 
 mod common;
@@ -39,7 +39,10 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
             }
             Ok(Some(DiscoveryEvent::Updated(device))) => {
                 if device.id == device_config.id {
-                    tracing::info!("Device updated (heartbeat): last_seen = {:?}", device.last_seen);
+                    tracing::info!(
+                        "Device updated (heartbeat): last_seen = {:?}",
+                        device.last_seen
+                    );
                     if let (Some(initial), Some(current)) = (initial_last_seen, device.last_seen) {
                         if current > initial {
                             heartbeats_received += 1;
@@ -68,7 +71,10 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
 
     // As seen in check_mdns, mdns-sd usually emits multiple ServiceResolved events
     // shortly after startup due to multiple PTR/TXT records resolving.
-    assert!(heartbeats_received >= 1, "Did not receive any heartbeat/update for the device");
+    assert!(
+        heartbeats_received >= 1,
+        "Did not receive any heartbeat/update for the device"
+    );
 
     tracing::info!("✓ Heartbeat test passed");
 

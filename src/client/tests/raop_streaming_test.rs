@@ -27,7 +27,8 @@ async fn create_device_with_server() -> (AirPlayDevice, MockRaopServer) {
         capabilities: DeviceCapabilities::default(),
         raop_port: Some(server.config.rtsp_port),
         raop_capabilities: None,
-        txt_records: std::collections::HashMap::new(), last_seen: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     (device, server)
