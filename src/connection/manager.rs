@@ -2006,7 +2006,7 @@ impl ConnectionManager {
                 .await
                 .map_err(|e| AirPlayError::IoError {
                     message: format!("Failed to send RTCP control packet: {e}"),
-                source: Some(Box::new(std::io::Error::other(e))),
+                    source: Some(Box::new(std::io::Error::other(e))),
                 })?;
             Ok(())
         } else {

@@ -1,11 +1,11 @@
+use airplay2::AirPlayConfig;
 use airplay2::audio::AudioCodec;
 use airplay2::connection::ConnectionManager;
 use airplay2::streaming::PcmStreamer;
-use airplay2::AirPlayConfig;
 use common::python_receiver::{PythonReceiver, TestSineSource};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use std::sync::Arc;
 
 mod common;
 
@@ -36,7 +36,11 @@ async fn test_retransmission_with_python_receiver() -> Result<(), Box<dyn std::e
     }
     assert!(connected, "Failed to connect to receiver");
 
-    manager.drop_packets_for_test.lock().await.extend_from_slice(&[10, 11, 12, 13, 14]);
+    manager
+        .drop_packets_for_test
+        .lock()
+        .await
+        .extend_from_slice(&[10, 11, 12, 13, 14]);
 
     let target_format = airplay2::audio::AudioFormat {
         sample_rate: airplay2::audio::SampleRate::Hz44100,
@@ -51,18 +55,21 @@ async fn test_retransmission_with_python_receiver() -> Result<(), Box<dyn std::e
     }
 
     // Create sine wave audio source (2 seconds)
-    let source = TestSineSource::new(
-        440.0,
-        2.0,
-    );
+    let source = TestSineSource::new(440.0, 2.0);
 
     // Create an event listener to forward RetransmitRequests to the streamer
     let mut event_rx = manager.subscribe();
     let streamer_clone = streamer.clone();
     tokio::spawn(async move {
         while let Ok(evt) = event_rx.recv().await {
-            if let airplay2::connection::ConnectionEvent::RetransmitRequest { seq_start, count } = evt {
-                tracing::info!("Integration test forwarding RetransmitRequest seq {} count {}", seq_start, count);
+            if let airplay2::connection::ConnectionEvent::RetransmitRequest { seq_start, count } =
+                evt
+            {
+                tracing::info!(
+                    "Integration test forwarding RetransmitRequest seq {} count {}",
+                    seq_start,
+                    count
+                );
                 let _ = streamer_clone.retransmit(seq_start, count).await;
             }
         }
