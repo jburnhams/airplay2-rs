@@ -211,7 +211,8 @@ impl SineWaveCheck {
         let duration = Duration::from_secs_f64(num_frames as f64 / audio.sample_rate as f64);
 
         // Approximate active duration by subtracting the longest silence run
-        let active_duration_secs = (num_frames.saturating_sub(max_silence_run)) as f32 / audio.sample_rate as f32;
+        let active_duration_secs =
+            (num_frames.saturating_sub(max_silence_run)) as f32 / audio.sample_rate as f32;
 
         let measured_frequency = if active_duration_secs > 0.0 {
             zero_crossings as f32 / (2.0 * active_duration_secs)
