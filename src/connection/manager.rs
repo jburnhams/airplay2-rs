@@ -62,12 +62,15 @@ pub struct ConnectionManager {
     pending_record_response: Mutex<bool>,
     /// Counter for Time Announce packets to avoid log spam
     time_announce_count: std::sync::atomic::AtomicU64,
+    /// Internal drop packets list for testing Retransmissions
+    #[doc(hidden)]
+    pub drop_packets_for_test: Mutex<Vec<u16>>,
 }
 
 /// UDP sockets for streaming
 pub(crate) struct UdpSockets {
     pub(crate) audio: UdpSocket,
-    pub(crate) control: UdpSocket,
+    pub(crate) control: std::sync::Arc<tokio::net::UdpSocket>,
     pub(crate) timing: UdpSocket,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
     pub(crate) server_audio_port: u16,
@@ -104,6 +107,7 @@ impl ConnectionManager {
             ntp_offset: std::sync::atomic::AtomicI64::new(0),
             pending_record_response: Mutex::new(false),
             time_announce_count: std::sync::atomic::AtomicU64::new(0),
+            drop_packets_for_test: Mutex::new(Vec::new()),
         }
     }
 
@@ -1370,13 +1374,64 @@ impl ConnectionManager {
                 }
             }
 
+            let ctrl_arc = std::sync::Arc::new(ctrl_sock);
             *self.sockets.lock().await = Some(UdpSockets {
                 audio: audio_sock,
-                control: ctrl_sock,
+                control: ctrl_arc.clone(),
                 timing: time_sock,
                 server_audio_port,
                 server_control_port: server_ctrl_port,
                 server_timing_port: server_time_port,
+            });
+
+            // Create a channel for signaling task shutdown
+            let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
+            let mut ptp_shutdown_guard = self.ptp_shutdown_tx.lock().await;
+            // We reuse ptp_shutdown_tx for this since it fires on disconnect
+            if ptp_shutdown_guard.is_none() {
+                *ptp_shutdown_guard = Some(shutdown_tx);
+            } else if let Some(tx) = ptp_shutdown_guard.as_ref() {
+                shutdown_rx = tx.subscribe();
+            }
+
+            // Spawn task to listen for RetransmitRequest packets on control socket
+            let event_tx = self.event_tx.clone();
+            tokio::spawn(async move {
+                let mut buf = [0u8; 1024];
+                loop {
+                    tokio::select! {
+                        result = ctrl_arc.recv_from(&mut buf) => {
+                            match result {
+                                Ok((size, _addr)) => {
+                                    let data = &buf[..size];
+                                    if data.len() >= 8 && data[0] == 0x80 && data[1] == 0xD5 {
+                                        // RTCP payload type 213 (0xD5) is RetransmitRequest
+                                        let seq_start = u16::from_be_bytes([data[4], data[5]]);
+                                        let count = u16::from_be_bytes([data[6], data[7]]);
+                                        tracing::debug!(
+                                            "Received RetransmitRequest for seq {} count {}",
+                                            seq_start, count
+                                        );
+                                        let _ = event_tx.send(ConnectionEvent::RetransmitRequest {
+                                            seq_start,
+                                            count,
+                                        });
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Error reading from control socket: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        _ = shutdown_rx.changed() => {
+                            if *shutdown_rx.borrow() {
+                                tracing::info!("Control socket listener shutting down");
+                                break;
+                            }
+                        }
+                    }
+                }
             });
         }
 
@@ -1860,6 +1915,15 @@ impl ConnectionManager {
     ///
     /// Returns error if sockets are not connected or send fails
     pub async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        if packet.len() >= 4 {
+            let seq = u16::from_be_bytes([packet[2], packet[3]]);
+            let mut drop_list = self.drop_packets_for_test.lock().await;
+            if let Some(pos) = drop_list.iter().position(|&x| x == seq) {
+                drop_list.remove(pos);
+                tracing::info!("Test: Dropping RTP packet seq {}", seq);
+                return Ok(());
+            }
+        }
         let sockets = self.sockets.lock().await;
         if let Some(ref socks) = *sockets {
             socks
@@ -1922,6 +1986,41 @@ impl ConnectionManager {
     /// # Errors
     ///
     /// Returns error if sockets are not connected or send fails
+    /// Send an RTCP control packet (e.g., `RetransmitResponse`)
+    pub async fn send_rtcp_control(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        let (sock, server_port) = {
+            let sockets = self.sockets.lock().await;
+            if let Some(s) = sockets.as_ref() {
+                (s.control.clone(), s.server_control_port)
+            } else {
+                return Err(AirPlayError::Disconnected {
+                    device_name: "none".to_string(),
+                });
+            }
+        };
+
+        let device = self.device.read().await;
+        if let Some(device) = device.as_ref() {
+            let addr = (device.address(), server_port);
+            sock.send_to(packet, addr)
+                .await
+                .map_err(|e| AirPlayError::IoError {
+                    message: format!("Failed to send RTCP control packet: {e}"),
+                    source: Some(Box::new(std::io::Error::other(e))),
+                })?;
+            Ok(())
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Send a `TimeAnnounce` packet to the device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the sockets are not connected.
     pub async fn send_time_announce(
         &self,
         rtp_timestamp: u32,

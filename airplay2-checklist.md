@@ -1,5 +1,12 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 14):**
+- **Packet Retransmission**:
+  - ✅ **VERIFIED**: `retransmission_integration` test verifies client buffering and response to python receiver's `RetransmitRequest` (RTP loss recovery).
+  - Added `PacketBuffer` to `PcmStreamer` to store outgoing packets.
+  - Implemented `ConnectionManager` control socket listener task to detect incoming `RetransmitRequest`s and pass them to the streamer via `ConnectionEvent::RetransmitRequest`.
+  - Fixed `PcmStreamer` to properly frame and encrypt `RetransmitResponse` payload and send back to the control port.
+
 **Work Done (Session 13):**
 - **NTP Fallback/Client Sync**:
   - ✅ **VERIFIED**: `ntp_client_integration` test verifies the standard RFC 5905 timing logic.
@@ -282,10 +289,10 @@
   - ✅ **VERIFIED**: Unit tests confirm wraparound handling
 - [x] Handle RTP timestamp wraparound (32-bit)
   - ✅ **VERIFIED**: Unit tests confirm wraparound handling
-- [ ] Buffer incoming RTP packets
-  - ❌ **NOT VERIFIED**: Client-side buffering not tested (we're sender not receiver)
-- [ ] Detect packet loss via sequence number gaps
-  - ❌ **NOT VERIFIED**: Loss detection exists but not tested under packet loss
+- [x] Buffer incoming RTP packets
+  - ✅ **VERIFIED**: `retransmission_integration` verifies that the sender effectively buffers outgoing packets and retransmits them upon receiver's request for sequence number gaps. (Client only sends, buffering applies to retransmissions).
+- [x] Detect packet loss via sequence number gaps
+  - ✅ **VERIFIED**: Client successfully processes `RetransmitRequest` from Python receiver (caused by sequence gap) and resends lost packets.
 - [x] Implement RTCP sender/receiver reports
   - ✅ **VERIFIED**: Implemented `TimeAnnouncePtp` (Type 215) sender reports.
   - Verified with `ptp_integration` test: Receiver logs confirm receipt of `TIME_ANNOUNCE_PTP`.

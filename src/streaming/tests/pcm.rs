@@ -7,9 +7,18 @@ use crate::audio::AudioFormat;
 use crate::error::AirPlayError;
 use crate::streaming::{PcmStreamer, RtpSender, SliceSource, StreamerState};
 
-#[derive(Default)]
 struct MockRtpSender {
     packets: Arc<Mutex<Vec<Vec<u8>>>>,
+    control_packets: Arc<Mutex<Vec<Vec<u8>>>>,
+}
+
+impl Default for MockRtpSender {
+    fn default() -> Self {
+        Self {
+            packets: Arc::new(Mutex::new(Vec::new())),
+            control_packets: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
 }
 
 #[async_trait]
@@ -26,6 +35,69 @@ impl RtpSender for MockRtpSender {
     ) -> Result<(), AirPlayError> {
         Ok(())
     }
+
+    async fn send_rtcp_control(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        self.control_packets.lock().unwrap().push(packet.to_vec());
+        Ok(())
+    }
+
+    fn subscribe_events(
+        &self,
+    ) -> Option<tokio::sync::broadcast::Receiver<crate::connection::ConnectionEvent>> {
+        None
+    }
+}
+
+#[tokio::test]
+async fn test_pcm_streamer_retransmit() {
+    use crate::audio::{ChannelConfig, SampleFormat, SampleRate};
+    use crate::streaming::source::SliceSource;
+    use std::time::Duration;
+
+    let format = AudioFormat {
+        sample_rate: SampleRate::Hz44100,
+        channels: ChannelConfig::Stereo,
+        sample_format: SampleFormat::I16,
+    };
+    let packets = Arc::new(Mutex::new(Vec::new()));
+    let control_packets = Arc::new(Mutex::new(Vec::new()));
+    let sender = Arc::new(MockRtpSender {
+        packets: packets.clone(),
+        control_packets: control_packets.clone(),
+    });
+
+    let streamer = PcmStreamer::new(sender, format, 44100);
+
+    let data = vec![0u8; 352 * 4 * 1000]; // 10 packets worth
+    let source = SliceSource::new(data, format);
+
+    let streamer_clone = Arc::new(streamer);
+    let streamer_task = streamer_clone.clone();
+
+    // Start streaming in background
+    let handle = tokio::spawn(async move {
+        streamer_task.stream(source).await.unwrap();
+    });
+
+    // Wait for packets to be sent
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Request retransmit of sequence 0, count 2
+    streamer_clone.retransmit(0, 2).await.unwrap();
+
+    // Wait for retransmit to be processed
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Verify retransmit packets were sent
+    let sent = control_packets.lock().unwrap().clone();
+    assert_eq!(sent.len(), 2, "Should have sent 2 retransmit packets");
+
+    // Retransmit packets should start with 0x80 0xD6
+    assert_eq!(sent[0][0], 0x80);
+    assert_eq!(sent[0][1], 0xD6);
+
+    streamer_clone.stop().await.unwrap();
+    let _ = handle.await;
 }
 
 #[tokio::test]
