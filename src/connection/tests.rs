@@ -69,7 +69,7 @@ mod ptp_integration_tests {
         manager
             .set_sockets_for_test(crate::connection::manager::UdpSockets {
                 audio: tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap(),
-                control: send_socket,
+                control: std::sync::Arc::new(send_socket),
                 timing: tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap(),
                 server_audio_port: 0,
                 server_control_port: 0,
