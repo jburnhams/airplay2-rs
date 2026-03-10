@@ -128,7 +128,7 @@ impl PythonReceiver {
             working_dir: Some(output_dir.clone()),
             env_vars,
             ready_strategy: ReadyStrategy::LogPattern("serving on".to_string()),
-            ready_timeout: Duration::from_secs(10),
+            ready_timeout: Duration::from_secs(45),
             log_prefix: format!("[{}]", name),
             ..Default::default()
         };
