@@ -14,8 +14,8 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
     // Start discovery
     let mut devices = discover()?;
 
-    // Start receiver
-    let receiver = PythonReceiver::start().await?;
+    // Start receiver with accelerated 100ms heartbeats
+    let receiver = PythonReceiver::start_with_args(&["--heartbeat-ms", "100"]).await?;
     let device_config = receiver.device_config();
 
     tracing::info!("Waiting for device to be discovered...");
@@ -25,7 +25,7 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
     let mut discovered = false;
     let mut heartbeats_received = 0;
 
-    let timeout_duration = Duration::from_secs(15);
+    let timeout_duration = Duration::from_secs(5); // Shorter timeout for faster tests
     let start_time = std::time::Instant::now();
 
     while start_time.elapsed() < timeout_duration {
