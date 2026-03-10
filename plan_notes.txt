@@ -1,8 +1,0 @@
-I need to add `#[cfg(test)]` block to my test where I access `drop_packets_for_test`? No, wait! `integration_tests` is a separate crate!
-If I put `#[cfg(test)]` on `drop_packets_for_test`, it's ONLY available inside the `airplay2` crate's own tests (`cargo test -p airplay2`), not inside `integration_tests`!!
-Ah! To make it available to integration tests, I have to remove `#[cfg(test)]`!
-Since this is an internal diagnostic feature, I can rename it to `pub(crate) debug_drop_packets: Mutex<Vec<u16>>` or something and leave it available? But wait, `pub(crate)` is not available in integration tests either!
-It MUST be `pub debug_drop_packets: Mutex<Vec<u16>>` on `ConnectionManager`.
-And since I can't use `#[cfg(test)]` if it's accessed by `integration_tests`, I have to either hide it with `#[doc(hidden)]` and make it pub, or provide a public method `#[doc(hidden)] pub fn test_drop_packets(&self, ...)` which is only compiled with a specific feature flag?
-Actually, `#[doc(hidden)] pub` is the standard way to expose test hooks to integration tests!
-Let me remove the `#[cfg(test)]` from `drop_packets_for_test` and make it `#[doc(hidden)] pub`!
