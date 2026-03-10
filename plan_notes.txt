@@ -1,0 +1,4 @@
+So `stream<S>` blocks the current task and pushes frames into the `self.connection.send_rtp_audio`.
+Inside `stream`, there's a big `loop` that encodes and sends frames!
+Let's see where the loop checks for Retransmit Requests. It currently doesn't.
+Wait, since `PcmStreamer` is isolated, we can change `StreamerCommand` to include `RetransmitRequest`.
