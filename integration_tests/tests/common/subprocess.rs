@@ -7,7 +7,20 @@ use std::process::ExitStatus;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(unix)]
 use nix::sys::signal::Signal;
+
+/// Graceful shutdown signal type.
+/// On Unix this is the real nix Signal; on Windows it's a stub (the value is
+/// never passed to kill() — see the `#[cfg(windows)]` block in `stop()`).
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(non_camel_case_types, dead_code)]
+pub enum Signal {
+    SIGTERM,
+    SIGKILL,
+}
+
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
@@ -55,6 +68,7 @@ pub struct SubprocessConfig {
     pub env_vars: HashMap<String, String>,
     pub ready_strategy: ReadyStrategy,
     pub ready_timeout: Duration,
+    #[allow(dead_code, reason = "Only used on Unix in the stop() method")]
     pub graceful_shutdown_signal: Signal,
     pub shutdown_timeout: Duration,
     pub log_prefix: String,
@@ -231,7 +245,7 @@ impl SubprocessHandle {
                     status = process.wait() => {
                         let stderr_tail = Self::extract_stderr_tail(&log_lines_clone);
                         return Err(SubprocessError::EarlyExit {
-                            status: status.unwrap_or_else(|_| std::os::unix::process::ExitStatusExt::from_raw(1)),
+                            status: status.unwrap_or_else(|_| make_exit_status(1)),
                             stderr_tail
                         });
                     }
@@ -274,7 +288,7 @@ impl SubprocessHandle {
                     status = process.wait() => {
                         let stderr_tail = Self::extract_stderr_tail(&log_lines_clone);
                         return Err(SubprocessError::EarlyExit {
-                            status: status.unwrap_or_else(|_| std::os::unix::process::ExitStatusExt::from_raw(1)),
+                            status: status.unwrap_or_else(|_| make_exit_status(1)),
                             stderr_tail
                         });
                     }
@@ -429,4 +443,19 @@ pub async fn wait_for_tcp_port(addr: SocketAddr, timeout: Duration) -> Result<()
 pub async fn wait_for_port_bound(port: u16, timeout: Duration) -> Result<(), SubprocessError> {
     let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
     wait_for_tcp_port(addr, timeout).await
+}
+
+/// Create a failure `ExitStatus` in a cross-platform way.
+/// Used as a fallback when `process.wait()` returns an error.
+fn make_exit_status(_code: i32) -> std::process::ExitStatus {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(_code)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(_code as u32)
+    }
 }

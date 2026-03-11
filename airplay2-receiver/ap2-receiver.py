@@ -1480,8 +1480,14 @@ if __name__ == "__main__":
         IPV4 = ifen[ni.AF_INET][0]["addr"]
         IP4ADDR_BIN = socket.inet_pton(ni.AF_INET, IPV4)
     if ifen.get(ni.AF_INET6):
-        IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
-        IP6ADDR_BIN = socket.inet_pton(ni.AF_INET6, IPV6)
+        try:
+            IPV6 = ifen[ni.AF_INET6][0]["addr"].split("%")[0]
+            IP6ADDR_BIN = socket.inet_pton(ni.AF_INET6, IPV6)
+        except OSError:
+            # inet_pton may fail for link-local addresses on some platforms (e.g. Windows).
+            # Fall back to IPv4-only operation.
+            IPV6 = None
+            IP6ADDR_BIN = None
 
     setup_global_structs(args, isDebug=DEBUG)
 
