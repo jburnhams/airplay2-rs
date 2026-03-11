@@ -67,6 +67,8 @@ pub struct ConnectionManager {
     pub drop_packets_for_test: Mutex<Vec<u16>>,
     /// Event channel drain task (keeps HomePod event TCP connection alive)
     event_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// TCP stream for buffered audio (AirPlay 2 type=103)
+    audio_tcp_stream: Mutex<Option<TcpStream>>,
 }
 
 /// UDP sockets for streaming
@@ -111,6 +113,7 @@ impl ConnectionManager {
             time_announce_count: std::sync::atomic::AtomicU64::new(0),
             drop_packets_for_test: Mutex::new(Vec::new()),
             event_task: Mutex::new(None),
+            audio_tcp_stream: Mutex::new(None),
         }
     }
 
@@ -1350,6 +1353,32 @@ impl ConnectionManager {
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
 
+            // For buffered audio (type=103), also connect via TCP (Python receiver uses TCP).
+            // The Python AudioBuffered.serve() creates a TCP server socket and calls accept().
+            if stream_type == 103 {
+                tracing::info!(
+                    "Buffered audio (type=103): connecting TCP to {}:{}",
+                    device_ip,
+                    server_audio_port
+                );
+                match TcpStream::connect((device_ip, server_audio_port)).await {
+                    Ok(tcp_stream) => {
+                        tracing::info!(
+                            "✓ Buffered audio TCP connected to port {}",
+                            server_audio_port
+                        );
+                        *self.audio_tcp_stream.lock().await = Some(tcp_stream);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to connect buffered audio TCP (port {}): {}",
+                            server_audio_port,
+                            e
+                        );
+                    }
+                }
+            }
+
             if server_time_port > 0 {
                 tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
                 time_sock.connect((device_ip, server_time_port)).await?;
@@ -2041,6 +2070,32 @@ impl ConnectionManager {
                 return Ok(());
             }
         }
+        // Buffered audio (AirPlay 2 type=103) uses TCP with 2-byte big-endian framing.
+        // The Python AudioBuffered.serve() expects: [2-byte total size (includes the 2 bytes)] [packet].
+        {
+            let mut tcp_guard = self.audio_tcp_stream.lock().await;
+            if let Some(ref mut tcp_stream) = *tcp_guard {
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "RTP packets are always well under 65535 bytes"
+                )]
+                let total_len = (packet.len() + 2) as u16;
+                let len_bytes = total_len.to_be_bytes();
+                AsyncWriteExt::write_all(tcp_stream, &len_bytes)
+                    .await
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: format!("Failed to send buffered audio length: {e}"),
+                        status_code: None,
+                    })?;
+                AsyncWriteExt::write_all(tcp_stream, packet)
+                    .await
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: format!("Failed to send buffered audio data: {e}"),
+                        status_code: None,
+                    })?;
+                return Ok(());
+            }
+        }
         let sockets = self.sockets.lock().await;
         if let Some(ref socks) = *sockets {
             socks
@@ -2476,6 +2531,7 @@ impl ConnectionManager {
         // Close connection
         *self.stream.lock().await = None;
         *self.sockets.lock().await = None;
+        *self.audio_tcp_stream.lock().await = None;
         *self.rtsp_session.lock().await = None;
         *self.session_keys.lock().await = None;
 
