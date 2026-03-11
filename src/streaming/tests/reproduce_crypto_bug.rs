@@ -1,5 +1,4 @@
-#[cfg(test)]
-mod tests {
+#![cfg(test)]
     use crate::protocol::raop::RaopSessionKeys;
     use crate::streaming::{RaopStreamConfig, RaopStreamer};
     use crate::protocol::rtp::raop::RaopAudioPacket;
@@ -32,4 +31,3 @@ mod tests {
             panic!("Critical security flaw: Keystream reuse detected! Consecutive packets encrypted with same keystream.");
         }
     }
-}
