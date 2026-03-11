@@ -459,6 +459,12 @@ class Audio:
         self.senderRtpTimestamp, self.playAtRtpTimestamp = None, None
         self.remoteClockMonotonic_ts, self.remoteClockId = None, None
 
+    def fini_audio_sink(self):
+        """Close the audio sink and terminate the audio backend.
+        Called after audio streaming finishes. Safe to override in subclasses."""
+        self.sink.close()
+        self.pa.terminate()
+
     def init_audio_sink(self):
         codecLatencySec = 0
         self.pa = get_audio_backend()
@@ -705,10 +711,6 @@ class AudioRealtime(Audio):
         self.port = self.socket.getsockname()[1]
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
         self.anchorRTPTimestamp = None
-
-    def fini_audio_sink(self):
-        self.sink.close()
-        self.pa.terminate()
 
     def serve(self, serverconn, control_recv, control_send):
         while True:
@@ -1048,3 +1050,8 @@ class AudioBuffered(Audio):
         finally:
             conn.close()
             self.socket.close()
+            if not SKIP_DECODE:
+                try:
+                    self.fini_audio_sink()
+                except Exception:
+                    pass

@@ -433,7 +433,8 @@ impl ReceiverOutput {
         }
 
         // 2. Verify dynamic range (should use most of 16-bit range)
-        if max_sample.abs() < 25000 || min_sample.abs() < 25000 {
+        // Cast to i32 before abs() to avoid overflow when min_sample == i16::MIN (-32768)
+        if (max_sample as i32).abs() < 25000 || (min_sample as i32).abs() < 25000 {
             tracing::warn!(
                 "Audio not using full dynamic range: max={}, min={}",
                 max_sample,
