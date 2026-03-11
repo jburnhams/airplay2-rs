@@ -119,8 +119,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_path = "Eels - 01 - Susan's House.mp3";
     println!("Playing file: {}", file_path);
 
-    // Stop previous playback if any
-    let _ = player.stop().await;
+    // NOTE: Do NOT call player.stop() here — doing so sends TEARDOWN which terminates
+    // the HomePod RTSP session and causes it to close the event channel.
+    // Without the event channel, SETRATEANCHORTIME returns 400.
+    // If you need to stop a previous session, disconnect and reconnect first.
 
     play_mp3(player, file_path).await
 }

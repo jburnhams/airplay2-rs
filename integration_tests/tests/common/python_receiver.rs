@@ -22,6 +22,8 @@ pub struct PythonReceiver {
     port: u16,
     // detected MAC address
     mac: Option<String>,
+    // Detected bind IP (parsed from "serving on IP:PORT")
+    ip: std::net::IpAddr,
     // Unique name for this receiver
     name: String,
 }
@@ -65,10 +67,33 @@ impl PythonReceiver {
         // Copy source files to temp dir
         Self::copy_dir_all(&source_dir, &output_dir)?;
 
+        let python_exe_for_detect = if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        };
+
         let interface = std::env::var("AIRPLAY_TEST_INTERFACE").unwrap_or_else(|_| {
-            // Use loopback interface for CI
             if cfg!(target_os = "macos") {
                 "lo0".to_string()
+            } else if cfg!(windows) {
+                // On Windows, 'lo' doesn't exist as a netifaces interface.
+                // Run a quick Python snippet to find the first interface with an IPv4 address.
+                let detect = std::process::Command::new(&python_exe_for_detect)
+                    .args([
+                        "-c",
+                        "import netifaces; \
+                         ifaces=[i for i in netifaces.interfaces() \
+                                 if netifaces.ifaddresses(i).get(2)]; \
+                         print(ifaces[0] if ifaces else 'lo')",
+                    ])
+                    .output();
+                match detect {
+                    Ok(o) if o.status.success() => {
+                        String::from_utf8_lossy(&o.stdout).trim().to_string()
+                    }
+                    _ => "lo".to_string(),
+                }
             } else {
                 "lo".to_string()
             }
@@ -139,19 +164,27 @@ impl PythonReceiver {
 
         let mut actual_port = 7000;
         let mut actual_mac = None;
+        let mut actual_ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
 
         for log in handle.logs() {
             if let Some(idx) = log.line.find("[Receiver]: Mac:") {
                 let mac = &log.line[idx + 16..];
                 actual_mac = Some(mac.trim().to_string());
             } else if log.line.contains("serving on") {
-                if let Some(Ok(p)) = log
-                    .line
-                    .split(':')
-                    .next_back()
-                    .map(|s| s.trim().parse::<u16>())
-                {
-                    actual_port = p;
+                // Format: "... serving on IP:PORT"
+                // Use rfind(':') so IPv6 addresses are handled correctly.
+                if let Some(serving_start) = log.line.find("serving on ") {
+                    let addr_part = &log.line[serving_start + "serving on ".len()..];
+                    if let Some(colon) = addr_part.rfind(':') {
+                        let ip_str = addr_part[..colon].trim();
+                        let port_str = addr_part[colon + 1..].trim();
+                        if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
+                            actual_ip = ip;
+                        }
+                        if let Ok(p) = port_str.parse::<u16>() {
+                            actual_port = p;
+                        }
+                    }
                 }
             }
         }
@@ -163,6 +196,7 @@ impl PythonReceiver {
             _temp_dir: Some(temp_dir),
             port: actual_port,
             mac: actual_mac,
+            ip: actual_ip,
             name,
         })
     }
@@ -274,7 +308,7 @@ impl PythonReceiver {
             id: id.clone(),
             name: id,
             model: Some("AirPlay2-Receiver".to_string()),
-            addresses: vec!["127.0.0.1".parse().unwrap()],
+            addresses: vec![self.ip],
             port: self.port, // Use detected port
             capabilities: airplay2::DeviceCapabilities {
                 airplay2: true,
@@ -399,7 +433,8 @@ impl ReceiverOutput {
         }
 
         // 2. Verify dynamic range (should use most of 16-bit range)
-        if max_sample.abs() < 25000 || min_sample.abs() < 25000 {
+        // Cast to i32 before abs() to avoid overflow when min_sample == i16::MIN (-32768)
+        if (max_sample as i32).abs() < 25000 || (min_sample as i32).abs() < 25000 {
             tracing::warn!(
                 "Audio not using full dynamic range: max={}, min={}",
                 max_sample,

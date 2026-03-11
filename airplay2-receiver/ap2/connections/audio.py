@@ -459,6 +459,12 @@ class Audio:
         self.senderRtpTimestamp, self.playAtRtpTimestamp = None, None
         self.remoteClockMonotonic_ts, self.remoteClockId = None, None
 
+    def fini_audio_sink(self):
+        """Close the audio sink and terminate the audio backend.
+        Called after audio streaming finishes. Safe to override in subclasses."""
+        self.sink.close()
+        self.pa.terminate()
+
     def init_audio_sink(self):
         codecLatencySec = 0
         self.pa = get_audio_backend()
@@ -612,8 +618,20 @@ class Audio:
         server_thread = threading.Thread(target=self.serve, args=(there, control_recv, control_send))
         player_thread = threading.Thread(target=self.play, args=(rcvr_cmd_pipe, here))
 
+        # Mark as daemon so the process exits when the main thread exits (even if threads
+        # are still running after the join timeout). This ensures the subprocess releases
+        # inherited pipe handles promptly when the parent process is killed.
+        server_thread.daemon = True
+        player_thread.daemon = True
+
         server_thread.start()
         player_thread.start()
+
+        # Join threads so this process exits as soon as they finish.
+        # server_thread exits when the TCP connection is closed (sender disconnects).
+        # player_thread exits via unhandled EOFError when the server pipe is closed.
+        server_thread.join(timeout=10.0)
+        player_thread.join(timeout=5.0)
 
     def msec_to_playout(self, rtp_ts):
         """
@@ -693,10 +711,6 @@ class AudioRealtime(Audio):
         self.port = self.socket.getsockname()[1]
         self.rtp_buffer = RTPRealtimeBuffer(buff_size, self.isDebug)
         self.anchorRTPTimestamp = None
-
-    def fini_audio_sink(self):
-        self.sink.close()
-        self.pa.terminate()
 
     def serve(self, serverconn, control_recv, control_send):
         while True:
@@ -995,11 +1009,18 @@ class AudioBuffered(Audio):
 
                 # Receive RTP packets from the TCP stream:
                 message = conn.recv(2, socket.MSG_WAITALL)
+                if not message:
+                    # TCP connection closed (EOF) – sender disconnected
+                    break
                 if message:
                     # Each RTP packet is preceeded by a uint16 of its size
                     data_len = int.from_bytes(message, byteorder='big')
                     # Then the RTP packet:
                     data = conn.recv(data_len - 2, socket.MSG_WAITALL)
+
+                    if SAVE_RAW_RTP:
+                        with open("rtp_packets.bin", "ab") as f:
+                            f.write(data)
 
                     rtp = RTP_BUFFERED(data)
                     self.log(rtp)
@@ -1029,3 +1050,8 @@ class AudioBuffered(Audio):
         finally:
             conn.close()
             self.socket.close()
+            if not SKIP_DECODE:
+                try:
+                    self.fini_audio_sink()
+                except Exception:
+                    pass

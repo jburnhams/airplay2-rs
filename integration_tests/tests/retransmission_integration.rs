@@ -76,6 +76,14 @@ async fn test_retransmission_with_python_receiver() -> Result<(), Box<dyn std::e
         }
     });
 
+    // For AirPlay 2 buffered audio (stream type 103), SETRATEANCHORTIME must be sent
+    // to tell the receiver to start playback. Without it, AudioBuffered.play() blocks
+    // waiting for the "play" command and no audio is written to the output file.
+    tracing::info!("Sending SETRATEANCHORTIME to start receiver playback...");
+    if let Err(e) = manager.send_set_rate_anchor_time(1.0).await {
+        tracing::warn!("SETRATEANCHORTIME failed (non-fatal): {}", e);
+    }
+
     // Stream
     streamer.stream(source).await?;
 

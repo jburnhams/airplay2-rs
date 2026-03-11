@@ -65,6 +65,10 @@ pub struct ConnectionManager {
     /// Internal drop packets list for testing Retransmissions
     #[doc(hidden)]
     pub drop_packets_for_test: Mutex<Vec<u16>>,
+    /// Event channel drain task (keeps HomePod event TCP connection alive)
+    event_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// TCP stream for buffered audio (AirPlay 2 type=103)
+    audio_tcp_stream: Mutex<Option<TcpStream>>,
 }
 
 /// UDP sockets for streaming
@@ -108,6 +112,8 @@ impl ConnectionManager {
             pending_record_response: Mutex::new(false),
             time_announce_count: std::sync::atomic::AtomicU64::new(0),
             drop_packets_for_test: Mutex::new(Vec::new()),
+            event_task: Mutex::new(None),
+            audio_tcp_stream: Mutex::new(None),
         }
     }
 
@@ -963,6 +969,11 @@ impl ConnectionManager {
             response_step1.status.as_u16(),
             response_step1.body.len()
         );
+        // Log all RTSP response headers for diagnostics (especially Session header)
+        tracing::info!("SETUP Step 1 response headers:");
+        for (k, v) in response_step1.headers.iter() {
+            tracing::info!("  {}: {}", k, v);
+        }
         if !response_step1.body.is_empty() {
             let hex_len = response_step1.body.len().min(256);
             tracing::info!(
@@ -1092,9 +1103,11 @@ impl ConnectionManager {
              timing_port={time_port}"
         );
 
-        // AirPlay 2 uses 96 (General Audio) with buffered audio params for both buffered and
-        // realtime
-        let stream_type = 96;
+        // AirPlay 2 Buffered Audio uses stream type 103 (required for HomePod / SETRATEANCHORTIME).
+        // Type 96 = real-time audio (AirPlay 1-style); type 103 = buffered audio (AirPlay 2 PTP).
+        // SETRATEANCHORTIME is only valid in buffered mode (type=103); HomePod returns 400 for it
+        // when the stream is set up as real-time (type=96).
+        let stream_type: u64 = if use_ptp { 103 } else { 96 };
 
         // Check if high-resolution audio (24-bit/48kHz) should be used.
         let use_hires = self.should_use_hires().await;
@@ -1195,6 +1208,11 @@ impl ConnectionManager {
                 hex_len,
                 &response_step2.body[..hex_len]
             );
+        }
+        // Log response headers for Step 2 (especially Session header)
+        tracing::info!("SETUP Step 2 response headers:");
+        for (k, v) in response_step2.headers.iter() {
+            tracing::info!("  {}: {}", k, v);
         }
 
         let mut server_ports = None;
@@ -1305,7 +1323,7 @@ impl ConnectionManager {
             }
         }
 
-        if let Some((server_audio_port, server_ctrl_port, _server_event_port, server_time_port)) =
+        if let Some((server_audio_port, server_ctrl_port, server_event_port, server_time_port)) =
             server_ports
         {
             // Modified to accept 4 ports
@@ -1334,6 +1352,32 @@ impl ConnectionManager {
 
             audio_sock.connect((device_ip, server_audio_port)).await?;
             ctrl_sock.connect((device_ip, server_ctrl_port)).await?;
+
+            // For buffered audio (type=103), also connect via TCP (Python receiver uses TCP).
+            // The Python AudioBuffered.serve() creates a TCP server socket and calls accept().
+            if stream_type == 103 {
+                tracing::info!(
+                    "Buffered audio (type=103): connecting TCP to {}:{}",
+                    device_ip,
+                    server_audio_port
+                );
+                match TcpStream::connect((device_ip, server_audio_port)).await {
+                    Ok(tcp_stream) => {
+                        tracing::info!(
+                            "✓ Buffered audio TCP connected to port {}",
+                            server_audio_port
+                        );
+                        *self.audio_tcp_stream.lock().await = Some(tcp_stream);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to connect buffered audio TCP (port {}): {}",
+                            server_audio_port,
+                            e
+                        );
+                    }
+                }
+            }
 
             if server_time_port > 0 {
                 tracing::info!("Connecting Timing to {}:{}", device_ip, server_time_port);
@@ -1375,6 +1419,75 @@ impl ConnectionManager {
             }
 
             let ctrl_arc = std::sync::Arc::new(ctrl_sock);
+
+            // 7c. Connect TCP event channel — HomePod requires this before it will
+            //     accept SETRATEANCHORTIME or RECORD.  The HomePod sends plist-encoded
+            //     playback events on this channel; we just need to drain them to prevent
+            //     the TCP send-buffer from stalling.
+            if server_event_port > 0 {
+                tracing::info!(
+                    "Connecting event channel TCP to {}:{}",
+                    device_ip, server_event_port
+                );
+                let event_connect_result = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    tokio::net::TcpStream::connect((device_ip, server_event_port)),
+                )
+                .await
+                .unwrap_or_else(|_| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "event channel connect timed out after 5s",
+                    ))
+                });
+                match event_connect_result {
+                    Ok(mut event_stream) => {
+                        tracing::info!(
+                            "✓ Event channel connected to port {}",
+                            server_event_port
+                        );
+                        // Drain task: reads and discards any events HomePod sends.
+                        // Moving event_stream into the task keeps the TCP connection alive.
+                        let handle = tokio::spawn(async move {
+                            let mut buf = [0u8; 4096];
+                            loop {
+                                match crate::net::AsyncReadExt::read(
+                                    &mut event_stream,
+                                    &mut buf,
+                                )
+                                .await
+                                {
+                                    Ok(0) => {
+                                        tracing::debug!(
+                                            "Event channel: HomePod closed connection"
+                                        );
+                                        break;
+                                    }
+                                    Ok(n) => {
+                                        tracing::trace!(
+                                            "Event channel: {} bytes received",
+                                            n
+                                        );
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Event channel read error: {}", e);
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+                        *self.event_task.lock().await = Some(handle);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to connect event channel (port {}): {}",
+                            server_event_port, e
+                        );
+                    }
+                }
+            } else {
+                tracing::warn!("eventPort is 0 — skipping event channel (SETRATEANCHORTIME may fail)");
+            }
             *self.sockets.lock().await = Some(UdpSockets {
                 audio: audio_sock,
                 control: ctrl_arc.clone(),
@@ -1435,25 +1548,12 @@ impl ConnectionManager {
             });
         }
 
-        // 8. Send RECORD to start the streaming session.
-        // For AirPlay 2 buffered audio, RECORD triggers PTP Sync messages.
-        // HomePod may not respond to RECORD until audio data starts flowing.
-        // We send RECORD and wait with a 5s timeout. If it times out, we mark
-        // that there's a pending RECORD response that must be consumed before
-        // the next RTSP request.
-        if use_ptp {
-            tracing::info!("Sending RECORD for AirPlay 2 Buffered Audio...");
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-            match tokio::time::timeout(std::time::Duration::from_secs(5), self.record()).await {
-                Ok(Ok(())) => tracing::info!("RECORD accepted by device"),
-                Ok(Err(e)) => tracing::warn!("RECORD failed: {}", e),
-                Err(_) => {
-                    tracing::warn!("RECORD timed out after 5s — marking pending response");
-                    *self.pending_record_response.lock().await = true;
-                }
-            }
-        }
+        // 8. RECORD and SETRATEANCHORTIME are sent from stream_audio() just before
+        //    audio streaming begins.  Sending them here would create an unbounded gap
+        //    between RECORD and SETRATEANCHORTIME (the HomePod gives up waiting for
+        //    SETRATEANCHORTIME after ~10 s and returns 500 for RECORD).  By deferring
+        //    both to stream_audio() they are sent back-to-back within milliseconds of
+        //    each other, well within the HomePod's timeout.
         Ok(())
     }
 
@@ -1618,6 +1718,18 @@ impl ConnectionManager {
             })?;
 
         if let Some(ref mut secure) = *secure_guard {
+            // Always log plaintext headers before encryption for diagnostic purposes.
+            // Find the header/body boundary (\r\n\r\n) and only decode the header portion,
+            // so we don't fail on binary bodies (like binary plists).
+            {
+                let header_end = encoded
+                    .windows(4)
+                    .position(|w| w == b"\r\n\r\n")
+                    .unwrap_or(encoded.len());
+                if let Ok(s) = std::str::from_utf8(&encoded[..header_end]) {
+                    tracing::info!(">> Sending RTSP (encrypted) headers:\n{}", s);
+                }
+            }
             tracing::debug!(
                 ">> Sending Encrypted RTSP request ({} bytes)",
                 encoded.len()
@@ -1638,17 +1750,12 @@ impl ConnectionManager {
         // Update stats
         self.stats.write().await.record_sent(encoded.len());
 
-        // Check if there's a pending RECORD response to consume first
-        let has_pending = {
-            let mut guard = self.pending_record_response.lock().await;
-            if *guard {
-                *guard = false;
-                true
-            } else {
-                false
-            }
-        };
-        let mut responses_to_skip = i32::from(has_pending);
+        // CSeq-aware response matching: discard any response whose CSeq does not match
+        // the one we just sent.  This handles RTSP response pipelining gracefully —
+        // for example, when RECORD is sent without waiting for its reply and SETRATEANCHORTIME
+        // is sent immediately after, the HomePod may deliver the RECORD response first
+        // (or last).  We simply keep reading until we see the response for *our* CSeq.
+        let expected_cseq = request.headers.cseq();
 
         // Read response
         let mut codec = self.rtsp_codec.lock().await;
@@ -1660,14 +1767,18 @@ impl ConnectionManager {
                 message: e.to_string(),
                 status_code: None,
             })? {
-                if responses_to_skip > 0 {
-                    tracing::info!(
-                        "Consumed deferred RECORD response: {} {}",
-                        response.status.as_u16(),
-                        response.reason
-                    );
-                    responses_to_skip -= 1;
-                    continue;
+                // Check CSeq: if we know our expected CSeq and the response CSeq differs,
+                // this is a deferred response for an earlier request (e.g., RECORD) — discard.
+                if let (Some(expected), Some(resp_cseq)) = (expected_cseq, response.cseq()) {
+                    if resp_cseq != expected {
+                        tracing::info!(
+                            "Discarding deferred response (CSeq={resp_cseq}, \
+                             expected={expected}): {} {}",
+                            response.status.as_u16(),
+                            response.reason
+                        );
+                        continue;
+                    }
                 }
                 return Ok(response);
             }
@@ -1790,7 +1901,19 @@ impl ConnectionManager {
         };
 
         let response = self.send_rtsp_request(&request).await?;
-        tracing::info!("SETPEERS response: {}", response.status.as_u16());
+        tracing::info!(
+            "SETPEERS response: {} {} (body: {} bytes)",
+            response.status.as_u16(),
+            response.reason,
+            response.body.len()
+        );
+        if !response.is_success() && !response.body.is_empty() {
+            if let Ok(plist_val) = crate::protocol::plist::decode(&response.body) {
+                tracing::warn!("SETPEERS error body (plist): {:#?}", plist_val);
+            } else if let Ok(text) = std::str::from_utf8(&response.body) {
+                tracing::warn!("SETPEERS error body (text): {}", text);
+            }
+        }
         Ok(())
     }
 
@@ -1811,20 +1934,43 @@ impl ConnectionManager {
                 })?;
             session.record_request()
         };
-        self.send_rtsp_request(&record_request).await?;
+        let response = self.send_rtsp_request(&record_request).await?;
+        tracing::info!(
+            "RECORD response: {} {} (body: {} bytes)",
+            response.status.as_u16(),
+            response.reason,
+            response.body.len()
+        );
+        if !response.is_success() && !response.body.is_empty() {
+            if let Ok(plist_val) = crate::protocol::plist::decode(&response.body) {
+                tracing::warn!("RECORD error body (plist): {:#?}", plist_val);
+            } else if let Ok(text) = std::str::from_utf8(&response.body) {
+                tracing::warn!("RECORD error body (text): {}", text);
+            }
+        }
+        if !response.is_success() {
+            return Err(AirPlayError::RtspError {
+                message: format!(
+                    "RECORD failed: {} {}",
+                    response.status.as_u16(),
+                    response.reason
+                ),
+                status_code: Some(response.status.as_u16()),
+            });
+        }
         Ok(())
     }
 
     /// Send SETRATEANCHORTIME with PTP timing fields.
     ///
-    /// `rate`: 1 = play, 0 = pause.
+    /// `rate`: 1.0 = play, 0.0 = pause.  Must be a float (Real) — HomePod rejects integers.
     /// Includes `networkTimeSecs`, `networkTimeFrac`, and `networkTimeTimelineID`
     /// derived from the PTP clock.
     ///
     /// # Errors
     ///
     /// Returns error if plist encoding fails or RTSP request fails.
-    pub async fn send_set_rate_anchor_time(&self, rate: i64) -> Result<(), AirPlayError> {
+    pub async fn send_set_rate_anchor_time(&self, rate: f64) -> Result<(), AirPlayError> {
         // Get device clock ID
         let device_clock_id = self.device_clock_id().await.unwrap_or(0);
 
@@ -1863,10 +2009,10 @@ impl ConnectionManager {
         );
 
         // Build SETRATEANCHORTIME plist with PTP timing fields.
-        // All fields use Integer type. networkTimeSecs/networkTimeFrac/networkTimeTimelineID
-        // are read as uint by receivers (shairport-sync) but encoded as signed Integer.
+        // `rate` MUST be a Real (float64) — HomePod returns 400 if it is an Integer.
+        // networkTimeSecs/networkTimeFrac/networkTimeTimelineID are Integer-encoded.
         let mut body = crate::protocol::plist::DictBuilder::new()
-            .insert("rate", rate)
+            .insert("rate", rate) // f64 → PlistValue::Real
             .insert("rtpTime", 0i64);
 
         // Only include timing fields if we have a valid device clock ID
@@ -1921,6 +2067,32 @@ impl ConnectionManager {
             if let Some(pos) = drop_list.iter().position(|&x| x == seq) {
                 drop_list.remove(pos);
                 tracing::info!("Test: Dropping RTP packet seq {}", seq);
+                return Ok(());
+            }
+        }
+        // Buffered audio (AirPlay 2 type=103) uses TCP with 2-byte big-endian framing.
+        // The Python AudioBuffered.serve() expects: [2-byte total size (includes the 2 bytes)] [packet].
+        {
+            let mut tcp_guard = self.audio_tcp_stream.lock().await;
+            if let Some(ref mut tcp_stream) = *tcp_guard {
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    reason = "RTP packets are always well under 65535 bytes"
+                )]
+                let total_len = (packet.len() + 2) as u16;
+                let len_bytes = total_len.to_be_bytes();
+                AsyncWriteExt::write_all(tcp_stream, &len_bytes)
+                    .await
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: format!("Failed to send buffered audio length: {e}"),
+                        status_code: None,
+                    })?;
+                AsyncWriteExt::write_all(tcp_stream, packet)
+                    .await
+                    .map_err(|e| AirPlayError::RtspError {
+                        message: format!("Failed to send buffered audio data: {e}"),
+                        status_code: None,
+                    })?;
                 return Ok(());
             }
         }
@@ -2351,9 +2523,15 @@ impl ConnectionManager {
         // Stop PTP handler if running
         self.stop_ptp().await;
 
+        // Stop event channel drain task
+        if let Some(task) = self.event_task.lock().await.take() {
+            task.abort();
+        }
+
         // Close connection
         *self.stream.lock().await = None;
         *self.sockets.lock().await = None;
+        *self.audio_tcp_stream.lock().await = None;
         *self.rtsp_session.lock().await = None;
         *self.session_keys.lock().await = None;
 
@@ -2425,37 +2603,17 @@ impl ConnectionManager {
     ///
     /// Uses the `socket2` crate to set socket options before binding.
     ///
-    /// Attempts a dual-stack (IPv4 + IPv6) bind first by creating an IPv6 wildcard
-    /// socket with `IPV6_V6ONLY` disabled. This lets the socket receive packets from
-    /// both IPv4 and IPv6 peers. If dual-stack is unavailable (e.g. the OS has
-    /// `net.ipv6.bindv6only=1`, IPv6 is disabled, or we are on a system that does
-    /// not support dual-stack), it falls back to an IPv4-only socket bound to
-    /// `0.0.0.0`. No `unwrap()` calls are used — all error paths propagate via `?`.
+    /// Binds an IPv4 wildcard socket (`0.0.0.0:{port}`).  PTP for `AirPlay` 2 is
+    /// exclusively over IPv4, so there is no benefit to a dual-stack IPv6 socket
+    /// here, and on Windows a dual-stack socket cannot call `send_to` with a plain
+    /// `SocketAddr::V4` address (it would need the IPv4-mapped form `::ffff:x.x.x.x`),
+    /// which would require changes throughout every send site.  Using IPv4 directly
+    /// is correct and portable.  No `unwrap()` calls are used — `SocketAddr` is
+    /// constructed directly and all error paths propagate via `?`.
     fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
-        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-
         use socket2::{Domain, Protocol, Socket, Type};
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-        // --- Attempt 1: dual-stack IPv6 wildcard socket -----------------------
-        // `set_only_v6(false)` enables IPv4-mapped IPv6 addresses so a single
-        // socket can service both address families.
-        let dual_stack = (|| -> std::io::Result<UdpSocket> {
-            let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port);
-            let sock = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
-            sock.set_only_v6(false)?; // dual-stack: accept IPv4-mapped addresses too
-            sock.set_reuse_address(true)?;
-            sock.set_nonblocking(true)?;
-            sock.bind(&addr.into())?;
-            let std_sock: std::net::UdpSocket = sock.into();
-            UdpSocket::from_std(std_sock)
-        })();
-
-        if let Ok(sock) = dual_stack {
-            return Ok(sock);
-        }
-
-        // --- Attempt 2: IPv4-only fallback ------------------------------------
-        // Used when the OS does not support dual-stack or IPv6 is not available.
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
         // Allow binding even if another process already holds the port.
