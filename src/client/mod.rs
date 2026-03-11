@@ -729,99 +729,75 @@ impl AirPlayClient {
 
         self.streamer = Some(streamer.clone());
 
-        // Don't set is_playing yet — we need to send SetRateAnchorTime first
-        // (play() checks is_playing and skips if already true)
-
-        // Send SETRATEANCHORTIME after audio starts flowing.
-        // RECORD was already sent during connect(). SETRATEANCHORTIME tells the device
-        // to start rendering audio at the given rate and PTP-anchored time.
+        // For AirPlay 2 Buffered Audio (PTP devices, e.g. HomePod) the session
+        // handshake must complete here, right before audio starts:
         //
-        // We use a oneshot channel so the setup task can report failure back to us.
-        // If SETRATEANCHORTIME fails after all retries, we abort streaming early
-        // rather than wasting CPU/network on audio the device will never render.
-        let (setup_tx, setup_rx) = tokio::sync::oneshot::channel::<Result<(), AirPlayError>>();
-        let connection = self.connection.clone();
-        tokio::spawn(async move {
-            // Wait for PTP to synchronize so SETRATEANCHORTIME can include
-            // proper networkTimeSecs/Frac anchor timestamps.
-            if connection.is_ptp_active().await {
-                tracing::info!("Waiting for PTP clock to synchronize...");
-                let ptp_timeout = Duration::from_secs(10);
-                let poll_interval = Duration::from_millis(200);
-                let start = tokio::time::Instant::now();
-                loop {
-                    if connection.is_ptp_synchronized().await {
-                        tracing::info!(
-                            "PTP clock synchronized after {:.1}s",
-                            start.elapsed().as_secs_f64()
-                        );
-                        break;
-                    }
-                    if start.elapsed() > ptp_timeout {
-                        tracing::warn!(
-                            "PTP clock not synchronized after {:.0}s — sending SETRATEANCHORTIME \
-                             without PTP timestamps (audio may not play)",
-                            ptp_timeout.as_secs_f64()
-                        );
-                        break;
-                    }
-                    tokio::time::sleep(poll_interval).await;
+        //   1. Wait for PTP to synchronize so networkTimeSecs is accurate.
+        //   2. Fire RECORD (short timeout — HomePod won't reply until step 3).
+        //   3. Send SETRATEANCHORTIME immediately after.
+        //
+        // Sending RECORD and SETRATEANCHORTIME back-to-back here guarantees the
+        // two messages arrive at the HomePod within milliseconds of each other —
+        // well inside its ~10 s patience window.
+        //
+        // CSeq-aware response matching in send_rtsp_request discards the deferred
+        // RECORD response automatically when it reads the SETRATEANCHORTIME reply.
+        if self.connection.is_ptp_active().await {
+            // Brief poll in case PTP isn't quite synchronized yet.
+            // In practice PTP syncs within ~500 ms of connect(), so this loop
+            // typically exits on the first or second iteration.
+            let start = tokio::time::Instant::now();
+            let max_wait = Duration::from_secs(5);
+            loop {
+                if self.connection.is_ptp_synchronized().await {
+                    break;
                 }
+                if start.elapsed() > max_wait {
+                    tracing::warn!(
+                        "PTP not synchronized after 5 s — proceeding anyway"
+                    );
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
 
-            // Wait for audio data to fill the device buffer
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            // AirPlay 2 buffered audio sequence:
+            //   1. SETRATEANCHORTIME — tells HomePod the PTP/RTP timing anchor
+            //      (valid while in Setup state, before RECORD starts the session)
+            //   2. RECORD — starts the streaming session; HomePod may reply
+            //      immediately or after receiving the first audio packets
+            //
+            // Sending SETRATEANCHORTIME after RECORD returns 400 because the
+            // HomePod's state machine expects SETRATEANCHORTIME in Setup state.
 
-            // Retry SETRATEANCHORTIME with increasing delays
-            let delays_ms = [1000, 2000, 3000, 5000, 8000];
-            let mut last_err = None;
-            for (attempt, delay) in delays_ms.iter().enumerate() {
-                tracing::info!(
-                    "Sending SETRATEANCHORTIME attempt {}/{}...",
-                    attempt + 1,
-                    delays_ms.len()
-                );
-                match connection.send_set_rate_anchor_time(1).await {
-                    Ok(()) => {
-                        tracing::info!("SETRATEANCHORTIME succeeded on attempt {}", attempt + 1);
-                        let _ = setup_tx.send(Ok(()));
-                        return;
-                    }
-                    Err(e) => {
-                        tracing::warn!("SETRATEANCHORTIME attempt {} failed: {}", attempt + 1, e);
-                        last_err = Some(e);
-                        tokio::time::sleep(Duration::from_millis(*delay)).await;
-                    }
-                }
+            // 1. SETRATEANCHORTIME — tells HomePod the PTP/RTP timing anchor.
+            //    Requires event channel TCP to be established (done in setup_session).
+            tracing::info!("Sending SETRATEANCHORTIME for AirPlay 2 Buffered Audio...");
+            match self.connection.send_set_rate_anchor_time(1.0).await {
+                Ok(()) => tracing::info!("✓ SETRATEANCHORTIME accepted"),
+                Err(e) => tracing::warn!("SETRATEANCHORTIME failed: {e}"),
             }
-            tracing::error!("SETRATEANCHORTIME failed after all retries");
-            let _ = setup_tx.send(Err(last_err.unwrap_or_else(|| AirPlayError::RtspError {
-                message: "SETRATEANCHORTIME failed after all retries".to_string(),
-                status_code: None,
-            })));
-        });
 
-        // Race streaming against the setup task. If setup fails, abort early.
-        // If setup succeeds, continue streaming until the source is exhausted.
-        let stream_fut = streamer.stream(source);
-        tokio::pin!(stream_fut);
-
-        tokio::select! {
-            result = &mut stream_fut => result,
-            setup_result = setup_rx => {
-                match setup_result {
-                    Ok(Ok(())) => {
-                        // Setup succeeded — continue streaming normally
-                        stream_fut.await
-                    }
-                    Ok(Err(e)) => Err(e),
-                    Err(_) => {
-                        // Setup task panicked or was cancelled — continue streaming
-                        stream_fut.await
-                    }
+            // 2. RECORD — starts the streaming session.  Fire with a short timeout;
+            //    HomePod may reply immediately or after the first audio packets arrive.
+            tracing::info!("Sending RECORD for AirPlay 2 Buffered Audio...");
+            match tokio::time::timeout(
+                Duration::from_millis(500),
+                self.connection.record(),
+            )
+            .await
+            {
+                Ok(Ok(())) => tracing::info!("✓ RECORD accepted"),
+                Ok(Err(e)) => tracing::warn!("RECORD failed: {e}"),
+                Err(_) => {
+                    tracing::debug!(
+                        "RECORD sent — HomePod will reply after first audio packets arrive"
+                    );
                 }
             }
         }
+
+        streamer.stream(source).await
     }
 
     // === Events ===
