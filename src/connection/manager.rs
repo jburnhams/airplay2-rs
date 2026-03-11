@@ -65,9 +65,9 @@ pub struct ConnectionManager {
     /// Internal drop packets list for testing Retransmissions
     #[doc(hidden)]
     pub drop_packets_for_test: Mutex<Vec<u16>>,
-    /// Event channel drain task (keeps HomePod event TCP connection alive)
+    /// Event channel drain task (keeps `HomePod` event TCP connection alive)
     event_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    /// TCP stream for buffered audio (AirPlay 2 type=103)
+    /// TCP stream for buffered audio (`AirPlay` 2 type=103)
     audio_tcp_stream: Mutex<Option<TcpStream>>,
 }
 
@@ -1427,7 +1427,8 @@ impl ConnectionManager {
             if server_event_port > 0 {
                 tracing::info!(
                     "Connecting event channel TCP to {}:{}",
-                    device_ip, server_event_port
+                    device_ip,
+                    server_event_port
                 );
                 let event_connect_result = tokio::time::timeout(
                     std::time::Duration::from_secs(5),
@@ -1442,32 +1443,21 @@ impl ConnectionManager {
                 });
                 match event_connect_result {
                     Ok(mut event_stream) => {
-                        tracing::info!(
-                            "✓ Event channel connected to port {}",
-                            server_event_port
-                        );
+                        tracing::info!("✓ Event channel connected to port {}", server_event_port);
                         // Drain task: reads and discards any events HomePod sends.
                         // Moving event_stream into the task keeps the TCP connection alive.
                         let handle = tokio::spawn(async move {
                             let mut buf = [0u8; 4096];
                             loop {
-                                match crate::net::AsyncReadExt::read(
-                                    &mut event_stream,
-                                    &mut buf,
-                                )
-                                .await
+                                match crate::net::AsyncReadExt::read(&mut event_stream, &mut buf)
+                                    .await
                                 {
                                     Ok(0) => {
-                                        tracing::debug!(
-                                            "Event channel: HomePod closed connection"
-                                        );
+                                        tracing::debug!("Event channel: HomePod closed connection");
                                         break;
                                     }
                                     Ok(n) => {
-                                        tracing::trace!(
-                                            "Event channel: {} bytes received",
-                                            n
-                                        );
+                                        tracing::trace!("Event channel: {} bytes received", n);
                                     }
                                     Err(e) => {
                                         tracing::warn!("Event channel read error: {}", e);
@@ -1481,12 +1471,15 @@ impl ConnectionManager {
                     Err(e) => {
                         tracing::warn!(
                             "Failed to connect event channel (port {}): {}",
-                            server_event_port, e
+                            server_event_port,
+                            e
                         );
                     }
                 }
             } else {
-                tracing::warn!("eventPort is 0 — skipping event channel (SETRATEANCHORTIME may fail)");
+                tracing::warn!(
+                    "eventPort is 0 — skipping event channel (SETRATEANCHORTIME may fail)"
+                );
             }
             *self.sockets.lock().await = Some(UdpSockets {
                 audio: audio_sock,
@@ -1548,12 +1541,11 @@ impl ConnectionManager {
             });
         }
 
-        // 8. RECORD and SETRATEANCHORTIME are sent from stream_audio() just before
-        //    audio streaming begins.  Sending them here would create an unbounded gap
-        //    between RECORD and SETRATEANCHORTIME (the HomePod gives up waiting for
-        //    SETRATEANCHORTIME after ~10 s and returns 500 for RECORD).  By deferring
-        //    both to stream_audio() they are sent back-to-back within milliseconds of
-        //    each other, well within the HomePod's timeout.
+        // 8. RECORD and SETRATEANCHORTIME are sent from stream_audio() just before audio streaming
+        //    begins.  Sending them here would create an unbounded gap between RECORD and
+        //    SETRATEANCHORTIME (the HomePod gives up waiting for SETRATEANCHORTIME after ~10 s and
+        //    returns 500 for RECORD).  By deferring both to stream_audio() they are sent
+        //    back-to-back within milliseconds of each other, well within the HomePod's timeout.
         Ok(())
     }
 
@@ -1963,7 +1955,7 @@ impl ConnectionManager {
 
     /// Send SETRATEANCHORTIME with PTP timing fields.
     ///
-    /// `rate`: 1.0 = play, 0.0 = pause.  Must be a float (Real) — HomePod rejects integers.
+    /// `rate`: 1.0 = play, 0.0 = pause.  Must be a float (Real) — `HomePod` rejects integers.
     /// Includes `networkTimeSecs`, `networkTimeFrac`, and `networkTimeTimelineID`
     /// derived from the PTP clock.
     ///
@@ -2071,7 +2063,8 @@ impl ConnectionManager {
             }
         }
         // Buffered audio (AirPlay 2 type=103) uses TCP with 2-byte big-endian framing.
-        // The Python AudioBuffered.serve() expects: [2-byte total size (includes the 2 bytes)] [packet].
+        // The Python AudioBuffered.serve() expects: [2-byte total size (includes the 2 bytes)]
+        // [packet].
         {
             let mut tcp_guard = self.audio_tcp_stream.lock().await;
             if let Some(ref mut tcp_stream) = *tcp_guard {
@@ -2611,8 +2604,9 @@ impl ConnectionManager {
     /// is correct and portable.  No `unwrap()` calls are used — `SocketAddr` is
     /// constructed directly and all error paths propagate via `?`.
     fn bind_ptp_port(port: u16) -> std::io::Result<UdpSocket> {
-        use socket2::{Domain, Protocol, Socket, Type};
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+        use socket2::{Domain, Protocol, Socket, Type};
 
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
         let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;

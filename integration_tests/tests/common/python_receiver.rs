@@ -82,10 +82,8 @@ impl PythonReceiver {
                 let detect = std::process::Command::new(&python_exe_for_detect)
                     .args([
                         "-c",
-                        "import netifaces; \
-                         ifaces=[i for i in netifaces.interfaces() \
-                                 if netifaces.ifaddresses(i).get(2)]; \
-                         print(ifaces[0] if ifaces else 'lo')",
+                        "import netifaces; ifaces=[i for i in netifaces.interfaces() if \
+                         netifaces.ifaddresses(i).get(2)]; print(ifaces[0] if ifaces else 'lo')",
                     ])
                     .output();
                 match detect {

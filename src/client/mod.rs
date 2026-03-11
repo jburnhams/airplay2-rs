@@ -753,40 +753,33 @@ impl AirPlayClient {
                     break;
                 }
                 if start.elapsed() > max_wait {
-                    tracing::warn!(
-                        "PTP not synchronized after 5 s — proceeding anyway"
-                    );
+                    tracing::warn!("PTP not synchronized after 5 s — proceeding anyway");
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
 
             // AirPlay 2 buffered audio sequence:
-            //   1. SETRATEANCHORTIME — tells HomePod the PTP/RTP timing anchor
-            //      (valid while in Setup state, before RECORD starts the session)
-            //   2. RECORD — starts the streaming session; HomePod may reply
-            //      immediately or after receiving the first audio packets
+            //   1. SETRATEANCHORTIME — tells HomePod the PTP/RTP timing anchor (valid while in
+            //      Setup state, before RECORD starts the session)
+            //   2. RECORD — starts the streaming session; HomePod may reply immediately or after
+            //      receiving the first audio packets
             //
             // Sending SETRATEANCHORTIME after RECORD returns 400 because the
             // HomePod's state machine expects SETRATEANCHORTIME in Setup state.
 
-            // 1. SETRATEANCHORTIME — tells HomePod the PTP/RTP timing anchor.
-            //    Requires event channel TCP to be established (done in setup_session).
+            // 1. SETRATEANCHORTIME — tells HomePod the PTP/RTP timing anchor. Requires event
+            //    channel TCP to be established (done in setup_session).
             tracing::info!("Sending SETRATEANCHORTIME for AirPlay 2 Buffered Audio...");
             match self.connection.send_set_rate_anchor_time(1.0).await {
                 Ok(()) => tracing::info!("✓ SETRATEANCHORTIME accepted"),
                 Err(e) => tracing::warn!("SETRATEANCHORTIME failed: {e}"),
             }
 
-            // 2. RECORD — starts the streaming session.  Fire with a short timeout;
-            //    HomePod may reply immediately or after the first audio packets arrive.
+            // 2. RECORD — starts the streaming session.  Fire with a short timeout; HomePod may
+            //    reply immediately or after the first audio packets arrive.
             tracing::info!("Sending RECORD for AirPlay 2 Buffered Audio...");
-            match tokio::time::timeout(
-                Duration::from_millis(500),
-                self.connection.record(),
-            )
-            .await
-            {
+            match tokio::time::timeout(Duration::from_millis(500), self.connection.record()).await {
                 Ok(Ok(())) => tracing::info!("✓ RECORD accepted"),
                 Ok(Err(e)) => tracing::warn!("RECORD failed: {e}"),
                 Err(_) => {
