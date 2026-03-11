@@ -1,34 +1,32 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tempfile::TempDir;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
 use tokio::time::sleep;
 use walkdir::WalkDir;
 
+use crate::common::diagnostics::TestDiagnostics;
+use crate::common::subprocess::{ReadyStrategy, SubprocessConfig, SubprocessHandle};
+
 /// Python receiver wrapper for testing
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct PythonReceiver {
-    process: Child,
+    handle: Option<SubprocessHandle>,
     output_dir: PathBuf,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     interface: String,
-    log_buffer: Arc<Mutex<Vec<String>>>,
     // Keep temp dir alive until receiver is dropped
     _temp_dir: Option<TempDir>,
     // Detected port
     port: u16,
     // detected MAC address
     mac: Option<String>,
-    // Flag to ensure logs are written once
-    logs_written: bool,
     // Unique name for this receiver
     name: String,
 }
 
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl PythonReceiver {
     /// Start the Python receiver
     pub async fn start() -> Result<Self, Box<dyn std::error::Error>> {
@@ -103,185 +101,68 @@ impl PythonReceiver {
             }
         });
 
-        let mut command = Command::new(&python_exe);
-        command
-            .arg("ap2-receiver.py")
-            .arg("--netiface")
-            .arg(&interface)
-            .arg("-m")
-            .arg(&name);
+        let mut command_args = vec![
+            "ap2-receiver.py".to_string(),
+            "--netiface".to_string(),
+            interface.clone(),
+            "-m".to_string(),
+            name.clone(),
+        ];
 
-        // Check if port is already in args
         if !args.contains(&"-p") && !args.contains(&"--port") {
-            command.arg("-p").arg("0");
+            command_args.push("-p".to_string());
+            command_args.push("0".to_string());
         }
 
         for arg in args {
-            command.arg(arg);
+            command_args.push(arg.to_string());
         }
 
-        let mut process = command
-            .current_dir(&output_dir)
-            .env("AIRPLAY_FILE_SINK", "1")
-            .env("AIRPLAY_SAVE_RTP", "1")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| format!("Failed to spawn python3 process: {}", e))?;
+        let mut env_vars = std::collections::HashMap::new();
+        env_vars.insert("AIRPLAY_FILE_SINK".to_string(), "1".to_string());
+        env_vars.insert("AIRPLAY_SAVE_RTP".to_string(), "1".to_string());
 
-        // Capture stdout for monitoring
-        let stdout = process.stdout.take().ok_or("Failed to capture stdout")?;
-        let stderr = process.stderr.take().ok_or("Failed to capture stderr")?;
+        let config = SubprocessConfig {
+            command: python_exe,
+            args: command_args,
+            working_dir: Some(output_dir.clone()),
+            env_vars,
+            ready_strategy: ReadyStrategy::LogPattern("serving on".to_string()),
+            ready_timeout: Duration::from_secs(45),
+            log_prefix: format!("[{}]", name),
+            ..Default::default()
+        };
 
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let log_buffer_clone = log_buffer.clone();
+        let handle = SubprocessHandle::spawn(config)
+            .await
+            .map_err(|e| e.to_string())?;
 
-        // Wait for receiver to start by reading output
-        let start = std::time::Instant::now();
-        let timeout = Duration::from_secs(10);
-
-        let mut reader = BufReader::new(stdout).lines();
-        let mut stderr_reader = BufReader::new(stderr).lines();
-        #[allow(unused_assignments)]
-        let mut found_serving = false;
-        let mut actual_port = 7000; // Default fallback
+        let mut actual_port = 7000;
         let mut actual_mac = None;
 
-        loop {
-            if start.elapsed() > timeout {
-                let _ = process.kill().await;
-                let logs = log_buffer.lock().unwrap().join("\n");
-                return Err(format!(
-                    "Python receiver failed to start within timeout.\nLogs:\n{}",
-                    logs
-                )
-                .into());
-            }
-
-            // Check if process is still running
-            if let Ok(Some(status)) = process.try_wait() {
-                let logs = log_buffer.lock().unwrap().join("\n");
-                return Err(
-                    format!("Python receiver exited early: {}\nLogs:\n{}", status, logs).into(),
-                );
-            }
-
-            tokio::select! {
-                line = reader.next_line() => {
-                    match line {
-                        Ok(Some(line)) => {
-                            tracing::debug!("Receiver stdout: {}", line.trim());
-                            if let Ok(mut logs) = log_buffer.lock() {
-                                logs.push(format!("STDOUT: {}", line));
-                            }
-                            if line.contains("[Receiver]: Mac:")
-                                && let Some(mac) = line.split("Mac:").nth(1) {
-                                    let mac = mac.trim().to_string();
-                                    tracing::info!("Detected receiver MAC: {}", mac);
-                                    actual_mac = Some(mac);
-                                }
-                            if line.contains("serving on") {
-                                tracing::info!("✓ Python receiver started: {}", line.trim());
-                                found_serving = true;
-                                if let Some(p) = line
-                                    .split(':')
-                                    .next_back()
-                                    .and_then(|s| s.trim().parse::<u16>().ok())
-                                {
-                                    actual_port = p;
-                                    tracing::info!("Detected receiver port: {}", actual_port);
-                                }
-                                break;
-                            }
-                        }
-                        Ok(None) => {}
-                        Err(e) => tracing::warn!("Error reading stdout: {}", e),
-                    }
+        for log in handle.logs() {
+            if let Some(idx) = log.line.find("[Receiver]: Mac:") {
+                let mac = &log.line[idx + 16..];
+                actual_mac = Some(mac.trim().to_string());
+            } else if log.line.contains("serving on") {
+                if let Some(Ok(p)) = log
+                    .line
+                    .split(':')
+                    .next_back()
+                    .map(|s| s.trim().parse::<u16>())
+                {
+                    actual_port = p;
                 }
-                line = stderr_reader.next_line() => {
-                     match line {
-                        Ok(Some(line)) => {
-                            tracing::warn!("Receiver stderr: {}", line.trim());
-                            if let Ok(mut logs) = log_buffer.lock() {
-                                logs.push(format!("STDERR: {}", line));
-                            }
-                            if line.contains("[Receiver]: Mac:")
-                                && let Some(mac) = line.split("Mac:").nth(1) {
-                                    let mac = mac.trim().to_string();
-                                    tracing::info!("Detected receiver MAC: {}", mac);
-                                    actual_mac = Some(mac);
-                                }
-                            if line.contains("serving on") {
-                                tracing::info!(
-                                    "✓ Python receiver started (detected in stderr): {}",
-                                    line.trim()
-                                );
-                                found_serving = true;
-                                #[allow(clippy::collapsible_if)]
-                                if let Some(port_str) = line.split(':').next_back() {
-                                    if let Ok(p) = port_str.trim().parse::<u16>() {
-                                        actual_port = p;
-                                        tracing::info!("Detected receiver port: {}", actual_port);
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                        Ok(None) => {}
-                        Err(e) => tracing::warn!("Error reading stderr: {}", e),
-                    }
-                }
-                _ = sleep(Duration::from_millis(100)) => {}
             }
         }
-
-        if !found_serving {
-            let _ = process.kill().await;
-            return Err("Failed to find 'serving on' message from receiver".into());
-        }
-
-        // Spawn a background task to keep reading output
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    line = reader.next_line() => {
-                        match line {
-                            Ok(Some(line)) => {
-                                tracing::debug!("Receiver stdout: {}", line.trim());
-                                if let Ok(mut logs) = log_buffer_clone.lock() {
-                                    logs.push(format!("STDOUT: {}", line));
-                                }
-                            }
-                            Ok(None) => break, // EOF
-                            Err(_) => break,
-                        }
-                    }
-                    line = stderr_reader.next_line() => {
-                        match line {
-                            Ok(Some(line)) => {
-                                tracing::warn!("Receiver stderr: {}", line.trim());
-                                if let Ok(mut logs) = log_buffer_clone.lock() {
-                                    logs.push(format!("STDERR: {}", line));
-                                }
-                            }
-                            Ok(None) => break, // EOF
-                            Err(_) => break,
-                        }
-                    }
-                }
-            }
-        });
 
         Ok(Self {
-            process,
+            handle: Some(handle),
             output_dir,
             interface,
-            log_buffer,
             _temp_dir: Some(temp_dir),
             port: actual_port,
             mac: actual_mac,
-            logs_written: false,
             name,
         })
     }
@@ -316,6 +197,7 @@ impl PythonReceiver {
     }
 
     /// Wait for a log pattern to appear in stdout/stderr
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub async fn wait_for_log(&self, pattern: &str, timeout: Duration) -> Result<(), String> {
         let start = std::time::Instant::now();
         loop {
@@ -324,9 +206,9 @@ impl PythonReceiver {
             }
 
             if self
-                .log_buffer
-                .lock()
-                .is_ok_and(|guard| guard.iter().any(|line| line.contains(pattern)))
+                .handle
+                .as_ref()
+                .is_some_and(|handle| handle.logs().iter().any(|log| log.line.contains(pattern)))
             {
                 return Ok(());
             }
@@ -335,87 +217,38 @@ impl PythonReceiver {
         }
     }
 
-    fn write_logs(&mut self) -> PathBuf {
-        // Write to root/target/integration-test-TIMESTAMP.log
-        let mut target_dir = match std::env::current_dir() {
-            Ok(pb) => pb,
-            Err(_) => PathBuf::from("."),
-        };
-
-        if !target_dir.join("target").exists()
-            && target_dir
-                .parent()
-                .map(|p| p.join("target").exists())
-                .unwrap_or(false)
-        {
-            target_dir = target_dir.parent().unwrap().to_path_buf();
-        }
-
-        let log_dir = target_dir.join("target");
-        if !log_dir.exists() {
-            let _ = fs::create_dir_all(&log_dir);
-        }
-
-        let log_path = log_dir.join(format!(
-            "integration-test-{}.log",
-            chrono::Utc::now().timestamp_millis()
-        ));
-
-        if !self.logs_written {
-            if let Ok(logs) = self.log_buffer.lock() {
-                if let Err(e) = fs::write(&log_path, logs.join("\n")) {
-                    tracing::warn!(
-                        "Failed to write integration test logs to {:?}: {}",
-                        log_path,
-                        e
-                    );
-                } else {
-                    tracing::info!("Wrote integration test logs to: {:?}", log_path);
-                }
-            }
-            self.logs_written = true;
-        }
-        log_path
-    }
-
     /// Stop the receiver and read output
     pub async fn stop(mut self) -> Result<ReceiverOutput, Box<dyn std::error::Error>> {
         tracing::info!("Stopping Python receiver");
 
-        // Send SIGTERM to allow graceful shutdown
-        #[cfg(unix)]
-        {
-            use nix::sys::signal::{Signal, kill};
-            use nix::unistd::Pid;
-            if let Some(id) = self.process.id() {
-                let pid = Pid::from_raw(id as i32);
-                let _ = kill(pid, Signal::SIGINT);
-            }
-        }
-
-        #[cfg(windows)]
-        {
-            let _ = self.process.kill().await;
-        }
-
-        // Wait for process to exit
-        let _ = tokio::time::timeout(Duration::from_secs(5), async {
-            let _ = self.process.wait().await;
-        })
-        .await;
-
-        // Force kill if still running
-        let _ = self.process.kill().await;
-        let _ = self.process.wait().await;
+        let handle = self.handle.take().ok_or("Subprocess already stopped")?;
+        let output = handle.stop().await.map_err(|e| e.to_string())?;
 
         // Read output files
         let audio_path = self.output_dir.join("received_audio_44100_2ch.raw");
         let rtp_path = self.output_dir.join("rtp_packets.bin");
 
+        // Sometimes file is not fully flushed? Wait a small moment just in case
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
         let audio_data = fs::read(&audio_path).ok();
         let rtp_data = fs::read(&rtp_path).ok();
 
-        let log_path = self.write_logs();
+        let mut diagnostics = TestDiagnostics::new(&self.name);
+        diagnostics
+            .subprocess_logs
+            .insert(self.name.clone(), output.logs);
+        if let Some(ref data) = audio_data {
+            diagnostics
+                .audio_files
+                .push(("received_audio_44100_2ch.raw".to_string(), data.clone()));
+        }
+        if let Some(ref data) = rtp_data {
+            diagnostics
+                .rtp_captures
+                .push(("rtp_packets.bin".to_string(), data.clone()));
+        }
+        let log_path = diagnostics.save();
 
         if let Some(ref data) = audio_data {
             tracing::info!("Read {} bytes from {}", data.len(), audio_path.display());
@@ -453,26 +286,32 @@ impl PythonReceiver {
             raop_port: None,
             raop_capabilities: None,
             txt_records: HashMap::new(),
+            last_seen: None,
         }
     }
 }
 
 impl Drop for PythonReceiver {
     fn drop(&mut self) {
-        if !self.logs_written {
-            self.write_logs();
+        if let Some(handle) = self.handle.take() {
+            // Initiate stop if dropped prematurely.
+            // A tokio spawn cannot be used easily here, so we just let SubprocessHandle drop
+            // to kill the process.
+            drop(handle);
         }
     }
 }
 
 /// Output from the Python receiver
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct ReceiverOutput {
     pub audio_data: Option<Vec<u8>>,
     pub rtp_data: Option<Vec<u8>>,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub log_path: PathBuf,
 }
 
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl ReceiverOutput {
     /// Verify audio data meets minimum requirements
     pub fn verify_audio_received(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -625,7 +464,7 @@ impl ReceiverOutput {
     }
 
     /// Detailed audio analysis (for debugging)
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn analyze_audio_detailed(&self) -> Result<AudioAnalysis, Box<dyn std::error::Error>> {
         let audio = self
             .audio_data
@@ -678,7 +517,7 @@ impl ReceiverOutput {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 pub struct AudioAnalysis {
     pub num_samples: usize,
     pub duration: f32,
@@ -699,6 +538,7 @@ pub struct TestSineSource {
     max_samples: usize,
 }
 
+#[allow(dead_code, reason = "Used in some test modules but not all")]
 impl TestSineSource {
     pub fn new(frequency: f32, duration_secs: f32) -> Self {
         let format = airplay2::audio::AudioFormat::CD_QUALITY;
@@ -713,6 +553,7 @@ impl TestSineSource {
         }
     }
 
+    #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub fn new_with_sample_rate(frequency: f32, duration_secs: f32, sample_rate: u32) -> Self {
         let format = airplay2::audio::AudioFormat {
             sample_rate: match sample_rate {

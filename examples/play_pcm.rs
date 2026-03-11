@@ -36,7 +36,10 @@ impl AudioSource for SineSource {
         for chunk in buffer.chunks_exact_mut(4) {
             // 2 bytes * 2 channels
             let sample = (self.phase * 2.0 * PI).sin();
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Safe cast as value is within bounds"
+            )]
             let value = (sample * i16::MAX as f32) as i16;
             let bytes = value.to_le_bytes();
 
@@ -91,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 raop_port: None,
                 raop_capabilities: None,
                 txt_records: std::collections::HashMap::new(),
+                last_seen: None,
             }
         });
 

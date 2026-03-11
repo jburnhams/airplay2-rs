@@ -245,13 +245,14 @@ impl AirPlayError {
     /// Check if this error is recoverable by retrying
     #[must_use]
     pub fn is_recoverable(&self) -> bool {
-        matches!(
-            self,
+        match self {
             Self::ConnectionTimeout { .. }
-                | Self::Timeout
-                | Self::NetworkError(_)
-                | Self::DeviceBusy
-        )
+            | Self::Timeout
+            | Self::NetworkError(_)
+            | Self::DeviceBusy => true,
+            Self::AuthenticationFailed { recoverable, .. } => *recoverable,
+            _ => false,
+        }
     }
 
     /// Check if this error indicates connection loss
@@ -268,3 +269,6 @@ impl AirPlayError {
 
 /// Result type alias for `AirPlay` operations
 pub type Result<T> = std::result::Result<T, AirPlayError>;
+
+#[cfg(test)]
+mod tests;

@@ -1,5 +1,5 @@
 //! Connection manager for `AirPlay` devices
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Reserved for future use")]
 
 use std::fmt::Write;
 use std::sync::Arc;
@@ -55,23 +55,29 @@ pub struct ConnectionManager {
     ptp_active: RwLock<bool>,
     /// Device's PTP clock ID (from SETUP Step 1 timingPeerInfo.ClockID)
     device_clock_id: Mutex<Option<u64>>,
+    ntp_offset: std::sync::atomic::AtomicI64,
     /// Whether a RECORD request was sent but its response hasn't been consumed yet.
     /// This happens when RECORD times out during `connect()`. The deferred response
     /// must be consumed before sending the next RTSP command.
     pending_record_response: Mutex<bool>,
+    /// Counter for Time Announce packets to avoid log spam
+    time_announce_count: std::sync::atomic::AtomicU64,
+    /// Internal drop packets list for testing Retransmissions
+    #[doc(hidden)]
+    pub drop_packets_for_test: Mutex<Vec<u16>>,
 }
 
 /// UDP sockets for streaming
-struct UdpSockets {
-    audio: UdpSocket,
-    control: UdpSocket,
-    timing: UdpSocket,
+pub(crate) struct UdpSockets {
+    pub(crate) audio: UdpSocket,
+    pub(crate) control: std::sync::Arc<tokio::net::UdpSocket>,
+    pub(crate) timing: UdpSocket,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
-    server_audio_port: u16,
+    pub(crate) server_audio_port: u16,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
-    server_control_port: u16,
+    pub(crate) server_control_port: u16,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
-    server_timing_port: u16,
+    pub(crate) server_timing_port: u16,
 }
 
 impl ConnectionManager {
@@ -98,7 +104,10 @@ impl ConnectionManager {
             ptp_shutdown_tx: Mutex::new(None),
             ptp_active: RwLock::new(false),
             device_clock_id: Mutex::new(None),
+            ntp_offset: std::sync::atomic::AtomicI64::new(0),
             pending_record_response: Mutex::new(false),
+            time_announce_count: std::sync::atomic::AtomicU64::new(0),
+            drop_packets_for_test: Mutex::new(Vec::new()),
         }
     }
 
@@ -107,6 +116,12 @@ impl ConnectionManager {
     pub fn with_pairing_storage(mut self, storage: Box<dyn PairingStorage>) -> Self {
         self.pairing_storage = Mutex::new(Some(storage));
         self
+    }
+
+    /// Test helper to set UDP sockets
+    #[cfg(test)]
+    pub(crate) async fn set_sockets_for_test(&self, sockets: UdpSockets) {
+        *self.sockets.lock().await = Some(sockets);
     }
 
     /// Get current connection state
@@ -892,7 +907,10 @@ impl ConnectionManager {
             // Include our PTP ClockID so the HomePod can match our Delay_Req
             // sourcePortIdentity to an authorised peer. Use Integer format to
             // match the format the HomePod uses for its own ClockID.
-            #[allow(clippy::cast_possible_wrap)]
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "PTP ClockID needs to be encoded as an integer"
+            )]
             let clock_id_as_i64 = ptp_clock_id as i64;
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
@@ -1018,7 +1036,10 @@ impl ConnectionManager {
                                             if let Some(port_val) = val.as_i64() {
                                                 #[allow(
                                                     clippy::cast_possible_truncation,
-                                                    clippy::cast_sign_loss
+                                                    clippy::cast_sign_loss,
+                                                    reason = "Ports are u16, plist uses i64. \
+                                                              Truncation is acceptable as ports \
+                                                              fit in u16."
                                                 )]
                                                 let port = port_val as u16;
                                                 tracing::info!(
@@ -1337,15 +1358,80 @@ impl ConnectionManager {
                     device_clock_port,
                 )
                 .await;
+            } else {
+                // Fetch NTP offset using RFC 5905 client
+                let device_addr = format!("{device_ip}:123");
+                let client = crate::protocol::rtp::ntp_client::NtpClient::new(
+                    device_addr,
+                    std::time::Duration::from_secs(2),
+                );
+                if let Ok(offset) = client.get_offset().await {
+                    tracing::info!("NTP offset fetched: {} us", offset);
+                    self.ntp_offset
+                        .store(offset, std::sync::atomic::Ordering::Relaxed);
+                } else {
+                    tracing::warn!("Failed to fetch NTP offset from {}:123", device_ip);
+                }
             }
 
+            let ctrl_arc = std::sync::Arc::new(ctrl_sock);
             *self.sockets.lock().await = Some(UdpSockets {
                 audio: audio_sock,
-                control: ctrl_sock,
+                control: ctrl_arc.clone(),
                 timing: time_sock,
                 server_audio_port,
                 server_control_port: server_ctrl_port,
                 server_timing_port: server_time_port,
+            });
+
+            // Create a channel for signaling task shutdown
+            let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
+            let mut ptp_shutdown_guard = self.ptp_shutdown_tx.lock().await;
+            // We reuse ptp_shutdown_tx for this since it fires on disconnect
+            if ptp_shutdown_guard.is_none() {
+                *ptp_shutdown_guard = Some(shutdown_tx);
+            } else if let Some(tx) = ptp_shutdown_guard.as_ref() {
+                shutdown_rx = tx.subscribe();
+            }
+
+            // Spawn task to listen for RetransmitRequest packets on control socket
+            let event_tx = self.event_tx.clone();
+            tokio::spawn(async move {
+                let mut buf = [0u8; 1024];
+                loop {
+                    tokio::select! {
+                        result = ctrl_arc.recv_from(&mut buf) => {
+                            match result {
+                                Ok((size, _addr)) => {
+                                    let data = &buf[..size];
+                                    if data.len() >= 8 && data[0] == 0x80 && data[1] == 0xD5 {
+                                        // RTCP payload type 213 (0xD5) is RetransmitRequest
+                                        let seq_start = u16::from_be_bytes([data[4], data[5]]);
+                                        let count = u16::from_be_bytes([data[6], data[7]]);
+                                        tracing::debug!(
+                                            "Received RetransmitRequest for seq {} count {}",
+                                            seq_start, count
+                                        );
+                                        let _ = event_tx.send(ConnectionEvent::RetransmitRequest {
+                                            seq_start,
+                                            count,
+                                        });
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Error reading from control socket: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        _ = shutdown_rx.changed() => {
+                            if *shutdown_rx.borrow() {
+                                tracing::info!("Control socket listener shutting down");
+                                break;
+                            }
+                        }
+                    }
+                }
             });
         }
 
@@ -1745,6 +1831,7 @@ impl ConnectionManager {
         // Get current network time. The HomePod's PTP clock uses its own epoch.
         // We send the master clock time (HomePod's PTP time = local - offset).
         let now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+        #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
         let (network_secs, network_frac) = {
             let clock_opt = self.ptp_clock().await;
             if let Some(ref clock_arc) = clock_opt {
@@ -1758,11 +1845,9 @@ impl ConnectionManager {
                     crate::protocol::ptp::timestamp::PtpTimestamp::from_nanos(remote_nanos)
                 };
                 // NTP-style 64-bit fraction: (nanoseconds / 1e9) * 2^64
-                #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
                 let frac = ((u128::from(remote.nanoseconds) << 64) / 1_000_000_000) as u64;
                 (remote.seconds, frac)
             } else {
-                #[allow(clippy::cast_possible_truncation, reason = "NTP fraction fits in u64")]
                 let frac = ((u128::from(now.nanoseconds) << 64) / 1_000_000_000) as u64;
                 (now.seconds, frac)
             }
@@ -1830,6 +1915,15 @@ impl ConnectionManager {
     ///
     /// Returns error if sockets are not connected or send fails
     pub async fn send_rtp_audio(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        if packet.len() >= 4 {
+            let seq = u16::from_be_bytes([packet[2], packet[3]]);
+            let mut drop_list = self.drop_packets_for_test.lock().await;
+            if let Some(pos) = drop_list.iter().position(|&x| x == seq) {
+                drop_list.remove(pos);
+                tracing::info!("Test: Dropping RTP packet seq {}", seq);
+                return Ok(());
+            }
+        }
         let sockets = self.sockets.lock().await;
         if let Some(ref socks) = *sockets {
             socks
@@ -1892,40 +1986,128 @@ impl ConnectionManager {
     /// # Errors
     ///
     /// Returns error if sockets are not connected or send fails
+    /// Send an RTCP control packet (e.g., `RetransmitResponse`)
+    pub async fn send_rtcp_control(&self, packet: &[u8]) -> Result<(), AirPlayError> {
+        let (sock, server_port) = {
+            let sockets = self.sockets.lock().await;
+            if let Some(s) = sockets.as_ref() {
+                (s.control.clone(), s.server_control_port)
+            } else {
+                return Err(AirPlayError::Disconnected {
+                    device_name: "none".to_string(),
+                });
+            }
+        };
+
+        let device = self.device.read().await;
+        if let Some(device) = device.as_ref() {
+            let addr = (device.address(), server_port);
+            sock.send_to(packet, addr)
+                .await
+                .map_err(|e| AirPlayError::IoError {
+                    message: format!("Failed to send RTCP control packet: {e}"),
+                    source: Some(Box::new(std::io::Error::other(e))),
+                })?;
+            Ok(())
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Send a `TimeAnnounce` packet to the device
+    ///
+    /// # Errors
+    ///
+    /// Returns error if the sockets are not connected.
     pub async fn send_time_announce(
         &self,
         rtp_timestamp: u32,
         sample_rate: u32,
     ) -> Result<(), AirPlayError> {
-        let (ptp_nanos, clock_id) = {
-            let clock_guard = self.ptp_clock.lock().await;
-            if let Some(clock) = clock_guard.as_ref() {
-                let clock = clock.read().await;
-                // Convert our local time to the master's PTP time domain.
-                // When we are slave, offset = (slave - master), so
-                // master_time = local_time - offset, which is remote_to_local().
-                let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
-                let master_time = clock.remote_to_local(local_now);
-                let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
-                // Use the remote master's clock ID if available, otherwise our own.
-                let id = clock
-                    .remote_master_clock_id()
-                    .unwrap_or_else(|| clock.clock_id());
-                (nanos, id)
-            } else {
-                return Ok(()); // PTP not active, skip
-            }
-        };
+        let (ptp_nanos, clock_id) =
+            {
+                let clock_guard = self.ptp_clock.lock().await;
+                if let Some(clock) = clock_guard.as_ref() {
+                    let clock = clock.read().await;
+                    // Convert our local time to the master's PTP time domain.
+                    // When we are slave, offset = (slave - master), so
+                    // master_time = local_time - offset, which is remote_to_local().
+                    let local_now = crate::protocol::ptp::timestamp::PtpTimestamp::now();
+                    let master_time = clock.remote_to_local(local_now);
+                    let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
+                    // Use the remote master's clock ID if available, otherwise our own.
+                    let id = clock
+                        .remote_master_clock_id()
+                        .unwrap_or_else(|| clock.clock_id());
+                    (nanos, id)
+                } else {
+                    // PTP not active, fallback to NTP
+                    let offset_micros = self.ntp_offset.load(std::sync::atomic::Ordering::Relaxed);
+                    let mut ntp_time = crate::protocol::rtp::NtpTimestamp::now();
+                    if offset_micros != 0 {
+                        let mut micros = ntp_time.to_micros();
+                        if offset_micros > 0 {
+                            #[allow(clippy::cast_sign_loss, reason = "Checked > 0")]
+                            let offset_u64 = offset_micros as u64;
+                            micros += offset_u64;
+                        } else {
+                            micros = micros.saturating_sub(offset_micros.unsigned_abs());
+                        }
+                        ntp_time = crate::protocol::rtp::NtpTimestamp {
+                            #[allow(clippy::cast_possible_truncation, reason = "NTP seconds")]
+                            seconds: (micros / 1_000_000) as u32,
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                reason = "Fraction fits in 32 bits"
+                            )]
+                            fraction: (((micros % 1_000_000) << 32) / 1_000_000) as u32,
+                        };
+                    }
+                    let ntp_timestamp_64 =
+                        (u64::from(ntp_time.seconds) << 32) | u64::from(ntp_time.fraction);
+
+                    let count = self
+                        .time_announce_count
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if count < 3 || count % 10 == 0 {
+                        tracing::info!(
+                            "TimeAnnounce: rtp_ts={}, ntp_time={}.{:09} (#{count})",
+                            rtp_timestamp,
+                            ntp_time.seconds,
+                            ntp_time.fraction,
+                        );
+                    }
+
+                    let packet = crate::protocol::rtp::ControlPacket::TimeAnnounceNtp {
+                        rtp_timestamp,
+                        ntp_timestamp: ntp_timestamp_64,
+                        rtp_timestamp_next: rtp_timestamp.wrapping_add(sample_rate),
+                    };
+
+                    let encoded = packet.encode();
+
+                    let sockets = self.sockets.lock().await;
+                    if let Some(ref socks) = *sockets {
+                        socks.control.send(&encoded).await.map_err(|e| {
+                            AirPlayError::RtspError {
+                                message: format!("Failed to send NTP TimeAnnounce: {e}"),
+                                status_code: None,
+                            }
+                        })?;
+                    }
+                    return Ok(());
+                }
+            };
 
         let ptp_secs = ptp_nanos / 1_000_000_000;
         let ptp_subsec_nanos = (ptp_nanos % 1_000_000_000) as u32;
 
         // Log first few and then every 10th to avoid spam
-        let count = {
-            use std::sync::atomic::{AtomicU64, Ordering};
-            static ANNOUNCE_COUNT: AtomicU64 = AtomicU64::new(0);
-            ANNOUNCE_COUNT.fetch_add(1, Ordering::Relaxed)
-        };
+        let count = self
+            .time_announce_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if count < 3 || count % 10 == 0 {
             tracing::info!(
                 "TimeAnnounce: rtp_ts={}, ptp_time={}.{:09}, clock=0x{:016X} (#{count})",
@@ -2329,9 +2511,9 @@ impl ConnectionManager {
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. \
-                     NOTE: Delay_Resp will NOT be received — PTP will not sync! \
-                     Stop any process using port {} (e.g. Windows Time service).",
+                    "Failed to bind PTP event port {} ({}); falling back to ephemeral port. NOTE: \
+                     Delay_Resp will NOT be received — PTP will not sync! Stop any process using \
+                     port {} (e.g. Windows Time service).",
                     PTP_EVENT_PORT,
                     e,
                     PTP_EVENT_PORT

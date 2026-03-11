@@ -135,7 +135,7 @@ impl AudioDecryptor {
 /// RTP audio receiver
 pub struct RtpAudioReceiver {
     socket: Arc<UdpSocket>,
-    #[allow(dead_code)] // Keep for future reference or debugging
+    #[allow(dead_code, reason = "Keep for future reference or debugging")]
     stream_params: StreamParameters,
     packet_tx: mpsc::Sender<AudioPacket>,
     decryptor: Option<AudioDecryptor>,

@@ -4,7 +4,7 @@ use std::net::IpAddr;
 use super::raop::RaopCapabilities;
 
 /// Represents a discovered `AirPlay` 2 device on the network
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct AirPlayDevice {
     /// Unique device identifier (from TXT record)
     pub id: String,
@@ -32,6 +32,9 @@ pub struct AirPlayDevice {
 
     /// Raw TXT record data for protocol use
     pub txt_records: HashMap<String, String>,
+
+    /// Last time the device was seen/announced
+    pub last_seen: Option<std::time::Instant>,
 }
 
 /// Device capability flags parsed from `AirPlay` features
@@ -73,6 +76,21 @@ pub struct DeviceCapabilities {
 
     /// Raw features bitmask
     pub raw_features: u64,
+}
+
+impl PartialEq for AirPlayDevice {
+    fn eq(&self, other: &Self) -> bool {
+        // Ignore `last_seen` when comparing devices for equality
+        self.id == other.id
+            && self.name == other.name
+            && self.model == other.model
+            && self.addresses == other.addresses
+            && self.port == other.port
+            && self.capabilities == other.capabilities
+            && self.raop_port == other.raop_port
+            && self.raop_capabilities == other.raop_capabilities
+            && self.txt_records == other.txt_records
+    }
 }
 
 impl AirPlayDevice {

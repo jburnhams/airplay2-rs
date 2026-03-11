@@ -48,6 +48,62 @@ mod ptp_integration_tests {
             raop_port: None,
             raop_capabilities: None,
             txt_records: HashMap::new(),
+            last_seen: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_send_time_announce_ntp_fallback() {
+        use crate::protocol::rtp::ControlPacket;
+
+        let config = AirPlayConfig::builder()
+            .timing_protocol(TimingProtocol::Ntp)
+            .build();
+        let manager = ConnectionManager::new(config);
+
+        // Set up dummy UDP sockets to receive the packet
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let addr = socket.local_addr().unwrap();
+        let send_socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        send_socket.connect(addr).await.unwrap();
+
+        manager
+            .set_sockets_for_test(crate::connection::manager::UdpSockets {
+                audio: tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap(),
+                control: std::sync::Arc::new(send_socket),
+                timing: tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap(),
+                server_audio_port: 0,
+                server_control_port: 0,
+                server_timing_port: 0,
+            })
+            .await;
+
+        // PTP clock is inherently None from new()
+
+        let result = manager.send_time_announce(1000, 44100).await;
+        assert!(result.is_ok(), "Sending TimeAnnounce fallback failed");
+
+        let mut buf = [0u8; 1500];
+        let (len, _) = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            socket.recv_from(&mut buf),
+        )
+        .await
+        .expect("Receive timed out")
+        .expect("Receive failed");
+
+        let packet = ControlPacket::decode(&buf[..len]).expect("Failed to decode sent packet");
+
+        if let ControlPacket::TimeAnnounceNtp {
+            rtp_timestamp,
+            rtp_timestamp_next,
+            ..
+        } = packet
+        {
+            assert_eq!(rtp_timestamp, 1000);
+            assert_eq!(rtp_timestamp_next, 1000 + 44100);
+        } else {
+            panic!("Expected TimeAnnounceNtp packet, got {packet:?}");
         }
     }
 

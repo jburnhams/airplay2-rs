@@ -30,7 +30,7 @@ pub struct AuthenticationHandler {
     homekit_handler: Option<PairingHandler>,
 
     /// Current authentication mode
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for testing or future auth methods")]
     mode: AuthMode,
 }
 

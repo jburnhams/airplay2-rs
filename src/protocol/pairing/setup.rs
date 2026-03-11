@@ -16,7 +16,7 @@ pub struct PairSetup {
     /// PIN entered by user
     pin: Option<String>,
     /// SRP client (used in initial step)
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     srp_client: Option<SrpClient>,
     /// SRP verifier (used during exchange)
     srp_verifier: Option<SrpVerifier>,

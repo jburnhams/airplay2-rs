@@ -61,7 +61,7 @@ pub use session::{AirPlay2SessionImpl, AirPlaySession, RaopSessionImpl};
 #[derive(Clone)]
 pub struct AirPlayClient {
     /// Configuration
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Reserved for future use")]
     config: AirPlayConfig,
     /// Connection manager
     connection: Arc<ConnectionManager>,

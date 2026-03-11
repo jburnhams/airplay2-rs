@@ -32,6 +32,7 @@ async fn create_device_with_server(
         raop_port,
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     if airplay2 {
@@ -103,6 +104,7 @@ async fn test_connection_failure_handling() {
         raop_port: Some(12345), // Random port likely closed
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
+        last_seen: None,
     };
 
     // Configure to force RAOP to use that port

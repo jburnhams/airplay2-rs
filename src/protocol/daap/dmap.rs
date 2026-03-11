@@ -280,7 +280,7 @@ impl DmapParser {
 /// # Errors
 ///
 /// Returns `DmapDecodeError` if data is invalid.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Reserved for future use")]
 pub fn decode_dmap(data: &[u8]) -> Result<Vec<(String, String)>, DmapDecodeError> {
     fn flatten(v: &DmapValue, acc: &mut Vec<(String, String)>) {
         if let DmapValue::Container(items) = v {
@@ -304,7 +304,7 @@ pub fn decode_dmap(data: &[u8]) -> Result<Vec<(String, String)>, DmapDecodeError
 }
 
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Reserved for future use")]
 pub enum DmapDecodeError {
     #[error("invalid tag")]
     InvalidTag,

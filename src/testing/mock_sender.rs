@@ -68,7 +68,7 @@ pub struct MockSender {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Mock sender logic")]
 struct ServerPorts {
     audio: u16,
     control: u16,

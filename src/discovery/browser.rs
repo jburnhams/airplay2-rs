@@ -99,6 +99,8 @@ struct DeviceBrowserStream {
     known_devices: HashMap<String, AirPlayDevice>,
     // Map full service name to device ID
     fullname_map: HashMap<String, String>,
+    // Timer for pruning stale devices
+    prune_interval: Option<tokio::time::Interval>,
 }
 
 impl DeviceBrowserStream {
@@ -147,6 +149,7 @@ impl DeviceBrowserStream {
             stream: Box::pin(stream),
             known_devices: HashMap::new(),
             fullname_map: HashMap::new(),
+            prune_interval: None,
         })
     }
 
@@ -265,6 +268,7 @@ impl DeviceBrowserStream {
                     raop_port: None,
                     raop_capabilities: None,
                     txt_records: HashMap::new(),
+                    last_seen: Some(std::time::Instant::now()),
                 }
             });
 
@@ -317,6 +321,9 @@ impl DeviceBrowserStream {
             // Add more filter checks...
         }
 
+        // Update last_seen
+        device.last_seen = Some(std::time::Instant::now());
+
         // Check if this is new or updated
         let event = if self.known_devices.contains_key(&device_id) {
             DiscoveryEvent::Updated(device.clone())
@@ -363,7 +370,44 @@ impl Stream for DeviceBrowserStream {
     type Item = DiscoveryEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if self.prune_interval.is_none() {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            self.prune_interval = Some(interval);
+        }
+
         loop {
+            // Check for stale devices first
+            if self
+                .prune_interval
+                .as_mut()
+                .unwrap()
+                .poll_tick(cx)
+                .is_ready()
+            {
+                let stale_timeout = std::time::Duration::from_secs(360); // 3 missed 120s heartbeats
+                let now = std::time::Instant::now();
+                let stale_ids: Vec<String> = self
+                    .known_devices
+                    .iter()
+                    .filter_map(|(id, device)| {
+                        if let Some(last_seen) = device.last_seen {
+                            if now.duration_since(last_seen) > stale_timeout {
+                                return Some(id.clone());
+                            }
+                        }
+                        None
+                    })
+                    .collect();
+
+                if let Some(id) = stale_ids.into_iter().next() {
+                    self.known_devices.remove(&id);
+                    // Also clean up fullname map
+                    self.fullname_map.retain(|_, v| v != &id);
+                    return Poll::Ready(Some(DiscoveryEvent::Removed(id)));
+                }
+            }
+
             let (service_type, event) = match self.stream.as_mut().poll_next(cx) {
                 Poll::Ready(Some(item)) => item,
                 Poll::Ready(None) => return Poll::Ready(None),

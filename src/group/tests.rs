@@ -15,6 +15,7 @@ fn test_device(id: &str) -> AirPlayDevice {
         raop_port: None,
         raop_capabilities: None,
         txt_records: HashMap::default(),
+        last_seen: None,
     }
 }
 
@@ -249,4 +250,51 @@ async fn test_invalid_device_not_found() {
         .set_member_volume(&group_id, "d1", Volume::MAX)
         .await;
     assert!(result.is_err());
+}
+
+#[test]
+fn test_device_group_with_leader() {
+    let leader = test_device("leader");
+    let group = DeviceGroup::with_leader("Leader Group", leader);
+
+    assert_eq!(group.name, "Leader Group");
+    assert_eq!(group.member_count(), 1);
+
+    let member = group.member("leader").unwrap();
+    assert!(member.is_leader);
+    assert_eq!(member.volume, Volume::MAX); // Default individual volume
+
+    // Group volume should be default
+    assert_eq!(group.volume(), Volume::DEFAULT);
+}
+
+#[tokio::test]
+async fn test_group_manager_default() {
+    let manager = GroupManager::default();
+
+    let groups = manager.all_groups().await;
+    assert!(groups.is_empty());
+}
+
+#[test]
+fn test_effective_volume_rounding() {
+    let mut group = DeviceGroup::new("Round Test");
+    group.add_member(test_device("d1"));
+
+    // Set group to 50%, member to 15%
+    group.set_volume(Volume::from_percent(50));
+    group.set_member_volume("d1", Volume::from_percent(15));
+
+    // 0.5 * 0.15 = 0.075 -> 7.5%, which should round to 8%
+    let effective = group.effective_volume("d1");
+    assert_eq!(effective.as_percent(), 8);
+}
+
+#[tokio::test]
+async fn test_remove_device_from_group_not_found() {
+    let manager = GroupManager::new();
+
+    // Removing a device that is not in any group should return Ok(()) gracefully
+    let result = manager.remove_device_from_group("nonexistent_device").await;
+    assert!(result.is_ok());
 }

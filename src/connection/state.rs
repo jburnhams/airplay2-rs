@@ -87,6 +87,13 @@ pub enum ConnectionEvent {
         /// Whether the error is recoverable
         recoverable: bool,
     },
+    /// Retransmit request received
+    RetransmitRequest {
+        /// Starting sequence number
+        seq_start: u16,
+        /// Number of packets requested
+        count: u16,
+    },
 }
 
 /// Reason for disconnection
