@@ -239,6 +239,13 @@ pub enum AirPlayError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
+
+    /// Group not found
+    #[error("group not found: {group_id}")]
+    GroupNotFound {
+        /// The ID of the group that was not found
+        group_id: String,
+    },
 }
 
 impl AirPlayError {
