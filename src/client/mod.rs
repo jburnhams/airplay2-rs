@@ -267,9 +267,10 @@ impl AirPlayClient {
                             // Trigger disconnect
                             let reason = DisconnectReason::NetworkError(e.to_string());
 
-                            // We must force state update because send_get_command might not have done
-                            // it if it failed at logic level. But if it failed
-                            // with IO error, connection might be broken.
+                            // We must force state update because send_get_command might not have
+                            // done it if it failed at logic level. But
+                            // if it failed with IO error, connection
+                            // might be broken.
                             // Calling disconnect_with_reason will ensure state update and event
                             // emission.
                             let _ = connection.disconnect_with_reason(reason).await;

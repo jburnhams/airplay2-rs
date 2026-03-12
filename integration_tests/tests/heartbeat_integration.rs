@@ -76,7 +76,8 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
     // due to Python zeroconf re-announcement flakiness on loopback
     if heartbeats_received == 0 {
         tracing::warn!(
-            "Did not receive any heartbeat/update for the device, but skipping strict assertion for flakiness"
+            "Did not receive any heartbeat/update for the device, but skipping strict assertion \
+             for flakiness"
         );
     }
 

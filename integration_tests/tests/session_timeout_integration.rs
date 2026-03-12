@@ -42,11 +42,14 @@ async fn test_session_timeout_disconnect() {
     assert_eq!(client.connection_state().await, ConnectionState::Connected);
 
     // 4. Manually override the last_activity to simulate an idle connection.
-    // We fetch the ConnectionManager internals (though it's pub(crate), we can't easily access it from integration tests outside the crate).
-    // Wait, integration tests are in `integration_tests/` crate, so we can't access `pub(crate)` fields like `last_activity`.
-    // Instead of overriding, we'll just wait for the timeout. But wait, the client automatically sends keep-alives every 10 seconds!
-    // Since our session timeout is 2 seconds, and the client sends keep-alives every 10 seconds, the keep-alive won't happen before the timeout triggers.
-    // The keep-alive loop checks `last_activity` every 1 second. Since `session_timeout` is 2s, it will timeout before the first 10s keep-alive is sent.
+    // We fetch the ConnectionManager internals (though it's pub(crate), we can't easily access it
+    // from integration tests outside the crate). Wait, integration tests are in
+    // `integration_tests/` crate, so we can't access `pub(crate)` fields like `last_activity`.
+    // Instead of overriding, we'll just wait for the timeout. But wait, the client automatically
+    // sends keep-alives every 10 seconds! Since our session timeout is 2 seconds, and the
+    // client sends keep-alives every 10 seconds, the keep-alive won't happen before the timeout
+    // triggers. The keep-alive loop checks `last_activity` every 1 second. Since
+    // `session_timeout` is 2s, it will timeout before the first 10s keep-alive is sent.
 
     // 5. Wait for the session timeout to trigger (should take slightly over 2 seconds)
     // We wait 4 seconds to be safe.
