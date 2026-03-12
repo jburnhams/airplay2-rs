@@ -41,7 +41,9 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
                             "Device updated (heartbeat): last_seen = {:?}",
                             device.last_seen
                         );
-                        if let (Some(initial), Some(current)) = (initial_last_seen, device.last_seen) {
+                        if let (Some(initial), Some(current)) =
+                            (initial_last_seen, device.last_seen)
+                        {
                             if current > initial {
                                 heartbeats_received += 1;
                                 // Update our initial last seen to the current one
