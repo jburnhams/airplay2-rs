@@ -330,8 +330,8 @@ impl GroupManager {
         // Add to group
         let group = groups
             .get_mut(group_id)
-            .ok_or(AirPlayError::DeviceNotFound {
-                device_id: group_id.as_str().to_string(),
+            .ok_or(AirPlayError::GroupNotFound {
+                group_id: group_id.as_str().to_string(),
             })?;
 
         group.add_member(device);
@@ -377,8 +377,8 @@ impl GroupManager {
         let mut groups = self.groups.write().await;
         let group = groups
             .get_mut(group_id)
-            .ok_or(AirPlayError::DeviceNotFound {
-                device_id: group_id.as_str().to_string(),
+            .ok_or(AirPlayError::GroupNotFound {
+                group_id: group_id.as_str().to_string(),
             })?;
 
         group.set_volume(volume);
@@ -399,8 +399,8 @@ impl GroupManager {
         let mut groups = self.groups.write().await;
         let group = groups
             .get_mut(group_id)
-            .ok_or(AirPlayError::DeviceNotFound {
-                device_id: group_id.as_str().to_string(),
+            .ok_or(AirPlayError::GroupNotFound {
+                group_id: group_id.as_str().to_string(),
             })?;
 
         group.set_member_volume(device_id, volume);

@@ -298,3 +298,49 @@ async fn test_remove_device_from_group_not_found() {
     let result = manager.remove_device_from_group("nonexistent_device").await;
     assert!(result.is_ok());
 }
+
+#[tokio::test]
+async fn test_set_volume_non_existent_device() {
+    let manager = GroupManager::new();
+    let group_id = manager.create_group("Empty Group").await;
+
+    // Setting volume for a device that is not in the group should return Ok(())
+    // since the logic just iterates and finds nothing or sets member.volume
+    let result = manager
+        .set_member_volume(&group_id, "nonexistent", Volume::MAX)
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_add_device_group_not_found() {
+    let manager = GroupManager::new();
+    let result = manager
+        .add_device_to_group(&GroupId::from_string("nonexistent"), test_device("d1"))
+        .await;
+
+    assert!(result.is_err());
+    match result {
+        Err(crate::error::AirPlayError::GroupNotFound { group_id }) => {
+            assert_eq!(group_id, "nonexistent");
+        }
+        _ => panic!("Expected GroupNotFound error"),
+    }
+}
+
+#[tokio::test]
+async fn test_create_group_with_multiple_devices_success() {
+    let manager = GroupManager::new();
+    let devices = vec![test_device("d1"), test_device("d2"), test_device("d3")];
+
+    let group_id = manager
+        .create_group_with_devices("Group 3", devices)
+        .await
+        .unwrap();
+
+    let group = manager.get_group(&group_id).await.unwrap();
+    assert_eq!(group.member_count(), 3);
+    assert!(group.member("d1").unwrap().is_leader);
+    assert!(!group.member("d2").unwrap().is_leader);
+    assert!(!group.member("d3").unwrap().is_leader);
+}

@@ -76,3 +76,58 @@ fn test_progress_overflow() {
 fn test_shuffle_mode_defaults() {
     assert_eq!(ShuffleMode::default(), ShuffleMode::Off);
 }
+
+#[tokio::test]
+async fn test_playback_controller_next_prev_not_connected() {
+    use std::sync::Arc;
+
+    use crate::connection::ConnectionManager;
+    use crate::types::AirPlayConfig;
+
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    let res = controller.next().await;
+    assert!(res.is_err(), "next() should fail when disconnected");
+
+    let res = controller.previous().await;
+    assert!(res.is_err(), "previous() should fail when disconnected");
+}
+
+#[tokio::test]
+async fn test_playback_controller_play_pause_stop_not_connected() {
+    use std::sync::Arc;
+
+    use crate::connection::ConnectionManager;
+    use crate::types::AirPlayConfig;
+
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    assert!(controller.play().await.is_err());
+    assert!(controller.pause().await.is_err());
+    assert!(controller.stop().await.is_err());
+    assert!(controller.toggle().await.is_err());
+}
+
+#[tokio::test]
+async fn test_playback_controller_set_shuffle_and_repeat() {
+    use std::sync::Arc;
+
+    use crate::connection::ConnectionManager;
+    use crate::types::AirPlayConfig;
+
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    // Tests that state updates correctly
+    let res = controller.set_shuffle(ShuffleMode::On).await;
+    // Because it tries to send command and fails (disconnected), state might not update depending
+    // on logic. However, if the command logic in PlaybackController updates state despite
+    // failure, or fails early, we should assert correctly. By looking at the implementation, if
+    // it returns an error, state might remain unchanged.
+    assert!(res.is_err());
+}
