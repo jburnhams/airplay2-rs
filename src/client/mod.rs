@@ -61,7 +61,6 @@ pub use session::{AirPlay2SessionImpl, AirPlaySession, RaopSessionImpl};
 #[derive(Clone)]
 pub struct AirPlayClient {
     /// Configuration
-    #[allow(dead_code, reason = "Reserved for future use")]
     config: AirPlayConfig,
     /// Connection manager
     connection: Arc<ConnectionManager>,
@@ -227,6 +226,7 @@ impl AirPlayClient {
 
     fn start_keep_alive(&self) {
         let connection = self.connection.clone();
+        let session_timeout = self.config.session_timeout;
 
         tokio::spawn(async move {
             // Check more frequently (1s) to detect disconnection faster
@@ -244,24 +244,41 @@ impl AirPlayClient {
                     continue;
                 }
 
-                tracing::debug!("Sending keep-alive (GET /info)");
-                // Send keep-alive (GET /info)
-                match connection.send_get_command("/info").await {
-                    Ok(_) => {
-                        tracing::debug!("Keep-alive success");
-                    }
-                    Err(e) => {
-                        tracing::warn!("Keep-alive failed: {}", e);
-                        // Trigger disconnect
-                        let reason = DisconnectReason::NetworkError(e.to_string());
+                // Check for session timeout
+                let last_activity_elapsed = connection
+                    .last_activity
+                    .lock()
+                    .unwrap()
+                    .elapsed();
 
-                        // We must force state update because send_get_command might not have done
-                        // it if it failed at logic level. But if it failed
-                        // with IO error, connection might be broken.
-                        // Calling disconnect_with_reason will ensure state update and event
-                        // emission.
-                        let _ = connection.disconnect_with_reason(reason).await;
-                        break;
+                if last_activity_elapsed > session_timeout {
+                    tracing::warn!("Session timed out after {:?}", session_timeout);
+                    let reason = DisconnectReason::NetworkError("Session timeout".to_string());
+                    let _ = connection.disconnect_with_reason(reason).await;
+                    break;
+                }
+
+                // Only send keep-alive every ~10s or if we haven't seen activity
+                if last_activity_elapsed > Duration::from_secs(10) {
+                    tracing::debug!("Sending keep-alive (GET /info)");
+                    // Send keep-alive (GET /info)
+                    match connection.send_get_command("/info").await {
+                        Ok(_) => {
+                            tracing::debug!("Keep-alive success");
+                        }
+                        Err(e) => {
+                            tracing::warn!("Keep-alive failed: {}", e);
+                            // Trigger disconnect
+                            let reason = DisconnectReason::NetworkError(e.to_string());
+
+                            // We must force state update because send_get_command might not have done
+                            // it if it failed at logic level. But if it failed
+                            // with IO error, connection might be broken.
+                            // Calling disconnect_with_reason will ensure state update and event
+                            // emission.
+                            let _ = connection.disconnect_with_reason(reason).await;
+                            break;
+                        }
                     }
                 }
             }
@@ -804,6 +821,11 @@ impl AirPlayClient {
     /// Get current state
     pub async fn state(&self) -> ClientState {
         self.state.get().await
+    }
+
+    /// Get current connection state directly from ConnectionManager
+    pub async fn connection_state(&self) -> ConnectionState {
+        self.connection.state().await
     }
 
     /// Subscribe to state changes
