@@ -245,11 +245,7 @@ impl AirPlayClient {
                 }
 
                 // Check for session timeout
-                let last_activity_elapsed = connection
-                    .last_activity
-                    .lock()
-                    .unwrap()
-                    .elapsed();
+                let last_activity_elapsed = connection.last_activity.lock().unwrap().elapsed();
 
                 if last_activity_elapsed > session_timeout {
                     tracing::warn!("Session timed out after {:?}", session_timeout);
@@ -823,7 +819,7 @@ impl AirPlayClient {
         self.state.get().await
     }
 
-    /// Get current connection state directly from ConnectionManager
+    /// Get current connection state directly from `ConnectionManager`
     pub async fn connection_state(&self) -> ConnectionState {
         self.connection.state().await
     }

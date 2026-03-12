@@ -14,7 +14,9 @@ async fn test_session_timeout_disconnect() {
     common::init_logging();
 
     // 1. Start a python receiver
-    let receiver = PythonReceiver::start().await.expect("Failed to start receiver");
+    let receiver = PythonReceiver::start()
+        .await
+        .expect("Failed to start receiver");
     let device = receiver.device_config();
 
     // 2. Initialize an AirPlayClient with a short session timeout
