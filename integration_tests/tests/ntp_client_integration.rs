@@ -4,7 +4,6 @@ use airplay2::protocol::rtp::ntp_client::NtpClient;
 use tokio;
 
 #[tokio::test]
-#[ignore = "Hits public NTP server which might be flaky in CI and firewalls"]
 async fn test_ntp_client_against_public_server() {
     let client = NtpClient::new("time.google.com:123".to_string(), Duration::from_secs(5));
     let offset_result = client.get_offset().await;
