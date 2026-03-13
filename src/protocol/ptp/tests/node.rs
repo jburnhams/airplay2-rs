@@ -1063,7 +1063,7 @@ async fn test_master_sends_sync_follow_up_pair() {
         ..Default::default()
     };
 
-    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     let mut node = PtpNode::new(
         master_event.clone(),
@@ -1074,7 +1074,7 @@ async fn test_master_sends_sync_follow_up_pair() {
     node.add_slave(slave_event_addr);
     node.add_general_slave(slave_general_addr);
 
-    let handle = tokio::spawn(async move { node.run(shutdown_rx).await });
+    let _handle = tokio::spawn(async move { node.run(shutdown_rx).await });
 
     // Wait for at least one Sync to be sent
     tokio::time::sleep(Duration::from_millis(300)).await;

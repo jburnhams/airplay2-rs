@@ -648,9 +648,9 @@ fn test_homepod_epoch_offset_full_exchange() {
     );
 
     // Now verify domain conversion: converting our Unix time to HomePod's domain.
-    // remote_to_local(our_time) = our_time - offset = 1,740,000,000.5 - 1,739,295,000 = 705,000.5
+    // local_to_remote(our_time) = our_time - offset = 1,740,000,000.5 - 1,739,295,000 = 705,000.5
     let our_time = PtpTimestamp::new(1_740_000_000, 500_000_000);
-    let master_time = clock.remote_to_local(our_time);
+    let master_time = clock.local_to_remote(our_time);
     assert!(
         master_time.seconds.abs_diff(705_000) <= 1,
         "Expected ~705,000s in master domain, got {}s",
@@ -658,9 +658,9 @@ fn test_homepod_epoch_offset_full_exchange() {
     );
 
     // And reverse: HomePod time to our domain
-    // local_to_remote(homepod_time) = 706,000 + 1,739,295,000 = 1,740,001,000
+    // remote_to_local(homepod_time) = 706,000 + 1,739,295,000 = 1,740,001,000
     let homepod_time = PtpTimestamp::new(706_000, 0);
-    let our_equivalent = clock.local_to_remote(homepod_time);
+    let our_equivalent = clock.remote_to_local(homepod_time);
     assert!(
         our_equivalent.seconds.abs_diff(1_740_001_000) <= 1,
         "Expected ~1,740,001,000s in our domain, got {}s",
@@ -685,9 +685,9 @@ fn test_homepod_epoch_offset_one_way() {
     let offset_s = clock.offset_nanos() / 1_000_000_000;
     assert_eq!(offset_s, 1_739_295_000);
 
-    // Domain conversion
+    // Domain conversion: our Unix time → HomePod domain
     let our_time = PtpTimestamp::new(1_740_000_000, 500_000_000);
-    let master_time = clock.remote_to_local(our_time);
+    let master_time = clock.local_to_remote(our_time);
     // master_time = our_time - offset ≈ 705,000.499s
     assert!(
         master_time.seconds.abs_diff(705_000) <= 1,
@@ -710,7 +710,9 @@ fn test_conversion_roundtrip_large_offset() {
     clock.process_timing(t1, t2, t3, t4);
 
     // Roundtrip: remote_to_local(local_to_remote(x)) == x
-    let original = PtpTimestamp::new(800_000, 123_456_789);
+    // local = slave (Unix domain, large), remote = master (HomePod domain, small)
+    // Start with a slave (Unix) timestamp and convert to master then back.
+    let original = PtpTimestamp::new(1_740_500_000, 123_456_789);
     let converted = clock.local_to_remote(original);
     let back = clock.remote_to_local(converted);
     let error_nanos = (back.to_nanos() - original.to_nanos()).unsigned_abs();
@@ -719,8 +721,8 @@ fn test_conversion_roundtrip_large_offset() {
         "Roundtrip error too large: {error_nanos} nanos"
     );
 
-    // And the other direction
-    let original2 = PtpTimestamp::new(1_740_500_000, 987_654_321);
+    // And the other direction: start with a master (HomePod) timestamp.
+    let original2 = PtpTimestamp::new(800_000, 987_654_321);
     let converted2 = clock.remote_to_local(original2);
     let back2 = clock.local_to_remote(converted2);
     let error_nanos2 = (back2.to_nanos() - original2.to_nanos()).unsigned_abs();
@@ -747,9 +749,10 @@ fn test_time_announce_conversion_slave_to_master_domain() {
     let homepod_clock_id = 0x50BC_9664_729E_0008_u64;
     clock.set_remote_master_clock_id(homepod_clock_id);
 
-    // Simulate what send_time_announce does:
+    // Simulate converting our Unix time to master (HomePod) domain:
+    // local_to_remote(local_now) = local_now - offset = 1,740,000,005 - 1,739,295,000 = 705,005s
     let local_now = PtpTimestamp::new(1_740_000_005, 0); // Our current Unix time
-    let master_time = clock.remote_to_local(local_now);
+    let master_time = clock.local_to_remote(local_now);
     let ptp_nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
     let used_clock_id = clock
         .remote_master_clock_id()
@@ -842,21 +845,22 @@ fn test_negative_offset_conversion() {
     assert_eq!(offset_s, -10, "Offset should be -10s (slave behind master)");
 
     // remote_to_local: convert master time 300s to slave equivalent.
-    // slave = master + offset(?) No: remote_to_local(x) = x - offset = 300 - (-10) = 310
+    // Convention: offset = slave - master, so slave = master + offset = 300 + (-10) = 290.
+    // When slave is 10s behind, master time 300 maps to slave reading 290.
     let master_ts = PtpTimestamp::new(300, 0);
     let result = clock.remote_to_local(master_ts);
     assert_eq!(
-        result.seconds, 310,
-        "remote_to_local should ADD 10s when offset is -10s"
+        result.seconds, 290,
+        "remote_to_local should give 290 when master=300 and offset=-10s"
     );
 
-    // local_to_remote: convert slave time 310s to master equivalent.
-    // local_to_remote(x) = x + offset = 310 + (-10) = 300
-    let slave_ts = PtpTimestamp::new(310, 0);
+    // local_to_remote: convert slave time 290s to master equivalent.
+    // master = slave - offset = 290 - (-10) = 300
+    let slave_ts = PtpTimestamp::new(290, 0);
     let result = clock.local_to_remote(slave_ts);
     assert_eq!(
         result.seconds, 300,
-        "local_to_remote should SUBTRACT 10s when offset is -10s"
+        "local_to_remote should give 300 when slave=290 and offset=-10s"
     );
 }
 
