@@ -1141,6 +1141,184 @@ async fn test_master_sends_sync_follow_up_pair() {
         found_follow_up,
         "Should receive Follow_Up from master on general port"
     );
+}
+
+// ===== Apple Signaling peer-announcement =====
+
+/// Verify that `build_apple_signaling` produces a correctly-formatted Signaling message:
+///   - 70 bytes total (34-byte header + 10-byte targetPortIdentity + 26-byte TLV)
+///   - Byte 0 = 0x1C (Apple transport_specific=1, messageType=0xC Signaling)
+///   - Message length field matches actual length
+///   - Source clock identity == our clock ID
+///   - Target clock identity == the provided target
+///   - TLV type = 0x0003 (ORGANIZATION_EXTENSION)
+///   - TLV OUI = 0x000D93 (Apple)
+///   - TLV sub-type = 0x01
+///   - TLV clock identity == our clock ID
+///   - TLV timing port == provided timing port
+#[tokio::test]
+async fn test_build_apple_signaling_format() {
+    let event_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let clock = create_shared_clock(0xABCD_EF01_2345_6789, crate::protocol::ptp::clock::PtpRole::Master);
+    let config = PtpNodeConfig {
+        clock_id: 0xABCD_EF01_2345_6789,
+        ..Default::default()
+    };
+    let node = PtpNode::new(event_sock, None, clock, config);
+
+    let target = PtpPortIdentity::new(0x1122_3344_5566_7788, 1);
+    let seq: u16 = 42;
+    let timing_port: u16 = 55_000;
+
+    let bytes = node.build_apple_signaling(target, seq, timing_port);
+
+    // Total length must be 70 bytes
+    assert_eq!(bytes.len(), 70, "Signaling message must be 70 bytes");
+
+    // Byte 0: 0x1C = Apple transport_specific(1) | Signaling messageType(0xC)
+    assert_eq!(bytes[0], 0x1C, "transport_specific | messageType byte mismatch");
+    // Byte 1: PTP version 2
+    assert_eq!(bytes[1], 0x02, "PTP version must be 2");
+
+    // Bytes 2-3: message length = 70
+    let msg_len = u16::from_be_bytes([bytes[2], bytes[3]]);
+    assert_eq!(msg_len, 70, "message_length field must be 70");
+
+    // Bytes 20-27: source clock identity = our clock ID
+    let src_clock = u64::from_be_bytes([
+        bytes[20], bytes[21], bytes[22], bytes[23],
+        bytes[24], bytes[25], bytes[26], bytes[27],
+    ]);
+    assert_eq!(src_clock, 0xABCD_EF01_2345_6789, "source clock identity mismatch");
+
+    // Bytes 30-31: sequence ID
+    let seq_id = u16::from_be_bytes([bytes[30], bytes[31]]);
+    assert_eq!(seq_id, 42, "sequence ID mismatch");
+
+    // Byte 32: control = 5 (Signaling)
+    assert_eq!(bytes[32], 0x05, "control field must be 5 for Signaling");
+
+    // Bytes 34-41: target clock identity
+    let tgt_clock = u64::from_be_bytes([
+        bytes[34], bytes[35], bytes[36], bytes[37],
+        bytes[38], bytes[39], bytes[40], bytes[41],
+    ]);
+    assert_eq!(tgt_clock, 0x1122_3344_5566_7788, "target clock identity mismatch");
+
+    // TLV starts at byte 44
+    let tlv_type = u16::from_be_bytes([bytes[44], bytes[45]]);
+    assert_eq!(tlv_type, 0x0003, "TLV type must be 0x0003 (ORGANIZATION_EXTENSION)");
+
+    let tlv_len = u16::from_be_bytes([bytes[46], bytes[47]]);
+    assert_eq!(tlv_len, 22, "TLV length must be 22");
+
+    // IEEE 1588 ORGANIZATION_EXTENSION TLV body layout (starts at byte 48):
+    //   [48..50] organizationId       = 00 0D 93 (Apple OUI)
+    //   [51..53] organizationSubType  = 00 00 01 (3 bytes, sub-type 1 per IEEE 1588 spec)
+    //   [54..61] clock_identity       (8 bytes BE) = our clock ID
+    //   [62..65] IPv4 address         (4 bytes) = zeros
+    //   [66..67] timing port          (2 bytes BE)
+    //   [68..69] reserved             = zeros
+    assert_eq!(bytes[48], 0x00, "OUI byte 0");
+    assert_eq!(bytes[49], 0x0D, "OUI byte 1");
+    assert_eq!(bytes[50], 0x93, "OUI byte 2");
+    // 3-byte organizationSubType = 00 00 01 (sub-type 1)
+    assert_eq!(bytes[51], 0x00, "sub-type[0] must be 0x00");
+    assert_eq!(bytes[52], 0x00, "sub-type[1] must be 0x00");
+    assert_eq!(bytes[53], 0x01, "sub-type[2] must be 0x01");
+
+    // Clock identity at bytes [54..61] = our clock ID
+    let tlv_clock = u64::from_be_bytes([
+        bytes[54], bytes[55], bytes[56], bytes[57],
+        bytes[58], bytes[59], bytes[60], bytes[61],
+    ]);
+    assert_eq!(tlv_clock, 0xABCD_EF01_2345_6789, "TLV clock identity must be our clock ID");
+
+    // Timing port at bytes [66..67]
+    let tlv_port = u16::from_be_bytes([bytes[66], bytes[67]]);
+    assert_eq!(tlv_port, timing_port, "TLV timing port mismatch");
+}
+
+/// Verify that the PTP node sends an Apple Signaling response when it receives a Signaling
+/// containing Apple ORGANIZATION_EXTENSION TLVs (OUI 0x000D93).
+///
+/// This is the bidirectional peer-announcement exchange that authorises
+/// `Delay_Req`/`Delay_Resp` flow in AirPlay 2 PTP.
+#[tokio::test]
+async fn test_apple_signaling_response_sent_on_apple_tlv() {
+    // "HomePod" general socket — sends the incoming Apple Signaling and listens for response.
+    let homepod_general = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let _homepod_general_addr = homepod_general.local_addr().unwrap();
+
+    // Our PTP node sockets
+    let event_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let general_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let our_general_addr = general_sock.local_addr().unwrap();
+    let timing_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let timing_port = timing_sock.local_addr().unwrap().port();
+
+    let clock_id: u64 = 0xDEAD_BEEF_1234_5678;
+    let clock = create_shared_clock(clock_id, crate::protocol::ptp::clock::PtpRole::Master);
+    let config = PtpNodeConfig {
+        clock_id,
+        priority1: 255,
+        announce_timeout: Duration::from_secs(60),
+        ..Default::default()
+    };
+    let mut node = PtpNode::new(
+        Arc::clone(&event_sock),
+        Some(Arc::clone(&general_sock)),
+        clock,
+        config,
+    );
+    node.set_timing_socket(Arc::clone(&timing_sock));
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let handle = tokio::spawn(async move { node.run(shutdown_rx).await });
+
+    // Build a fake HomePod Signaling with Apple ORGANIZATION_EXTENSION TLV sub-type 1
+    // (34-byte header + 10-byte targetPortIdentity + 26-byte Apple TLV = 70 bytes)
+    let total_len: u16 = 70;
+    let mut sig = vec![0u8; 70];
+    sig[0] = 0x1C;                                         // Apple transport | Signaling
+    sig[1] = 0x02;                                         // PTP version 2
+    sig[2..4].copy_from_slice(&total_len.to_be_bytes());
+    // Source clock identity (HomePod's fake clock ID)
+    sig[20..28].copy_from_slice(&0x5000_AABB_CCDD_EEFFu64.to_be_bytes());
+    sig[28..30].copy_from_slice(&1u16.to_be_bytes());      // port 1
+    // targetPortIdentity bytes 34-43: leave as zero (broadcast-ish)
+    // Apple ORGANIZATION_EXTENSION TLV at offset 44
+    sig[44..46].copy_from_slice(&0x0003u16.to_be_bytes()); // type ORGANIZATION_EXTENSION
+    sig[46..48].copy_from_slice(&22u16.to_be_bytes());     // TLV body length 22
+    sig[48] = 0x00; sig[49] = 0x0D; sig[50] = 0x93;       // Apple OUI
+    sig[51] = 0x01;                                        // sub-type 1
+
+    // Send the fake HomePod Signaling to our general socket
+    homepod_general.send_to(&sig, our_general_addr).await.unwrap();
+
+    // The node must send a Signaling response back to homepod_general_addr within 1 second.
+    let mut buf = vec![0u8; 256];
+    let recv_result =
+        tokio::time::timeout(Duration::from_secs(1), homepod_general.recv_from(&mut buf))
+            .await
+            .expect("Timed out waiting for Apple Signaling response")
+            .expect("recv_from error");
+    let (len, _src) = recv_result;
+
+    assert!(len >= 70, "Response should be at least 70 bytes, got {len}");
+    assert_eq!(buf[0], 0x1C, "Response byte 0 must be 0x1C (Apple Signaling)");
+    let tlv_type = u16::from_be_bytes([buf[44], buf[45]]);
+    assert_eq!(tlv_type, 0x0003, "TLV type must be ORGANIZATION_EXTENSION (0x0003)");
+    assert_eq!(buf[48], 0x00, "OUI byte 0 must be 0x00");
+    assert_eq!(buf[49], 0x0D, "OUI byte 1 must be 0x0D");
+    assert_eq!(buf[50], 0x93, "OUI byte 2 must be 0x93");
+    // IEEE 1588: organizationSubType is 3 bytes [51..53]
+    assert_eq!(buf[51], 0x00, "TLV sub-type[0] must be 0x00");
+    assert_eq!(buf[52], 0x00, "TLV sub-type[1] must be 0x00");
+    assert_eq!(buf[53], 0x01, "TLV sub-type[2] must be 0x01");
+    // timing port is at bytes [66..67] (after 3-byte sub-type + 8-byte clock_id + 4-byte IPv4)
+    let resp_port = u16::from_be_bytes([buf[66], buf[67]]);
+    assert_eq!(resp_port, timing_port, "TLV timing port must match our timing socket port");
 
     shutdown_tx.send(true).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;

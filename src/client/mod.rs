@@ -743,6 +743,9 @@ impl AirPlayClient {
 
         self.streamer = Some(streamer.clone());
 
+        self.state.update(|s| s.playback.is_playing = true).await;
+        self.playback.set_playing(true).await;
+
         // For AirPlay 2 Buffered Audio (PTP devices, e.g. HomePod) the session
         // handshake must complete here, right before audio starts:
         //
@@ -802,6 +805,20 @@ impl AirPlayClient {
                     );
                 }
             }
+        } else {
+            // Send RECORD request to start buffering on device.
+            // For non-PTP (AirPlay 1 / NTP) devices where RECORD is
+            // deferred until the actual streaming begins.
+            let connection = self.connection.clone();
+            tokio::spawn(async move {
+                // Short delay to allow streamer to fill buffer and start sending
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                tracing::info!("Sending RECORD request to device...");
+                match connection.record().await {
+                    Ok(()) => tracing::info!("RECORD request accepted by device"),
+                    Err(e) => tracing::error!("RECORD request failed: {}", e),
+                }
+            });
         }
 
         streamer.stream(source).await

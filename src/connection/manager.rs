@@ -77,7 +77,7 @@ pub struct ConnectionManager {
 pub(crate) struct UdpSockets {
     pub(crate) audio: UdpSocket,
     pub(crate) control: std::sync::Arc<tokio::net::UdpSocket>,
-    pub(crate) timing: UdpSocket,
+    pub(crate) timing: std::sync::Arc<UdpSocket>,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
     pub(crate) server_audio_port: u16,
     #[allow(dead_code, reason = "Fields kept for debugging visibility")]
@@ -761,7 +761,50 @@ impl ConnectionManager {
 
         // Generate our PTP clock identity early so it can be included in SETUP
         // timingPeerInfo AND in SETPEERS (required for HomePod to respond to Delay_Req).
+        //
+        // With SupportsClockPortMatchingOverride=true, the HomePod routes Delay_Resp
+        // using the ClockPorts dictionary rather than the source port of the Delay_Req.
+        // If our clock ID is absent from ClockPorts, the HomePod silently drops Delay_Resp
+        // → the clock never synchronises.  Registering our clock ID in ClockPorts tells
+        // the HomePod exactly which port to use when sending Delay_Resp back to us.
+        //
+        // IMPORTANT: this value must match the clock_id used inside start_ptp_master
+        // (passed as a parameter); do NOT re-generate it there.
         let ptp_clock_id: u64 = if use_ptp { rand::random() } else { 0 };
+
+        // Bind the timing socket BEFORE SETUP Step 1 so its ephemeral port is known.
+        //
+        // Real AirPlay 2 clients register their ephemeral timing port (NOT the standard
+        // PTP event port 319) in ClockPorts.  Evidence: HomePod SETUP responses show
+        // stale ClockPorts entries with ephemeral ports (e.g. 33063) from previous
+        // Apple device sessions.  The HomePod routes Delay_Resp to the port in ClockPorts,
+        // so we must register the same socket we will actually receive on.
+        //
+        // We bind early so that:
+        //   1. We know time_port for ClockPorts in SETUP Step 1 (before we send it).
+        //   2. The same socket is passed to start_ptp_master for Delay_Req send + Delay_Resp
+        //      receive, ensuring the source port of Delay_Req matches the registered port.
+        let ptp_time_sock: Option<std::sync::Arc<UdpSocket>> = if use_ptp {
+            match Self::bind_ephemeral_socket().await {
+                Ok(sock) => {
+                    tracing::info!(
+                        "PTP timing socket bound to ephemeral port {} (will be registered in ClockPorts)",
+                        sock.local_addr().map(|a| a.port()).unwrap_or(0)
+                    );
+                    Some(std::sync::Arc::new(sock))
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to bind PTP timing socket early: {} (will bind later)", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let ptp_time_port = ptp_time_sock.as_ref()
+            .and_then(|s| s.local_addr().ok())
+            .map(|a| a.port())
+            .unwrap_or(0);
 
         if !use_ptp {
             // For NTP/AirPlay 1 devices, send a preliminary Session SETUP
@@ -916,11 +959,32 @@ impl ConnectionManager {
             // Include our PTP ClockID so the HomePod can match our Delay_Req
             // sourcePortIdentity to an authorised peer. Use Integer format to
             // match the format the HomePod uses for its own ClockID.
+            //
+            // The ClockPorts dictionary tells the HomePod which port to use when sending
+            // Delay_Resp back to us.  The HomePod's SupportsClockPortMatchingOverride=true
+            // means it uses this map instead of the source port of the Delay_Req packet.
+            // Key   = our PTP clock ID as a 16-character uppercase hex string (IEEE 1588
+            //         clock identity format, same as what we use in PTP messages).
+            // Value = our ephemeral timing socket port (ptp_time_port), NOT port 319.
+            //
+            // Using the ephemeral port is critical: real Apple AirPlay 2 clients register
+            // their ephemeral timing port here (confirmed by stale HomePod ClockPorts entries
+            // showing ephemeral ports like 33063 from previous Apple device sessions).
+            // The HomePod routes Delay_Resp to this exact port; if we register 319 instead,
+            // the HomePod sends Delay_Resp to 319 but then our timing_socket (which is on the
+            // ephemeral port) never receives it — the clock exchange stalls indefinitely.
             #[allow(
                 clippy::cast_possible_wrap,
                 reason = "PTP ClockID needs to be encoded as an integer"
             )]
             let clock_id_as_i64 = ptp_clock_id as i64;
+            let clock_ports = DictBuilder::new()
+                .insert(
+                    format!("{:016X}", ptp_clock_id),
+                    i64::from(ptp_time_port),
+                )
+                .build();
+
             let timing_peer_info = DictBuilder::new()
                 .insert("Addresses", vec![local_ip])
                 .insert(
@@ -932,8 +996,17 @@ impl ConnectionManager {
                         .map(|s| s.client_session_id().to_string())
                         .unwrap_or_default(),
                 )
+                // Register our PTP clock identity so the HomePod can route Delay_Resp to us.
                 .insert("ClockID", clock_id_as_i64)
+                .insert("SupportsClockPortMatchingOverride", true)
+                .insert("ClockPorts", clock_ports)
                 .build();
+
+            tracing::info!(
+                "PTP timingPeerInfo: clock_id=0x{:016X}, timing_port={} (registered in ClockPorts)",
+                ptp_clock_id,
+                ptp_time_port
+            );
 
             DictBuilder::new()
                 .insert("timingProtocol", "PTP")
@@ -1088,10 +1161,18 @@ impl ConnectionManager {
 
         let audio_sock = Self::bind_ephemeral_socket().await?;
         let ctrl_sock = Self::bind_ephemeral_socket().await?;
-        let time_sock = Self::bind_ephemeral_socket().await?;
+
+        // Reuse the timing socket bound earlier (before SETUP Step 1) so that
+        // the timingPort we advertise here matches the port registered in ClockPorts.
+        // If ptp_time_sock is None (non-PTP session or early-bind failed), bind a new one.
+        let time_sock: std::sync::Arc<UdpSocket> = match ptp_time_sock {
+            Some(sock) => sock,
+            None => std::sync::Arc::new(Self::bind_ephemeral_socket().await?),
+        };
 
         let audio_port = audio_sock.local_addr()?.port();
         let ctrl_port = ctrl_sock.local_addr()?.port();
+        // time_port already known from ptp_time_port (same socket)
         let time_port = time_sock.local_addr()?.port();
 
         tracing::debug!(
@@ -1398,7 +1479,7 @@ impl ConnectionManager {
                 }
 
                 self.start_ptp_master(
-                    &time_sock,
+                    &*time_sock,
                     device_ip,
                     server_time_port,
                     ptp_clock_id,
@@ -1549,6 +1630,7 @@ impl ConnectionManager {
         //    SETRATEANCHORTIME (the HomePod gives up waiting for SETRATEANCHORTIME after ~10 s and
         //    returns 500 for RECORD).  By deferring both to stream_audio() they are sent
         //    back-to-back within milliseconds of each other, well within the HomePod's timeout.
+        // Note: For NTP/AirPlay 1 devices, RECORD is deferred until streaming starts.
         Ok(())
     }
 
@@ -1937,9 +2019,10 @@ impl ConnectionManager {
             session.record_request()
         };
         let response = self.send_rtsp_request(&record_request).await?;
+        let status = response.status.as_u16();
         tracing::info!(
             "RECORD response: {} {} (body: {} bytes)",
-            response.status.as_u16(),
+            status,
             response.reason,
             response.body.len()
         );
@@ -1952,12 +2035,8 @@ impl ConnectionManager {
         }
         if !response.is_success() {
             return Err(AirPlayError::RtspError {
-                message: format!(
-                    "RECORD failed: {} {}",
-                    response.status.as_u16(),
-                    response.reason
-                ),
-                status_code: Some(response.status.as_u16()),
+                message: format!("RECORD failed with status {status}: {}", response.reason),
+                status_code: Some(status),
             });
         }
         Ok(())
@@ -2054,6 +2133,39 @@ impl ConnectionManager {
         .await?;
 
         tracing::info!("SETRATEANCHORTIME accepted by device (rate={})", rate);
+        Ok(())
+    }
+
+    /// Send FLUSH command to tell the device where audio playback begins.
+    ///
+    /// Must be called after RECORD. The `seq` and `timestamp` are the initial
+    /// RTP sequence number and timestamp of the first audio packet.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if RTSP request fails
+    pub async fn send_flush(&self, seq: u16, timestamp: u32) -> Result<(), AirPlayError> {
+        tracing::debug!("Sending FLUSH request (seq={}, rtptime={})...", seq, timestamp);
+        let flush_request = {
+            let mut session_guard = self.rtsp_session.lock().await;
+            let session = session_guard
+                .as_mut()
+                .ok_or_else(|| AirPlayError::InvalidState {
+                    message: "No RTSP session".to_string(),
+                    current_state: "None".to_string(),
+                })?;
+            session.flush_request(seq, timestamp)
+        };
+        let response = self.send_rtsp_request(&flush_request).await?;
+        let status = response.status.as_u16();
+        tracing::info!("FLUSH response status: {}", status);
+        if !response.is_success() {
+            tracing::warn!(
+                "FLUSH returned non-success status {}: {} (continuing)",
+                status,
+                response.reason
+            );
+        }
         Ok(())
     }
 
@@ -2676,10 +2788,12 @@ impl ConnectionManager {
     ) {
         use crate::protocol::ptp::handler::{PTP_EVENT_PORT, PTP_GENERAL_PORT, PtpSlaveHandler};
 
-        // clock_id is passed in (generated before SETUP/SETPEERS so it matches the SETUP
-        // timingPeerInfo ClockID). We act as PTP slave — the HomePod acts as master and
-        // sends Sync/Follow_Up. This lets us measure the offset between our clock and the
-        // HomePod's clock.
+        // clock_id is passed in (pre-generated in setup_session() BEFORE the SETUP handshake
+        // so it matches the ClockID registered in timingPeerInfo.ClockPorts).
+        // We act as PTP slave — the HomePod acts as master and sends Sync/Follow_Up.
+        // This lets us measure the offset between our clock and the HomePod's clock.
+        // Do NOT re-generate it here — any mismatch causes the HomePod to silently
+        // drop Delay_Resp (SupportsClockPortMatchingOverride routing failure).
         let clock = create_shared_clock(clock_id, PtpRole::Slave);
 
         // Bind to standard PTP event port (319).
@@ -2736,7 +2850,8 @@ impl ConnectionManager {
 
         let config = PtpHandlerConfig {
             clock_id,
-            // We act as PTP slave — the HomePod acts as grandmaster.
+            // We act as PTP slave — the HomePod acts as grandmaster (priority1=248).
+            // Using Slave role ensures we sync to HomePod's clock.
             role: PtpRole::Slave,
             sync_interval: std::time::Duration::from_secs(1),
             delay_req_interval: std::time::Duration::from_millis(200),
@@ -2763,6 +2878,7 @@ impl ConnectionManager {
             );
 
             // If device advertised ClockPorts, try sending Delay_Req there too.
+            // The HomePod routes Delay_Resp to the ClockPorts-registered port.
             if let Some(cp) = device_clock_port {
                 let clock_port_addr = std::net::SocketAddr::new(device_ip, cp);
                 tracing::info!(
