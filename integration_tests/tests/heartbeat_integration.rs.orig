@@ -30,28 +30,26 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
 
     while start_time.elapsed() < timeout_duration {
         match tokio::time::timeout(Duration::from_secs(2), devices.next()).await {
-            Ok(Some(DiscoveryEvent::Added(device) | DiscoveryEvent::Updated(device))) => {
+            Ok(Some(DiscoveryEvent::Added(device))) => {
                 if device.id == device_config.id {
-                    if !discovered {
-                        tracing::info!("Device discovered: {}", device.name);
-                        discovered = true;
-                        initial_last_seen = device.last_seen;
-                    } else {
-                        tracing::info!(
-                            "Device updated (heartbeat): last_seen = {:?}",
-                            device.last_seen
-                        );
-                        if let (Some(initial), Some(current)) =
-                            (initial_last_seen, device.last_seen)
-                        {
-                            if current > initial {
-                                heartbeats_received += 1;
-                                // Update our initial last seen to the current one
-                                initial_last_seen = Some(current);
-                            }
+                    tracing::info!("Device discovered: {}", device.name);
+                    discovered = true;
+                    initial_last_seen = device.last_seen;
+                }
+            }
+            Ok(Some(DiscoveryEvent::Updated(device))) => {
+                if device.id == device_config.id {
+                    tracing::info!(
+                        "Device updated (heartbeat): last_seen = {:?}",
+                        device.last_seen
+                    );
+                    if let (Some(initial), Some(current)) = (initial_last_seen, device.last_seen) {
+                        if current > initial {
+                            heartbeats_received += 1;
+                            // Update our initial last seen to the current one
+                            initial_last_seen = Some(current);
                         }
-                    }
-                    if initial_last_seen.is_none() {
+                    } else if initial_last_seen.is_none() {
                         initial_last_seen = device.last_seen;
                         discovered = true;
                     }
