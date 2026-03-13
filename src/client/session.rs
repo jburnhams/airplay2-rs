@@ -511,14 +511,46 @@ impl AirPlaySession for AirPlay2SessionImpl {
         Ok(())
     }
 
-    async fn set_metadata(&mut self, _track: &TrackInfo) -> Result<(), AirPlayError> {
-        // TODO: Implement metadata setting in AirPlayClient
-        Ok(())
+    async fn set_metadata(&mut self, track: &TrackInfo) -> Result<(), AirPlayError> {
+        // TrackMetadata from protocol/daap
+        let meta = crate::protocol::daap::TrackMetadata {
+            title: Some(track.title.clone()),
+            artist: Some(track.artist.clone()),
+            album: track.album.clone(),
+            genre: track.genre.clone(),
+            track_number: track.track_number,
+            disc_number: track.disc_number,
+            duration_ms: track.duration_secs.map(|s| {
+                let ms = s * 1000.0;
+                if ms >= f64::from(u32::MAX) {
+                    u32::MAX
+                } else if ms < 0.0 {
+                    0
+                } else {
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        reason = "Duration in seconds * 1000 fits in u32 (max ~49 days) and is \
+                                  checked for bounds"
+                    )]
+                    {
+                        ms as u32
+                    }
+                }
+            }),
+            ..Default::default()
+        };
+
+        self.client.set_metadata(meta).await
     }
 
-    async fn set_artwork(&mut self, _data: &[u8]) -> Result<(), AirPlayError> {
-        // TODO: Implement artwork setting in AirPlayClient
-        Ok(())
+    async fn set_artwork(&mut self, data: &[u8]) -> Result<(), AirPlayError> {
+        // Detect format or default
+        let format = crate::protocol::daap::ArtworkFormat::detect(data)
+            .unwrap_or(crate::protocol::daap::ArtworkFormat::Jpeg);
+        let mime_type = format.mime_type();
+
+        self.client.set_artwork(data, mime_type).await
     }
 
     async fn playback_state(&self) -> PlaybackState {

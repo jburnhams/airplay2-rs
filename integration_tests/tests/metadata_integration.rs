@@ -6,7 +6,8 @@
 use std::time::Duration;
 
 use airplay2::protocol::daap::{DmapProgress, TrackMetadata};
-use airplay2::{AirPlayClient, AirPlayConfig};
+use airplay2::types::TrackInfo;
+use airplay2::{AirPlayClient, AirPlayConfig, UnifiedAirPlayClient};
 use tokio::time::sleep;
 
 mod common;
@@ -112,5 +113,84 @@ async fn test_metadata_updates() -> Result<(), Box<dyn std::error::Error>> {
     receiver.stop().await?;
 
     tracing::info!("✅ Metadata integration test passed");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_unified_client_metadata_and_artwork() -> Result<(), Box<dyn std::error::Error>> {
+    common::init_logging();
+    tracing::info!("Starting UnifiedAirPlayClient Metadata integration test");
+
+    // 1. Start Receiver
+    let receiver = PythonReceiver::start().await?;
+    let device = receiver.device_config();
+
+    // 2. Connect
+    let mut client = UnifiedAirPlayClient::new();
+
+    tracing::info!("Connecting to receiver...");
+    let mut connected = false;
+    for i in 0..5 {
+        if client.connect(device.clone()).await.is_ok() {
+            connected = true;
+            break;
+        }
+        tracing::info!("Connection attempt {} failed, retrying...", i + 1);
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    if !connected {
+        return Err("Failed to connect unified client after retries".into());
+    }
+    tracing::info!("Connected!");
+
+    // 3. Send Metadata via Unified Client
+    tracing::info!("Sending metadata...");
+    let track = TrackInfo::new(
+        "http://example.com/audio.mp3",
+        "Unified Client Track",
+        "Unified Artist",
+    )
+    .with_album("Unified Album")
+    .with_duration(120.0);
+
+    client.session_mut().unwrap().set_metadata(&track).await?;
+
+    tracing::info!("Verifying unified metadata logs...");
+    receiver
+        .wait_for_log(
+            "dmap.itemname: Unified Client Track",
+            Duration::from_secs(5),
+        )
+        .await?;
+    receiver
+        .wait_for_log("daap.songartist: Unified Artist", Duration::from_secs(5))
+        .await?;
+    receiver
+        .wait_for_log("daap.songalbum: Unified Album", Duration::from_secs(5))
+        .await?;
+    tracing::info!("Unified Metadata verified!");
+
+    // 4. Send Artwork via Unified Client
+    tracing::info!("Sending artwork...");
+    let artwork_data = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F']; // Fake JPEG header
+    client
+        .session_mut()
+        .unwrap()
+        .set_artwork(&artwork_data)
+        .await?;
+
+    tracing::info!("Verifying unified artwork logs...");
+    receiver
+        .wait_for_log("Artwork saved to ", Duration::from_secs(5))
+        .await?;
+    tracing::info!("Unified Artwork verified!");
+
+    // 5. Cleanup
+    tracing::info!("Disconnecting...");
+    client.disconnect().await?;
+    receiver.stop().await?;
+
+    tracing::info!("✅ Unified Metadata integration test passed");
     Ok(())
 }

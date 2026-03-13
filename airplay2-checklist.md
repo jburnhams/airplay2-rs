@@ -1,5 +1,10 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 15):**
+- **Unified Client Metadata/Artwork**:
+  - ✅ **VERIFIED**: `test_unified_client_metadata_and_artwork` in `metadata_integration.rs` verifies `UnifiedAirPlayClient` metadata and artwork.
+  - Implemented `set_metadata` and `set_artwork` within `AirPlay2SessionImpl`, hooking the unified `AirPlaySession` trait up to the underlying `AirPlayClient` implementation.
+
 **Work Done (Session 14):**
 - **Packet Retransmission**:
   - ✅ **VERIFIED**: `retransmission_integration` test verifies client buffering and response to python receiver's `RetransmitRequest` (RTP loss recovery).
