@@ -38,12 +38,14 @@ impl NtpClient {
 
         // Resolve server_addr to a single IP before sending
         // This ensures the response peer_addr matches exactly where we sent the packet
-        let mut addrs = tokio::net::lookup_host(&self.server_addr).await.map_err(|_| {
-            AirPlayError::NetworkError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Failed to resolve NTP server address",
-            ))
-        })?;
+        let mut addrs = tokio::net::lookup_host(&self.server_addr)
+            .await
+            .map_err(|_| {
+                AirPlayError::NetworkError(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Failed to resolve NTP server address",
+                ))
+            })?;
 
         let target_addr = addrs.next().ok_or_else(|| {
             AirPlayError::NetworkError(std::io::Error::new(
