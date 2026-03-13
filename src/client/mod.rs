@@ -245,7 +245,7 @@ impl AirPlayClient {
                 }
 
                 // Check for session timeout
-                let last_activity_elapsed = connection.last_activity.lock().unwrap().elapsed();
+                let last_activity_elapsed = connection.last_activity.lock().await.elapsed();
 
                 if last_activity_elapsed > session_timeout {
                     tracing::warn!("Session timed out after {:?}", session_timeout);
