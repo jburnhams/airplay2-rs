@@ -973,11 +973,6 @@ impl ConnectionManager {
             // The HomePod routes Delay_Resp to this exact port; if we register 319 instead,
             // the HomePod sends Delay_Resp to 319 but then our timing_socket (which is on the
             // ephemeral port) never receives it — the clock exchange stalls indefinitely.
-            #[allow(
-                clippy::cast_possible_wrap,
-                reason = "PTP ClockID needs to be encoded as an integer"
-            )]
-            let clock_id_as_i64 = ptp_clock_id as i64;
             let clock_ports = DictBuilder::new()
                 .insert(
                     format!("{:016X}", ptp_clock_id),
@@ -997,7 +992,9 @@ impl ConnectionManager {
                         .unwrap_or_default(),
                 )
                 // Register our PTP clock identity so the HomePod can route Delay_Resp to us.
-                .insert("ClockID", clock_id_as_i64)
+                // Pass as u64 directly — PlistValue::UnsignedInteger preserves all 64 bits
+                // without wrapping, avoiding a negative ClockID when the MSB is set.
+                .insert("ClockID", ptp_clock_id)
                 .insert("SupportsClockPortMatchingOverride", true)
                 .insert("ClockPorts", clock_ports)
                 .build();
@@ -1107,12 +1104,10 @@ impl ConnectionManager {
                             if let Some(tpi_dict) = tpi.as_dict() {
                                 // Extract ClockID for SETRATEANCHORTIME networkTimeTimelineID
                                 if let Some(cid) = tpi_dict.get("ClockID") {
-                                    if let Some(cid_val) = cid.as_i64() {
-                                        #[allow(
-                                            clippy::cast_sign_loss,
-                                            reason = "Clock ID is unsigned but plist stores as i64"
-                                        )]
-                                        let clock_id = cid_val as u64;
+                                    // as_u64() handles both Integer(i64) and UnsignedInteger(u64)
+                                    // variants, so this works regardless of whether the HomePod
+                                    // encodes its own ClockID as signed or unsigned.
+                                    if let Some(clock_id) = cid.as_u64() {
                                         tracing::info!("Device ClockID: 0x{:016X}", clock_id);
                                         *self.device_clock_id.lock().await = Some(clock_id);
                                     }

@@ -501,6 +501,7 @@ fn client_config_ieee(clock_id: u64, priority1: u8) -> PtpNodeConfig {
         announce_interval: Duration::from_millis(50),
         recv_buf_size: 256,
         use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP
+        transport_specific: 0,    // Standard IEEE 1588 (HomePod uses 1 for AirPlay, 0 for tests)
         announce_timeout: Duration::from_secs(6), // Default for tests
     }
 }
