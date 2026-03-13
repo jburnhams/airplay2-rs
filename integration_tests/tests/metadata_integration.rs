@@ -154,7 +154,11 @@ async fn test_unified_client_metadata_and_artwork() -> Result<(), Box<dyn std::e
     .with_album("Unified Album")
     .with_duration(120.0);
 
-    client.session_mut().unwrap().set_metadata(&track).await?;
+    client
+        .session_mut()
+        .expect("session_mut should be present after successful connection")
+        .set_metadata(&track)
+        .await?;
 
     tracing::info!("Verifying unified metadata logs...");
     receiver
@@ -176,7 +180,7 @@ async fn test_unified_client_metadata_and_artwork() -> Result<(), Box<dyn std::e
     let artwork_data = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F']; // Fake JPEG header
     client
         .session_mut()
-        .unwrap()
+        .expect("session_mut should be present after successful connection")
         .set_artwork(&artwork_data)
         .await?;
 

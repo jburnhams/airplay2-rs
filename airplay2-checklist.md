@@ -4,11 +4,6 @@
 - **Unified Client Metadata/Artwork**:
   - ✅ **VERIFIED**: `test_unified_client_metadata_and_artwork` in `metadata_integration.rs` verifies `UnifiedAirPlayClient` metadata and artwork.
   - Implemented `set_metadata` and `set_artwork` within `AirPlay2SessionImpl`, hooking the unified `AirPlaySession` trait up to the underlying `AirPlayClient` implementation.
-- **Session Timeout and Refresh**:
-  - ✅ **VERIFIED**: `session_timeout_integration` test verifies client triggers disconnect correctly upon idleness.
-  - Implemented `session_timeout` configuration parameter in `AirPlayConfig` with a default of 120 seconds.
-  - Implemented `last_activity` tracking in `ConnectionManager` to record when RTSP messages are sent or received.
-  - Updated keep-alive task in `AirPlayClient` to check for timeout and properly disconnect the connection if the timeout threshold is exceeded. Keep-alives naturally prevent timeout by refreshing the `last_activity`.
 
 **Work Done (Session 14):**
 - **Packet Retransmission**:
@@ -269,8 +264,7 @@
 #### Session Key Management
 - [x] Store pairing session keys securely
   - ✅ **VERIFIED**: Keys stored in JSON file and successfully used for reconnection.
-- [x] Implement session timeout and refresh
-  - ✅ **VERIFIED**: Implemented timeout logic and keep-alive tracking. Validated via `session_timeout_integration` test.
+- [ ] Implement session timeout and refresh
 - [x] Clear keys on logout/disconnection
   - ✅ **VERIFIED**: Verified via `forget_device_integration` and `reconnection_integration`. Session keys cleared on disconnect, persistent keys on forget.
 

@@ -69,8 +69,6 @@ pub struct ConnectionManager {
     event_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// TCP stream for buffered audio (`AirPlay` 2 type=103)
     audio_tcp_stream: Mutex<Option<TcpStream>>,
-    /// Last network activity (for session timeout)
-    pub(crate) last_activity: tokio::sync::Mutex<tokio::time::Instant>,
 }
 
 /// UDP sockets for streaming
@@ -116,7 +114,6 @@ impl ConnectionManager {
             drop_packets_for_test: Mutex::new(Vec::new()),
             event_task: Mutex::new(None),
             audio_tcp_stream: Mutex::new(None),
-            last_activity: tokio::sync::Mutex::new(tokio::time::Instant::now()),
         }
     }
 
@@ -1745,9 +1742,6 @@ impl ConnectionManager {
         // Update stats
         self.stats.write().await.record_sent(encoded.len());
 
-        // Update last activity since we just sent data
-        *self.last_activity.lock().await = tokio::time::Instant::now();
-
         // CSeq-aware response matching: discard any response whose CSeq does not match
         // the one we just sent.  This handles RTSP response pipelining gracefully —
         // for example, when RECORD is sent without waiting for its reply and SETRATEANCHORTIME
@@ -1778,10 +1772,6 @@ impl ConnectionManager {
                         continue;
                     }
                 }
-
-                // Update last activity since we just received a valid response
-                *self.last_activity.lock().await = tokio::time::Instant::now();
-
                 return Ok(response);
             }
 

@@ -24,9 +24,6 @@ pub struct AirPlayConfig {
     /// Timeout for connection attempts (default: 10 seconds)
     pub connection_timeout: Duration,
 
-    /// Timeout for session idleness (default: 120 seconds)
-    pub session_timeout: Duration,
-
     /// Interval for polling playback state (default: 500ms)
     pub state_poll_interval: Duration,
 
@@ -72,7 +69,6 @@ impl Default for AirPlayConfig {
         Self {
             discovery_timeout: Duration::from_secs(5),
             connection_timeout: Duration::from_secs(10),
-            session_timeout: Duration::from_secs(120),
             state_poll_interval: Duration::from_millis(500),
             debug_protocol: false,
             reconnect_attempts: 3,
@@ -115,13 +111,6 @@ impl AirPlayConfigBuilder {
     #[must_use]
     pub fn connection_timeout(mut self, timeout: Duration) -> Self {
         self.config.connection_timeout = timeout;
-        self
-    }
-
-    /// Set session timeout
-    #[must_use]
-    pub fn session_timeout(mut self, timeout: Duration) -> Self {
-        self.config.session_timeout = timeout;
         self
     }
 
