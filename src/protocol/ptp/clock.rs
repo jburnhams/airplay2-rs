@@ -88,7 +88,14 @@ pub struct PtpClock {
     /// Maximum number of measurements to keep.
     max_measurements: usize,
     /// Current offset estimate (slave - master) in nanoseconds.
-    /// Positive means slave clock is ahead of master.
+    ///
+    /// After epoch calibration this reflects only residual network jitter
+    /// (typically < 1 ms), NOT the raw epoch difference between Unix time
+    /// and the master's custom epoch.
+    ///
+    /// Convention: `offset_ns = slave_ns − master_ns`.  Positive means the
+    /// slave clock reads a larger number than the master at the same moment.
+    /// To convert slave → master: `master = slave − offset_ns`.
     offset_ns: i128,
     /// Current drift rate in parts-per-million.
     drift_ppm: f64,
@@ -100,6 +107,24 @@ pub struct PtpClock {
     max_rtt: Duration,
     /// Clock identity of the remote PTP master (set when acting as slave).
     remote_master_clock_id: Option<u64>,
+    /// Fixed epoch offset measured from the *first* timing exchange
+    /// (before the software clock is calibrated).
+    ///
+    /// `epoch_offset_ns = unix_now_ns − master_now_ns`.  Set once on the
+    /// first complete Delay_Req / Delay_Resp exchange and never changed
+    /// (subsequent `offset_ns` measurements are made in the master's time
+    /// domain and reflect only residual drift).
+    ///
+    /// `None` until the first measurement has been processed.
+    epoch_offset_ns: Option<i128>,
+    /// Monotonic anchor used to track master time without system-clock jumps.
+    ///
+    /// At `epoch_anchor` (a monotonic `Instant`), the master clock was at
+    /// `epoch_anchor_master_ns` nanoseconds.  `master_now()` advances from
+    /// this anchor using `Instant::elapsed()` to avoid wall-clock skew.
+    epoch_anchor: Instant,
+    /// Master clock nanoseconds at `epoch_anchor`.
+    epoch_anchor_master_ns: i128,
 }
 
 impl PtpClock {
@@ -126,6 +151,9 @@ impl PtpClock {
             min_sync_measurements: Self::DEFAULT_MIN_SYNC,
             max_rtt: Self::DEFAULT_MAX_RTT,
             remote_master_clock_id: None,
+            epoch_offset_ns: None,
+            epoch_anchor: Instant::now(),
+            epoch_anchor_master_ns: 0,
         }
     }
 
@@ -257,32 +285,94 @@ impl PtpClock {
         self.drift_ppm = offset_diff_ns / (time_diff_secs * 1e9) * 1e6;
     }
 
-    /// Convert a remote PTP timestamp to an equivalent local PTP timestamp.
+    /// Calibrate the master-clock epoch from the first raw timing measurement.
     ///
-    /// Adjusts for offset and drift.
+    /// Call this exactly once, after `process_timing` has been run on T1/T2/T3/T4
+    /// where T2 and T3 were captured using the host Unix clock (not yet corrected).
+    /// `raw_offset_ns` is `offset_nanos()` at that point — the full epoch difference
+    /// between the host Unix time and the master's custom epoch (~56 years for
+    /// Apple HomePod vs. Unix 1970 epoch).
+    ///
+    /// After calibration, callers should obtain T2/T3 timestamps via `adjusted_now()`
+    /// instead of `PtpTimestamp::now()`.  Subsequent `process_timing` calls will then
+    /// receive timestamps in the master's domain and `offset_ns` will reflect only
+    /// residual network jitter (typically < 1 ms).
+    pub fn calibrate_epoch(&mut self, raw_offset_ns: i128) {
+        if self.epoch_offset_ns.is_some() {
+            return; // Already calibrated; don't overwrite.
+        }
+        self.epoch_offset_ns = Some(raw_offset_ns);
+        // Establish a monotonic anchor so that master_now() does not jump when
+        // the system wall clock changes.
+        self.epoch_anchor = Instant::now();
+        // Master time right now = unix_now − epoch_offset
+        let unix_now_ns = PtpTimestamp::now().to_nanos();
+        self.epoch_anchor_master_ns = unix_now_ns - raw_offset_ns;
+    }
+
+    /// Returns the estimated current master clock time, or `None` if not yet calibrated.
+    ///
+    /// Uses a monotonic `Instant` anchor to avoid wall-clock jumps.  After
+    /// `calibrate_epoch` is called this advances in lock-step with the host
+    /// monotonic clock, which runs at the same rate as the master's oscillator
+    /// (any residual rate difference is reflected in `offset_ns` over time).
+    #[must_use]
+    pub fn master_now(&self) -> Option<PtpTimestamp> {
+        self.epoch_offset_ns?; // return None if not calibrated
+        let elapsed_ns = i128::try_from(self.epoch_anchor.elapsed().as_nanos()).unwrap_or(0);
+        let master_ns = self.epoch_anchor_master_ns + elapsed_ns;
+        Some(if master_ns >= 0 {
+            PtpTimestamp::from_nanos(master_ns)
+        } else {
+            PtpTimestamp::ZERO
+        })
+    }
+
+    /// Convert a timestamp in the master's domain to an equivalent slave timestamp.
+    ///
+    /// Relationship: `offset_ns = slave_ns − master_ns`
+    /// Therefore:    `slave_ns  = master_ns + offset_ns`
+    ///
+    /// After epoch calibration `offset_ns` is near zero, so this is nearly the
+    /// identity function.  Before calibration the result will be inaccurate.
     #[must_use]
     pub fn remote_to_local(&self, remote: PtpTimestamp) -> PtpTimestamp {
-        // local = remote - offset (since offset = slave - master)
         let remote_nanos = remote.to_nanos();
-        let local_nanos = remote_nanos - self.offset_ns;
+        let local_nanos = remote_nanos + self.offset_ns; // slave = master + offset
         if local_nanos < 0 {
             return PtpTimestamp::ZERO;
         }
         PtpTimestamp::from_nanos(local_nanos)
     }
 
-    /// Convert a local PTP timestamp to an equivalent remote PTP timestamp.
+    /// Convert a timestamp in the slave's domain to an equivalent master timestamp.
     ///
-    /// Adjusts for offset and drift.
+    /// Relationship: `offset_ns = slave_ns − master_ns`
+    /// Therefore:    `master_ns = slave_ns − offset_ns`
+    ///
+    /// After epoch calibration `offset_ns` is near zero, so this is nearly the
+    /// identity function.  Before calibration the result will be inaccurate.
     #[must_use]
     pub fn local_to_remote(&self, local: PtpTimestamp) -> PtpTimestamp {
-        // remote = local + offset
         let local_nanos = local.to_nanos();
-        let remote_nanos = local_nanos + self.offset_ns;
+        let remote_nanos = local_nanos - self.offset_ns; // master = slave - offset
         if remote_nanos < 0 {
             return PtpTimestamp::ZERO;
         }
         PtpTimestamp::from_nanos(remote_nanos)
+    }
+
+    /// Whether the epoch has been calibrated from at least one measurement.
+    #[must_use]
+    pub fn is_epoch_calibrated(&self) -> bool {
+        self.epoch_offset_ns.is_some()
+    }
+
+    /// The raw epoch offset (Unix time − master time) in nanoseconds, measured
+    /// from the first timing exchange.  `None` before first calibration.
+    #[must_use]
+    pub fn epoch_offset_ns(&self) -> Option<i128> {
+        self.epoch_offset_ns
     }
 
     /// Get the current offset estimate in nanoseconds.

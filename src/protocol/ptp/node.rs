@@ -160,6 +160,15 @@ pub struct PtpNode {
     /// Announce timeout: if no Announce from the remote master within
     /// this duration, assume it's gone and revert to master.
     announce_timeout: Duration,
+    /// Epoch offset from the first Delay_Req/Delay_Resp exchange.
+    ///
+    /// `unix_now_ns − master_now_ns`, computed from the first measurement
+    /// where T2 and T3 were captured with the Unix wall clock.  Once set,
+    /// `adjusted_now()` subtracts this value so that subsequent T2/T3
+    /// timestamps are in the master's time domain.  This makes `offset_ns`
+    /// in `PtpClock` converge to near zero (residual jitter only) rather
+    /// than retaining the full epoch difference (~56 years for HomePod).
+    calibrated_epoch_offset: Option<i128>,
 }
 
 impl PtpNode {
@@ -194,6 +203,7 @@ impl PtpNode {
             delay_req_unanswered: 0,
             remote_master: None,
             announce_timeout,
+            calibrated_epoch_offset: None,
         }
     }
 
@@ -242,6 +252,31 @@ impl PtpNode {
     #[must_use]
     pub fn clock(&self) -> SharedPtpClock {
         self.clock.clone()
+    }
+
+    /// Current timestamp in the master's time domain.
+    ///
+    /// Before epoch calibration (first Delay_Resp not yet received) this
+    /// falls back to the Unix wall clock (`PtpTimestamp::now()`), so T2/T3
+    /// captured during the first exchange will be in Unix nanoseconds.  The
+    /// resulting large `offset_ns` (~56 years for HomePod) is then used to
+    /// call `PtpClock::calibrate_epoch` so that all subsequent calls return
+    /// a timestamp in the master's epoch.
+    ///
+    /// After calibration: `master_ns = unix_now_ns − epoch_offset_ns`.
+    fn adjusted_now(&self) -> PtpTimestamp {
+        match self.calibrated_epoch_offset {
+            None => PtpTimestamp::now(), // pre-calibration: use raw Unix time
+            Some(epoch_offset) => {
+                let unix_ns = PtpTimestamp::now().to_nanos();
+                let master_ns = unix_ns - epoch_offset;
+                if master_ns >= 0 {
+                    PtpTimestamp::from_nanos(master_ns)
+                } else {
+                    PtpTimestamp::ZERO
+                }
+            }
+        }
     }
 
     /// Run the PTP node event loop.
@@ -452,7 +487,10 @@ impl PtpNode {
         data: &[u8],
         src: SocketAddr,
     ) -> Result<(), std::io::Error> {
-        let receive_time = PtpTimestamp::now();
+        // Use adjusted_now() so that after epoch calibration T2 is in the
+        // master's time domain, causing subsequent offset measurements to
+        // converge near zero rather than retaining the raw epoch difference.
+        let receive_time = self.adjusted_now();
 
         if self.config.use_airplay_format {
             if let Ok(pkt) = AirPlayTimingPacket::decode(data) {
@@ -640,13 +678,34 @@ impl PtpNode {
                 PtpMessageBody::DelayResp {
                     receive_timestamp, ..
                 } => {
-                    tracing::info!(
-                        "PTP node: DelayResp (general port) seq={} T4={} from {}",
+                    // Apple HomePod Delay_Resp non-standard encoding:
+                    //   receiveTimestamp = T1 (last Sync send time, NOT the actual T4)
+                    //   correctionField  = (T4_actual − T1) in 2^-16 ns units
+                    //
+                    // So T4_actual = receiveTimestamp + correctionField >> 16 ns.
+                    //
+                    // This differs from IEEE 1588-2008 §11.4.3 where receiveTimestamp
+                    // IS T4 and correctionField carries transparent-clock residence.
+                    // The correctionField is a signed 64-bit value in 2^-16 ns units;
+                    // right-shifting by 16 gives the integer nanosecond component
+                    // (sub-ns fractional part discarded, acceptable for audio sync).
+                    let correction_ns = msg.header.correction_field >> 16; // 2^-16 ns → ns
+                    let t4_actual = if correction_ns > 0 {
+                        let base_ns = receive_timestamp.to_nanos();
+                        let corrected_ns = base_ns + i128::from(correction_ns);
+                        PtpTimestamp::from_nanos(corrected_ns.max(0))
+                    } else {
+                        *receive_timestamp
+                    };
+                    tracing::debug!(
+                        "PTP node: DelayResp (general port) seq={}, T4_body={}, correction={}ns, T4_actual={}, from {}",
                         msg.header.sequence_id,
                         receive_timestamp,
-                        src
+                        correction_ns,
+                        t4_actual,
+                        src,
                     );
-                    self.process_delay_resp(*receive_timestamp).await;
+                    self.process_delay_resp(t4_actual).await;
                 }
                 PtpMessageBody::Announce {
                     grandmaster_identity,
@@ -768,8 +827,25 @@ impl PtpNode {
             let t4 = receive_timestamp;
             let mut clock = self.clock.write().await;
             clock.process_timing(t1, t2_saved, t3, t4);
+
+            // On the first successful measurement T2/T3 were captured with the
+            // raw Unix clock so offset_ns ≈ (unix_epoch − master_epoch) ~56 years
+            // for HomePod.  Calibrate the epoch once so that every subsequent
+            // T2/T3 comes from adjusted_now() (master domain) and offset_ns
+            // reflects only residual network jitter (typically < 1 ms).
+            if self.calibrated_epoch_offset.is_none() {
+                let raw_offset = clock.offset_nanos();
+                clock.calibrate_epoch(raw_offset);
+                self.calibrated_epoch_offset = Some(raw_offset);
+                tracing::info!(
+                    "PTP node: Master clock epoch calibrated (epoch_offset={:.3}ms). \
+                     Subsequent offsets will reflect residual jitter only.",
+                    raw_offset as f64 / 1_000_000.0
+                );
+            }
+
             tracing::info!(
-                "PTP node: Clock synced! offset={:.3}ms, measurements={}",
+                "PTP node: Clock synced (offset={:.6}ms, measurements={})",
                 clock.offset_millis(),
                 clock.measurement_count()
             );
@@ -1180,7 +1256,9 @@ impl PtpNode {
             return Ok(());
         };
 
-        let t3 = PtpTimestamp::now();
+        // Use adjusted_now() for T3 so it matches the master's time domain
+        // after epoch calibration (same reasoning as for T2 in handle_event_packet).
+        let t3 = self.adjusted_now();
         self.pending_t3 = Some(t3);
         self.delay_req_sent_at = Some(tokio::time::Instant::now());
 

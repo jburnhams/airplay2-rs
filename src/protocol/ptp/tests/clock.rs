@@ -305,10 +305,11 @@ fn test_remote_to_local_with_offset() {
     let remote = PtpTimestamp::new(200, 0);
     let local = clock.remote_to_local(remote);
 
-    // local should be remote - offset ≈ 200 - 5 = 195
+    // offset = slave − master = +5 s (slave reads bigger numbers).
+    // slave = master + offset  →  remote_to_local(master=200) = 200 + 5 = 205.
     assert!(
-        local.seconds.abs_diff(195) <= 1,
-        "Expected ~195s, got {}",
+        local.seconds.abs_diff(205) <= 1,
+        "Expected ~205s, got {}",
         local.seconds
     );
 }
@@ -327,10 +328,11 @@ fn test_local_to_remote_with_offset() {
     let local = PtpTimestamp::new(195, 0);
     let remote = clock.local_to_remote(local);
 
-    // remote should be local + offset ≈ 195 + 5 = 200
+    // offset = slave − master = +5 s (slave reads bigger numbers).
+    // master = slave − offset  →  local_to_remote(slave=195) = 195 − 5 = 190.
     assert!(
-        remote.seconds.abs_diff(200) <= 1,
-        "Expected ~200s, got {}",
+        remote.seconds.abs_diff(190) <= 1,
+        "Expected ~190s, got {}",
         remote.seconds
     );
 }
@@ -855,5 +857,112 @@ fn test_negative_offset_conversion() {
     assert_eq!(
         result.seconds, 300,
         "local_to_remote should SUBTRACT 10s when offset is -10s"
+    );
+}
+
+// ── Epoch calibration and master_now() ──────────────────────────────────────
+
+/// `calibrate_epoch` should only accept the first call; subsequent calls must
+/// be silently ignored so that the stable reference point is never overwritten.
+#[test]
+fn test_calibrate_epoch_idempotent() {
+    let mut clock = PtpClock::new(0, PtpRole::Slave);
+
+    assert!(!clock.is_epoch_calibrated());
+    assert!(clock.master_now().is_none());
+
+    clock.calibrate_epoch(1_000_000_000); // 1 s epoch offset
+    assert!(clock.is_epoch_calibrated());
+    assert_eq!(clock.epoch_offset_ns(), Some(1_000_000_000));
+
+    // Second call must be ignored.
+    clock.calibrate_epoch(9_999_999_999);
+    assert_eq!(
+        clock.epoch_offset_ns(),
+        Some(1_000_000_000),
+        "second calibrate_epoch call must not overwrite the first"
+    );
+}
+
+/// After calibration, `master_now()` should return a timestamp very close to
+/// `unix_now − epoch_offset`.  We allow a 500 ms window for CI jitter.
+#[test]
+fn test_master_now_after_calibration() {
+    let mut clock = PtpClock::new(0, PtpRole::Slave);
+
+    // Compute a plausible epoch_offset: unix_now − 1_000_000_000 ns (1 s offset)
+    let unix_now_ns = PtpTimestamp::now().to_nanos();
+    let epoch_offset: i128 = 1_000_000_000; // 1 second
+    clock.calibrate_epoch(epoch_offset);
+
+    let master = clock.master_now().expect("master_now must return Some after calibration");
+    let expected_ns = unix_now_ns - epoch_offset;
+
+    let diff = (master.to_nanos() - expected_ns).abs();
+    assert!(
+        diff < 500_000_000, // within 500 ms
+        "master_now() deviated by {}ms from expected",
+        diff / 1_000_000
+    );
+}
+
+/// After epoch calibration, the simulated second measurement (T2/T3 in the
+/// master's domain) should give an `offset_ns` near zero — only path-delay
+/// residual remains, not the raw epoch difference.
+#[test]
+fn test_offset_converges_after_epoch_calibration() {
+    // Simulate HomePod scenario:
+    //   epoch_offset = 1 000 000 000 000 ns (1 000 s, i.e., Unix >> HomePod epoch)
+    //   actual one-way path delay = 2 ms = 2_000_000 ns
+    //   processing time at slave = 100 µs = 100_000 ns
+    //
+    // T1 and T4 are in the HomePod's clock domain (no epoch offset).
+    // T2 and T3 are in the Unix clock domain (shifted by EPOCH_OFFSET).
+    //
+    // RTT = (T4−T1) − (T3−T2) = 2*PATH_DELAY ≈ 4 ms — both differences are
+    // within the same epoch, so EPOCH_OFFSET cancels.
+    const EPOCH_OFFSET: i128 = 1_000_000_000_000; // 1000 s
+    const PATH_DELAY_NS: i128 = 2_000_000; // 2 ms one-way
+    const PROC_NS: i128 = 100_000; // 100 µs slave processing
+
+    // First measurement: T2/T3 in Unix domain (pre-calibration).
+    let t1 = PtpTimestamp::from_nanos(500_000_000_000); // 500 s in HomePod epoch
+    let t2 = PtpTimestamp::from_nanos(t1.to_nanos() + EPOCH_OFFSET + PATH_DELAY_NS);
+    let t3 = PtpTimestamp::from_nanos(t2.to_nanos() + PROC_NS);
+    // T4 is in HomePod domain — do NOT add EPOCH_OFFSET.
+    // RTT = (T4-T1)-(T3-T2) = (2*d+p) - p = 2*d = 4 ms < DEFAULT_MAX_RTT.
+    let t4 = PtpTimestamp::from_nanos(t1.to_nanos() + 2 * PATH_DELAY_NS + PROC_NS);
+
+    let mut clock = PtpClock::new(0, PtpRole::Slave);
+    // Keep only 1 measurement so the median equals the most recent sample.
+    clock.set_max_measurements(1);
+    assert!(clock.process_timing(t1, t2, t3, t4), "first measurement must be accepted");
+
+    // First offset ≈ EPOCH_OFFSET (large raw epoch difference).
+    let raw_offset = clock.offset_nanos();
+    assert!(
+        (raw_offset - EPOCH_OFFSET).abs() < 10_000_000, // within 10 ms
+        "first offset should ≈ epoch_offset, got {raw_offset}"
+    );
+
+    // Calibrate the epoch once.
+    clock.calibrate_epoch(raw_offset);
+
+    // Second measurement: T2/T3 are now in the master's domain (adjusted_now()
+    // subtracts epoch_offset from unix time), so T1≈T2≈T3≈T4 are all in the
+    // HomePod epoch.  Offset should collapse to near-zero (only path delay residual).
+    let t1b = PtpTimestamp::from_nanos(500_001_000_000); // 1 s later in HomePod epoch
+    let t2b = PtpTimestamp::from_nanos(t1b.to_nanos() + PATH_DELAY_NS);
+    let t3b = PtpTimestamp::from_nanos(t2b.to_nanos() + PROC_NS);
+    let t4b = PtpTimestamp::from_nanos(t1b.to_nanos() + 2 * PATH_DELAY_NS + PROC_NS);
+
+    assert!(clock.process_timing(t1b, t2b, t3b, t4b), "second measurement must be accepted");
+
+    // With max_measurements=1 the deque holds only the latest sample, so the
+    // median is exactly this measurement's offset (should be 0).
+    let residual = clock.offset_nanos();
+    assert!(
+        residual.abs() < 1_000_000, // within 1 ms
+        "after calibration offset should be near zero, got {residual} ns"
     );
 }
