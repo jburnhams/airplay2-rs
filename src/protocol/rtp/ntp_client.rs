@@ -36,6 +36,22 @@ impl NtpClient {
             .await
             .map_err(AirPlayError::NetworkError)?;
 
+        // Resolve server_addr to a single IP before sending
+        // This ensures the response peer_addr matches exactly where we sent the packet
+        let mut addrs = tokio::net::lookup_host(&self.server_addr).await.map_err(|_| {
+            AirPlayError::NetworkError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Failed to resolve NTP server address",
+            ))
+        })?;
+
+        let target_addr = addrs.next().ok_or_else(|| {
+            AirPlayError::NetworkError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "No addresses found for NTP server",
+            ))
+        })?;
+
         // Format packet: standard NTP v4 client request
         let mut req = [0u8; NTP_PACKET_SIZE];
         req[0] = 0x23; // LI=0, VN=4, Mode=3 (Client)
@@ -44,7 +60,7 @@ impl NtpClient {
         let t1_bytes = t1.encode();
         req[40..48].copy_from_slice(&t1_bytes);
 
-        tokio::time::timeout(self.timeout, socket.send_to(&req, &self.server_addr))
+        tokio::time::timeout(self.timeout, socket.send_to(&req, target_addr))
             .await
             .map_err(|_| AirPlayError::Timeout)?
             .map_err(AirPlayError::NetworkError)?;
@@ -54,17 +70,6 @@ impl NtpClient {
         let end_time = std::time::Instant::now() + self.timeout;
         let mut valid_response = false;
 
-        // Resolve server_addr to an IP for matching against peer_addr
-        let target_addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host(&self.server_addr)
-            .await
-            .map_err(|_| {
-                AirPlayError::NetworkError(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Failed to resolve NTP server address",
-                ))
-            })?
-            .collect();
-
         // Loop until a valid response is received or timeout occurs
         while std::time::Instant::now() < end_time {
             let remaining = end_time - std::time::Instant::now();
@@ -73,7 +78,7 @@ impl NtpClient {
             match result {
                 Ok(Ok((bytes_read, peer_addr))) => {
                     // Verify IP matches
-                    if !target_addrs.contains(&peer_addr) {
+                    if peer_addr != target_addr {
                         continue;
                     }
 

@@ -6,8 +6,12 @@ use tokio;
 #[tokio::test]
 async fn test_ntp_client_against_public_server() {
     // Use pool.ntp.org as it might be more reliable in some environments than time.google.com,
-    // and increase the timeout to 15s to prevent flaky CI failures.
-    let servers = ["pool.ntp.org:123", "time.google.com:123", "time.apple.com:123"];
+    // and increase the timeout to 10s to prevent flaky CI failures.
+    let servers = [
+        "pool.ntp.org:123",
+        "time.google.com:123",
+        "time.apple.com:123",
+    ];
 
     let mut last_error = None;
     for server in servers {
