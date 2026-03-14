@@ -84,12 +84,9 @@ async fn test_pcm_streaming_end_to_end() -> Result<(), Box<dyn std::error::Error
     let output = receiver.stop().await?;
 
     // Verify results
-    if let Err(e) = output.verify_audio_received() {
-        tracing::warn!("Ignoring missing audio error (flaky on CI): {}", e);
-    } else {
-        output.verify_rtp_received()?;
-        output.verify_sine_wave_quality(440.0, false)?;
-    }
+    output.verify_audio_received()?;
+    output.verify_rtp_received()?;
+    output.verify_sine_wave_quality(440.0, false)?;
 
     tracing::info!("✅ PCM integration test passed");
     Ok(())
@@ -131,12 +128,9 @@ async fn test_alac_streaming_end_to_end() -> Result<(), Box<dyn std::error::Erro
     let output = receiver.stop().await?;
 
     // Verify results
-    if let Err(e) = output.verify_audio_received() {
-        tracing::warn!("Ignoring missing audio error (flaky on CI): {}", e);
-    } else {
-        output.verify_rtp_received()?;
-        output.verify_sine_wave_quality(440.0, true)?;
-    }
+    output.verify_audio_received()?;
+    output.verify_rtp_received()?;
+    output.verify_sine_wave_quality(440.0, true)?;
 
     tracing::info!("✅ ALAC integration test passed");
     Ok(())
