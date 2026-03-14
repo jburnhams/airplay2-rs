@@ -62,20 +62,20 @@ The following documents have been verified against source code and marked with *
 The following documents describe planned features that are not yet implemented:
 
 ### Section 19: Multi-room Grouping
-- **Status**: NOT IMPLEMENTED
-- **Missing**: `src/multiroom/` module
+- **Status**: VERIFIED
+- **Location**: `src/group/` module
 - **Description**: Multi-room audio grouping with synchronized playback
 - **Dependencies**: Requires clock synchronization infrastructure
 
 ### Section 21: AirPlayClient Implementation
-- **Status**: NOT IMPLEMENTED
-- **Missing**: `src/client.rs`
+- **Status**: VERIFIED
+- **Location**: `src/client/mod.rs`
 - **Description**: Unified high-level client combining all components
 - **Note**: Individual components (discovery, connection, streaming, control) ARE implemented
 
 ### Section 22: High-Level API (AirPlayPlayer)
-- **Status**: NOT IMPLEMENTED
-- **Missing**: `src/player.rs`
+- **Status**: VERIFIED
+- **Location**: `src/player/mod.rs`
 - **Description**: Simplified player API for common use cases
 - **Dependencies**: Depends on AirPlayClient (Section 21)
 

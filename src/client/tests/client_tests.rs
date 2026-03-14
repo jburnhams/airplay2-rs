@@ -177,3 +177,87 @@ async fn test_play_url_fails_without_connection() {
         Err(crate::error::AirPlayError::Disconnected { .. })
     ));
 }
+
+#[tokio::test]
+async fn test_volume_controls_fail_without_connection() {
+    let client = AirPlayClient::default_client();
+
+    let res = client.volume_up().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.volume_down().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.mute().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.unmute().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.toggle_mute().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_playback_controls_fail_without_connection() {
+    let client = AirPlayClient::default_client();
+
+    let res = client.play().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.pause().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.stop().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.next().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.previous().await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+
+    let res = client.seek(std::time::Duration::from_secs(10)).await;
+    assert!(matches!(
+        res,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_forget_device() {
+    let client = AirPlayClient::default_client();
+    // Since we don't have persistent storage setup by default, this should just succeed silently
+    let res = client.forget_device("some_device_id").await;
+    assert!(res.is_ok());
+}
