@@ -2308,7 +2308,10 @@ impl ConnectionManager {
     /// # Errors
     ///
     /// Returns error if the sockets are not connected.
-    #[allow(clippy::too_many_lines, reason = "TimeAnnounce generation is inherently long")]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "TimeAnnounce generation is inherently long"
+    )]
     pub async fn send_time_announce(
         &self,
         rtp_timestamp: u32,

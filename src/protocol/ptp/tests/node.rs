@@ -1710,8 +1710,12 @@ async fn test_delay_resp_correction_field_t4_extraction() {
             let master = clk.master_now().unwrap();
             // Master time should be around 1000 s since HomePod epoch.
             // Allow ±10 s for test timing jitter.
-            #[allow(clippy::cast_precision_loss, reason = "Precision loss is acceptable here")]
-            let master_ns = (master.to_nanos() / 1_000_000_000) as f64 + ((master.to_nanos() % 1_000_000_000) as f64 / 1e9);
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "Precision loss is acceptable here"
+            )]
+            let master_ns = (master.to_nanos() / 1_000_000_000) as f64
+                + ((master.to_nanos() % 1_000_000_000) as f64 / 1e9);
             assert!(
                 master.to_nanos() > 990_000_000_000 && master.to_nanos() < 1_010_000_000_000,
                 "master_now() = {master_ns:.3}s, expected ~1000s"

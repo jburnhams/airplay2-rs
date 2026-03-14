@@ -228,7 +228,8 @@ impl PtpNode {
         }
     }
 
-    /// Set the `AirPlay` 2 timing socket used for `Delay_Req` (sending) and `Delay_Resp` (receiving).
+    /// Set the `AirPlay` 2 timing socket used for `Delay_Req` (sending) and `Delay_Resp`
+    /// (receiving).
     ///
     /// Real `AirPlay` 2 clients (Apple Music, etc.) do NOT send `Delay_Req` from the standard
     /// PTP event port (319).  Instead they use an ephemeral port that was registered with the
@@ -1091,10 +1092,11 @@ impl PtpNode {
     /// Build a Signaling message containing an Apple `ORGANIZATION_EXTENSION` TLV (sub-type 1).
     ///
     /// `AirPlay` 2 uses a bidirectional peer-announcement protocol over PTP Signaling.  After the
-    /// `HomePod` sends its own Signaling (OUI 0x000D93, sub-type 1) identifying its clock and timing
-    /// port, it expects the client to respond with a mirror Signaling identifying the client's
-    /// clock and ephemeral timing port.  Without this exchange the `HomePod` does not send
-    /// `Delay_Resp` — the peer discovery step is what authorises the `Delay_Req`/`Delay_Resp` flow.
+    /// `HomePod` sends its own Signaling (OUI 0x000D93, sub-type 1) identifying its clock and
+    /// timing port, it expects the client to respond with a mirror Signaling identifying the
+    /// client's clock and ephemeral timing port.  Without this exchange the `HomePod` does not
+    /// send `Delay_Resp` — the peer discovery step is what authorises the
+    /// `Delay_Req`/`Delay_Resp` flow.
     ///
     /// IEEE 1588-2008 `ORGANIZATION_EXTENSION` TLV body layout (22 bytes total):
     /// ```text
