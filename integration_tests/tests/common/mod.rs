@@ -1,6 +1,9 @@
 pub mod diagnostics;
 pub mod ports;
 pub mod python_receiver;
+pub mod shairport_sync;
+#[cfg(test)]
+pub mod shairport_sync_tests;
 pub mod subprocess;
 
 use std::sync::Once;

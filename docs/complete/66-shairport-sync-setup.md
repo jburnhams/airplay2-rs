@@ -329,13 +329,13 @@ Steps:
 
 ## Acceptance Criteria
 
-- [ ] shairport-sync builds from source on Ubuntu with a single script
-- [ ] Build is cached and reused across test runs
-- [ ] Config generation produces valid shairport-sync configs for AP1 and AP2
-- [ ] `ShairportSync::start()` spawns the process and detects readiness
-- [ ] Audio captured via pipe backend matches expected format
-- [ ] `device_config()` produces an `AirPlayDevice` our client can connect to
-- [ ] Cleanup happens on both success and failure paths
+- [x] shairport-sync builds from source on Ubuntu with a single script
+- [x] Build is cached and reused across test runs
+- [x] Config generation produces valid shairport-sync configs for AP1 and AP2
+- [x] `ShairportSync::start()` spawns the process and detects readiness
+- [x] Audio captured via pipe backend matches expected format
+- [x] `device_config()` produces an `AirPlayDevice` our client can connect to
+- [x] Cleanup happens on both success and failure paths
 
 ---
 
