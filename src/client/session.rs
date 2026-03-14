@@ -511,14 +511,45 @@ impl AirPlaySession for AirPlay2SessionImpl {
         Ok(())
     }
 
-    async fn set_metadata(&mut self, _track: &TrackInfo) -> Result<(), AirPlayError> {
-        // TODO: Implement metadata setting in AirPlayClient
-        Ok(())
+    async fn set_metadata(&mut self, track: &TrackInfo) -> Result<(), AirPlayError> {
+        let meta = crate::protocol::daap::TrackMetadata {
+            title: Some(track.title.clone()),
+            artist: Some(track.artist.clone()),
+            album: track.album.clone(),
+            genre: track.genre.clone(),
+            track_number: track.track_number,
+            disc_number: track.disc_number,
+            duration_ms: track.duration_secs.map(|s| {
+                let ms = s * 1000.0;
+                if ms >= f64::from(u32::MAX) {
+                    u32::MAX
+                } else if ms < 0.0 {
+                    0
+                } else {
+                    #[allow(
+                        clippy::cast_possible_truncation,
+                        clippy::cast_sign_loss,
+                        reason = "Duration in seconds * 1000 fits in u32 (max ~49 days) and is \
+                                  checked for bounds"
+                    )]
+                    let ms_u32 = ms as u32;
+                    ms_u32
+                }
+            }),
+            year: None,
+        };
+        self.client.set_metadata(meta).await
     }
 
-    async fn set_artwork(&mut self, _data: &[u8]) -> Result<(), AirPlayError> {
-        // TODO: Implement artwork setting in AirPlayClient
-        Ok(())
+    async fn set_artwork(&mut self, data: &[u8]) -> Result<(), AirPlayError> {
+        let mime_type = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+            "image/png"
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            "image/jpeg"
+        } else {
+            "image/jpeg" // Fallback
+        };
+        self.client.set_artwork(data, mime_type).await
     }
 
     async fn playback_state(&self) -> PlaybackState {
