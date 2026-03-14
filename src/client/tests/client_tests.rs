@@ -1,5 +1,5 @@
-use crate::client::session::AirPlaySession;
 use crate::client::AirPlayClient;
+use crate::client::session::AirPlaySession;
 use crate::state::ClientEvent;
 use crate::types::{AirPlayConfig, TimingProtocol, TrackInfo};
 
@@ -208,9 +208,9 @@ async fn test_airplay2_session_metadata_and_artwork() {
         ..Default::default()
     };
 
-
     let res = session.set_metadata(&track).await;
-    // Network is not connected, but set_metadata returns Ok since it uses playback controller which enqueues it
+    // Network is not connected, but set_metadata returns Ok since it uses playback controller which
+    // enqueues it
     assert!(res.is_ok() || res.is_err());
 
     let png_data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00];
