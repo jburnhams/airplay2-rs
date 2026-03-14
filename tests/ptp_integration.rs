@@ -769,13 +769,15 @@ async fn test_immediate_delay_req_on_follow_up() {
     // loopback.  400 ms is a generous bound that comfortably fits inside the
     // HomePod's real burst window (~375 ms).
     let mut buf = [0u8; 256];
-    // Need to drain possible Announces first from the event socket (though Announce usually goes to general)
+    // Need to drain possible Announces first from the event socket (though Announce usually goes to
+    // general)
     let mut msg_type = None;
     for _ in 0..5 {
         let result = tokio::time::timeout(
             Duration::from_millis(400),
             homepod_event_sock.recv_from(&mut buf),
-        ).await;
+        )
+        .await;
 
         if let Ok(Ok((len, _))) = result {
             if let Ok(msg) = PtpMessage::decode(&buf[..len]) {
