@@ -25,7 +25,7 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
     let mut discovered = false;
     let mut heartbeats_received = 0;
 
-    let timeout_duration = Duration::from_secs(15); // Shorter timeout for faster tests
+    let timeout_duration = Duration::from_secs(5); // Shorter timeout for faster tests
     let start_time = std::time::Instant::now();
 
     while start_time.elapsed() < timeout_duration {
@@ -51,10 +51,6 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
                             }
                         }
                     }
-                    if initial_last_seen.is_none() {
-                        initial_last_seen = device.last_seen;
-                        discovered = true;
-                    }
                 }
             }
             Ok(Some(_)) => {} // Ignore other events
@@ -74,14 +70,12 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
 
     assert!(discovered, "Device was not discovered");
 
-    // Temporarily ignore heartbeat assertions in this test environment
-    // due to Python zeroconf re-announcement flakiness on loopback
-    if heartbeats_received == 0 {
-        tracing::warn!(
-            "Did not receive any heartbeat/update for the device, but skipping strict assertion \
-             for flakiness"
-        );
-    }
+    // As seen in check_mdns, mdns-sd usually emits multiple ServiceResolved events
+    // shortly after startup due to multiple PTR/TXT records resolving.
+    assert!(
+        heartbeats_received >= 1,
+        "Did not receive any heartbeat/update for the device"
+    );
 
     tracing::info!("✓ Heartbeat test passed");
 
