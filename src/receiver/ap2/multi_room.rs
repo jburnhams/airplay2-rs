@@ -151,13 +151,9 @@ impl MultiRoomCoordinator {
         }
 
         // Get current position in PTP time (Master time)
-        // Since we are Slave (Follower), we convert our local time to Remote (Master) time.
-        // PtpClock implementation defines "Local" as Master and "Remote" as Slave for offset
-        // calculation: offset = Slave - Master.
-        // remote_to_local(ts) = ts - offset = ts - (Slave - Master).
-        // If we pass Slave time as input: Slave - (Slave - Master) = Master.
-        // So we use remote_to_local to convert Slave -> Master.
-        let master_time = self.clock.remote_to_local(now);
+        // Since we are Slave (Follower), we convert our local (slave) time to remote (master) time.
+        // Convention: offset = slave - master, so master = slave - offset = local_to_remote(slave).
+        let master_time = self.clock.local_to_remote(now);
         let current_ptp = master_time.to_airplay_compact();
 
         // Calculate drift from target

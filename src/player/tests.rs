@@ -191,3 +191,58 @@ async fn test_target_device_name() {
     let target = player.target_device_name.read().await.clone();
     assert_eq!(target, Some("HomePod".to_string()));
 }
+
+#[tokio::test]
+async fn test_player_builder_device_name() {
+    let player = PlayerBuilder::new().device_name("Bedroom Speaker").build();
+    let target = player.target_device_name.read().await.clone();
+    assert_eq!(target, Some("Bedroom Speaker".to_string()));
+    assert!(player.auto_reconnect.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn test_device_initially_none() {
+    let player = AirPlayPlayer::new();
+    assert!(player.device().await.is_none());
+}
+
+#[tokio::test]
+async fn test_initial_queue_length() {
+    let player = AirPlayPlayer::new();
+    assert_eq!(player.queue_length().await, 0);
+}
+
+#[tokio::test]
+async fn test_initial_is_connected() {
+    let player = AirPlayPlayer::new();
+    assert!(!player.is_connected().await);
+}
+
+#[tokio::test]
+async fn test_initial_playback_state() {
+    let player = AirPlayPlayer::new();
+    let state = player.playback_state().await;
+    assert!(!state.is_playing);
+    assert!(state.position_secs.abs() < f64::EPSILON);
+}
+
+#[tokio::test]
+async fn test_toggle_fails_disconnected() {
+    let player = AirPlayPlayer::new();
+    let res = player.toggle().await;
+    assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
+}
+
+#[tokio::test]
+async fn test_skip_fails_disconnected() {
+    let player = AirPlayPlayer::new();
+    let res = player.skip().await;
+    assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
+}
+
+#[tokio::test]
+async fn test_back_fails_disconnected() {
+    let player = AirPlayPlayer::new();
+    let res = player.back().await;
+    assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
+}
