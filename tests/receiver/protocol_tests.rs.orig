@@ -92,7 +92,7 @@ async fn test_volume_control() {
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => panic!("Event channel closed unexpectedly"),
+                Err(_) => panic!("Timeout"),
             }
         }
     })
