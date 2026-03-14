@@ -1147,11 +1147,11 @@ async fn test_master_sends_sync_follow_up_pair() {
 
 /// Verify that `build_apple_signaling` produces a correctly-formatted Signaling message:
 ///   - 70 bytes total (34-byte header + 10-byte targetPortIdentity + 26-byte TLV)
-///   - Byte 0 = 0x1C (Apple transport_specific=1, messageType=0xC Signaling)
+///   - Byte 0 = 0x1C (Apple `transport_specific=1`, messageType=0xC Signaling)
 ///   - Message length field matches actual length
 ///   - Source clock identity == our clock ID
 ///   - Target clock identity == the provided target
-///   - TLV type = 0x0003 (ORGANIZATION_EXTENSION)
+///   - TLV type = 0x0003 (`ORGANIZATION_EXTENSION`)
 ///   - TLV OUI = 0x000D93 (Apple)
 ///   - TLV sub-type = 0x01
 ///   - TLV clock identity == our clock ID
@@ -1159,7 +1159,10 @@ async fn test_master_sends_sync_follow_up_pair() {
 #[tokio::test]
 async fn test_build_apple_signaling_format() {
     let event_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
-    let clock = create_shared_clock(0xABCD_EF01_2345_6789, crate::protocol::ptp::clock::PtpRole::Master);
+    let clock = create_shared_clock(
+        0xABCD_EF01_2345_6789,
+        crate::protocol::ptp::clock::PtpRole::Master,
+    );
     let config = PtpNodeConfig {
         clock_id: 0xABCD_EF01_2345_6789,
         ..Default::default()
@@ -1176,7 +1179,10 @@ async fn test_build_apple_signaling_format() {
     assert_eq!(bytes.len(), 70, "Signaling message must be 70 bytes");
 
     // Byte 0: 0x1C = Apple transport_specific(1) | Signaling messageType(0xC)
-    assert_eq!(bytes[0], 0x1C, "transport_specific | messageType byte mismatch");
+    assert_eq!(
+        bytes[0], 0x1C,
+        "transport_specific | messageType byte mismatch"
+    );
     // Byte 1: PTP version 2
     assert_eq!(bytes[1], 0x02, "PTP version must be 2");
 
@@ -1186,10 +1192,12 @@ async fn test_build_apple_signaling_format() {
 
     // Bytes 20-27: source clock identity = our clock ID
     let src_clock = u64::from_be_bytes([
-        bytes[20], bytes[21], bytes[22], bytes[23],
-        bytes[24], bytes[25], bytes[26], bytes[27],
+        bytes[20], bytes[21], bytes[22], bytes[23], bytes[24], bytes[25], bytes[26], bytes[27],
     ]);
-    assert_eq!(src_clock, 0xABCD_EF01_2345_6789, "source clock identity mismatch");
+    assert_eq!(
+        src_clock, 0xABCD_EF01_2345_6789,
+        "source clock identity mismatch"
+    );
 
     // Bytes 30-31: sequence ID
     let seq_id = u16::from_be_bytes([bytes[30], bytes[31]]);
@@ -1200,14 +1208,19 @@ async fn test_build_apple_signaling_format() {
 
     // Bytes 34-41: target clock identity
     let tgt_clock = u64::from_be_bytes([
-        bytes[34], bytes[35], bytes[36], bytes[37],
-        bytes[38], bytes[39], bytes[40], bytes[41],
+        bytes[34], bytes[35], bytes[36], bytes[37], bytes[38], bytes[39], bytes[40], bytes[41],
     ]);
-    assert_eq!(tgt_clock, 0x1122_3344_5566_7788, "target clock identity mismatch");
+    assert_eq!(
+        tgt_clock, 0x1122_3344_5566_7788,
+        "target clock identity mismatch"
+    );
 
     // TLV starts at byte 44
     let tlv_type = u16::from_be_bytes([bytes[44], bytes[45]]);
-    assert_eq!(tlv_type, 0x0003, "TLV type must be 0x0003 (ORGANIZATION_EXTENSION)");
+    assert_eq!(
+        tlv_type, 0x0003,
+        "TLV type must be 0x0003 (ORGANIZATION_EXTENSION)"
+    );
 
     let tlv_len = u16::from_be_bytes([bytes[46], bytes[47]]);
     assert_eq!(tlv_len, 22, "TLV length must be 22");
@@ -1229,10 +1242,12 @@ async fn test_build_apple_signaling_format() {
 
     // Clock identity at bytes [54..61] = our clock ID
     let tlv_clock = u64::from_be_bytes([
-        bytes[54], bytes[55], bytes[56], bytes[57],
-        bytes[58], bytes[59], bytes[60], bytes[61],
+        bytes[54], bytes[55], bytes[56], bytes[57], bytes[58], bytes[59], bytes[60], bytes[61],
     ]);
-    assert_eq!(tlv_clock, 0xABCD_EF01_2345_6789, "TLV clock identity must be our clock ID");
+    assert_eq!(
+        tlv_clock, 0xABCD_EF01_2345_6789,
+        "TLV clock identity must be our clock ID"
+    );
 
     // Timing port at bytes [66..67]
     let tlv_port = u16::from_be_bytes([bytes[66], bytes[67]]);
@@ -1240,10 +1255,10 @@ async fn test_build_apple_signaling_format() {
 }
 
 /// Verify that the PTP node sends an Apple Signaling response when it receives a Signaling
-/// containing Apple ORGANIZATION_EXTENSION TLVs (OUI 0x000D93).
+/// containing Apple `ORGANIZATION_EXTENSION` TLVs (OUI 0x000D93).
 ///
 /// This is the bidirectional peer-announcement exchange that authorises
-/// `Delay_Req`/`Delay_Resp` flow in AirPlay 2 PTP.
+/// `Delay_Req`/`Delay_Resp` flow in `AirPlay` 2 PTP.
 #[tokio::test]
 async fn test_apple_signaling_response_sent_on_apple_tlv() {
     // "HomePod" general socket — sends the incoming Apple Signaling and listens for response.
@@ -1280,21 +1295,26 @@ async fn test_apple_signaling_response_sent_on_apple_tlv() {
     // (34-byte header + 10-byte targetPortIdentity + 26-byte Apple TLV = 70 bytes)
     let total_len: u16 = 70;
     let mut sig = vec![0u8; 70];
-    sig[0] = 0x1C;                                         // Apple transport | Signaling
-    sig[1] = 0x02;                                         // PTP version 2
+    sig[0] = 0x1C; // Apple transport | Signaling
+    sig[1] = 0x02; // PTP version 2
     sig[2..4].copy_from_slice(&total_len.to_be_bytes());
     // Source clock identity (HomePod's fake clock ID)
     sig[20..28].copy_from_slice(&0x5000_AABB_CCDD_EEFFu64.to_be_bytes());
-    sig[28..30].copy_from_slice(&1u16.to_be_bytes());      // port 1
+    sig[28..30].copy_from_slice(&1u16.to_be_bytes()); // port 1
     // targetPortIdentity bytes 34-43: leave as zero (broadcast-ish)
     // Apple ORGANIZATION_EXTENSION TLV at offset 44
     sig[44..46].copy_from_slice(&0x0003u16.to_be_bytes()); // type ORGANIZATION_EXTENSION
-    sig[46..48].copy_from_slice(&22u16.to_be_bytes());     // TLV body length 22
-    sig[48] = 0x00; sig[49] = 0x0D; sig[50] = 0x93;       // Apple OUI
-    sig[51] = 0x01;                                        // sub-type 1
+    sig[46..48].copy_from_slice(&22u16.to_be_bytes()); // TLV body length 22
+    sig[48] = 0x00;
+    sig[49] = 0x0D;
+    sig[50] = 0x93; // Apple OUI
+    sig[51] = 0x01; // sub-type 1
 
     // Send the fake HomePod Signaling to our general socket
-    homepod_general.send_to(&sig, our_general_addr).await.unwrap();
+    homepod_general
+        .send_to(&sig, our_general_addr)
+        .await
+        .unwrap();
 
     // The node must send a Signaling response back to homepod_general_addr within 1 second.
     let mut buf = vec![0u8; 256];
@@ -1306,9 +1326,15 @@ async fn test_apple_signaling_response_sent_on_apple_tlv() {
     let (len, _src) = recv_result;
 
     assert!(len >= 70, "Response should be at least 70 bytes, got {len}");
-    assert_eq!(buf[0], 0x1C, "Response byte 0 must be 0x1C (Apple Signaling)");
+    assert_eq!(
+        buf[0], 0x1C,
+        "Response byte 0 must be 0x1C (Apple Signaling)"
+    );
     let tlv_type = u16::from_be_bytes([buf[44], buf[45]]);
-    assert_eq!(tlv_type, 0x0003, "TLV type must be ORGANIZATION_EXTENSION (0x0003)");
+    assert_eq!(
+        tlv_type, 0x0003,
+        "TLV type must be ORGANIZATION_EXTENSION (0x0003)"
+    );
     assert_eq!(buf[48], 0x00, "OUI byte 0 must be 0x00");
     assert_eq!(buf[49], 0x0D, "OUI byte 1 must be 0x0D");
     assert_eq!(buf[50], 0x93, "OUI byte 2 must be 0x93");
@@ -1318,7 +1344,10 @@ async fn test_apple_signaling_response_sent_on_apple_tlv() {
     assert_eq!(buf[53], 0x01, "TLV sub-type[2] must be 0x01");
     // timing port is at bytes [66..67] (after 3-byte sub-type + 8-byte clock_id + 4-byte IPv4)
     let resp_port = u16::from_be_bytes([buf[66], buf[67]]);
-    assert_eq!(resp_port, timing_port, "TLV timing port must match our timing socket port");
+    assert_eq!(
+        resp_port, timing_port,
+        "TLV timing port must match our timing socket port"
+    );
 
     shutdown_tx.send(true).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
@@ -1511,13 +1540,14 @@ async fn test_announce_timeout_reverts_to_master() {
 
 // ── Apple Delay_Resp correctionField (T4 encoding) ──────────────────────────
 
-/// Verify that the node correctly extracts T4_actual from the HomePod's
-/// non-standard Delay_Resp encoding where:
-///   receiveTimestamp = T1  (reference Sync time, NOT the actual Delay_Req receive time)
-///   correctionField  = (T4_actual − T1) in 2^-16 ns units
+/// Verify that the node correctly extracts `T4_actual` from the `HomePod`'s
+/// non-standard `Delay_Resp` encoding where:
+///   receiveTimestamp = T1  (reference Sync time, NOT the actual `Delay_Req` receive time)
+///   correctionField  = (`T4_actual` − T1) in 2^-16 ns units
 ///
 /// After two exchanges the clock should converge to near-zero offset (only
 /// residual path delay jitter), not the raw epoch difference.
+#[allow(clippy::too_many_lines, reason = "Test is naturally long")]
 #[tokio::test]
 async fn test_delay_resp_correction_field_t4_extraction() {
     // ── Setup ────────────────────────────────────────────────────────────────
@@ -1533,9 +1563,9 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     let homepod_event_addr = homepod_event.local_addr().unwrap();
     let _homepod_general_addr = homepod_general.local_addr().unwrap();
 
-    let clock = create_shared_clock(0xDEADBEEFCAFE0001, PtpRole::Slave);
+    let clock = create_shared_clock(0xDEAD_BEEF_CAFE_0001, PtpRole::Slave);
     let config = PtpNodeConfig {
-        clock_id: 0xDEADBEEFCAFE0001,
+        clock_id: 0xDEAD_BEEF_CAFE_0001,
         priority1: 255,
         priority2: 255,
         sync_interval: Duration::from_secs(1),
@@ -1547,7 +1577,12 @@ async fn test_delay_resp_correction_field_t4_extraction() {
         announce_timeout: Duration::from_secs(60),
     };
     let _ = homepod_event_addr; // peer address is learned from incoming packets, not config
-    let mut node = PtpNode::new(event_sock.clone(), Some(general_sock.clone()), clock.clone(), config);
+    let mut node = PtpNode::new(
+        event_sock.clone(),
+        Some(general_sock.clone()),
+        clock.clone(),
+        config,
+    );
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let handle = tokio::spawn(async move { node.run(shutdown_rx).await });
@@ -1555,16 +1590,19 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     // ── Simulate HomePod sending Sync + Follow_Up ────────────────────────────
     // We use a HomePod-style epoch: T1 = 1000 s from HomePod reference.
     // Unix epoch offset would be ~56 years; we pick something computable.
+    #[allow(clippy::no_effect_underscore_binding)]
     let _t1_homepod_ns: i128 = 1_000_000_000_000; // 1000 s in HomePod ns (kept for documentation)
 
     // Build a Sync message (transport_specific=1, messageType=0x00).
     let mut sync = vec![0u8; 44];
     sync[0] = 0x10; // transport_specific=1, type=Sync
     sync[1] = 0x02;
-    sync[2] = 0x00; sync[3] = 44; // length
+    sync[2] = 0x00;
+    sync[3] = 44; // length
     // source port identity (bytes 20-29): HomePod GM
-    sync[20..28].copy_from_slice(&0x50BC96A637CF0008u64.to_be_bytes());
-    sync[28] = 0x81; sync[29] = 0x3D; // portNumber
+    sync[20..28].copy_from_slice(&0x50BC_96A6_37CF_0008_u64.to_be_bytes());
+    sync[28] = 0x81;
+    sync[29] = 0x3D; // portNumber
     sync[6] = 0x02; // flags: TWO_STEP
     homepod_event.send_to(&sync, event_addr).await.unwrap();
 
@@ -1572,23 +1610,28 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     let mut followup = vec![0u8; 44];
     followup[0] = 0x18; // transport_specific=1, type=Follow_Up (0x08)
     followup[1] = 0x02;
-    followup[2] = 0x00; followup[3] = 44;
-    followup[20..28].copy_from_slice(&0x50BC96A637CF0008u64.to_be_bytes());
-    followup[28] = 0x81; followup[29] = 0x3D;
+    followup[2] = 0x00;
+    followup[3] = 44;
+    followup[20..28].copy_from_slice(&0x50BC_96A6_37CF_0008_u64.to_be_bytes());
+    followup[28] = 0x81;
+    followup[29] = 0x3D;
     // preciseOriginTimestamp (body bytes 34-43): 1000 s = 0x3B9ACA00 ... in BE
     let t1_sec: u64 = 1000;
     let t1_ns: u32 = 0;
-    followup[34] = (t1_sec >> 40) as u8;
-    followup[35] = (t1_sec >> 32) as u8;
-    followup[36] = (t1_sec >> 24) as u8;
-    followup[37] = (t1_sec >> 16) as u8;
-    followup[38] = (t1_sec >> 8) as u8;
-    followup[39] = t1_sec as u8;
-    followup[40] = (t1_ns >> 24) as u8;
-    followup[41] = (t1_ns >> 16) as u8;
-    followup[42] = (t1_ns >> 8) as u8;
-    followup[43] = t1_ns as u8;
-    homepod_general.send_to(&followup, general_addr).await.unwrap();
+    followup[34] = u8::try_from((t1_sec >> 40) & 0xFF).unwrap();
+    followup[35] = u8::try_from((t1_sec >> 32) & 0xFF).unwrap();
+    followup[36] = u8::try_from((t1_sec >> 24) & 0xFF).unwrap();
+    followup[37] = u8::try_from((t1_sec >> 16) & 0xFF).unwrap();
+    followup[38] = u8::try_from((t1_sec >> 8) & 0xFF).unwrap();
+    followup[39] = u8::try_from(t1_sec & 0xFF).unwrap();
+    followup[40] = u8::try_from((t1_ns >> 24) & 0xFF).unwrap();
+    followup[41] = u8::try_from((t1_ns >> 16) & 0xFF).unwrap();
+    followup[42] = u8::try_from((t1_ns >> 8) & 0xFF).unwrap();
+    followup[43] = u8::try_from(t1_ns & 0xFF).unwrap();
+    homepod_general
+        .send_to(&followup, general_addr)
+        .await
+        .unwrap();
 
     // Wait a moment for the node to send Delay_Req.
     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -1598,7 +1641,8 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     let recv = tokio::time::timeout(
         Duration::from_millis(500),
         homepod_event.recv_from(&mut buf),
-    ).await;
+    )
+    .await;
 
     // It is acceptable for no Delay_Req to arrive yet (timing-dependent in CI).
     // The important thing we test is the correctionField T4 extraction below.
@@ -1614,30 +1658,37 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     let mut delay_resp = vec![0u8; 54];
     delay_resp[0] = 0x19; // transport_specific=1, type=Delay_Resp (0x09)
     delay_resp[1] = 0x02;
-    delay_resp[2] = 0x00; delay_resp[3] = 54;
+    delay_resp[2] = 0x00;
+    delay_resp[3] = 54;
     // correctionField bytes [8..16]
     delay_resp[8..16].copy_from_slice(&correction_field.to_be_bytes());
     // sourcePortIdentity (HomePod GM)
-    delay_resp[20..28].copy_from_slice(&0x50BC96A637CF0008u64.to_be_bytes());
-    delay_resp[28] = 0x81; delay_resp[29] = 0x3D;
+    delay_resp[20..28].copy_from_slice(&0x50BC_96A6_37CF_0008_u64.to_be_bytes());
+    delay_resp[28] = 0x81;
+    delay_resp[29] = 0x3D;
     // sequenceId = 0
-    delay_resp[30] = 0x00; delay_resp[31] = 0x00;
+    delay_resp[30] = 0x00;
+    delay_resp[31] = 0x00;
     // receiveTimestamp (body bytes 34-43) = T1
-    delay_resp[34] = (t4_body_sec >> 40) as u8;
-    delay_resp[35] = (t4_body_sec >> 32) as u8;
-    delay_resp[36] = (t4_body_sec >> 24) as u8;
-    delay_resp[37] = (t4_body_sec >> 16) as u8;
-    delay_resp[38] = (t4_body_sec >> 8) as u8;
-    delay_resp[39] = t4_body_sec as u8;
-    delay_resp[40] = (t4_body_ns >> 24) as u8;
-    delay_resp[41] = (t4_body_ns >> 16) as u8;
-    delay_resp[42] = (t4_body_ns >> 8) as u8;
-    delay_resp[43] = t4_body_ns as u8;
+    delay_resp[34] = u8::try_from((t4_body_sec >> 40) & 0xFF).unwrap();
+    delay_resp[35] = u8::try_from((t4_body_sec >> 32) & 0xFF).unwrap();
+    delay_resp[36] = u8::try_from((t4_body_sec >> 24) & 0xFF).unwrap();
+    delay_resp[37] = u8::try_from((t4_body_sec >> 16) & 0xFF).unwrap();
+    delay_resp[38] = u8::try_from((t4_body_sec >> 8) & 0xFF).unwrap();
+    delay_resp[39] = u8::try_from(t4_body_sec & 0xFF).unwrap();
+    delay_resp[40] = u8::try_from((t4_body_ns >> 24) & 0xFF).unwrap();
+    delay_resp[41] = u8::try_from((t4_body_ns >> 16) & 0xFF).unwrap();
+    delay_resp[42] = u8::try_from((t4_body_ns >> 8) & 0xFF).unwrap();
+    delay_resp[43] = u8::try_from(t4_body_ns & 0xFF).unwrap();
     // requestingPortIdentity (bytes 44-53): our clock_id
-    delay_resp[44..52].copy_from_slice(&0xDEADBEEFCAFE0001u64.to_be_bytes());
-    delay_resp[52] = 0x00; delay_resp[53] = 0x01;
+    delay_resp[44..52].copy_from_slice(&0xDEAD_BEEF_CAFE_0001_u64.to_be_bytes());
+    delay_resp[52] = 0x00;
+    delay_resp[53] = 0x01;
 
-    homepod_general.send_to(&delay_resp, general_addr).await.unwrap();
+    homepod_general
+        .send_to(&delay_resp, general_addr)
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Check that the clock registered a measurement with a non-zero epoch offset.
@@ -1659,10 +1710,11 @@ async fn test_delay_resp_correction_field_t4_extraction() {
             let master = clk.master_now().unwrap();
             // Master time should be around 1000 s since HomePod epoch.
             // Allow ±10 s for test timing jitter.
+            #[allow(clippy::cast_precision_loss, reason = "Precision loss is acceptable here")]
+            let master_ns = (master.to_nanos() / 1_000_000_000) as f64 + ((master.to_nanos() % 1_000_000_000) as f64 / 1e9);
             assert!(
                 master.to_nanos() > 990_000_000_000 && master.to_nanos() < 1_010_000_000_000,
-                "master_now() = {:.3}s, expected ~1000s",
-                master.to_nanos() as f64 / 1e9
+                "master_now() = {master_ns:.3}s, expected ~1000s"
             );
         }
         // Whether or not calibrated (timing-dependent), measurement_count >= 0 is fine.

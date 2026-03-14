@@ -2,7 +2,6 @@
 //!
 //! Tests end-to-end PTP exchanges using real UDP sockets on loopback.
 
-use airplay2::protocol::ptp::node::{EffectiveRole, PtpNode, PtpNodeConfig};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,6 +12,7 @@ use airplay2::protocol::ptp::handler::{
 use airplay2::protocol::ptp::message::{
     AirPlayTimingPacket, PtpMessage, PtpMessageBody, PtpMessageType, PtpParseError, PtpPortIdentity,
 };
+use airplay2::protocol::ptp::node::{EffectiveRole, PtpNode, PtpNodeConfig};
 use airplay2::protocol::ptp::timestamp::PtpTimestamp;
 use tokio::net::UdpSocket;
 
@@ -501,7 +501,7 @@ fn client_config_ieee(clock_id: u64, priority1: u8) -> PtpNodeConfig {
         announce_interval: Duration::from_millis(50),
         recv_buf_size: 256,
         use_airplay_format: false, // HomePod uses standard IEEE 1588 PTP
-        transport_specific: 0,    // Standard IEEE 1588 (HomePod uses 1 for AirPlay, 0 for tests)
+        transport_specific: 0,     // Standard IEEE 1588 (HomePod uses 1 for AirPlay, 0 for tests)
         announce_timeout: Duration::from_secs(6), // Default for tests
     }
 }
@@ -534,8 +534,7 @@ async fn run_node_with_announce(
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let mut node_task = node;
     let handle = tokio::spawn(async move {
-        let _ =
-            tokio::time::timeout(Duration::from_millis(300), node_task.run(shutdown_rx)).await;
+        let _ = tokio::time::timeout(Duration::from_millis(300), node_task.run(shutdown_rx)).await;
         node_task
     });
 
@@ -616,7 +615,8 @@ async fn test_bmca_old_priority128_stays_master_over_homepod_248() {
     assert_eq!(
         node_after.role(),
         EffectiveRole::Master,
-        "Node with priority1=128 stays Master even when HomePod (p1=248) announces — this was the bug"
+        "Node with priority1=128 stays Master even when HomePod (p1=248) announces — this was the \
+         bug"
     );
 }
 
@@ -689,10 +689,10 @@ fn client_config_ieee_slow_timer(clock_id: u64, priority1: u8) -> PtpNodeConfig 
 /// receiving a Follow_Up, *without* waiting for the periodic delay_req_timer.
 ///
 /// This is the primary regression test for the HomePod burst timing bug:
-/// - OLD behaviour: Delay_Req arrives after `delay_req_interval` (≥ 100 ms in
-///   tests, ≥ 1 s in production) — too late for the HomePod's sync window.
-/// - NEW behaviour: Delay_Req is sent inside `handle_general_packet` as soon as
-///   Follow_Up is processed, typically within a few milliseconds on loopback.
+/// - OLD behaviour: Delay_Req arrives after `delay_req_interval` (≥ 100 ms in tests, ≥ 1 s in
+///   production) — too late for the HomePod's sync window.
+/// - NEW behaviour: Delay_Req is sent inside `handle_general_packet` as soon as Follow_Up is
+///   processed, typically within a few milliseconds on loopback.
 ///
 /// The test uses `delay_req_interval = 10 s` so the periodic timer cannot fire;
 /// the only possible source of Delay_Req is the immediate Follow_Up path.
@@ -780,8 +780,8 @@ async fn test_immediate_delay_req_on_follow_up() {
 
     let (len, _) = result
         .expect(
-            "Delay_Req must arrive within 400 ms — old timer-only code \
-             would miss the HomePod burst window",
+            "Delay_Req must arrive within 400 ms — old timer-only code would miss the HomePod \
+             burst window",
         )
         .unwrap();
     let msg = PtpMessage::decode(&buf[..len]).unwrap();
@@ -798,8 +798,8 @@ async fn test_immediate_delay_req_on_follow_up() {
 /// 1. Sync + Follow_Up → Delay_Req sent → `pending_t3` is now `Some(t3)`.
 /// 2. Delay_Resp is lost (not sent by the master).
 /// 3. New Sync arrives — must reset `pending_t3 = None` (the fix).
-/// 4. Follow_Up for the new Sync → `pending_t3.is_none()` is `true` again
-///    → another Delay_Req is sent.
+/// 4. Follow_Up for the new Sync → `pending_t3.is_none()` is `true` again → another Delay_Req is
+///    sent.
 ///
 /// Without the fix at step 3, `pending_t3` would remain `Some`, the guard in
 /// `handle_general_packet` would prevent any further Delay_Req, and the clock
@@ -853,7 +853,10 @@ async fn test_pending_t3_reset_prevents_stuck_exchange() {
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     homepod_general_sock
-        .send_to(&PtpMessage::follow_up(source, 1, t1a).encode(), client_general_addr)
+        .send_to(
+            &PtpMessage::follow_up(source, 1, t1a).encode(),
+            client_general_addr,
+        )
         .await
         .unwrap();
 
@@ -885,7 +888,10 @@ async fn test_pending_t3_reset_prevents_stuck_exchange() {
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     homepod_general_sock
-        .send_to(&PtpMessage::follow_up(source, 2, t1b).encode(), client_general_addr)
+        .send_to(
+            &PtpMessage::follow_up(source, 2, t1b).encode(),
+            client_general_addr,
+        )
         .await
         .unwrap();
 
@@ -904,8 +910,8 @@ async fn test_pending_t3_reset_prevents_stuck_exchange() {
 
     let (len, _) = second
         .expect(
-            "Node must send a second Delay_Req after the new Sync resets pending_t3 \
-             (without the fix the node would be permanently stuck)",
+            "Node must send a second Delay_Req after the new Sync resets pending_t3 (without the \
+             fix the node would be permanently stuck)",
         )
         .unwrap();
     let msg = PtpMessage::decode(&buf[..len]).unwrap();
@@ -962,7 +968,6 @@ async fn test_two_node_end_to_end_clock_sync() {
     // Follow_Up/Announce (client general socket).
     homepod_node.add_slave(client_event_addr);
     homepod_node.add_general_slave(client_general_addr);
-    //
     // Client uses HomePod's event addr as a lookup hint so that
     // `process_announce` resolves `remote_master.event_addr` to the correct
     // port (the Announce arrives on the general socket; the lookup in
@@ -973,10 +978,8 @@ async fn test_two_node_end_to_end_clock_sync() {
     let (homepod_shutdown_tx, homepod_shutdown_rx) = tokio::sync::watch::channel(false);
     let (client_shutdown_tx, client_shutdown_rx) = tokio::sync::watch::channel(false);
 
-    let homepod_handle =
-        tokio::spawn(async move { homepod_node.run(homepod_shutdown_rx).await });
-    let client_handle =
-        tokio::spawn(async move { client_node.run(client_shutdown_rx).await });
+    let homepod_handle = tokio::spawn(async move { homepod_node.run(homepod_shutdown_rx).await });
+    let client_handle = tokio::spawn(async move { client_node.run(client_shutdown_rx).await });
 
     // Allow time for:
     //  1. Initial Announce → client switches to Slave.
@@ -993,8 +996,7 @@ async fn test_two_node_end_to_end_clock_sync() {
     let clock = client_clock.read().await;
     assert!(
         clock.is_synchronized(),
-        "Client clock should be synchronized after PTP exchange \
-         (measurements={})",
+        "Client clock should be synchronized after PTP exchange (measurements={})",
         clock.measurement_count()
     );
     // On loopback both nodes share the same wall clock, so the measured offset

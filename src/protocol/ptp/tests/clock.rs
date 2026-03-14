@@ -899,7 +899,9 @@ fn test_master_now_after_calibration() {
     let epoch_offset: i128 = 1_000_000_000; // 1 second
     clock.calibrate_epoch(epoch_offset);
 
-    let master = clock.master_now().expect("master_now must return Some after calibration");
+    let master = clock
+        .master_now()
+        .expect("master_now must return Some after calibration");
     let expected_ns = unix_now_ns - epoch_offset;
 
     let diff = (master.to_nanos() - expected_ns).abs();
@@ -940,7 +942,10 @@ fn test_offset_converges_after_epoch_calibration() {
     let mut clock = PtpClock::new(0, PtpRole::Slave);
     // Keep only 1 measurement so the median equals the most recent sample.
     clock.set_max_measurements(1);
-    assert!(clock.process_timing(t1, t2, t3, t4), "first measurement must be accepted");
+    assert!(
+        clock.process_timing(t1, t2, t3, t4),
+        "first measurement must be accepted"
+    );
 
     // First offset ≈ EPOCH_OFFSET (large raw epoch difference).
     let raw_offset = clock.offset_nanos();
@@ -960,7 +965,10 @@ fn test_offset_converges_after_epoch_calibration() {
     let t3b = PtpTimestamp::from_nanos(t2b.to_nanos() + PROC_NS);
     let t4b = PtpTimestamp::from_nanos(t1b.to_nanos() + 2 * PATH_DELAY_NS + PROC_NS);
 
-    assert!(clock.process_timing(t1b, t2b, t3b, t4b), "second measurement must be accepted");
+    assert!(
+        clock.process_timing(t1b, t2b, t3b, t4b),
+        "second measurement must be accepted"
+    );
 
     // With max_measurements=1 the deque holds only the latest sample, so the
     // median is exactly this measurement's offset (should be 0).

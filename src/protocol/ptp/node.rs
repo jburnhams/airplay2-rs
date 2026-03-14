@@ -41,17 +41,17 @@ pub struct PtpNodeConfig {
     pub recv_buf_size: usize,
     /// Use `AirPlay` compact packet format instead of IEEE 1588.
     pub use_airplay_format: bool,
-    /// Transport-specific nibble to set in outgoing event messages (Delay_Req, Sync).
+    /// Transport-specific nibble to set in outgoing event messages (`Delay_Req`, Sync).
     ///
-    /// Apple AirPlay 2 devices use `transport_specific = 1` (byte 0 of PTP messages
+    /// Apple `AirPlay` 2 devices use `transport_specific = 1` (byte 0 of PTP messages
     /// is `0x1n` where `n` is the message type).  Standard IEEE 1588 uses 0.
-    /// HomePod may silently ignore Delay_Req with the wrong transport_specific.
+    /// `HomePod` may silently ignore `Delay_Req` with the wrong `transport_specific`.
     pub transport_specific: u8,
     /// How long to wait without an Announce before reverting to Master role.
     ///
-    /// IEEE 1588 default is 3 × announce_interval (typically 3s). For AirPlay 2,
-    /// the HomePod often only sends a single Announce to establish BMCA and then
-    /// relies on Sync/Delay_Req/Delay_Resp for ongoing synchronization. Setting
+    /// IEEE 1588 default is 3 × `announce_interval` (typically 3s). For `AirPlay` 2,
+    /// the `HomePod` often only sends a single Announce to establish BMCA and then
+    /// relies on `Sync/Delay_Req/Delay_Resp` for ongoing synchronization. Setting
     /// this to a large value (e.g. 60s) prevents premature reversion to Master.
     pub announce_timeout: Duration,
 }
@@ -116,16 +116,16 @@ pub struct PtpNode {
     /// Receives Sync from master, sends Sync/Announce as master.
     event_socket: Arc<UdpSocket>,
     /// General socket (port 320), optional if using `AirPlay` format.
-    /// Receives Follow_Up, Announce, Signaling from master.
+    /// Receives `Follow_Up`, Announce, Signaling from master.
     general_socket: Option<Arc<UdpSocket>>,
-    /// Timing socket (AirPlay 2 ephemeral port): sends Delay_Req and receives Delay_Resp.
+    /// Timing socket (`AirPlay` 2 ephemeral port): sends `Delay_Req` and receives `Delay_Resp`.
     ///
-    /// Real AirPlay 2 clients do NOT send Delay_Req from the standard PTP event port (319).
-    /// Instead, they bind an ephemeral timing port (registered in SETUP Step 1 ClockPorts
-    /// and SETUP Step 2 timingPort) and use that port for the entire Delay_Req/Delay_Resp
-    /// exchange.  The HomePod's `SupportsClockPortMatchingOverride=true` tells it to look
+    /// Real `AirPlay` 2 clients do NOT send `Delay_Req` from the standard PTP event port (319).
+    /// Instead, they bind an ephemeral timing port (registered in SETUP Step 1 `ClockPorts`
+    /// and SETUP Step 2 timingPort) and use that port for the entire `Delay_Req/Delay_Resp`
+    /// exchange.  The `HomePod`'s `SupportsClockPortMatchingOverride=true` tells it to look
     /// up `ClockPorts[clock_id]` to find our registered ephemeral port and route
-    /// Delay_Resp there.  If this socket is `None`, we fall back to `event_socket`.
+    /// `Delay_Resp` there.  If this socket is `None`, we fall back to `event_socket`.
     timing_socket: Option<Arc<UdpSocket>>,
     /// Shared clock state.
     clock: SharedPtpClock,
@@ -160,14 +160,14 @@ pub struct PtpNode {
     /// Announce timeout: if no Announce from the remote master within
     /// this duration, assume it's gone and revert to master.
     announce_timeout: Duration,
-    /// Epoch offset from the first Delay_Req/Delay_Resp exchange.
+    /// Epoch offset from the first `Delay_Req/Delay_Resp` exchange.
     ///
     /// `unix_now_ns − master_now_ns`, computed from the first measurement
     /// where T2 and T3 were captured with the Unix wall clock.  Once set,
     /// `adjusted_now()` subtracts this value so that subsequent T2/T3
     /// timestamps are in the master's time domain.  This makes `offset_ns`
     /// in `PtpClock` converge to near zero (residual jitter only) rather
-    /// than retaining the full epoch difference (~56 years for HomePod).
+    /// than retaining the full epoch difference (~56 years for `HomePod`).
     calibrated_epoch_offset: Option<i128>,
 }
 
@@ -228,16 +228,16 @@ impl PtpNode {
         }
     }
 
-    /// Set the AirPlay 2 timing socket used for Delay_Req (sending) and Delay_Resp (receiving).
+    /// Set the `AirPlay` 2 timing socket used for `Delay_Req` (sending) and `Delay_Resp` (receiving).
     ///
-    /// Real AirPlay 2 clients (Apple Music, etc.) do NOT send Delay_Req from the standard
+    /// Real `AirPlay` 2 clients (Apple Music, etc.) do NOT send `Delay_Req` from the standard
     /// PTP event port (319).  Instead they use an ephemeral port that was registered with the
-    /// HomePod via `timingPeerInfo.ClockPorts` in SETUP Step 1 and `timingPort` in SETUP Step 2.
+    /// `HomePod` via `timingPeerInfo.ClockPorts` in SETUP Step 1 and `timingPort` in SETUP Step 2.
     ///
-    /// When set, this socket is preferred over `event_socket` for Delay_Req sends, and the run
-    /// loop also reads Delay_Resp from it (in addition to the event/general sockets).
-    /// This is required to receive Delay_Resp because HomePod routes it to the registered
-    /// ClockPorts port (the ephemeral timing port), NOT to port 319.
+    /// When set, this socket is preferred over `event_socket` for `Delay_Req` sends, and the run
+    /// loop also reads `Delay_Resp` from it (in addition to the event/general sockets).
+    /// This is required to receive `Delay_Resp` because `HomePod` routes it to the registered
+    /// `ClockPorts` port (the ephemeral timing port), NOT to port 319.
     pub fn set_timing_socket(&mut self, sock: Arc<UdpSocket>) {
         self.timing_socket = Some(sock);
     }
@@ -256,10 +256,10 @@ impl PtpNode {
 
     /// Current timestamp in the master's time domain.
     ///
-    /// Before epoch calibration (first Delay_Resp not yet received) this
+    /// Before epoch calibration (first `Delay_Resp` not yet received) this
     /// falls back to the Unix wall clock (`PtpTimestamp::now()`), so T2/T3
     /// captured during the first exchange will be in Unix nanoseconds.  The
-    /// resulting large `offset_ns` (~56 years for HomePod) is then used to
+    /// resulting large `offset_ns` (~56 years for `HomePod`) is then used to
     /// call `PtpClock::calibrate_epoch` so that all subsequent calls return
     /// a timestamp in the master's epoch.
     ///
@@ -559,8 +559,7 @@ impl PtpNode {
                         self.delay_req_unanswered += 1;
                         self.delay_req_sent_at = None;
                         tracing::debug!(
-                            "PTP node: Delay_Req unanswered when next Sync arrived \
-                             (unanswered={})",
+                            "PTP node: Delay_Req unanswered when next Sync arrived (unanswered={})",
                             self.delay_req_unanswered
                         );
                     }
@@ -628,6 +627,10 @@ impl PtpNode {
     /// Returns an `Err` only for fatal I/O errors so that the caller can
     /// propagate them through the event loop. Non-fatal conditions are logged
     /// and silently ignored.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Complex logic function with multiple match arms"
+    )]
     async fn handle_general_packet(
         &mut self,
         data: &[u8],
@@ -667,7 +670,7 @@ impl PtpNode {
                         // pending_t3 was already cleared (and unanswered counter advanced
                         // if needed) by the Sync handler above, so we just decide whether
                         // to send another Delay_Req or fall back to one-way mode.
-                        self.pending_t3 = None;       // already None; defensive clear
+                        self.pending_t3 = None; // already None; defensive clear
                         self.delay_req_sent_at = None; // clear stale timer if any
                         if self.delay_req_unanswered < 2 {
                             self.send_delay_req().await?;
@@ -700,7 +703,8 @@ impl PtpNode {
                         *receive_timestamp
                     };
                     tracing::debug!(
-                        "PTP node: DelayResp (general port) seq={}, T4_body={}, correction={}ns, T4_actual={}, from {}",
+                        "PTP node: DelayResp (general port) seq={}, T4_body={}, correction={}ns, \
+                         T4_actual={}, from {}",
                         msg.header.sequence_id,
                         receive_timestamp,
                         correction_ns,
@@ -754,12 +758,9 @@ impl PtpNode {
                     if data.len() > 44 {
                         let mut offset = 44;
                         while offset + 4 <= data.len() {
-                            let tlv_type =
-                                u16::from_be_bytes([data[offset], data[offset + 1]]);
-                            let tlv_len = u16::from_be_bytes([
-                                data[offset + 2],
-                                data[offset + 3],
-                            ]) as usize;
+                            let tlv_type = u16::from_be_bytes([data[offset], data[offset + 1]]);
+                            let tlv_len =
+                                u16::from_be_bytes([data[offset + 2], data[offset + 3]]) as usize;
 
                             // Check for Apple ORGANIZATION_EXTENSION (OUI 00 0D 93)
                             if tlv_type == 0x0003
@@ -769,11 +770,14 @@ impl PtpNode {
                                 && data[offset + 5] == 0x0D
                                 && data[offset + 6] == 0x93
                             {
-                                let sub_type =
-                                    if offset + 7 < data.len() { data[offset + 7] } else { 0 };
+                                let sub_type = if offset + 7 < data.len() {
+                                    data[offset + 7]
+                                } else {
+                                    0
+                                };
                                 tracing::debug!(
-                                    "PTP Signaling TLV: ORGANIZATION_EXTENSION (Apple OUI 0x000D93) \
-                                     sub-type={} len={}",
+                                    "PTP Signaling TLV: ORGANIZATION_EXTENSION (Apple OUI \
+                                     0x000D93) sub-type={} len={}",
                                     sub_type,
                                     tlv_len
                                 );
@@ -795,9 +799,11 @@ impl PtpNode {
 
                     if has_apple_tlv {
                         tracing::info!(
-                            "PTP node: HomePod Apple Signaling received — sending peer-announcement response"
+                            "PTP node: HomePod Apple Signaling received — sending \
+                             peer-announcement response"
                         );
-                        self.send_apple_signaling_response(source_port_id, src).await?;
+                        self.send_apple_signaling_response(source_port_id, src)
+                            .await?;
                     }
                 }
                 _ => {
@@ -839,10 +845,15 @@ impl PtpNode {
                 let raw_offset = clock.offset_nanos();
                 clock.calibrate_epoch(raw_offset);
                 self.calibrated_epoch_offset = Some(raw_offset);
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "Precision loss is acceptable for logging epoch offset in ms"
+                )]
+                let raw_offset_ms = raw_offset as f64 / 1_000_000.0;
                 tracing::info!(
-                    "PTP node: Master clock epoch calibrated (epoch_offset={:.3}ms). \
-                     Subsequent offsets will reflect residual jitter only.",
-                    raw_offset as f64 / 1_000_000.0
+                    "PTP node: Master clock epoch calibrated (epoch_offset={:.3}ms). Subsequent \
+                     offsets will reflect residual jitter only.",
+                    raw_offset_ms
                 );
             }
 
@@ -1077,15 +1088,15 @@ impl PtpNode {
         Ok(())
     }
 
-    /// Build a Signaling message containing an Apple ORGANIZATION_EXTENSION TLV (sub-type 1).
+    /// Build a Signaling message containing an Apple `ORGANIZATION_EXTENSION` TLV (sub-type 1).
     ///
-    /// AirPlay 2 uses a bidirectional peer-announcement protocol over PTP Signaling.  After the
-    /// HomePod sends its own Signaling (OUI 0x000D93, sub-type 1) identifying its clock and timing
+    /// `AirPlay` 2 uses a bidirectional peer-announcement protocol over PTP Signaling.  After the
+    /// `HomePod` sends its own Signaling (OUI 0x000D93, sub-type 1) identifying its clock and timing
     /// port, it expects the client to respond with a mirror Signaling identifying the client's
-    /// clock and ephemeral timing port.  Without this exchange the HomePod does not send
-    /// `Delay_Resp` — the peer discovery step is what authorises the Delay_Req/Delay_Resp flow.
+    /// clock and ephemeral timing port.  Without this exchange the `HomePod` does not send
+    /// `Delay_Resp` — the peer discovery step is what authorises the `Delay_Req`/`Delay_Resp` flow.
     ///
-    /// IEEE 1588-2008 ORGANIZATION_EXTENSION TLV body layout (22 bytes total):
+    /// IEEE 1588-2008 `ORGANIZATION_EXTENSION` TLV body layout (22 bytes total):
     /// ```text
     ///  [0..2]   organizationId  = 00 0D 93 (Apple OUI)
     ///  [3..5]   organizationSubType = 00 00 01 (3 bytes per IEEE 1588 spec, sub-type 1)
@@ -1177,13 +1188,17 @@ impl PtpNode {
         // TLV body
         buf.extend_from_slice(&tlv_body);
 
-        debug_assert_eq!(buf.len(), total_len as usize, "Signaling message size mismatch");
+        debug_assert_eq!(
+            buf.len(),
+            total_len as usize,
+            "Signaling message size mismatch"
+        );
         buf
     }
 
-    /// Send an Apple peer-announcement Signaling response to the HomePod.
+    /// Send an Apple peer-announcement Signaling response to the `HomePod`.
     ///
-    /// Called whenever we receive an Apple Signaling from the HomePod.  The HomePod
+    /// Called whenever we receive an Apple Signaling from the `HomePod`.  The `HomePod`
     /// requires this reciprocal announcement before it will process our `Delay_Req`
     /// and send `Delay_Resp`.
     async fn send_apple_signaling_response(
@@ -1195,8 +1210,7 @@ impl PtpNode {
             .timing_socket
             .as_ref()
             .and_then(|s| s.local_addr().ok())
-            .map(|a| a.port())
-            .unwrap_or(0);
+            .map_or(0, |a| a.port());
 
         if timing_port == 0 {
             tracing::debug!(

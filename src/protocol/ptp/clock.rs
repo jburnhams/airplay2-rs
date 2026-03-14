@@ -111,7 +111,7 @@ pub struct PtpClock {
     /// (before the software clock is calibrated).
     ///
     /// `epoch_offset_ns = unix_now_ns − master_now_ns`.  Set once on the
-    /// first complete Delay_Req / Delay_Resp exchange and never changed
+    /// first complete `Delay_Req` / `Delay_Resp` exchange and never changed
     /// (subsequent `offset_ns` measurements are made in the master's time
     /// domain and reflect only residual drift).
     ///
@@ -291,7 +291,7 @@ impl PtpClock {
     /// where T2 and T3 were captured using the host Unix clock (not yet corrected).
     /// `raw_offset_ns` is `offset_nanos()` at that point — the full epoch difference
     /// between the host Unix time and the master's custom epoch (~56 years for
-    /// Apple HomePod vs. Unix 1970 epoch).
+    /// Apple `HomePod` vs. Unix 1970 epoch).
     ///
     /// After calibration, callers should obtain T2/T3 timestamps via `adjusted_now()`
     /// instead of `PtpTimestamp::now()`.  Subsequent `process_timing` calls will then

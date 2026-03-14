@@ -788,23 +788,27 @@ impl ConnectionManager {
             match Self::bind_ephemeral_socket().await {
                 Ok(sock) => {
                     tracing::info!(
-                        "PTP timing socket bound to ephemeral port {} (will be registered in ClockPorts)",
-                        sock.local_addr().map(|a| a.port()).unwrap_or(0)
+                        "PTP timing socket bound to ephemeral port {} (will be registered in \
+                         ClockPorts)",
+                        sock.local_addr().map_or(0, |a| a.port())
                     );
                     Some(std::sync::Arc::new(sock))
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to bind PTP timing socket early: {} (will bind later)", e);
+                    tracing::warn!(
+                        "Failed to bind PTP timing socket early: {} (will bind later)",
+                        e
+                    );
                     None
                 }
             }
         } else {
             None
         };
-        let ptp_time_port = ptp_time_sock.as_ref()
+        let ptp_time_port = ptp_time_sock
+            .as_ref()
             .and_then(|s| s.local_addr().ok())
-            .map(|a| a.port())
-            .unwrap_or(0);
+            .map_or(0, |a| a.port());
 
         if !use_ptp {
             // For NTP/AirPlay 1 devices, send a preliminary Session SETUP
@@ -974,10 +978,7 @@ impl ConnectionManager {
             // the HomePod sends Delay_Resp to 319 but then our timing_socket (which is on the
             // ephemeral port) never receives it — the clock exchange stalls indefinitely.
             let clock_ports = DictBuilder::new()
-                .insert(
-                    format!("{:016X}", ptp_clock_id),
-                    i64::from(ptp_time_port),
-                )
+                .insert(format!("{ptp_clock_id:016X}"), i64::from(ptp_time_port))
                 .build();
 
             let timing_peer_info = DictBuilder::new()
@@ -1474,7 +1475,7 @@ impl ConnectionManager {
                 }
 
                 self.start_ptp_master(
-                    &*time_sock,
+                    &time_sock,
                     device_ip,
                     server_time_port,
                     ptp_clock_id,
@@ -2140,7 +2141,11 @@ impl ConnectionManager {
     ///
     /// Returns error if RTSP request fails
     pub async fn send_flush(&self, seq: u16, timestamp: u32) -> Result<(), AirPlayError> {
-        tracing::debug!("Sending FLUSH request (seq={}, rtptime={})...", seq, timestamp);
+        tracing::debug!(
+            "Sending FLUSH request (seq={}, rtptime={})...",
+            seq,
+            timestamp
+        );
         let flush_request = {
             let mut session_guard = self.rtsp_session.lock().await;
             let session = session_guard
@@ -2303,6 +2308,7 @@ impl ConnectionManager {
     /// # Errors
     ///
     /// Returns error if the sockets are not connected.
+    #[allow(clippy::too_many_lines, reason = "TimeAnnounce generation is inherently long")]
     pub async fn send_time_announce(
         &self,
         rtp_timestamp: u32,
@@ -2314,78 +2320,78 @@ impl ConnectionManager {
         // as estimated from the calibrated PTP offset.  Before calibration
         // (epoch not yet measured) we skip the announcement to avoid sending
         // an invalid timestamp that would confuse the HomePod's scheduler.
-        let (ptp_nanos, clock_id) = {
-            let clock_guard = self.ptp_clock.lock().await;
-            if let Some(clock) = clock_guard.as_ref() {
-                let clock = clock.read().await;
-                let master_time = match clock.master_now() {
-                    Some(t) => t,
-                    None => return Ok(()), // not yet calibrated; skip
-                };
-                let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
-                // Use the remote master's clock ID if available, otherwise our own.
-                let id = clock
-                    .remote_master_clock_id()
-                    .unwrap_or_else(|| clock.clock_id());
-                (nanos, id)
-            } else {
-                // PTP not active, fallback to NTP
-                let offset_micros = self.ntp_offset.load(std::sync::atomic::Ordering::Relaxed);
-                let mut ntp_time = crate::protocol::rtp::NtpTimestamp::now();
-                if offset_micros != 0 {
-                    let mut micros = ntp_time.to_micros();
-                    if offset_micros > 0 {
-                        #[allow(clippy::cast_sign_loss, reason = "Checked > 0")]
-                        let offset_u64 = offset_micros as u64;
-                        micros += offset_u64;
-                    } else {
-                        micros = micros.saturating_sub(offset_micros.unsigned_abs());
-                    }
-                    ntp_time = crate::protocol::rtp::NtpTimestamp {
-                        #[allow(clippy::cast_possible_truncation, reason = "NTP seconds")]
-                        seconds: (micros / 1_000_000) as u32,
-                        #[allow(
-                            clippy::cast_possible_truncation,
-                            reason = "Fraction fits in 32 bits"
-                        )]
-                        fraction: (((micros % 1_000_000) << 32) / 1_000_000) as u32,
+        let (ptp_nanos, clock_id) =
+            {
+                let clock_guard = self.ptp_clock.lock().await;
+                if let Some(clock) = clock_guard.as_ref() {
+                    let clock = clock.read().await;
+                    let Some(master_time) = clock.master_now() else {
+                        return Ok(()); // not yet calibrated
                     };
-                }
-                let ntp_timestamp_64 =
-                    (u64::from(ntp_time.seconds) << 32) | u64::from(ntp_time.fraction);
-
-                let count = self
-                    .time_announce_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if count < 3 || count % 10 == 0 {
-                    tracing::info!(
-                        "TimeAnnounce: rtp_ts={}, ntp_time={}.{:09} (#{count})",
-                        rtp_timestamp,
-                        ntp_time.seconds,
-                        ntp_time.fraction,
-                    );
-                }
-
-                let packet = crate::protocol::rtp::ControlPacket::TimeAnnounceNtp {
-                    rtp_timestamp,
-                    ntp_timestamp: ntp_timestamp_64,
-                    rtp_timestamp_next: rtp_timestamp.wrapping_add(sample_rate),
-                };
-
-                let encoded = packet.encode();
-
-                let sockets = self.sockets.lock().await;
-                if let Some(ref socks) = *sockets {
-                    socks.control.send(&encoded).await.map_err(|e| {
-                        AirPlayError::RtspError {
-                            message: format!("Failed to send NTP TimeAnnounce: {e}"),
-                            status_code: None,
+                    let nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
+                    // Use the remote master's clock ID if available, otherwise our own.
+                    let id = clock
+                        .remote_master_clock_id()
+                        .unwrap_or_else(|| clock.clock_id());
+                    (nanos, id)
+                } else {
+                    // PTP not active, fallback to NTP
+                    let offset_micros = self.ntp_offset.load(std::sync::atomic::Ordering::Relaxed);
+                    let mut ntp_time = crate::protocol::rtp::NtpTimestamp::now();
+                    if offset_micros != 0 {
+                        let mut micros = ntp_time.to_micros();
+                        if offset_micros > 0 {
+                            #[allow(clippy::cast_sign_loss, reason = "Checked > 0")]
+                            let offset_u64 = offset_micros as u64;
+                            micros += offset_u64;
+                        } else {
+                            micros = micros.saturating_sub(offset_micros.unsigned_abs());
                         }
-                    })?;
+                        ntp_time = crate::protocol::rtp::NtpTimestamp {
+                            #[allow(clippy::cast_possible_truncation, reason = "NTP seconds")]
+                            seconds: (micros / 1_000_000) as u32,
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                reason = "Fraction fits in 32 bits"
+                            )]
+                            fraction: (((micros % 1_000_000) << 32) / 1_000_000) as u32,
+                        };
+                    }
+                    let ntp_timestamp_64 =
+                        (u64::from(ntp_time.seconds) << 32) | u64::from(ntp_time.fraction);
+
+                    let count = self
+                        .time_announce_count
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if count < 3 || count % 10 == 0 {
+                        tracing::info!(
+                            "TimeAnnounce: rtp_ts={}, ntp_time={}.{:09} (#{count})",
+                            rtp_timestamp,
+                            ntp_time.seconds,
+                            ntp_time.fraction,
+                        );
+                    }
+
+                    let packet = crate::protocol::rtp::ControlPacket::TimeAnnounceNtp {
+                        rtp_timestamp,
+                        ntp_timestamp: ntp_timestamp_64,
+                        rtp_timestamp_next: rtp_timestamp.wrapping_add(sample_rate),
+                    };
+
+                    let encoded = packet.encode();
+
+                    let sockets = self.sockets.lock().await;
+                    if let Some(ref socks) = *sockets {
+                        socks.control.send(&encoded).await.map_err(|e| {
+                            AirPlayError::RtspError {
+                                message: format!("Failed to send NTP TimeAnnounce: {e}"),
+                                status_code: None,
+                            }
+                        })?;
+                    }
+                    return Ok(());
                 }
-                return Ok(());
-            }
-        };
+            };
 
         let ptp_secs = ptp_nanos / 1_000_000_000;
         let ptp_subsec_nanos = (ptp_nanos % 1_000_000_000) as u32;
