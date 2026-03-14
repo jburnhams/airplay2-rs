@@ -549,10 +549,21 @@ impl PtpNode {
                         );
                     }
                     // Store T1/T2 for slave-side processing.
-                    // Also reset pending_t3 so that a missed Delay_Resp doesn't
-                    // permanently block the next exchange: when the next Sync arrives
-                    // we start fresh, allowing handle_general_packet (Follow_Up path)
-                    // or the periodic timer to send a new Delay_Req.
+                    //
+                    // If pending_t3 is still set here it means we sent a Delay_Req
+                    // for the *previous* Sync cycle and the master never replied.
+                    // Count that now, before clearing, so that the fallback counter
+                    // advances correctly.  (The Follow_Up handler used to do this, but
+                    // it sees pending_t3=None because we clear it below first.)
+                    if self.pending_t3.is_some() {
+                        self.delay_req_unanswered += 1;
+                        self.delay_req_sent_at = None;
+                        tracing::debug!(
+                            "PTP node: Delay_Req unanswered when next Sync arrived \
+                             (unanswered={})",
+                            self.delay_req_unanswered
+                        );
+                    }
                     self.pending_t1 = Some(*origin_timestamp);
                     self.pending_t2 = Some(receive_time);
                     self.pending_t3 = None; // reset: new Sync cycle begins
@@ -653,20 +664,11 @@ impl PtpNode {
                     // complete Sync+Follow_Up pair while in Slave role, unless we are
                     // in one-way fallback mode.
                     if self.role == EffectiveRole::Slave && self.pending_t2.is_some() {
-                        // If a Delay_Req we sent earlier is still pending (pending_t3 is
-                        // set) when the *next* sync round arrives, it means the master
-                        // never answered it.  Count it as unanswered now so the fallback
-                        // counter advances correctly.
-                        if self.pending_t3.is_some() {
-                            self.delay_req_unanswered += 1;
-                            tracing::debug!(
-                                "PTP node: Delay_Req unanswered when next sync arrived \
-                                 (unanswered={})",
-                                self.delay_req_unanswered
-                            );
-                        }
-                        self.pending_t3 = None;
-                        self.delay_req_sent_at = None;
+                        // pending_t3 was already cleared (and unanswered counter advanced
+                        // if needed) by the Sync handler above, so we just decide whether
+                        // to send another Delay_Req or fall back to one-way mode.
+                        self.pending_t3 = None;       // already None; defensive clear
+                        self.delay_req_sent_at = None; // clear stale timer if any
                         if self.delay_req_unanswered < 2 {
                             self.send_delay_req().await?;
                         } else {
