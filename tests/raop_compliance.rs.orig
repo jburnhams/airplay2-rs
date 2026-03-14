@@ -119,6 +119,6 @@ async fn test_raop_handshake_compliance() {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => panic!("Client failed: {}", e),
         Ok(Err(_)) => panic!("Client panic"),
-        Err(_) => {} // Timeout is expected
+        Err(_) => println!("Timeout waiting for client"),
     }
 }

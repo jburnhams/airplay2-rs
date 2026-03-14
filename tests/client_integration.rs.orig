@@ -164,7 +164,9 @@ async fn test_client_connect_failure() {
         Ok(Ok(_)) => {
             panic!("Connection succeeded when it should have failed");
         }
-        Err(_) => {} // Timeout is expected
+        Err(e) => {
+            println!("Timeout: {}", e)
+        }
     }
 
     assert!(!client.is_connected().await);
