@@ -220,4 +220,8 @@ async fn test_airplay2_session_metadata_and_artwork() {
     let jpeg_data = vec![0xFF, 0xD8, 0xFF, 0x00, 0x00];
     let res = session.set_artwork(&jpeg_data).await;
     assert!(res.is_ok() || res.is_err());
+
+    let unsupported_data = vec![0x00, 0x01, 0x02];
+    let res = session.set_artwork(&unsupported_data).await;
+    assert!(matches!(res, Err(crate::error::AirPlayError::InvalidParameter { .. })));
 }
