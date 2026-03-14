@@ -305,10 +305,11 @@ fn test_remote_to_local_with_offset() {
     let remote = PtpTimestamp::new(200, 0);
     let local = clock.remote_to_local(remote);
 
-    // local should be remote - offset ≈ 200 - 5 = 195
+    // offset = slave − master = +5 s (slave reads bigger numbers).
+    // slave = master + offset  →  remote_to_local(master=200) = 200 + 5 = 205.
     assert!(
-        local.seconds.abs_diff(195) <= 1,
-        "Expected ~195s, got {}",
+        local.seconds.abs_diff(205) <= 1,
+        "Expected ~205s, got {}",
         local.seconds
     );
 }
@@ -327,10 +328,11 @@ fn test_local_to_remote_with_offset() {
     let local = PtpTimestamp::new(195, 0);
     let remote = clock.local_to_remote(local);
 
-    // remote should be local + offset ≈ 195 + 5 = 200
+    // offset = slave − master = +5 s (slave reads bigger numbers).
+    // master = slave − offset  →  local_to_remote(slave=195) = 195 − 5 = 190.
     assert!(
-        remote.seconds.abs_diff(200) <= 1,
-        "Expected ~200s, got {}",
+        remote.seconds.abs_diff(190) <= 1,
+        "Expected ~190s, got {}",
         remote.seconds
     );
 }
@@ -646,9 +648,9 @@ fn test_homepod_epoch_offset_full_exchange() {
     );
 
     // Now verify domain conversion: converting our Unix time to HomePod's domain.
-    // remote_to_local(our_time) = our_time - offset = 1,740,000,000.5 - 1,739,295,000 = 705,000.5
+    // local_to_remote(our_time) = our_time - offset = 1,740,000,000.5 - 1,739,295,000 = 705,000.5
     let our_time = PtpTimestamp::new(1_740_000_000, 500_000_000);
-    let master_time = clock.remote_to_local(our_time);
+    let master_time = clock.local_to_remote(our_time);
     assert!(
         master_time.seconds.abs_diff(705_000) <= 1,
         "Expected ~705,000s in master domain, got {}s",
@@ -656,9 +658,9 @@ fn test_homepod_epoch_offset_full_exchange() {
     );
 
     // And reverse: HomePod time to our domain
-    // local_to_remote(homepod_time) = 706,000 + 1,739,295,000 = 1,740,001,000
+    // remote_to_local(homepod_time) = 706,000 + 1,739,295,000 = 1,740,001,000
     let homepod_time = PtpTimestamp::new(706_000, 0);
-    let our_equivalent = clock.local_to_remote(homepod_time);
+    let our_equivalent = clock.remote_to_local(homepod_time);
     assert!(
         our_equivalent.seconds.abs_diff(1_740_001_000) <= 1,
         "Expected ~1,740,001,000s in our domain, got {}s",
@@ -683,9 +685,9 @@ fn test_homepod_epoch_offset_one_way() {
     let offset_s = clock.offset_nanos() / 1_000_000_000;
     assert_eq!(offset_s, 1_739_295_000);
 
-    // Domain conversion
+    // Domain conversion: our Unix time → HomePod domain
     let our_time = PtpTimestamp::new(1_740_000_000, 500_000_000);
-    let master_time = clock.remote_to_local(our_time);
+    let master_time = clock.local_to_remote(our_time);
     // master_time = our_time - offset ≈ 705,000.499s
     assert!(
         master_time.seconds.abs_diff(705_000) <= 1,
@@ -708,7 +710,9 @@ fn test_conversion_roundtrip_large_offset() {
     clock.process_timing(t1, t2, t3, t4);
 
     // Roundtrip: remote_to_local(local_to_remote(x)) == x
-    let original = PtpTimestamp::new(800_000, 123_456_789);
+    // local = slave (Unix domain, large), remote = master (HomePod domain, small)
+    // Start with a slave (Unix) timestamp and convert to master then back.
+    let original = PtpTimestamp::new(1_740_500_000, 123_456_789);
     let converted = clock.local_to_remote(original);
     let back = clock.remote_to_local(converted);
     let error_nanos = (back.to_nanos() - original.to_nanos()).unsigned_abs();
@@ -717,8 +721,8 @@ fn test_conversion_roundtrip_large_offset() {
         "Roundtrip error too large: {error_nanos} nanos"
     );
 
-    // And the other direction
-    let original2 = PtpTimestamp::new(1_740_500_000, 987_654_321);
+    // And the other direction: start with a master (HomePod) timestamp.
+    let original2 = PtpTimestamp::new(800_000, 987_654_321);
     let converted2 = clock.remote_to_local(original2);
     let back2 = clock.local_to_remote(converted2);
     let error_nanos2 = (back2.to_nanos() - original2.to_nanos()).unsigned_abs();
@@ -745,9 +749,10 @@ fn test_time_announce_conversion_slave_to_master_domain() {
     let homepod_clock_id = 0x50BC_9664_729E_0008_u64;
     clock.set_remote_master_clock_id(homepod_clock_id);
 
-    // Simulate what send_time_announce does:
+    // Simulate converting our Unix time to master (HomePod) domain:
+    // local_to_remote(local_now) = local_now - offset = 1,740,000,005 - 1,739,295,000 = 705,005s
     let local_now = PtpTimestamp::new(1_740_000_005, 0); // Our current Unix time
-    let master_time = clock.remote_to_local(local_now);
+    let master_time = clock.local_to_remote(local_now);
     let ptp_nanos = u64::try_from(master_time.to_nanos()).unwrap_or(0);
     let used_clock_id = clock
         .remote_master_clock_id()
@@ -840,20 +845,128 @@ fn test_negative_offset_conversion() {
     assert_eq!(offset_s, -10, "Offset should be -10s (slave behind master)");
 
     // remote_to_local: convert master time 300s to slave equivalent.
-    // slave = master + offset(?) No: remote_to_local(x) = x - offset = 300 - (-10) = 310
+    // Convention: offset = slave - master, so slave = master + offset = 300 + (-10) = 290.
+    // When slave is 10s behind, master time 300 maps to slave reading 290.
     let master_ts = PtpTimestamp::new(300, 0);
     let result = clock.remote_to_local(master_ts);
     assert_eq!(
-        result.seconds, 310,
-        "remote_to_local should ADD 10s when offset is -10s"
+        result.seconds, 290,
+        "remote_to_local should give 290 when master=300 and offset=-10s"
     );
 
-    // local_to_remote: convert slave time 310s to master equivalent.
-    // local_to_remote(x) = x + offset = 310 + (-10) = 300
-    let slave_ts = PtpTimestamp::new(310, 0);
+    // local_to_remote: convert slave time 290s to master equivalent.
+    // master = slave - offset = 290 - (-10) = 300
+    let slave_ts = PtpTimestamp::new(290, 0);
     let result = clock.local_to_remote(slave_ts);
     assert_eq!(
         result.seconds, 300,
-        "local_to_remote should SUBTRACT 10s when offset is -10s"
+        "local_to_remote should give 300 when slave=290 and offset=-10s"
+    );
+}
+
+// ── Epoch calibration and master_now() ──────────────────────────────────────
+
+/// `calibrate_epoch` should only accept the first call; subsequent calls must
+/// be silently ignored so that the stable reference point is never overwritten.
+#[test]
+fn test_calibrate_epoch_idempotent() {
+    let mut clock = PtpClock::new(0, PtpRole::Slave);
+
+    assert!(!clock.is_epoch_calibrated());
+    assert!(clock.master_now().is_none());
+
+    clock.calibrate_epoch(1_000_000_000); // 1 s epoch offset
+    assert!(clock.is_epoch_calibrated());
+    assert_eq!(clock.epoch_offset_ns(), Some(1_000_000_000));
+
+    // Second call must be ignored.
+    clock.calibrate_epoch(9_999_999_999);
+    assert_eq!(
+        clock.epoch_offset_ns(),
+        Some(1_000_000_000),
+        "second calibrate_epoch call must not overwrite the first"
+    );
+}
+
+/// After calibration, `master_now()` should return a timestamp very close to
+/// `unix_now − epoch_offset`.  We allow a 500 ms window for CI jitter.
+#[test]
+fn test_master_now_after_calibration() {
+    let mut clock = PtpClock::new(0, PtpRole::Slave);
+
+    // Compute a plausible epoch_offset: unix_now − 1_000_000_000 ns (1 s offset)
+    let unix_now_ns = PtpTimestamp::now().to_nanos();
+    let epoch_offset: i128 = 1_000_000_000; // 1 second
+    clock.calibrate_epoch(epoch_offset);
+
+    let master = clock.master_now().expect("master_now must return Some after calibration");
+    let expected_ns = unix_now_ns - epoch_offset;
+
+    let diff = (master.to_nanos() - expected_ns).abs();
+    assert!(
+        diff < 500_000_000, // within 500 ms
+        "master_now() deviated by {}ms from expected",
+        diff / 1_000_000
+    );
+}
+
+/// After epoch calibration, the simulated second measurement (T2/T3 in the
+/// master's domain) should give an `offset_ns` near zero — only path-delay
+/// residual remains, not the raw epoch difference.
+#[test]
+fn test_offset_converges_after_epoch_calibration() {
+    // Simulate HomePod scenario:
+    //   epoch_offset = 1 000 000 000 000 ns (1 000 s, i.e., Unix >> HomePod epoch)
+    //   actual one-way path delay = 2 ms = 2_000_000 ns
+    //   processing time at slave = 100 µs = 100_000 ns
+    //
+    // T1 and T4 are in the HomePod's clock domain (no epoch offset).
+    // T2 and T3 are in the Unix clock domain (shifted by EPOCH_OFFSET).
+    //
+    // RTT = (T4−T1) − (T3−T2) = 2*PATH_DELAY ≈ 4 ms — both differences are
+    // within the same epoch, so EPOCH_OFFSET cancels.
+    const EPOCH_OFFSET: i128 = 1_000_000_000_000; // 1000 s
+    const PATH_DELAY_NS: i128 = 2_000_000; // 2 ms one-way
+    const PROC_NS: i128 = 100_000; // 100 µs slave processing
+
+    // First measurement: T2/T3 in Unix domain (pre-calibration).
+    let t1 = PtpTimestamp::from_nanos(500_000_000_000); // 500 s in HomePod epoch
+    let t2 = PtpTimestamp::from_nanos(t1.to_nanos() + EPOCH_OFFSET + PATH_DELAY_NS);
+    let t3 = PtpTimestamp::from_nanos(t2.to_nanos() + PROC_NS);
+    // T4 is in HomePod domain — do NOT add EPOCH_OFFSET.
+    // RTT = (T4-T1)-(T3-T2) = (2*d+p) - p = 2*d = 4 ms < DEFAULT_MAX_RTT.
+    let t4 = PtpTimestamp::from_nanos(t1.to_nanos() + 2 * PATH_DELAY_NS + PROC_NS);
+
+    let mut clock = PtpClock::new(0, PtpRole::Slave);
+    // Keep only 1 measurement so the median equals the most recent sample.
+    clock.set_max_measurements(1);
+    assert!(clock.process_timing(t1, t2, t3, t4), "first measurement must be accepted");
+
+    // First offset ≈ EPOCH_OFFSET (large raw epoch difference).
+    let raw_offset = clock.offset_nanos();
+    assert!(
+        (raw_offset - EPOCH_OFFSET).abs() < 10_000_000, // within 10 ms
+        "first offset should ≈ epoch_offset, got {raw_offset}"
+    );
+
+    // Calibrate the epoch once.
+    clock.calibrate_epoch(raw_offset);
+
+    // Second measurement: T2/T3 are now in the master's domain (adjusted_now()
+    // subtracts epoch_offset from unix time), so T1≈T2≈T3≈T4 are all in the
+    // HomePod epoch.  Offset should collapse to near-zero (only path delay residual).
+    let t1b = PtpTimestamp::from_nanos(500_001_000_000); // 1 s later in HomePod epoch
+    let t2b = PtpTimestamp::from_nanos(t1b.to_nanos() + PATH_DELAY_NS);
+    let t3b = PtpTimestamp::from_nanos(t2b.to_nanos() + PROC_NS);
+    let t4b = PtpTimestamp::from_nanos(t1b.to_nanos() + 2 * PATH_DELAY_NS + PROC_NS);
+
+    assert!(clock.process_timing(t1b, t2b, t3b, t4b), "second measurement must be accepted");
+
+    // With max_measurements=1 the deque holds only the latest sample, so the
+    // median is exactly this measurement's offset (should be 0).
+    let residual = clock.offset_nanos();
+    assert!(
+        residual.abs() < 1_000_000, // within 1 ms
+        "after calibration offset should be near zero, got {residual} ns"
     );
 }

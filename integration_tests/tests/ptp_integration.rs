@@ -31,8 +31,30 @@ async fn test_ptp_synchronization() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     let mut client = AirPlayClient::new(config);
-    if let Err(e) = client.connect(&device).await {
-        tracing::error!("Connection failed: {}", e);
+
+    // Retry up to 3 times — the Python receiver occasionally returns
+    // "Authentication failed - invalid proof" on the first attempt due to a
+    // transient state issue.  This matches the retry pattern used by other
+    // integration tests (e.g. aac_streaming, ntp_integration).
+    let mut connected = false;
+    let mut last_error = None;
+    for attempt in 1..=3 {
+        tracing::info!("Connection attempt {}/3...", attempt);
+        match client.connect(&device).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => {
+                tracing::warn!("Connection attempt {} failed: {}", attempt, e);
+                last_error = Some(e);
+                sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
+    if !connected {
+        let e = last_error.unwrap();
+        tracing::error!("All connection attempts failed. Last error: {}", e);
         let output = receiver.stop().await?;
         if output.log_path.exists() {
             let logs = std::fs::read_to_string(&output.log_path)?;
