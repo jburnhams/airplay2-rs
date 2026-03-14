@@ -1,12 +1,13 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use std::time::Duration;
 
-use airplay2::types::AirPlayDevice;
-use airplay2::types::DeviceCapabilities;
 use airplay2::types::raop::{RaopCapabilities, RaopCodec, RaopEncryption};
+use airplay2::types::{AirPlayDevice, DeviceCapabilities};
 use tokio::fs;
 use tokio::task::JoinHandle;
 
@@ -289,7 +290,7 @@ impl ShairportSync {
 
         let shairport_bin = std::env::current_dir()
             .unwrap()
-            .join("../../target/shairport-sync/bin/shairport-sync");
+            .join("../target/shairport-sync/bin/shairport-sync");
 
         let shairport_bin_str = shairport_bin.to_string_lossy().to_string();
 
@@ -404,7 +405,21 @@ pub async fn start_pipe_reader(
 
     let handle = tokio::spawn(async move {
         let mut data = Vec::new();
+
         // Wait for the pipe to be available, or stop signal
+        #[cfg(unix)]
+        let file = loop {
+            tokio::select! {
+                _ = &mut stop_rx => return data,
+                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                    if let Ok(f) = tokio::net::unix::pipe::OpenOptions::new().open_receiver(&pipe_path) {
+                        break f;
+                    }
+                }
+            }
+        };
+
+        #[cfg(windows)]
         let file = loop {
             tokio::select! {
                 _ = &mut stop_rx => return data,
@@ -418,6 +433,9 @@ pub async fn start_pipe_reader(
         };
 
         use tokio::io::AsyncReadExt;
+        #[cfg(unix)]
+        let mut reader = tokio::io::BufReader::new(file);
+        #[cfg(windows)]
         let mut reader = tokio::io::BufReader::new(file);
         let mut buf = [0u8; 4096];
 

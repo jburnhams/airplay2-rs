@@ -5,9 +5,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
 mod common;
-use common::shairport_sync::{
-    OutputBackend, ShairportConfig, ShairportSync, start_pipe_reader,
-};
+use common::shairport_sync::{OutputBackend, ShairportConfig, ShairportSync, start_pipe_reader};
 
 #[tokio::test]
 #[ignore]
