@@ -544,10 +544,9 @@ impl AirPlaySession for AirPlay2SessionImpl {
     async fn set_artwork(&mut self, data: &[u8]) -> Result<(), AirPlayError> {
         let mime_type = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
             "image/png"
-        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
-            "image/jpeg"
         } else {
-            "image/jpeg" // Fallback
+            // Treat everything else as JPEG (including valid JPEG headers [0xFF, 0xD8, 0xFF])
+            "image/jpeg"
         };
         self.client.set_artwork(data, mime_type).await
     }

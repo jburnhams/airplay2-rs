@@ -1,3 +1,4 @@
+use crate::client::session::AirPlaySession;
 use crate::client::AirPlayClient;
 use crate::state::ClientEvent;
 use crate::types::{AirPlayConfig, TimingProtocol, TrackInfo};
@@ -207,7 +208,7 @@ async fn test_airplay2_session_metadata_and_artwork() {
         ..Default::default()
     };
 
-    use crate::client::session::AirPlaySession;
+
     let res = session.set_metadata(&track).await;
     // Network is not connected, but set_metadata returns Ok since it uses playback controller which enqueues it
     assert!(res.is_ok() || res.is_err());
