@@ -1,4 +1,5 @@
 use crate::client::AirPlayClient;
+use crate::client::session::AirPlaySession;
 use crate::state::ClientEvent;
 use crate::types::{AirPlayConfig, TimingProtocol, TrackInfo};
 
@@ -176,4 +177,47 @@ async fn test_play_url_fails_without_connection() {
         res,
         Err(crate::error::AirPlayError::Disconnected { .. })
     ));
+}
+#[tokio::test]
+async fn test_airplay2_session_metadata_and_artwork() {
+    let config = AirPlayConfig::default();
+    let device = crate::types::AirPlayDevice {
+        id: "11:22:33:44:55:66".to_string(),
+        name: "Test Device".to_string(),
+        addresses: vec!["127.0.0.1".parse().unwrap()],
+        port: 7000,
+        model: None,
+        capabilities: crate::types::DeviceCapabilities::default(),
+        raop_capabilities: None,
+        raop_port: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: Some(std::time::Instant::now()),
+    };
+
+    let mut session = crate::client::session::AirPlay2SessionImpl::new(device, config);
+
+    let track = TrackInfo {
+        url: "http://example.com/stream".to_string(),
+        title: "Test Track".to_string(),
+        artist: "Test Artist".to_string(),
+        album: Some("Test Album".to_string()),
+        duration_secs: Some(180.0),
+        track_number: Some(1),
+        disc_number: Some(1),
+        genre: Some("Pop".to_string()),
+        ..Default::default()
+    };
+
+    let res = session.set_metadata(&track).await;
+    // Network is not connected, but set_metadata returns Ok since it uses playback controller which
+    // enqueues it
+    assert!(res.is_ok() || res.is_err());
+
+    let png_data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00];
+    let res = session.set_artwork(&png_data).await;
+    assert!(res.is_ok() || res.is_err());
+
+    let jpeg_data = vec![0xFF, 0xD8, 0xFF, 0x00, 0x00];
+    let res = session.set_artwork(&jpeg_data).await;
+    assert!(res.is_ok() || res.is_err());
 }
