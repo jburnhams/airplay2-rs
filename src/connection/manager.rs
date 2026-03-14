@@ -1101,7 +1101,7 @@ impl ConnectionManager {
             time_port
         );
 
-        let transport = format!(
+        let mut transport = format!(
             "RTP/AVP/UDP;unicast;mode=record;client_port={audio_port};control_port={ctrl_port};\
              timing_port={time_port}"
         );
@@ -1198,7 +1198,22 @@ impl ConnectionManager {
             // Send transport header now to negotiate ports
             session.setup_session_request(&setup_plist_step2, Some(&transport))
         };
-        let response_step2 = self.send_rtsp_request(&setup_req_step2).await?;
+
+        let mut response_step2 = self.send_rtsp_request(&setup_req_step2).await?;
+
+        // Check for Unsupported Transport (e.g. 461)
+        if response_step2.status.as_u16() == 461 {
+            tracing::info!("UDP Transport unsupported (461), retrying with TCP interleaved RTP fallback");
+            transport = "RTP/AVP/TCP;interleaved=0-1".to_string();
+
+            let setup_req_step2_tcp = {
+                let mut session_guard = self.rtsp_session.lock().await;
+                let session = session_guard.as_mut().unwrap();
+                session.setup_session_request(&setup_plist_step2, Some(&transport))
+            };
+            response_step2 = self.send_rtsp_request(&setup_req_step2_tcp).await?;
+        }
+
         tracing::info!(
             "SETUP Step 2 response status: {}, body length: {} bytes",
             response_step2.status.as_u16(),
