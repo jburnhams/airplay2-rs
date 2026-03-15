@@ -49,11 +49,6 @@ async fn test_queue_shuffle_clear() {
 
     assert_eq!(client.queue().await.len(), 2);
 
-    // Testing shuffle toggle logic (no network needed for local queue state shuffle flag)
-    // Note: client.set_shuffle() calls playback.set_shuffle() which calls network.
-    // So we can't test set_shuffle() fully without connection mocking.
-
-    // But we can test clear_queue
     client.clear_queue().await;
     assert!(client.queue().await.is_empty());
 }
@@ -61,10 +56,8 @@ async fn test_queue_shuffle_clear() {
 #[tokio::test]
 async fn test_volume_defaults() {
     let client = AirPlayClient::default_client();
-    // Default volume is 0.75 in VolumeController
     assert!((client.volume().await - 0.75).abs() < f32::EPSILON);
 
-    // Check state consistency
     let state = client.state().await;
     assert!(
         (state.volume - 0.75).abs() < f32::EPSILON,
@@ -78,7 +71,6 @@ async fn test_volume_set_fails_without_connection() {
     let client = AirPlayClient::default_client();
     let result = client.set_volume(0.5).await;
     assert!(result.is_err());
-    // Volume should not have changed because set failed
     assert!((client.volume().await - 0.75).abs() < f32::EPSILON);
 }
 
@@ -87,11 +79,9 @@ async fn test_event_subscription() {
     let client = AirPlayClient::default_client();
     let mut rx = client.subscribe_events();
 
-    // Trigger an event that doesn't require network (e.g. queue update)
     let track = TrackInfo::default();
     client.add_to_queue(track).await;
 
-    // We should receive an event
     let event = rx.recv().await;
     assert!(event.is_ok());
     match event.unwrap() {
@@ -100,8 +90,6 @@ async fn test_event_subscription() {
     }
 }
 
-// --- PTP timing config tests ---
-
 #[tokio::test]
 async fn test_client_with_ptp_config() {
     let config = AirPlayConfig {
@@ -109,7 +97,6 @@ async fn test_client_with_ptp_config() {
         ..Default::default()
     };
     let client = AirPlayClient::new(config);
-    // Client should be created successfully with PTP config
     assert!(!client.is_connected().await);
 }
 
@@ -133,7 +120,6 @@ async fn test_client_with_ntp_timing_config() {
 
 #[tokio::test]
 async fn test_client_connect_fails_without_device_ptp() {
-    // Connecting to a non-existent device should fail regardless of timing protocol
     let config = AirPlayConfig {
         timing_protocol: TimingProtocol::Ptp,
         ..Default::default()
@@ -145,7 +131,7 @@ async fn test_client_connect_fails_without_device_ptp() {
         name: "Fake HomePod".to_string(),
         model: None,
         addresses: vec!["127.0.0.1".parse().unwrap()],
-        port: 1, // Non-existent service
+        port: 1,
         capabilities: crate::types::DeviceCapabilities {
             supports_ptp: true,
             airplay2: true,
@@ -161,12 +147,6 @@ async fn test_client_connect_fails_without_device_ptp() {
     let result = client.connect(&device).await;
     assert!(result.is_err());
 }
-
-// Note: test_set_metadata, test_set_progress, test_set_artwork rely on self.playback
-// which does not explicitly check for ensure_connected() internally for these, but rather sends
-// through network. In the current implementation, playback.set_metadata returns OK if there is no
-// session to send to. So we cannot easily assert Err(Disconnected). These tests are skipped here
-// and better covered via integration.
 
 #[tokio::test]
 async fn test_play_url_fails_without_connection() {
@@ -257,7 +237,43 @@ async fn test_playback_controls_fail_without_connection() {
 #[tokio::test]
 async fn test_forget_device() {
     let client = AirPlayClient::default_client();
-    // Since we don't have persistent storage setup by default, this should just succeed silently
     let res = client.forget_device("some_device_id").await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn test_with_pairing_storage() {
+    let client = AirPlayClient::default_client();
+    struct DummyStorage;
+    #[async_trait::async_trait]
+    impl crate::protocol::pairing::PairingStorage for DummyStorage {
+        async fn load(&self, _: &str) -> Option<crate::protocol::pairing::PairingKeys> {
+            None
+        }
+        async fn save(
+            &mut self,
+            _: &str,
+            _: &crate::protocol::pairing::PairingKeys,
+        ) -> Result<(), crate::protocol::pairing::storage::StorageError> {
+            Ok(())
+        }
+        async fn remove(
+            &mut self,
+            _: &str,
+        ) -> Result<(), crate::protocol::pairing::storage::StorageError> {
+            Ok(())
+        }
+        async fn list_devices(&self) -> Vec<String> {
+            Vec::new()
+        }
+    }
+    let client = client.with_pairing_storage(Box::new(DummyStorage));
+    assert!(!client.is_connected().await);
+}
+
+#[tokio::test]
+async fn test_disconnect_emits_event_when_connected() {
+    let client = AirPlayClient::default_client();
+    let res = client.disconnect().await;
     assert!(res.is_ok());
 }

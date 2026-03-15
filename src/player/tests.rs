@@ -246,3 +246,49 @@ async fn test_back_fails_disconnected() {
     let res = player.back().await;
     assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
 }
+
+#[cfg(feature = "decoders")]
+#[tokio::test]
+async fn test_play_file_connected() {
+    let mut player = AirPlayPlayer::new();
+
+    // Test the target device logic but without actual connection success since we don't mock it
+    // here
+    player
+        .set_target_device_name(Some("NonExistentDevice".to_string()))
+        .await;
+
+    // Trying to play file will attempt connection to "NonExistentDevice"
+    let res = player.play_file("Cargo.toml").await;
+    // Should fail because it couldn't connect
+    assert!(matches!(
+        res,
+        Err(AirPlayError::DeviceNotFound { .. }) | Err(AirPlayError::ConnectionFailed { .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_quick_play_fails() {
+    // Should fail with DeviceNotFound if there are no devices
+    let res = quick_play(vec![(
+        "url".to_string(),
+        "title".to_string(),
+        "artist".to_string(),
+    )])
+    .await;
+    assert!(res.is_err());
+}
+
+#[tokio::test]
+async fn test_quick_connect_fails() {
+    // Should fail with DeviceNotFound
+    let res = quick_connect().await;
+    assert!(res.is_err());
+}
+
+#[tokio::test]
+async fn test_quick_connect_to_fails() {
+    // Should fail with DeviceNotFound
+    let res = quick_connect_to("Missing Device").await;
+    assert!(res.is_err());
+}
