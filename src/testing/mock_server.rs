@@ -59,6 +59,8 @@ impl Default for MockServerConfig {
 struct ServerState {
     /// Whether the server is currently in a streaming state.
     streaming: bool,
+    /// The current rate if `SetRateAnchorTime` was called
+    rate: Option<f64>,
     /// The current RTSP session ID, if any.
     session_id: Option<String>,
     /// Buffer of received audio packets.
@@ -69,6 +71,14 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+}
+
+impl MockServer {
+    /// Get the current rate
+    #[must_use]
+    pub async fn current_rate(&self) -> Option<f64> {
+        self.state.read().await.rate
+    }
 }
 
 /// A Mock `AirPlay` server.
@@ -98,6 +108,7 @@ impl MockServer {
             config,
             state: Arc::new(RwLock::new(ServerState {
                 streaming: false,
+                rate: None,
                 session_id: None,
                 audio_packets: Vec::new(),
                 volume: 0.0,
@@ -422,12 +433,14 @@ impl MockServer {
             }
             Method::SetRateAnchorTime => {
                 // Parse body to check rate
+                let mut parsed_rate: Option<f64> = None;
                 let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
                     if let Some(dict) = plist.as_dict() {
                         if let Some(rate) = dict
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
+                            parsed_rate = Some(rate);
                             rate.abs() > f64::EPSILON
                         } else {
                             true
@@ -439,7 +452,11 @@ impl MockServer {
                     true
                 };
 
-                state.write().await.streaming = streaming;
+                let mut s = state.write().await;
+                s.streaming = streaming;
+                if parsed_rate.is_some() {
+                    s.rate = parsed_rate;
+                }
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {
