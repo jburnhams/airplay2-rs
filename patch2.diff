@@ -1,0 +1,44 @@
+--- src/client/tests/client_tests.rs
++++ src/client/tests/client_tests.rs
+@@ -244,28 +244,30 @@
+
+ #[tokio::test]
+ async fn test_with_pairing_storage() {
++    struct DummyStorage;
++
++    #[async_trait::async_trait]
++    impl crate::protocol::pairing::PairingStorage for DummyStorage {
++        async fn load(&self, _: &str) -> Option<crate::protocol::pairing::PairingKeys> {
++            None
++        }
++        async fn save(&mut self, _: &str, _: &crate::protocol::pairing::PairingKeys) -> Result<(), crate::protocol::pairing::storage::StorageError> {
++            Ok(())
++        }
++        async fn remove(&mut self, _: &str) -> Result<(), crate::protocol::pairing::storage::StorageError> {
++            Ok(())
++        }
++        async fn list_devices(&self) -> Vec<String> {
++            Vec::new()
++        }
++    }
++
+     let client = AirPlayClient::default_client();
+-    struct DummyStorage;
+-    #[async_trait::async_trait]
+-    impl crate::protocol::pairing::PairingStorage for DummyStorage {
+-        async fn load(&self, _: &str) -> Option<crate::protocol::pairing::PairingKeys> {
+-            None
+-        }
+-        async fn save(&mut self, _: &str, _: &crate::protocol::pairing::PairingKeys) -> Result<(), crate::protocol::pairing::storage::StorageError> {
+-            Ok(())
+-        }
+-        async fn remove(&mut self, _: &str) -> Result<(), crate::protocol::pairing::storage::StorageError> {
+-            Ok(())
+-        }
+-        async fn list_devices(&self) -> Vec<String> {
+-            Vec::new()
+-        }
+-    }
+     let client = client.with_pairing_storage(Box::new(DummyStorage));
+     assert!(!client.is_connected().await);
+ }
