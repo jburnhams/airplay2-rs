@@ -233,15 +233,29 @@ async fn test_back_fails_disconnected() {
 async fn test_play_file_connected() {
     let mut player = AirPlayPlayer::new();
 
-    player.set_target_device_name(Some("NonExistentDevice".to_string())).await;
+    player
+        .set_target_device_name(Some("NonExistentDevice".to_string()))
+        .await;
 
     let res = player.play_file("Cargo.toml").await;
-    assert!(matches!(res, Err(AirPlayError::IoError { .. }) | Err(AirPlayError::DeviceNotFound { .. }) | Err(AirPlayError::InvalidState { .. }) | Err(AirPlayError::ConnectionFailed { .. })));
+    // Fix clippy unnested_or_patterns
+    assert!(matches!(
+        res,
+        Err(AirPlayError::DeviceNotFound { .. }
+            | AirPlayError::InvalidState { .. }
+            | AirPlayError::ConnectionFailed { .. }
+            | AirPlayError::IoError { .. })
+    ));
 }
 
 #[tokio::test]
 async fn test_quick_play_fails() {
-    let res = quick_play(vec![("url".to_string(), "title".to_string(), "artist".to_string())]).await;
+    let res = quick_play(vec![(
+        "url".to_string(),
+        "title".to_string(),
+        "artist".to_string(),
+    )])
+    .await;
     assert!(res.is_err());
 }
 

@@ -243,7 +243,6 @@ async fn test_forget_device() {
 
 #[tokio::test]
 async fn test_with_pairing_storage() {
-    let client = AirPlayClient::default_client();
     struct DummyStorage;
     #[async_trait::async_trait]
     impl crate::protocol::pairing::PairingStorage for DummyStorage {
@@ -267,6 +266,7 @@ async fn test_with_pairing_storage() {
             Vec::new()
         }
     }
+    let client = AirPlayClient::default_client();
     let client = client.with_pairing_storage(Box::new(DummyStorage));
     assert!(!client.is_connected().await);
 }
