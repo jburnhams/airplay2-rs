@@ -57,7 +57,8 @@ async fn test_raop_handshake_compliance() {
     // Instead of completing the mock and incorrectly allowing it to time out
     // or hang during pair-setup, we immediately send a 401 Unauthorized
     // to simulate a failed RAOP authentication.
-    let response = "RTSP/1.0 401 Unauthorized\r\nCSeq: 1\r\nWWW-Authenticate: Basic realm=\"roap\"\r\n\r\n";
+    let response =
+        "RTSP/1.0 401 Unauthorized\r\nCSeq: 1\r\nWWW-Authenticate: Basic realm=\"roap\"\r\n\r\n";
     stream.write_all(response.as_bytes()).await.unwrap();
 
     // Await client result (with timeout)
