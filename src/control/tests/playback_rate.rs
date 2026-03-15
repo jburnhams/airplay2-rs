@@ -18,17 +18,14 @@ async fn test_fast_forward_rewind() {
         model: Some("MockModel".to_string()),
         addresses: vec![addr.ip()],
         port: addr.port(),
-        capabilities: Default::default(),
+        capabilities: crate::types::DeviceCapabilities::default(),
         raop_port: None,
         raop_capabilities: None,
         txt_records: std::collections::HashMap::new(),
         last_seen: None,
     };
 
-    client
-        .connect(&device)
-        .await
-        .expect("Connection failed");
+    client.connect(&device).await.expect("Connection failed");
 
     // Fast forward should set rate to 2.0
     client.fast_forward().await.expect("Fast forward failed");

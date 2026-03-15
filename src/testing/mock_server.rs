@@ -59,7 +59,7 @@ impl Default for MockServerConfig {
 struct ServerState {
     /// Whether the server is currently in a streaming state.
     streaming: bool,
-    /// The current rate if SetRateAnchorTime was called
+    /// The current rate if `SetRateAnchorTime` was called
     rate: Option<f64>,
     /// The current RTSP session ID, if any.
     session_id: Option<String>,
