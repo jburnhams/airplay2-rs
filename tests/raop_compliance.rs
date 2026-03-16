@@ -70,7 +70,8 @@ async fn test_raop_handshake_compliance() {
 
     // If it's a GET /info request, respond to that and then expect ANNOUNCE
     if request.starts_with("GET /info") {
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n";
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: \
+                        application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
 
         // Read next request which should be ANNOUNCE
@@ -78,7 +79,10 @@ async fn test_raop_handshake_compliance() {
         let request = String::from_utf8_lossy(&buffer[..n]);
         println!("Received request 3 (after info): {}", request);
 
-        assert!(request.starts_with("ANNOUNCE") || request.starts_with("POST"), "Expected ANNOUNCE or POST after /info");
+        assert!(
+            request.starts_with("ANNOUNCE") || request.starts_with("POST"),
+            "Expected ANNOUNCE or POST after /info"
+        );
 
         if request.starts_with("ANNOUNCE") {
             assert!(request.contains("Content-Type: application/sdp"));
@@ -166,7 +170,8 @@ async fn test_raop_handshake_compliance() {
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed gracefully: {}", e), // Expected since mock is incomplete
+        Ok(Ok(Err(e))) => println!("Client failed gracefully: {}", e), // Expected since mock is
+        // incomplete
         Ok(Err(e)) => panic!("Client task panicked: {:?}", e),
         Err(_) => panic!("Timeout waiting for client"),
     }
