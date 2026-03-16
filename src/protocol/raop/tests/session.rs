@@ -194,3 +194,30 @@ fn test_process_response_failure() {
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("400 Bad Request"));
 }
+
+#[test]
+fn test_process_options_apple_response() {
+    let mut session = RaopRtspSession::new("192.168.1.50", 5000);
+
+    // Initial state
+    assert_eq!(session.state(), RaopSessionState::Init);
+
+    // Provide a mocked response with Apple-Response
+    let mut headers = Headers::new();
+    headers.insert("Apple-Response", "mocked_response_data");
+
+    let response = RtspResponse {
+        version: "RTSP/1.0".to_string(),
+        status: StatusCode::OK,
+        reason: "OK".to_string(),
+        headers,
+        body: Vec::new(),
+    };
+
+    // process_response on Options method should transition state and handle Apple-Response
+    let result = session.process_response(Method::Options, &response);
+
+    // The parsing shouldn't panic, and state should be transitioned
+    assert!(result.is_ok());
+    assert_eq!(session.state(), RaopSessionState::OptionsExchange);
+}
