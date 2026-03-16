@@ -110,6 +110,8 @@ async fn test_playback_controller_play_pause_stop_not_connected() {
     assert!(controller.pause().await.is_err());
     assert!(controller.stop().await.is_err());
     assert!(controller.toggle().await.is_err());
+    assert!(controller.fast_forward().await.is_err());
+    assert!(controller.rewind().await.is_err());
 }
 
 #[tokio::test]

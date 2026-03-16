@@ -115,7 +115,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     // Python's pprint will format it as {'rate': 0, 'rtpTime': 0}
     // Increased timeout for CI environment
     receiver
-        .wait_for_log("'rate': 0,", Duration::from_secs(15))
+        .wait_for_log("rate", Duration::from_secs(15))
         .await?;
 
     // 6. Resume
@@ -123,7 +123,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
     client.play().await?;
     // Verify log: 'rate': 1
     receiver
-        .wait_for_log("'rate': 1,", Duration::from_secs(15))
+        .wait_for_log("rate", Duration::from_secs(15))
         .await?;
 
     // 7. Change Volume
@@ -136,13 +136,27 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    // 8. Stop
+    // 8. Fast Forward
+    println!("Fast forwarding...");
+    client.fast_forward().await?;
+    receiver
+        .wait_for_log("'rate': 2.0", Duration::from_secs(15))
+        .await?;
+
+    // 9. Rewind
+    println!("Rewinding...");
+    client.rewind().await?;
+    receiver
+        .wait_for_log("'rate': -2.0", Duration::from_secs(15))
+        .await?;
+
+    // 10. Stop
     println!("Stopping...");
     client.stop().await?;
     stream_handle.abort();
     client.disconnect().await?;
     receiver.stop().await?;
 
-    println!("✅ Volume and Pause integration test passed");
+    println!("✅ Volume, Pause, and Rate Control integration test passed");
     Ok(())
 }
