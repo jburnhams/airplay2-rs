@@ -139,7 +139,7 @@ async fn test_fast_forward_and_rewind() {
     let controller = crate::control::playback::PlaybackController::new(manager);
 
     // Initial position should be 0.0
-    assert_eq!(controller.state().await.position_secs, 0.0);
+    assert!(controller.state().await.position_secs.abs() < f64::EPSILON);
 
     // Fast forward should attempt to skip forward 10s. Since it's disconnected, it'll fail,
     // but the state doesn't update on failure. We can mock it or just verify it fails correctly.
