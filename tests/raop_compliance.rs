@@ -62,17 +62,69 @@ async fn test_raop_handshake_compliance() {
                     GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n";
     stream.write_all(response.as_bytes()).await.unwrap();
 
-    // --- Step 2: ANNOUNCE ---
+    // --- Step 2: GET /info (AirPlay 2 behavior) or ANNOUNCE (AirPlay 1) ---
     let n = stream.read(&mut buffer).await.unwrap();
     let request = String::from_utf8_lossy(&buffer[..n]);
 
     println!("Received request 2: {}", request);
 
-    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
-    // double checks) The client implementation might differ, so we should be robust.
-    // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
+    // If it's a GET /info request, respond to that and then expect ANNOUNCE
+    if request.starts_with("GET /info") {
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: \
+                        application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
 
-    if request.starts_with("ANNOUNCE") {
+        // Read next request which should be ANNOUNCE
+        let n = stream.read(&mut buffer).await.unwrap();
+        let request = String::from_utf8_lossy(&buffer[..n]);
+        println!("Received request 3 (after info): {}", request);
+
+        assert!(
+            request.starts_with("ANNOUNCE") || request.starts_with("POST"),
+            "Expected ANNOUNCE or POST after /info"
+        );
+
+        if request.starts_with("ANNOUNCE") {
+            assert!(request.contains("Content-Type: application/sdp"));
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+
+            // --- Step 4: SETUP ---
+            let n = stream.read(&mut buffer).await.unwrap();
+            let request = String::from_utf8_lossy(&buffer[..n]);
+            println!("Received request 4 (SETUP): {}", request);
+
+            assert!(request.starts_with("SETUP"));
+            assert!(request.contains("Transport: RTP/AVP/UDP"));
+
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nSession: CAFEBABE\r\nTransport: \
+                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                            timing_port=6002\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+
+            // --- Step 5: RECORD ---
+            let n = stream.read(&mut buffer).await.unwrap();
+            let request = String::from_utf8_lossy(&buffer[..n]);
+            println!("Received request 5 (RECORD): {}", request);
+
+            assert!(request.starts_with("RECORD"));
+            assert!(request.contains("Session: CAFEBABE"));
+            assert!(request.contains("Range: npt=0-"));
+
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 5\r\nAudio-Latency: 2205\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+        } else if request.starts_with("POST") {
+            // Pairing
+            println!("Got POST instead of ANNOUNCE");
+            // If the code path just errors out on pairing mismatch, we allow the test to fail
+            // gracefully. We are just ensuring it doesn't hang.
+
+            // To prevent hanging, we should respond with a failure to abort the client
+            let response = "RTSP/1.0 401 Unauthorized\r\nCSeq: 3\r\nConnection: close\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+            drop(stream);
+        }
+    } else if request.starts_with("ANNOUNCE") {
         assert!(request.contains("Content-Type: application/sdp"));
 
         let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
@@ -105,20 +157,22 @@ async fn test_raop_handshake_compliance() {
     } else if request.starts_with("POST") {
         // Maybe pairing?
         println!("Got POST instead of ANNOUNCE");
-        // For this test, we might stop here if we unexpected behavior, or handle it.
-        // This verifies that we at least got past the first step.
     }
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
+    // Await client result (with timeout)
+    // For a 401 response to a pairing POST request, the client should properly return
+    // an error rather than hanging. We wait for it here and assert it resolves gracefully.
+    let result = tokio::time::timeout(Duration::from_secs(5), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => println!("Client failed gracefully: {}", e), // Expected since mock is
+        // incomplete
+        Ok(Err(e)) => panic!("Client task panicked: {:?}", e),
+        Err(_) => panic!("Timeout waiting for client"),
     }
 }
