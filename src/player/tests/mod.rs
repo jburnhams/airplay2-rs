@@ -207,6 +207,30 @@ async fn test_device_initially_none() {
 }
 
 #[tokio::test]
+async fn test_current_track_initially_none() {
+    let player = AirPlayPlayer::new();
+    assert!(player.current_track().await.is_none());
+}
+
+#[tokio::test]
+async fn test_set_auto_reconnect_flag() {
+    let mut player = AirPlayPlayer::new();
+    // Default is true
+    assert!(player.auto_reconnect.load(Ordering::SeqCst));
+
+    player.set_auto_reconnect(false);
+    assert!(!player.auto_reconnect.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn test_set_target_device_name_property() {
+    let player = AirPlayPlayer::new();
+    player.set_target_device_name(Some("Living Room".to_string())).await;
+    let name = player.target_device_name.read().await.clone();
+    assert_eq!(name, Some("Living Room".to_string()));
+}
+
+#[tokio::test]
 async fn test_initial_queue_length() {
     let player = AirPlayPlayer::new();
     assert_eq!(player.queue_length().await, 0);

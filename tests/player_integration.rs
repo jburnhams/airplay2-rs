@@ -218,3 +218,57 @@ async fn test_player_disconnected_errors() {
     let res = player.seek(10.0).await;
     assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
 }
+
+#[tokio::test]
+async fn test_player_connect_and_device_state() {
+    let config = MockServerConfig {
+        rtsp_port: 0,
+        ..Default::default()
+    };
+    let mut server = MockServer::new(config);
+    let addr = server.start().await.expect("Failed to start server");
+
+    let player = AirPlayPlayer::new();
+
+    // Initially not connected
+    assert!(!player.is_connected().await);
+    assert!(player.device().await.is_none());
+
+    let device = AirPlayDevice {
+        id: "player_connect_state".to_string(),
+        name: "Connect State Device".to_string(),
+        model: Some("Mock".to_string()),
+        addresses: vec![addr.ip()],
+        port: addr.port(),
+        capabilities: airplay2::types::DeviceCapabilities {
+            airplay2: true,
+            supports_audio: true,
+            ..Default::default()
+        },
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
+    };
+
+    // Connect
+    player.connect(&device).await.expect("Connect failed");
+
+    // Check state after connecting
+    assert!(player.is_connected().await);
+    let connected_device = player
+        .device()
+        .await
+        .expect("Expected a device to be returned");
+    assert_eq!(connected_device.id, device.id);
+    assert_eq!(connected_device.name, device.name);
+
+    // Disconnect
+    player.disconnect().await.expect("Disconnect failed");
+
+    // Check state after disconnecting
+    assert!(!player.is_connected().await);
+    assert!(player.device().await.is_none());
+
+    server.stop().await;
+}
