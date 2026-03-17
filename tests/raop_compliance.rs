@@ -107,18 +107,91 @@ async fn test_raop_handshake_compliance() {
         println!("Got POST instead of ANNOUNCE");
         // For this test, we might stop here if we unexpected behavior, or handle it.
         // This verifies that we at least got past the first step.
+    } else if request.starts_with("GET /info") {
+        // Handle GET /info gracefully
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: text/x-apple-plist+xml\r\n\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\r\n<plist version=\"1.0\">\r\n<dict>\r\n<key>audioLatencies</key>\r\n<array>\r\n<dict>\r\n<key>audioType</key>\r\n<string>default</string>\r\n<key>inputLatencyMicros</key>\r\n<integer>0</integer>\r\n<key>outputLatencyMicros</key>\r\n<integer>0</integer>\r\n</dict>\r\n</array>\r\n<key>keepAliveSendStatsAsBody</key>\r\n<true/>\r\n</dict>\r\n</plist>\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
+
+        // Next request might be SETUP or ANNOUNCE or POST /auth-setup
+        let n = stream.read(&mut buffer).await.unwrap();
+        let request = String::from_utf8_lossy(&buffer[..n]);
+        println!("Received request 3: {}", request);
+
+        if request.starts_with("POST /auth-setup") {
+            // Send auth response
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n01234567890123456789012345678901";
+            stream.write_all(response.as_bytes()).await.unwrap();
+
+            loop {
+                let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+                    Ok(Ok(n)) => n,
+                    _ => break,
+                };
+                if n == 0 { break; }
+
+                let req = String::from_utf8_lossy(&buffer[..n]);
+                println!("Received follow-up request: {}", req);
+
+                if req.starts_with("POST /auth-setup") || req.starts_with("POST /pair-setup") || req.starts_with("POST /pair-verify") {
+                    let response = "HTTP/1.1 200 OK\r\nCSeq: 4\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n01234567890123456789012345678901";
+                    let _ = stream.write_all(response.as_bytes()).await;
+                } else if req.starts_with("ANNOUNCE") || req.starts_with("SETUP") {
+                    let response = "RTSP/1.0 200 OK\r\nCSeq: 5\r\nSession: CAFEBABE\r\nTransport: \
+                                    RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                                    timing_port=6002\r\n\r\n";
+                    let _ = stream.write_all(response.as_bytes()).await;
+                }
+            }
+        } else if request.starts_with("ANNOUNCE") {
+            assert!(request.contains("Content-Type: application/sdp"));
+
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+
+            // Next should be SETUP
+            let n = stream.read(&mut buffer).await.unwrap();
+            let request = String::from_utf8_lossy(&buffer[..n]);
+            println!("Received request 4: {}", request);
+
+            if request.starts_with("SETUP") {
+                let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nSession: CAFEBABE\r\nTransport: \
+                                RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                                timing_port=6002\r\n\r\n";
+                stream.write_all(response.as_bytes()).await.unwrap();
+
+                // Wait for RECORD
+                let n = stream.read(&mut buffer).await.unwrap();
+                let request = String::from_utf8_lossy(&buffer[..n]);
+                println!("Received request 5: {}", request);
+                if request.starts_with("RECORD") {
+                    let response = "RTSP/1.0 200 OK\r\nCSeq: 5\r\nAudio-Latency: 2205\r\n\r\n";
+                    stream.write_all(response.as_bytes()).await.unwrap();
+                }
+            }
+        } else if request.starts_with("SETUP") {
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nSession: CAFEBABE\r\nTransport: \
+                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                            timing_port=6002\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.unwrap();
+
+            // Wait for RECORD
+            let n = stream.read(&mut buffer).await.unwrap();
+            let request = String::from_utf8_lossy(&buffer[..n]);
+            println!("Received request 4: {}", request);
+            if request.starts_with("RECORD") {
+                let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
+        }
     }
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
+    // Since we are mocking the server simply to check compliance of initial requests,
+    // the client connection will eventually fail or timeout due to incomplete responses.
+    // For this test, we care that the client initiated the correct requests, not that
+    // it successfully established a full connection against our incomplete mock.
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
-
-    match result {
-        Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
-    }
+    // Abort the connect handle so the test finishes cleanly
+    connect_handle.abort();
 }

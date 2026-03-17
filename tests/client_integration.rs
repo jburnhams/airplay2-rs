@@ -155,21 +155,23 @@ async fn test_client_connect_failure() {
 
     let result = timeout(Duration::from_secs(2), client.connect(&device)).await;
 
-    // We expect the connection to either timeout (if OS drops) or return an error (Connection
-    // refused)
+    // We expect the connection to either timeout (if OS drops packets to invalid port)
+    // or return a ConnectionRefused error immediately.
     match result {
-        Ok(Err(_e)) => {
-            // Connection failed as expected
+        Ok(Err(e)) => {
+            // Connection failed with an error as expected
+            tracing::info!("Connection failed expectedly with: {}", e);
         }
         Ok(Ok(_)) => {
-            panic!("Connection succeeded when it should have failed");
+            panic!("Connection succeeded when it should have failed (port 65534 should be closed)");
         }
         Err(_) => {
-            // Timeout is also an acceptable failure mode depending on OS
+            // OS timed out the connection attempt before our 2s timeout
+            tracing::info!("Connection timed out expectedly");
         }
     }
 
-    assert!(!client.is_connected().await);
+    assert!(!client.is_connected().await, "Client must report disconnected state");
 }
 
 #[tokio::test]
