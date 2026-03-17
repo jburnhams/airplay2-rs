@@ -225,7 +225,9 @@ async fn test_set_auto_reconnect_flag() {
 #[tokio::test]
 async fn test_set_target_device_name_property() {
     let player = AirPlayPlayer::new();
-    player.set_target_device_name(Some("Living Room".to_string())).await;
+    player
+        .set_target_device_name(Some("Living Room".to_string()))
+        .await;
     let name = player.target_device_name.read().await.clone();
     assert_eq!(name, Some("Living Room".to_string()));
 }
