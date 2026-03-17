@@ -56,7 +56,7 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
             Ok(Some(_)) => {} // Ignore other events
             Ok(None) => break,
             Err(_) => {
-                // Timeout, no new events in 2s
+                tracing::debug!("Timeout waiting for new mDNS events; continuing loop");
             }
         }
 

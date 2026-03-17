@@ -28,11 +28,25 @@ async fn test_multi_room_coordination() -> Result<(), Box<dyn std::error::Error>
         .build();
 
     let mut client = AirPlayClient::new(config);
-    if let Err(e) = client.connect(&device).await {
-        tracing::error!("Connection failed: {}", e);
-        receiver.stop().await?;
-        return Err(e.into());
+
+    // Add retry logic for connecting to python receiver in tests
+    let mut connected = false;
+    for i in 0..3 {
+        if let Err(e) = client.connect(&device).await {
+            tracing::error!("Connection failed (attempt {}): {}", i + 1, e);
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        } else {
+            connected = true;
+            break;
+        }
     }
+
+    if !connected {
+        tracing::error!("All connection attempts failed");
+        receiver.stop().await?;
+        return Err("Connection failed after retries".into());
+    }
+
     assert!(client.is_connected().await, "Client should be connected");
 
     // The multi-room coordinator logic in `AirPlayClient` is tied to the PTP synchronization
