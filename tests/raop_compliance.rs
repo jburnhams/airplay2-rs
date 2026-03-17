@@ -119,26 +119,40 @@ async fn test_raop_handshake_compliance() {
 
         if request.starts_with("POST /auth-setup") {
             // Send auth response
-            let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n01234567890123456789012345678901";
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nContent-Type: \
+                            application/octet-stream\r\nContent-Length: \
+                            32\r\n\r\n01234567890123456789012345678901";
             stream.write_all(response.as_bytes()).await.unwrap();
 
             loop {
-                let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+                let n = match tokio::time::timeout(
+                    Duration::from_millis(500),
+                    stream.read(&mut buffer),
+                )
+                .await
+                {
                     Ok(Ok(n)) => n,
                     _ => break,
                 };
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
 
                 let req = String::from_utf8_lossy(&buffer[..n]);
                 println!("Received follow-up request: {}", req);
 
-                if req.starts_with("POST /auth-setup") || req.starts_with("POST /pair-setup") || req.starts_with("POST /pair-verify") {
-                    let response = "HTTP/1.1 200 OK\r\nCSeq: 4\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n01234567890123456789012345678901";
+                if req.starts_with("POST /auth-setup")
+                    || req.starts_with("POST /pair-setup")
+                    || req.starts_with("POST /pair-verify")
+                {
+                    let response = "HTTP/1.1 200 OK\r\nCSeq: 4\r\nContent-Type: \
+                                    application/octet-stream\r\nContent-Length: \
+                                    32\r\n\r\n01234567890123456789012345678901";
                     let _ = stream.write_all(response.as_bytes()).await;
                 } else if req.starts_with("ANNOUNCE") || req.starts_with("SETUP") {
                     let response = "RTSP/1.0 200 OK\r\nCSeq: 5\r\nSession: CAFEBABE\r\nTransport: \
-                                    RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                                    timing_port=6002\r\n\r\n";
+                                    RTP/AVP/UDP;unicast;mode=record;server_port=6000;\
+                                    control_port=6001;timing_port=6002\r\n\r\n";
                     let _ = stream.write_all(response.as_bytes()).await;
                 }
             }
@@ -155,8 +169,8 @@ async fn test_raop_handshake_compliance() {
 
             if request.starts_with("SETUP") {
                 let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nSession: CAFEBABE\r\nTransport: \
-                                RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                                timing_port=6002\r\n\r\n";
+                                RTP/AVP/UDP;unicast;mode=record;server_port=6000;\
+                                control_port=6001;timing_port=6002\r\n\r\n";
                 stream.write_all(response.as_bytes()).await.unwrap();
 
                 // Wait for RECORD

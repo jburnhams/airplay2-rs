@@ -171,7 +171,10 @@ async fn test_client_connect_failure() {
         }
     }
 
-    assert!(!client.is_connected().await, "Client must report disconnected state");
+    assert!(
+        !client.is_connected().await,
+        "Client must report disconnected state"
+    );
 }
 
 #[tokio::test]
