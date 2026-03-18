@@ -418,6 +418,30 @@ impl AirPlayClient {
         self.playback.seek(position).await
     }
 
+    /// Fast forward
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
+    pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
+        self.ensure_connected().await?;
+        self.playback.fast_forward().await?;
+        self.state.update(|s| s.playback.is_playing = true).await;
+        Ok(())
+    }
+
+    /// Rewind
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
+    pub async fn rewind(&self) -> Result<(), AirPlayError> {
+        self.ensure_connected().await?;
+        self.playback.rewind().await?;
+        self.state.update(|s| s.playback.is_playing = true).await;
+        Ok(())
+    }
+
     /// Get current playback state
     pub async fn playback_state(&self) -> PlaybackState {
         self.state.get().await.playback
