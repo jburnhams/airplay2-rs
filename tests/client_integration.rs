@@ -114,6 +114,16 @@ async fn test_client_integration_flow() {
     assert!(!server.is_streaming().await);
     assert!(!client.playback_state().await.is_playing);
 
+    // Fast Forward
+    client.fast_forward().await.expect("Fast forward failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(client.playback_state().await.is_playing); // State updates to playing
+
+    // Rewind
+    client.rewind().await.expect("Rewind failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(client.playback_state().await.is_playing); // State updates to playing
+
     // 6. Disconnect
     println!("Disconnecting...");
     client.disconnect().await.expect("Disconnect failed");
