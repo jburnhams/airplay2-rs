@@ -387,9 +387,12 @@ impl SubprocessHandle {
     #[allow(dead_code, reason = "Used in some test modules but not all")]
     pub async fn is_running(&mut self) -> bool {
         match self.process.try_wait() {
-            Ok(Some(_)) => false,
-            Ok(None) => true,
-            Err(_) => false,
+            Ok(Some(_)) => false, // Process has exited
+            Ok(None) => true,     // Process is still running
+            Err(e) => {
+                tracing::warn!("Failed to query process status: {}", e);
+                false
+            }
         }
     }
 

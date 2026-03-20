@@ -62,11 +62,23 @@ async fn test_raop_handshake_compliance() {
                     GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n";
     stream.write_all(response.as_bytes()).await.unwrap();
 
-    // --- Step 2: ANNOUNCE ---
-    let n = stream.read(&mut buffer).await.unwrap();
-    let request = String::from_utf8_lossy(&buffer[..n]);
+    // --- Step 2: GET /info (Optional) or ANNOUNCE ---
+    let mut n = stream.read(&mut buffer).await.unwrap();
+    let mut request = String::from_utf8_lossy(&buffer[..n]).to_string();
 
     println!("Received request 2: {}", request);
+
+    // RAOP client often queries GET /info to determine features before ANNOUNCE.
+    if request.starts_with("GET /info") {
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: \
+                        application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
+
+        // Now read the next request which should be ANNOUNCE or POST
+        n = stream.read(&mut buffer).await.unwrap();
+        request = String::from_utf8_lossy(&buffer[..n]).to_string();
+        println!("Received request 3 (after info): {}", request);
+    }
 
     // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
     // double checks) The client implementation might differ, so we should be robust.
@@ -105,20 +117,44 @@ async fn test_raop_handshake_compliance() {
     } else if request.starts_with("POST") {
         // Maybe pairing?
         println!("Got POST instead of ANNOUNCE");
-        // For this test, we might stop here if we unexpected behavior, or handle it.
-        // This verifies that we at least got past the first step.
+
+        // Handle the POST command gracefully so the client connection doesn't hang
+        // and time out while waiting for a response. We return 200 OK.
+        // auth-setup expects a 32 byte response
+        let mut response = b"RTSP/1.0 200 OK\r\nCSeq: 3\r\nContent-Length: 32\r\nContent-Type: application/octet-stream\r\n\r\n".to_vec();
+        response.extend_from_slice(&[0u8; 32]);
+        stream.write_all(&response).await.unwrap();
+
+        // The client expects more steps for pairing, so rather than stall it out,
+        // we close the connection immediately after so client fails fast.
+
+        // Ensure client is aborted
+        connect_handle.abort();
+    } else {
+        connect_handle.abort();
     }
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
+    // We add a short timeout, and panic if it times out since it should not hang.
 
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => {
+            // It is acceptable for the client to fail if we aborted the pairing/setup early
+            // in this compliance test, but we must log it cleanly instead of failing the test.
+            println!("Client failed as expected during mock RAOP setup: {}", e);
+        }
+        Ok(Err(e)) => {
+            if e.is_cancelled() {
+                println!("Client task cancelled successfully.");
+            } else {
+                panic!("Client task panicked: {:?}", e);
+            }
+        }
+        Err(_) => panic!("Timeout waiting for client to finish connecting"),
     }
 }

@@ -159,13 +159,15 @@ async fn test_client_connect_failure() {
     // refused)
     match result {
         Ok(Err(_e)) => {
-            // Connection failed as expected
+            // Connection failed as expected (e.g. Connection refused)
         }
         Ok(Ok(_)) => {
             panic!("Connection succeeded when it should have failed");
         }
         Err(_) => {
-            // Timeout is also an acceptable failure mode depending on OS
+            // A timeout from tokio::time::timeout is an expected failure mode here
+            // since the target port is invalid and the OS may drop the SYN packets.
+            tracing::info!("Connection timed out as expected.");
         }
     }
 
