@@ -92,13 +92,21 @@ async fn test_volume_control() {
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => return false,
+                Err(_) => {
+                    // Channel closed or lagged
+                    return false;
+                }
             }
         }
     })
     .await;
 
-    assert!(result.unwrap_or(false), "VolumeChanged event not received");
+    // `result` is an `Err` if the 1s timeout occurs.
+    // `Ok(false)` if the channel closed before we received the expected event.
+    assert!(
+        result.unwrap_or(false),
+        "VolumeChanged event not received before timeout or channel close"
+    );
 
     sender.teardown().await.unwrap();
     receiver.stop().await.unwrap();
