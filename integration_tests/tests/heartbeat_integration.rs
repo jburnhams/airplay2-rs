@@ -55,8 +55,9 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
             }
             Ok(Some(_)) => {} // Ignore other events
             Ok(None) => break,
-            Err(_) => {
+            Err(e) => {
                 // Timeout, no new events in 2s
+                tracing::debug!("Timeout, no new events in 2s: {:?}", e);
             }
         }
 
