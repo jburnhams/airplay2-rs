@@ -69,6 +69,8 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+    /// Last rate received in `SetRateAnchorTime`
+    last_rate: Option<f64>,
 }
 
 /// A Mock `AirPlay` server.
@@ -103,6 +105,7 @@ impl MockServer {
                 volume: 0.0,
                 paired: false,
                 pairing_server,
+                last_rate: None,
             })),
             shutdown: None,
             address: None,
@@ -180,6 +183,11 @@ impl MockServer {
     /// Returns the number of audio packets received.
     pub async fn audio_packet_count(&self) -> usize {
         self.state.read().await.audio_packets.len()
+    }
+
+    /// Get the last playback rate received.
+    pub async fn last_rate(&self) -> Option<f64> {
+        self.state.read().await.last_rate
     }
 
     /// Returns the current volume level.
@@ -428,6 +436,7 @@ impl MockServer {
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
+                            state.write().await.last_rate = Some(rate);
                             rate.abs() > f64::EPSILON
                         } else {
                             true

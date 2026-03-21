@@ -131,3 +131,52 @@ async fn test_playback_controller_set_shuffle_and_repeat() {
     // it returns an error, state might remain unchanged.
     assert!(res.is_err());
 }
+
+#[tokio::test]
+async fn test_playback_controller_fast_forward_rewind() {
+    use crate::testing::mock_server::MockServer;
+    use crate::types::AirPlayDevice;
+
+    let mut server = MockServer::default_server();
+    server.start().await.unwrap();
+
+    // Create connection manager
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+
+    // Connect to mock server
+    let device = AirPlayDevice {
+        id: "mock_device_ff_rewind".to_string(),
+        name: "Mock Device".to_string(),
+        addresses: vec![std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)],
+        port: server.address().unwrap().port(),
+        model: None,
+        capabilities: crate::types::DeviceCapabilities::default(),
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
+    };
+
+    manager.connect(&device).await.unwrap();
+
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    // Test fast forward
+    controller.fast_forward().await.unwrap();
+    // Verify rate is 2.0
+    let rate = server.last_rate().await.unwrap();
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Expected fast-forward rate to be 2.0, got {rate}"
+    );
+
+    // Test rewind
+    controller.rewind().await.unwrap();
+    // Verify rate is -2.0
+    let rate = server.last_rate().await.unwrap();
+    assert!(
+        (rate - -2.0).abs() < f64::EPSILON,
+        "Expected rewind rate to be -2.0, got {rate}"
+    );
+}
