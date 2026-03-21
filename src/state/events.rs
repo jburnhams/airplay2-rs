@@ -182,7 +182,10 @@ impl EventFilter {
         loop {
             match self.rx.recv().await {
                 Ok(event) if (self.filter)(&event) => return Some(event),
-                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Ok(_) => {}
+                Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                    tracing::warn!("Event receiver lagged, skipped {} events", skipped);
+                }
                 Err(broadcast::error::RecvError::Closed) => return None,
             }
         }
