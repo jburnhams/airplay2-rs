@@ -72,53 +72,99 @@ async fn test_raop_handshake_compliance() {
     // double checks) The client implementation might differ, so we should be robust.
     // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
 
-    if request.starts_with("ANNOUNCE") {
-        assert!(request.contains("Content-Type: application/sdp"));
+    let mut request_str = request.into_owned();
+    let mut cseq = 2;
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
+    if request_str.starts_with("GET /info") {
+        let response = format!(
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+             text/x-apple-plist+xml\r\nContent-Length: 0\r\n\r\n",
+            cseq
+        );
         stream.write_all(response.as_bytes()).await.unwrap();
 
-        // --- Step 3: SETUP ---
         let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 3: {}", request);
+        request_str = String::from_utf8_lossy(&buffer[..n]).into_owned();
+        println!("Received request 3: {}", request_str);
+        cseq += 1;
+    }
 
-        assert!(request.starts_with("SETUP"));
-        assert!(request.contains("Transport: RTP/AVP/UDP"));
+    if request_str.starts_with("ANNOUNCE") {
+        assert!(request_str.contains("Content-Type: application/sdp"));
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nSession: CAFEBABE\r\nTransport: \
-                        RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                        timing_port=6002\r\n\r\n";
+        let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
         stream.write_all(response.as_bytes()).await.unwrap();
+        cseq += 1;
 
-        // --- Step 4: RECORD ---
+        // --- Step 3/4: SETUP ---
         let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 4: {}", request);
+        let request_str = String::from_utf8_lossy(&buffer[..n]);
+        println!("Received request {}: {}", cseq, request_str);
 
-        assert!(request.starts_with("RECORD"));
-        assert!(request.contains("Session: CAFEBABE"));
-        assert!(request.contains("Range: npt=0-"));
+        assert!(request_str.starts_with("SETUP"));
+        assert!(request_str.contains("Transport: RTP/AVP/UDP"));
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
+        let response = format!(
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+             RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;timing_port=6002\\
+             r\n\r\n",
+            cseq
+        );
         stream.write_all(response.as_bytes()).await.unwrap();
-    } else if request.starts_with("POST") {
+        cseq += 1;
+
+        // --- Step 4/5: RECORD ---
+        let n = stream.read(&mut buffer).await.unwrap();
+        let request_str = String::from_utf8_lossy(&buffer[..n]);
+        println!("Received request {}: {}", cseq, request_str);
+
+        assert!(request_str.starts_with("RECORD"));
+        assert!(request_str.contains("Session: CAFEBABE"));
+        assert!(request_str.contains("Range: npt=0-"));
+
+        let response = format!(
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+            cseq
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
+    } else if request_str.starts_with("POST") {
         // Maybe pairing?
         println!("Got POST instead of ANNOUNCE");
-        // For this test, we might stop here if we unexpected behavior, or handle it.
-        // This verifies that we at least got past the first step.
+        let response = format!(
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\nContent-Type: \
+             application/octet-stream\r\n\r\n",
+            cseq
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
+        stream.write_all(&[0u8; 32]).await.unwrap();
+
+        // After auth-setup, it might send another POST /auth-setup or ANNOUNCE. Let's read it.
+        if let Ok(n) =
+            tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await
+        {
+            let n = n.unwrap();
+            let req_str2 = String::from_utf8_lossy(&buffer[..n]);
+            println!("Received request {}: {}", cseq + 1, req_str2);
+        }
     }
+
+    // Drop the listener and stream to force client connection to abort.
+    drop(stream);
+    drop(listener);
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
+    // Force failure of connection to ensure timeout doesn't happen, as we didn't complete handshake
+    // connect_handle handles the task. Since stream was closed, client connection should fail
+    // cleanly Wait for the task up to 5 seconds to ensure client times out.
+    let result = tokio::time::timeout(Duration::from_secs(5), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => println!("Client safely failed after mock stop: {}", e),
+        Ok(Err(_)) => panic!("Client panic"),
+        Err(_) => println!("Timeout waiting for client (expected)"),
     }
 }
