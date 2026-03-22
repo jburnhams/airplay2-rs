@@ -246,9 +246,7 @@ impl PlaybackController {
     ///
     /// Returns error if network fails
     pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip forward 10s
-        self.seek_relative(Duration::from_secs(10), true).await
+        self.send_rate(2.0).await
     }
 
     /// Rewind
@@ -257,9 +255,7 @@ impl PlaybackController {
     ///
     /// Returns error if network fails
     pub async fn rewind(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip backward 10s
-        self.seek_relative(Duration::from_secs(10), false).await
+        self.send_rate(-2.0).await
     }
 
     /// Set repeat mode
@@ -395,6 +391,28 @@ impl PlaybackController {
                 Method::SetParameter,
                 Some(body),
                 Some("application/x-dmap-tagged".to_string()),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Internal: send rate command
+    async fn send_rate(&self, rate: f64) -> Result<(), AirPlayError> {
+        let body = DictBuilder::new()
+            .insert("rate", rate)
+            .insert("rtpTime", 0u64)
+            .build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
             )
             .await?;
         Ok(())

@@ -184,6 +184,57 @@ async fn test_player_advanced_controls() {
 }
 
 #[tokio::test]
+async fn test_player_rate_control() {
+    let config = MockServerConfig {
+        rtsp_port: 0,
+        ..Default::default()
+    };
+    let mut server = MockServer::new(config);
+    let addr = server.start().await.expect("Failed to start server");
+
+    let player = AirPlayPlayer::new();
+    let device = AirPlayDevice {
+        id: "player_test_rate".to_string(),
+        name: "Rate Control Test Device".to_string(),
+        model: Some("Mock".to_string()),
+        addresses: vec![addr.ip()],
+        port: addr.port(),
+        capabilities: airplay2::types::DeviceCapabilities {
+            airplay2: true,
+            supports_audio: true,
+            ..Default::default()
+        },
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
+    };
+
+    player.connect(&device).await.expect("Connect failed");
+
+    // Fast forward should set rate to 2.0
+    player.fast_forward().await.expect("Fast forward failed");
+    let rate = server.last_rate().await.expect("Expected a rate to be set");
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Expected rate to be 2.0, got {}",
+        rate
+    );
+
+    // Rewind should set rate to -2.0
+    player.rewind().await.expect("Rewind failed");
+    let rate = server.last_rate().await.expect("Expected a rate to be set");
+    assert!(
+        (rate - (-2.0)).abs() < f64::EPSILON,
+        "Expected rate to be -2.0, got {}",
+        rate
+    );
+
+    player.disconnect().await.expect("Disconnect failed");
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn test_player_builder() {
     let player = PlayerBuilder::new()
         .connection_timeout(Duration::from_secs(5))
