@@ -65,7 +65,9 @@ async fn test_raop_handshake_compliance() {
     // Handle varying handshakes (including info/auth requests) before ANNOUNCE.
     // The client may try info, auth-setup, pair-setup depending on flags.
     loop {
-        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer))
+            .await
+        {
             Ok(Ok(n)) if n > 0 => n,
             _ => break,
         };
@@ -75,8 +77,8 @@ async fn test_raop_handshake_compliance() {
         // Extract CSeq for matching response sequence
         let mut cseq = 2;
         for line in request.lines() {
-            if line.starts_with("CSeq: ") {
-                if let Ok(val) = line[6..].trim().parse::<u32>() {
+            if let Some(stripped) = line.strip_prefix("CSeq: ") {
+                if let Ok(val) = stripped.trim().parse::<u32>() {
                     cseq = val;
                 }
             }
@@ -87,7 +89,8 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             let auth_resp = vec![0u8; 32];
-            let response_headers = format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nContent-Length: 32\r\n\r\n");
+            let response_headers =
+                format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nContent-Length: 32\r\n\r\n");
             stream.write_all(response_headers.as_bytes()).await.unwrap();
             stream.write_all(&auth_resp).await.unwrap();
         } else if request.starts_with("POST /pair-setup") {
@@ -99,14 +102,17 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("SETUP") {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n");
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n"
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
             assert!(request.contains("Range: npt=0-"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nAudio-Latency: 2205\r\n\r\n");
+            let response =
+                format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nAudio-Latency: 2205\r\n\r\n");
             stream.write_all(response.as_bytes()).await.unwrap();
             break;
         } else {
