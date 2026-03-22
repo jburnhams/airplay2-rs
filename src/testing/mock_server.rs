@@ -69,6 +69,8 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+    /// Last rate received in `SetRateAnchorTime`
+    last_rate: Option<f64>,
 }
 
 /// A Mock `AirPlay` server.
@@ -103,6 +105,7 @@ impl MockServer {
                 volume: 0.0,
                 paired: false,
                 pairing_server,
+                last_rate: None,
             })),
             shutdown: None,
             address: None,
@@ -190,6 +193,11 @@ impl MockServer {
     /// Checks if the server is currently streaming.
     pub async fn is_streaming(&self) -> bool {
         self.state.read().await.streaming
+    }
+
+    /// Gets the last received playback rate.
+    pub async fn last_rate(&self) -> Option<f64> {
+        self.state.read().await.last_rate
     }
 
     /// Handles a single client connection.
@@ -422,12 +430,14 @@ impl MockServer {
             }
             Method::SetRateAnchorTime => {
                 // Parse body to check rate
+                let mut parsed_rate = None;
                 let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
                     if let Some(dict) = plist.as_dict() {
                         if let Some(rate) = dict
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
+                            parsed_rate = Some(rate);
                             rate.abs() > f64::EPSILON
                         } else {
                             true
@@ -439,7 +449,12 @@ impl MockServer {
                     true
                 };
 
-                state.write().await.streaming = streaming;
+                let mut write_state = state.write().await;
+                write_state.streaming = streaming;
+                if let Some(rate) = parsed_rate {
+                    write_state.last_rate = Some(rate);
+                }
+                drop(write_state);
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {

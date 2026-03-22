@@ -360,6 +360,24 @@ impl AirPlayPlayer {
         self.client.previous().await
     }
 
+    /// Fast forward
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
+    pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
+        self.client.fast_forward().await
+    }
+
+    /// Rewind
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
+    pub async fn rewind(&self) -> Result<(), AirPlayError> {
+        self.client.rewind().await
+    }
+
     /// Seek to position (in seconds)
     ///
     /// # Errors
