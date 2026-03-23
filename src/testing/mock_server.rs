@@ -65,6 +65,8 @@ struct ServerState {
     audio_packets: Vec<RtpPacket>,
     /// Current volume level in dB (or similar scale).
     volume: f32,
+    /// Current playback rate
+    rate: f64,
     /// Whether the client is paired.
     paired: bool,
     /// Pairing server instance
@@ -101,6 +103,7 @@ impl MockServer {
                 session_id: None,
                 audio_packets: Vec::new(),
                 volume: 0.0,
+                rate: 0.0,
                 paired: false,
                 pairing_server,
             })),
@@ -190,6 +193,11 @@ impl MockServer {
     /// Checks if the server is currently streaming.
     pub async fn is_streaming(&self) -> bool {
         self.state.read().await.streaming
+    }
+
+    /// Returns the current playback rate.
+    pub async fn rate(&self) -> f64 {
+        self.state.read().await.rate
     }
 
     /// Handles a single client connection.
@@ -422,12 +430,14 @@ impl MockServer {
             }
             Method::SetRateAnchorTime => {
                 // Parse body to check rate
+                let mut new_rate = 1.0;
                 let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
                     if let Some(dict) = plist.as_dict() {
                         if let Some(rate) = dict
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
+                            new_rate = rate;
                             rate.abs() > f64::EPSILON
                         } else {
                             true
@@ -439,7 +449,9 @@ impl MockServer {
                     true
                 };
 
-                state.write().await.streaming = streaming;
+                let mut state = state.write().await;
+                state.streaming = streaming;
+                state.rate = new_rate;
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {

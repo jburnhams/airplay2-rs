@@ -418,6 +418,26 @@ impl AirPlayClient {
         self.playback.seek(position).await
     }
 
+    /// Fast forward
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
+    pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
+        self.ensure_connected().await?;
+        self.playback.fast_forward().await
+    }
+
+    /// Rewind
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails.
+    pub async fn rewind(&self) -> Result<(), AirPlayError> {
+        self.ensure_connected().await?;
+        self.playback.rewind().await
+    }
+
     /// Get current playback state
     pub async fn playback_state(&self) -> PlaybackState {
         self.state.get().await.playback
@@ -978,6 +998,36 @@ impl UnifiedAirPlayClient {
     pub async fn play(&mut self) -> Result<(), AirPlayError> {
         if let Some(session) = self.session_mut() {
             session.play().await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Fast forward
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails or not connected.
+    pub async fn fast_forward(&mut self) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.fast_forward().await
+        } else {
+            Err(AirPlayError::Disconnected {
+                device_name: "none".to_string(),
+            })
+        }
+    }
+
+    /// Rewind
+    ///
+    /// # Errors
+    ///
+    /// Returns error if playback command fails or not connected.
+    pub async fn rewind(&mut self) -> Result<(), AirPlayError> {
+        if let Some(session) = self.session_mut() {
+            session.rewind().await
         } else {
             Err(AirPlayError::Disconnected {
                 device_name: "none".to_string(),

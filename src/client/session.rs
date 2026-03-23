@@ -30,6 +30,12 @@ pub trait AirPlaySession: Send + Sync {
     /// Stop playback
     async fn stop(&mut self) -> Result<(), AirPlayError>;
 
+    /// Fast forward
+    async fn fast_forward(&mut self) -> Result<(), AirPlayError>;
+
+    /// Rewind
+    async fn rewind(&mut self) -> Result<(), AirPlayError>;
+
     /// Set volume (0.0 - 1.0)
     async fn set_volume(&mut self, volume: f32) -> Result<(), AirPlayError>;
 
@@ -328,6 +334,14 @@ impl AirPlaySession for RaopSessionImpl {
         Ok(())
     }
 
+    async fn fast_forward(&mut self) -> Result<(), AirPlayError> {
+        Ok(()) // RAOP does not implement rate control in this manner
+    }
+
+    async fn rewind(&mut self) -> Result<(), AirPlayError> {
+        Ok(()) // RAOP does not implement rate control in this manner
+    }
+
     async fn set_volume(&mut self, volume: f32) -> Result<(), AirPlayError> {
         // Convert to dB: 0.0 = -144dB (mute), 1.0 = 0dB
         // Using a simple log scale approximation or -30dB floor
@@ -487,6 +501,14 @@ impl AirPlaySession for AirPlay2SessionImpl {
 
     async fn stop(&mut self) -> Result<(), AirPlayError> {
         self.client.stop().await
+    }
+
+    async fn fast_forward(&mut self) -> Result<(), AirPlayError> {
+        self.client.fast_forward().await
+    }
+
+    async fn rewind(&mut self) -> Result<(), AirPlayError> {
+        self.client.rewind().await
     }
 
     async fn set_volume(&mut self, volume: f32) -> Result<(), AirPlayError> {
