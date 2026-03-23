@@ -169,13 +169,21 @@ async fn test_client_fast_forward_rewind() {
     client.fast_forward().await.expect("Fast forward failed");
     tokio::time::sleep(Duration::from_millis(50)).await;
     let ff_rate = server.rate().await;
-    assert!((ff_rate - 2.0).abs() < f64::EPSILON, "Expected rate 2.0, got {}", ff_rate);
+    assert!(
+        (ff_rate - 2.0).abs() < f64::EPSILON,
+        "Expected rate 2.0, got {}",
+        ff_rate
+    );
 
     // Rewind
     client.rewind().await.expect("Rewind failed");
     tokio::time::sleep(Duration::from_millis(50)).await;
     let rw_rate = server.rate().await;
-    assert!((rw_rate - (-2.0)).abs() < f64::EPSILON, "Expected rate -2.0, got {}", rw_rate);
+    assert!(
+        (rw_rate - (-2.0)).abs() < f64::EPSILON,
+        "Expected rate -2.0, got {}",
+        rw_rate
+    );
 
     client.disconnect().await.expect("Disconnect failed");
     server.stop().await;
