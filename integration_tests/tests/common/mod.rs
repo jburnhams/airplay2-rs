@@ -1,3 +1,4 @@
+pub mod audio_verify;
 pub mod diagnostics;
 pub mod ports;
 pub mod python_receiver;
