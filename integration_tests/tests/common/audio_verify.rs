@@ -68,11 +68,21 @@ impl RawAudio {
             } else if self.format.bits_per_sample == 24 {
                 match self.format.endianness {
                     Endianness::Little => {
-                        let bytes = [chunk[0], chunk[1], chunk[2], if chunk[2] & 0x80 != 0 { 0xFF } else { 0x00 }];
+                        let bytes = [
+                            chunk[0],
+                            chunk[1],
+                            chunk[2],
+                            if chunk[2] & 0x80 != 0 { 0xFF } else { 0x00 },
+                        ];
                         i32::from_le_bytes(bytes)
                     }
                     Endianness::Big => {
-                        let bytes = [if chunk[0] & 0x80 != 0 { 0xFF } else { 0x00 }, chunk[0], chunk[1], chunk[2]];
+                        let bytes = [
+                            if chunk[0] & 0x80 != 0 { 0xFF } else { 0x00 },
+                            chunk[0],
+                            chunk[1],
+                            chunk[2],
+                        ];
                         i32::from_be_bytes(bytes)
                     }
                 }
@@ -85,13 +95,16 @@ impl RawAudio {
     }
 
     pub fn samples_i16(&self) -> Vec<i16> {
-        self.samples_i32().into_iter().map(|s| {
-            if self.format.bits_per_sample == 24 {
-                (s >> 8) as i16
-            } else {
-                s as i16
-            }
-        }).collect()
+        self.samples_i32()
+            .into_iter()
+            .map(|s| {
+                if self.format.bits_per_sample == 24 {
+                    (s >> 8) as i16
+                } else {
+                    s as i16
+                }
+            })
+            .collect()
     }
 
     pub fn samples_f32(&self) -> Vec<f32> {
@@ -101,7 +114,10 @@ impl RawAudio {
         } else {
             32768.0 // 2^15
         };
-        i32_samples.into_iter().map(|s| s as f32 / max_val).collect()
+        i32_samples
+            .into_iter()
+            .map(|s| s as f32 / max_val)
+            .collect()
     }
 
     pub fn channel(&self, ch: usize) -> Vec<f32> {
@@ -234,8 +250,18 @@ impl SineWaveCheck {
         }
 
         let amplitude_range = (max_sample as i32) - (min_sample as i32);
-        let rms = (samples.iter().map(|&s| (s - mean) * (s - mean)).sum::<f32>() / samples.len() as f32).sqrt() * 32768.0;
-        let peak = samples.iter().map(|&s| (s - mean).abs()).fold(0.0f32, f32::max) * 32768.0;
+        let rms = (samples
+            .iter()
+            .map(|&s| (s - mean) * (s - mean))
+            .sum::<f32>()
+            / samples.len() as f32)
+            .sqrt()
+            * 32768.0;
+        let peak = samples
+            .iter()
+            .map(|&s| (s - mean).abs())
+            .fold(0.0f32, f32::max)
+            * 32768.0;
         let crest_factor = if rms > 0.0 { peak / rms } else { 0.0 };
 
         let actual_duration = samples.len() as f32 / audio.format.sample_rate as f32;

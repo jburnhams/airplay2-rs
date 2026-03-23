@@ -84,7 +84,13 @@ fn test_measure_onset_latency() {
 
     let mut data = vec![0; (sample_rate as f32 * silence_duration) as usize * 4];
 
-    let signal = generate_sine_wave(440.0, sample_rate, signal_duration, 1.0, RawAudioFormat::CD_QUALITY);
+    let signal = generate_sine_wave(
+        440.0,
+        sample_rate,
+        signal_duration,
+        1.0,
+        RawAudioFormat::CD_QUALITY,
+    );
     data.extend_from_slice(&signal.data);
 
     let audio = RawAudio::from_bytes(data, RawAudioFormat::CD_QUALITY);
