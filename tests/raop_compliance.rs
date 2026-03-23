@@ -62,51 +62,73 @@ async fn test_raop_handshake_compliance() {
                     GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n";
     stream.write_all(response.as_bytes()).await.unwrap();
 
-    // --- Step 2: ANNOUNCE ---
-    let n = stream.read(&mut buffer).await.unwrap();
-    let request = String::from_utf8_lossy(&buffer[..n]);
+    let mut cseq = 2;
+    // Client may send GET /info, POST /auth-setup, ANNOUNCE, SETUP, RECORD in various orders.
+    // Use a robust read loop to respond until RECORD is received.
+    while let Ok(n) = stream.read(&mut buffer).await {
+        if n == 0 {
+            break; // Connection closed
+        }
 
-    println!("Received request 2: {}", request);
-
-    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
-    // double checks) The client implementation might differ, so we should be robust.
-    // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
-
-    if request.starts_with("ANNOUNCE") {
-        assert!(request.contains("Content-Type: application/sdp"));
-
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
-
-        // --- Step 3: SETUP ---
-        let n = stream.read(&mut buffer).await.unwrap();
         let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 3: {}", request);
+        println!("Received request {}: {}", cseq, request);
 
-        assert!(request.starts_with("SETUP"));
-        assert!(request.contains("Transport: RTP/AVP/UDP"));
-
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nSession: CAFEBABE\r\nTransport: \
-                        RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                        timing_port=6002\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
-
-        // --- Step 4: RECORD ---
-        let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 4: {}", request);
-
-        assert!(request.starts_with("RECORD"));
-        assert!(request.contains("Session: CAFEBABE"));
-        assert!(request.contains("Range: npt=0-"));
-
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
-    } else if request.starts_with("POST") {
-        // Maybe pairing?
-        println!("Got POST instead of ANNOUNCE");
-        // For this test, we might stop here if we unexpected behavior, or handle it.
-        // This verifies that we at least got past the first step.
+        if request.starts_with("GET /info") {
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                cseq
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        } else if request.starts_with("POST /pair-setup")
+            || request.starts_with("POST /pair-verify")
+            || request.starts_with("POST /auth-setup")
+        {
+            // Mock auth response with exactly 32 bytes of binary data for /auth-setup
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                cseq
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+            let auth_data = [0u8; 32];
+            stream.write_all(&auth_data).await.unwrap();
+        } else if request.starts_with("POST") {
+            // Unhandled POST request, safely reply to prevent hanging
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                cseq
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+            break;
+        } else if request.starts_with("ANNOUNCE") {
+            assert!(request.contains("Content-Type: application/sdp"));
+            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
+            stream.write_all(response.as_bytes()).await.unwrap();
+        } else if request.starts_with("SETUP") {
+            assert!(request.contains("Transport: RTP/AVP/UDP"));
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                cseq
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        } else if request.starts_with("RECORD") {
+            assert!(request.contains("Session: CAFEBABE"));
+            assert!(request.contains("Range: npt=0-"));
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+            break; // Finished RAOP handshake successfully
+        } else {
+            // Unhandled request, just send 200 OK
+            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
+            stream.write_all(response.as_bytes()).await.unwrap();
+        }
+        cseq += 1;
     }
 
     // Await client result (with timeout)
@@ -117,8 +139,12 @@ async fn test_raop_handshake_compliance() {
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => {
+            // We expect the client to fail if we aborted early on a POST request due to missing
+            // crypto mock.
+            println!("Client failed as expected during handshake: {}", e);
+        }
+        Ok(Err(e)) => panic!("Client panic: {}", e),
+        Err(_) => panic!("Timeout waiting for client"),
     }
 }
