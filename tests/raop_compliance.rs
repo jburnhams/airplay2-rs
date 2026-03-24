@@ -81,17 +81,17 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
             stream.write_all(&[0u8; 32]).await.unwrap();
         } else if request.starts_with("POST /pair-setup") {
-            // Stop early so we do not attempt full pairing because that requires complex cryptography handling
-            // We just wanted to verify RAOP handshake logic sends expected headers on connection
-            // Unblock the client pairing setup first
+            // Stop early so we do not attempt full pairing because that requires complex
+            // cryptography handling We just wanted to verify RAOP handshake logic sends
+            // expected headers on connection Unblock the client pairing setup first
             let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
             stream.write_all(response.as_bytes()).await.unwrap();
             // Need a sleep to ensure client reads the response before dropping the stream
             tokio::time::sleep(Duration::from_millis(50)).await;
 
             // To make sure the background task actually shuts down, we should abort the connection
-            // since pair-setup initiates a long HTTP exchange on a different socket entirely, the main
-            // RTSP stream drop won't cancel the pairing HTTP client request.
+            // since pair-setup initiates a long HTTP exchange on a different socket entirely, the
+            // main RTSP stream drop won't cancel the pairing HTTP client request.
             // We abort the spawned task immediately to ensure the timeout passes
             connect_handle.abort();
             break;
@@ -114,20 +114,23 @@ async fn test_raop_handshake_compliance() {
     }
 
     // Await client result (with timeout)
-    // The client will fail pairing because we explicitly dropped connection when `POST /pair-setup` arrived,
-    // which tests that we successfully handled the start of RAOP compliance and gracefully error on pairing fail.
+    // The client will fail pairing because we explicitly dropped connection when `POST /pair-setup`
+    // arrived, which tests that we successfully handled the start of RAOP compliance and
+    // gracefully error on pairing fail.
     drop(stream);
     let result = tokio::time::timeout(Duration::from_secs(2), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => {
-            // Because we broke early at pair-setup, an error is expected, verify it's the expected drop/EOF error
+            // Because we broke early at pair-setup, an error is expected, verify it's the expected
+            // drop/EOF error
             println!("Client returned error as expected on drop: {}", e);
         }
         Ok(Err(e)) => {
-            // Because we called connect_handle.abort(), an abort error is a JoinError that gets returned as an Err.
-            // This is expected and means the connection dropped/failed exactly as we tested.
+            // Because we called connect_handle.abort(), an abort error is a JoinError that gets
+            // returned as an Err. This is expected and means the connection
+            // dropped/failed exactly as we tested.
             println!("Client returned task error as expected on drop: {}", e);
         }
         Err(_) => panic!("Timeout waiting for client!"),
