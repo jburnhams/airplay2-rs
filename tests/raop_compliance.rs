@@ -92,9 +92,12 @@ async fn test_raop_handshake_compliance() {
             assert!(current_request.starts_with("SETUP"));
             assert!(current_request.contains("Transport: RTP/AVP/UDP"));
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
 
             // --- Step 4: RECORD ---
@@ -106,19 +109,29 @@ async fn test_raop_handshake_compliance() {
             assert!(current_request.starts_with("RECORD"));
             assert!(current_request.contains("Session: CAFEBABE"));
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             break;
         } else if current_request.starts_with("POST") {
             println!("Got POST: {}", current_request);
             // Handle POST /auth-setup or similar
             if current_request.contains("/auth-setup") {
-                let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n", cseq);
+                let response = format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                    cseq
+                );
                 let mut resp_bytes = response.into_bytes();
                 resp_bytes.extend_from_slice(&[0u8; 32]);
                 stream.write_all(&resp_bytes).await.unwrap();
             } else {
-                let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", cseq);
+                let response = format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
             }
         } else if current_request.starts_with("GET") {
@@ -126,7 +139,12 @@ async fn test_raop_handshake_compliance() {
             if current_request.contains("/info") {
                 // Send dummy info response
                 let info = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>macAddress</key>\n\t<string>00:11:22:33:44:55</string>\n</dict>\n</plist>";
-                let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: text/x-apple-plist+xml\r\nContent-Length: {}\r\n\r\n", cseq, info.len());
+                let response = format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     text/x-apple-plist+xml\r\nContent-Length: {}\r\n\r\n",
+                    cseq,
+                    info.len()
+                );
                 let mut resp_bytes = response.into_bytes();
                 resp_bytes.extend_from_slice(info);
                 stream.write_all(&resp_bytes).await.unwrap();
@@ -141,7 +159,9 @@ async fn test_raop_handshake_compliance() {
 
         // Read next request
         let n = stream.read(&mut buffer).await.unwrap();
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
         current_request = String::from_utf8_lossy(&buffer[..n]).into_owned();
         cseq += 1;
         println!("Received request {}: {}", cseq, current_request);
