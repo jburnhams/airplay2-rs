@@ -158,14 +158,16 @@ async fn test_client_connect_failure() {
     // We expect the connection to either timeout (if OS drops) or return an error (Connection
     // refused)
     match result {
-        Ok(Err(_e)) => {
-            // Connection failed as expected
+        Ok(Err(e)) => {
+            // Connection failed as expected, log the expected error to preserve visibility
+            tracing::info!("Connection failed as expected: {e}");
         }
         Ok(Ok(_)) => {
             panic!("Connection succeeded when it should have failed");
         }
-        Err(_) => {
+        Err(e) => {
             // Timeout is also an acceptable failure mode depending on OS
+            tracing::info!("Connection timed out as expected: {e}");
         }
     }
 
