@@ -246,10 +246,9 @@ impl PlaybackController {
     ///
     /// Returns error if network fails
     pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
-        self.connection.send_set_rate_anchor_time(2.0).await?;
-        let mut state = self.state.write().await;
-        state.is_playing = true;
-        Ok(())
+        // TODO: Implement rate control properly
+        // For now just skip forward 10s
+        self.seek_relative(Duration::from_secs(10), true).await
     }
 
     /// Rewind
@@ -258,10 +257,9 @@ impl PlaybackController {
     ///
     /// Returns error if network fails
     pub async fn rewind(&self) -> Result<(), AirPlayError> {
-        self.connection.send_set_rate_anchor_time(-2.0).await?;
-        let mut state = self.state.write().await;
-        state.is_playing = true;
-        Ok(())
+        // TODO: Implement rate control properly
+        // For now just skip backward 10s
+        self.seek_relative(Duration::from_secs(10), false).await
     }
 
     /// Set repeat mode

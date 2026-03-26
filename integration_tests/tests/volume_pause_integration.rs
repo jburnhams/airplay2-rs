@@ -126,7 +126,21 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
         .wait_for_log("'rate': 1,", Duration::from_secs(15))
         .await?;
 
-    // 7. Change Volume
+    // 7. Fast Forward
+    println!("Fast forwarding...");
+    client.fast_forward().await?;
+    receiver
+        .wait_for_log("'rate': 2.0,", Duration::from_secs(15))
+        .await?;
+
+    // 8. Rewind
+    println!("Rewinding...");
+    client.rewind().await?;
+    receiver
+        .wait_for_log("'rate': -2.0,", Duration::from_secs(15))
+        .await?;
+
+    // 9. Change Volume
     println!("Setting volume to 0.25 (-12.04 dB)...");
     client.set_volume(0.25).await?;
     receiver
@@ -136,7 +150,7 @@ async fn test_volume_and_pause() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    // 8. Stop
+    // 10. Stop
     println!("Stopping...");
     client.stop().await?;
     stream_handle.abort();
