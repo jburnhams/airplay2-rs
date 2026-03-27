@@ -75,46 +75,7 @@ impl PlaybackController {
         let mut state = self.state.write().await;
 
         if !state.is_playing {
-            let mut builder = DictBuilder::new()
-                .insert("rate", 1i64)
-                .insert("rtpTime", 0u64);
-
-            // Include PTP anchor timestamps so the device knows when to render
-            if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
-                tracing::info!(
-                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} \
-                     (timeline=0x{:016X})",
-                    secs,
-                    // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
-                    u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
-                        .expect("PTP time fraction conversion should fit in u32"),
-                    timeline_id,
-                );
-                builder = builder
-                    .insert("networkTimeSecs", secs)
-                    .insert("networkTimeFrac", frac)
-                    .insert("networkTimeTimelineID", timeline_id);
-            } else {
-                tracing::warn!(
-                    "SetRateAnchorTime: PTP clock not available or not synchronized — sending \
-                     without networkTime fields (device may not render audio)"
-                );
-            }
-
-            let body = builder.build();
-            let encoded =
-                crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-                    message: format!("Failed to encode plist: {e}"),
-                    status_code: None,
-                })?;
-
-            self.connection
-                .send_command(
-                    Method::SetRateAnchorTime,
-                    Some(encoded),
-                    Some("application/x-apple-binary-plist".to_string()),
-                )
-                .await?;
+            self.set_rate(1.0).await?;
             state.is_playing = true;
         }
 
@@ -131,10 +92,39 @@ impl PlaybackController {
 
         // Send pause unconditionally. We might have started a stream in another task
         // and the state might not be synchronized, but it's safe to send a pause command.
-        let body = DictBuilder::new()
-            .insert("rate", 0i64)
-            .insert("rtpTime", 0u64)
-            .build();
+        self.set_rate(0.0).await?;
+        state.is_playing = false;
+
+        Ok(())
+    }
+
+    /// Internal method to set playback rate via `SetRateAnchorTime`
+    async fn set_rate(&self, rate: f64) -> Result<(), AirPlayError> {
+        let mut builder = DictBuilder::new()
+            .insert("rate", rate)
+            .insert("rtpTime", 0u64);
+
+        // Include PTP anchor timestamps so the device knows when to render
+        if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
+            tracing::debug!(
+                "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} (timeline=0x{:016X})",
+                secs,
+                u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
+                    .expect("PTP time fraction conversion should fit in u32"),
+                timeline_id,
+            );
+            builder = builder
+                .insert("networkTimeSecs", secs)
+                .insert("networkTimeFrac", frac)
+                .insert("networkTimeTimelineID", timeline_id);
+        } else {
+            tracing::warn!(
+                "SetRateAnchorTime: PTP clock not available or not synchronized — sending without \
+                 networkTime fields (device may not render audio)"
+            );
+        }
+
+        let body = builder.build();
         let encoded =
             crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
                 message: format!("Failed to encode plist: {e}"),
@@ -148,8 +138,6 @@ impl PlaybackController {
                 Some("application/x-apple-binary-plist".to_string()),
             )
             .await?;
-        state.is_playing = false;
-
         Ok(())
     }
 
@@ -242,24 +230,30 @@ impl PlaybackController {
 
     /// Fast forward
     ///
+    /// Sends `SetRateAnchorTime` with `rate=2.0`.
+    ///
     /// # Errors
     ///
     /// Returns error if network fails
     pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip forward 10s
-        self.seek_relative(Duration::from_secs(10), true).await
+        self.set_rate(2.0).await?;
+        let mut state = self.state.write().await;
+        state.is_playing = true;
+        Ok(())
     }
 
     /// Rewind
+    ///
+    /// Sends `SetRateAnchorTime` with `rate=-2.0`.
     ///
     /// # Errors
     ///
     /// Returns error if network fails
     pub async fn rewind(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip backward 10s
-        self.seek_relative(Duration::from_secs(10), false).await
+        self.set_rate(-2.0).await?;
+        let mut state = self.state.write().await;
+        state.is_playing = true;
+        Ok(())
     }
 
     /// Set repeat mode
