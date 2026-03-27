@@ -17,8 +17,10 @@ async fn test_raop_handshake_compliance() {
     device.capabilities.airplay2 = false; // Force fallback to RAOP
 
     // 3. Connect Client in background
-    let mut config = ClientConfig::default();
-    config.preferred_protocol = PreferredProtocol::PreferRaop;
+    let config = ClientConfig {
+        preferred_protocol: PreferredProtocol::PreferRaop,
+        ..Default::default()
+    };
     let mut client = UnifiedAirPlayClient::with_config(config);
 
     let connect_handle = tokio::spawn(async move { client.connect(device).await });
