@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use airplay2::testing::create_test_device;
-use airplay2::{UnifiedAirPlayClient, ClientConfig, PreferredProtocol};
+use airplay2::{ClientConfig, PreferredProtocol, UnifiedAirPlayClient};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -52,7 +52,8 @@ async fn test_raop_handshake_compliance() {
         request.contains("Active-Remote:"),
         "Missing Active-Remote header"
     );
-    // X-Apple-Device-ID is not always present in RAOP (often uses Client-Instance instead or iTunes Agent)
+    // X-Apple-Device-ID is not always present in RAOP (often uses Client-Instance instead or iTunes
+    // Agent)
 
     // Send Response
     // RAOP requires Apple-Challenge in response for auth, but we can simulate success or continue
@@ -83,14 +84,16 @@ async fn test_raop_handshake_compliance() {
 
         if request.starts_with("GET /info") {
             let response = format!(
-                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
                 cseq
             );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // Auth-setup expects 32-byte binary response
             let response = format!(
-                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/octet-stream\r\nContent-Length: 32\r\n\r\n",
                 cseq
             );
             let mut buf = response.into_bytes();
@@ -105,7 +108,8 @@ async fn test_raop_handshake_compliance() {
         } else if request.starts_with("POST /fp-setup") {
             // AirPlay 2 may try FairPlay setup (fp-setup).
             // A 200 OK with no body might make it proceed or skip to pairing.
-            // Returning an error (e.g. 501 Not Implemented or 404 Not Found) will force it to try other methods.
+            // Returning an error (e.g. 501 Not Implemented or 404 Not Found) will force it to try
+            // other methods.
             let response = format!(
                 "HTTP/1.1 404 Not Found\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
                 cseq
@@ -113,7 +117,8 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST ") && request.contains("auth-setup") {
             let response = format!(
-                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/octet-stream\r\nContent-Length: 32\r\n\r\n",
                 cseq
             );
             let mut buf = response.into_bytes();
@@ -127,19 +132,24 @@ async fn test_raop_handshake_compliance() {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
             let response = format!(
                 "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                timing_port=6002\r\n\r\n",
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
                 cseq
             );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             break;
         } else if request.starts_with("OPTIONS") {
             let response = format!(
-                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n",
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                 TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\nApple-Jack-Status: \
+                 connected; type=analog\r\n\r\n",
                 cseq
             );
             stream.write_all(response.as_bytes()).await.unwrap();
