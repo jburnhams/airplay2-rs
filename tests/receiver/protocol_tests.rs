@@ -92,13 +92,16 @@ async fn test_volume_control() {
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => return false,
+                Err(e) => panic!("Event receiver error: {}", e),
             }
         }
     })
     .await;
 
-    assert!(result.unwrap_or(false), "VolumeChanged event not received");
+    assert!(
+        result.unwrap_or(false),
+        "VolumeChanged event not received within timeout"
+    );
 
     sender.teardown().await.unwrap();
     receiver.stop().await.unwrap();
