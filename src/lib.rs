@@ -80,8 +80,8 @@ pub mod streaming;
 // Re-exports
 pub use audio::AudioFormat;
 pub use client::{
-    AirPlayClient, ClientConfig, PreferredProtocol, SelectedProtocol, UnifiedAirPlayClient,
-    check_raop_encryption,
+    AirPlay2SessionImpl, AirPlayClient, AirPlaySession, ClientConfig, PreferredProtocol,
+    RaopSessionImpl, SelectedProtocol, UnifiedAirPlayClient, check_raop_encryption,
 };
 pub use control::volume::Volume;
 pub use discovery::{DiscoveryEvent, discover, scan};
