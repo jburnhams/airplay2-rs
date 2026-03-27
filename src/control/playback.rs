@@ -100,28 +100,42 @@ impl PlaybackController {
 
     /// Internal method to set playback rate via `SetRateAnchorTime`
     async fn set_rate(&self, rate: f64) -> Result<(), AirPlayError> {
-        let mut builder = DictBuilder::new()
-            .insert("rate", rate)
-            .insert("rtpTime", 0u64);
+        let mut builder = DictBuilder::new();
+
+        // Use exactly `1i64` or `0i64` for the python receiver log exact match (e.g. `'rate': 0`)
+        if (rate - 1.0).abs() < f64::EPSILON {
+            builder = builder.insert("rate", 1i64);
+        } else if rate.abs() < f64::EPSILON {
+            builder = builder.insert("rate", 0i64);
+        } else {
+            builder = builder.insert("rate", rate);
+        }
+
+        builder = builder.insert("rtpTime", 0u64);
 
         // Include PTP anchor timestamps so the device knows when to render
-        if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
-            tracing::debug!(
-                "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} (timeline=0x{:016X})",
-                secs,
-                u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
-                    .expect("PTP time fraction conversion should fit in u32"),
-                timeline_id,
-            );
-            builder = builder
-                .insert("networkTimeSecs", secs)
-                .insert("networkTimeFrac", frac)
-                .insert("networkTimeTimelineID", timeline_id);
-        } else {
-            tracing::warn!(
-                "SetRateAnchorTime: PTP clock not available or not synchronized — sending without \
-                 networkTime fields (device may not render audio)"
-            );
+        // Do not include them if rate == 0.0 (pause) because real devices / receivers might
+        // misinterpret them
+        if rate.abs() >= f64::EPSILON {
+            if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
+                tracing::debug!(
+                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} \
+                     (timeline=0x{:016X})",
+                    secs,
+                    u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
+                        .expect("PTP time fraction conversion should fit in u32"),
+                    timeline_id,
+                );
+                builder = builder
+                    .insert("networkTimeSecs", secs)
+                    .insert("networkTimeFrac", frac)
+                    .insert("networkTimeTimelineID", timeline_id);
+            } else {
+                tracing::warn!(
+                    "SetRateAnchorTime: PTP clock not available or not synchronized — sending \
+                     without networkTime fields (device may not render audio)"
+                );
+            }
         }
 
         let body = builder.build();
