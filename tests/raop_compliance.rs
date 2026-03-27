@@ -75,22 +75,35 @@ async fn test_raop_handshake_compliance() {
         println!("Received request {}: {}", step, request);
 
         if request.starts_with("GET /info") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", step);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                step
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // Send 32 bytes back for auth-setup to unblock client
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\n\r\n{}", step, String::from_utf8(vec![0; 32]).unwrap());
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\n\r\n{}",
+                step,
+                String::from_utf8(vec![0; 32]).unwrap()
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
-        } else if request.starts_with("POST /pair-setup") || request.starts_with("POST /pair-verify") {
+        } else if request.starts_with("POST /pair-setup")
+            || request.starts_with("POST /pair-verify")
+        {
             // Unblock pair setup loop with standard valid-looking responses
-            let response = format!("HTTP/1.1 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", step);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                step
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
 
             // Allow client to process and potentially close the connection
             tokio::time::sleep(Duration::from_millis(50)).await;
 
-            // Break loop here so we can finish the test after pair-setup without timing out waiting for more requests.
-            // Client connect task fails during pairing since it's a mock, which is fine for this test.
+            // Break loop here so we can finish the test after pair-setup without timing out waiting
+            // for more requests. Client connect task fails during pairing since it's a
+            // mock, which is fine for this test.
             break;
         } else if request.starts_with("ANNOUNCE") {
             assert!(request.contains("Content-Type: application/sdp"));
@@ -98,16 +111,25 @@ async fn test_raop_handshake_compliance() {
             let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", step);
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("SETUP") {
-            assert!(request.contains("Transport: RTP/AVP/UDP") || request.contains("Transport: RTP/AVP/TCP"));
+            assert!(
+                request.contains("Transport: RTP/AVP/UDP")
+                    || request.contains("Transport: RTP/AVP/TCP")
+            );
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", step);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                step
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE") || request.contains("Range: npt=0-"));
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", step);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                step
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             break;
         } else if request.starts_with("POST") {
@@ -131,10 +153,10 @@ async fn test_raop_handshake_compliance() {
 
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
 
-    // For this compliance test we are validating that we can send valid initial connection requests.
-    // The client will fail pairing since this is just a mock server returning 200 OK without
-    // any actual pairing data payload. So we just accept the timeout or connection failure.
-    // If it was ok, that's fine too.
+    // For this compliance test we are validating that we can send valid initial connection
+    // requests. The client will fail pairing since this is just a mock server returning 200 OK
+    // without any actual pairing data payload. So we just accept the timeout or connection
+    // failure. If it was ok, that's fine too.
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => println!("Client failed as expected during mock pairing: {}", e),
