@@ -29,10 +29,13 @@ async fn test_raop_handshake_compliance() {
 
     let mut step = 1;
     loop {
-        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer))
+            .await
+        {
             Ok(Ok(0)) => break, // Connection closed
             Ok(Ok(n)) => n,
-            Ok(Err(_)) | Err(_) => break, // Error or timeout, just stop and see what connect_handle returns
+            Ok(Err(_)) | Err(_) => break, /* Error or timeout, just stop and see what
+                                           * connect_handle returns */
         };
         let request = String::from_utf8_lossy(&buffer[..n]);
         println!("Received request {}: {}", step, request);
@@ -65,22 +68,38 @@ async fn test_raop_handshake_compliance() {
                 );
             }
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
-                            TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
-                            GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                 TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\nApple-Jack-Status: \
+                 connected; type=analog\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("GET /info") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             let body = vec![0u8; 32];
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             stream.write_all(&body).await.unwrap();
-        } else if request.starts_with("POST /pair-setup") || request.starts_with("POST /pair-verify") {
-            // we will sleep to stop the test from continuing since pairing requires crypto calculations
-            // and this is a mock test that stops at handshakes.
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", cseq);
+        } else if request.starts_with("POST /pair-setup")
+            || request.starts_with("POST /pair-verify")
+        {
+            // we will sleep to stop the test from continuing since pairing requires crypto
+            // calculations and this is a mock test that stops at handshakes.
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
             break;
@@ -92,15 +111,21 @@ async fn test_raop_handshake_compliance() {
         } else if request.starts_with("SETUP") {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
             assert!(request.contains("Range: npt=0-"));
 
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             break; // Finished handshake sequence
         } else {
@@ -121,7 +146,10 @@ async fn test_raop_handshake_compliance() {
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client connect failed early, but this is fine since it lacks pairing crypto setup: {}", e),
+        Ok(Ok(Err(e))) => println!(
+            "Client connect failed early, but this is fine since it lacks pairing crypto setup: {}",
+            e
+        ),
         Ok(Err(_)) => panic!("Client panic"),
         Err(_) => println!("Timeout waiting for client - expected as we halt pair-setup"),
     }
