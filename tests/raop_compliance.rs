@@ -77,25 +77,38 @@ async fn test_raop_handshake_compliance() {
 
     while !current_request.starts_with("RECORD") {
         if current_request.starts_with("GET /info") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: text/x-apple-plist+xml\r\n\r\n", current_cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: text/x-apple-plist+xml\r\n\r\n",
+                current_cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if current_request.starts_with("POST /auth-setup") {
             // Mock auth setup
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\n\r\n", current_cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\n\r\n",
+                current_cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             stream.write_all(&[0u8; 32]).await.unwrap();
         } else if current_request.starts_with("POST /pair-verify") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", current_cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                current_cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
-        } else if current_request.starts_with("POST") || current_request.contains("POST /pair-setup") || current_request.trim().len() <= 10 {
+        } else if current_request.starts_with("POST")
+            || current_request.contains("POST /pair-setup")
+            || current_request.trim().len() <= 10
+        {
             // Mock pairing setup / verify or handle stray body bytes
             // We should respond with something that the Srp client accepts, or just empty 200 OK
             // If pairing fails, the client will retry other credentials.
             // Since this is just a compliance test for the general flow without full mock crypto,
             // we will just stop parsing pairing here, and we can consider the mock successful
             // enough since RAOP compliance has already covered OPTIONS and initial connection.
-            // Since we can't easily mock SRP, let's just break out of the loop and treat it as success.
+            // Since we can't easily mock SRP, let's just break out of the loop and treat it as
+            // success.
             break;
         } else if current_request.starts_with("ANNOUNCE") {
             assert!(current_request.contains("Content-Type: application/sdp"));
@@ -103,10 +116,19 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if current_request.starts_with("SETUP") {
             assert!(current_request.contains("Transport: RTP/AVP/UDP"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;timing_port=6002\r\n\r\n", current_cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                current_cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if current_request.starts_with("OPTIONS") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\n\r\n", current_cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                 TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\n\r\n",
+                current_cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else {
             panic!("Unexpected request: {}", current_request);
@@ -128,7 +150,10 @@ async fn test_raop_handshake_compliance() {
         assert!(current_request.contains("Session: CAFEBABE"));
         assert!(current_request.contains("Range: npt=0-"));
 
-        let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", current_cseq);
+        let response = format!(
+            "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+            current_cseq
+        );
         stream.write_all(response.as_bytes()).await.unwrap();
     }
 
@@ -143,7 +168,10 @@ async fn test_raop_handshake_compliance() {
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed as expected because we cut the handshake short: {}", e),
+        Ok(Ok(Err(e))) => println!(
+            "Client failed as expected because we cut the handshake short: {}",
+            e
+        ),
         Ok(Err(e)) => panic!("Client panic: {:?}", e),
         Err(_) => panic!("Timeout waiting for client"),
     }
