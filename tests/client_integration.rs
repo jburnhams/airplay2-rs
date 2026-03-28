@@ -253,13 +253,21 @@ async fn test_playback_rate_control() {
     client.fast_forward().await.expect("Fast forward failed");
     tokio::time::sleep(Duration::from_millis(50)).await;
     let rate = server.rate().await;
-    assert!((rate - 2.0).abs() < f64::EPSILON, "Expected rate 2.0, got {}", rate);
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Expected rate 2.0, got {}",
+        rate
+    );
 
     // Rewind (rate = -2.0)
     client.rewind().await.expect("Rewind failed");
     tokio::time::sleep(Duration::from_millis(50)).await;
     let rate = server.rate().await;
-    assert!((rate - (-2.0)).abs() < f64::EPSILON, "Expected rate -2.0, got {}", rate);
+    assert!(
+        (rate - (-2.0)).abs() < f64::EPSILON,
+        "Expected rate -2.0, got {}",
+        rate
+    );
 
     client.disconnect().await.expect("Disconnect failed");
     server.stop().await;
