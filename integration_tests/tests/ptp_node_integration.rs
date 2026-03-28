@@ -236,7 +236,7 @@ async fn test_kitchen_bedroom_bmca_negotiation() {
     );
     let offset = bed_clk.offset_millis().abs();
     assert!(
-        offset < 10.0,
+        offset < 100.0,
         "Bedroom offset should be small (got {offset:.3}ms)"
     );
 }

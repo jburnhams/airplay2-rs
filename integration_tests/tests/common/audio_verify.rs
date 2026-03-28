@@ -56,6 +56,7 @@ pub struct SineWaveResult {
 }
 
 impl SineWaveResult {
+    #[allow(dead_code)]
     pub fn assert_passed(&self) -> Result<(), AudioVerifyError> {
         if self.passed {
             Ok(())
@@ -77,12 +78,15 @@ impl SineWaveCheck {
 
     pub fn verify(&self, audio: &RawAudio) -> Result<SineWaveResult, AudioVerifyError> {
         if audio.is_empty() {
-            return Err(AudioVerifyError::VerificationFailed("Audio is empty".into()));
+            return Err(AudioVerifyError::VerificationFailed(
+                "Audio is empty".into(),
+            ));
         }
 
         // Apply skip first N ms of audio (setup latency skip)
         let setup_latency_ms = 200.0;
-        let setup_latency_samples = (audio.sample_rate as f32 * (setup_latency_ms / 1000.0)) as usize;
+        let setup_latency_samples =
+            (audio.sample_rate as f32 * (setup_latency_ms / 1000.0)) as usize;
         let mut num_frames = audio.num_frames();
 
         let start_frame = setup_latency_samples.min(num_frames);
@@ -93,7 +97,10 @@ impl SineWaveCheck {
             None => audio.channel(0),
         };
 
-        let mut samples = all_samples.into_iter().skip(start_frame).collect::<Vec<_>>();
+        let mut samples = all_samples
+            .into_iter()
+            .skip(start_frame)
+            .collect::<Vec<_>>();
         num_frames = samples.len();
 
         if num_frames == 0 {
@@ -216,15 +223,18 @@ impl SineWaveCheck {
         }
 
         let mut measured_frequency = zc_frequency;
-        let zc_error = (zc_frequency - self.expected_frequency).abs() / self.expected_frequency * 100.0;
-        let ac_error = (ac_frequency - self.expected_frequency).abs() / self.expected_frequency * 100.0;
+        let zc_error =
+            (zc_frequency - self.expected_frequency).abs() / self.expected_frequency * 100.0;
+        let ac_error =
+            (ac_frequency - self.expected_frequency).abs() / self.expected_frequency * 100.0;
 
         // Use AC if it's better and ZC is way off, otherwise stick to ZC.
         if zc_error > self.frequency_tolerance_pct && ac_error <= self.frequency_tolerance_pct {
             measured_frequency = ac_frequency;
         }
 
-        let frequency_error_pct = (measured_frequency - self.expected_frequency).abs() / self.expected_frequency * 100.0;
+        let frequency_error_pct =
+            (measured_frequency - self.expected_frequency).abs() / self.expected_frequency * 100.0;
 
         // Continuity check
         let mut max_silence_run_samples = 0;
@@ -243,7 +253,8 @@ impl SineWaveCheck {
             }
         }
 
-        let max_silence_run_ms = (max_silence_run_samples as f32 / audio.sample_rate as f32) * 1000.0;
+        let max_silence_run_ms =
+            (max_silence_run_samples as f32 / audio.sample_rate as f32) * 1000.0;
 
         let mut failure_reasons = Vec::new();
         let mut passed = true;
@@ -256,11 +267,18 @@ impl SineWaveCheck {
             ));
         }
 
-        if self.check_frequency && duration_secs > 0.5 && frequency_error_pct > self.frequency_tolerance_pct {
+        if self.check_frequency
+            && duration_secs > 0.5
+            && frequency_error_pct > self.frequency_tolerance_pct
+        {
             passed = false;
             failure_reasons.push(format!(
-                "Frequency error {:.2}% is greater than tolerance {:.2}% (measured: {:.2} Hz, expected: {:.2} Hz)",
-                frequency_error_pct, self.frequency_tolerance_pct, measured_frequency, self.expected_frequency
+                "Frequency error {:.2}% is greater than tolerance {:.2}% (measured: {:.2} Hz, \
+                 expected: {:.2} Hz)",
+                frequency_error_pct,
+                self.frequency_tolerance_pct,
+                measured_frequency,
+                self.expected_frequency
             ));
         } else if self.check_frequency && duration_secs <= 0.5 {
             // Very short audio warning, check skipped or relaxed
@@ -373,7 +391,9 @@ pub fn measure_gap_latency(audio: &RawAudio, gap_threshold_ms: f32) -> Vec<GapIn
                     gaps.push(GapInfo {
                         start_frame: start,
                         end_frame: i,
-                        duration: Duration::from_secs_f64(duration_frames as f64 / audio.sample_rate as f64),
+                        duration: Duration::from_secs_f64(
+                            duration_frames as f64 / audio.sample_rate as f64,
+                        ),
                         position: Duration::from_secs_f64(start as f64 / audio.sample_rate as f64),
                     });
                 }
@@ -391,7 +411,9 @@ pub fn measure_gap_latency(audio: &RawAudio, gap_threshold_ms: f32) -> Vec<GapIn
             gaps.push(GapInfo {
                 start_frame: start,
                 end_frame: end,
-                duration: Duration::from_secs_f64(duration_frames as f64 / audio.sample_rate as f64),
+                duration: Duration::from_secs_f64(
+                    duration_frames as f64 / audio.sample_rate as f64,
+                ),
                 position: Duration::from_secs_f64(start as f64 / audio.sample_rate as f64),
             });
         }
@@ -514,7 +536,11 @@ pub fn compute_snr(original: &RawAudio, received: &RawAudio) -> f64 {
     let rec_samples = received.samples_f32();
 
     let max_offset = (original.sample_rate as usize * 2) * original.channels as usize;
-    let (offset, _) = align_audio(&orig_samples, &rec_samples, max_offset.min(rec_samples.len()));
+    let (offset, _) = align_audio(
+        &orig_samples,
+        &rec_samples,
+        max_offset.min(rec_samples.len()),
+    );
 
     let aligned_rec = if offset < rec_samples.len() {
         &rec_samples[offset..]
@@ -564,7 +590,11 @@ pub struct CodecVerifyResult {
     pub issues: Vec<String>,
 }
 
-pub fn verify_codec_integrity(audio: &RawAudio, codec: CodecType, reference: Option<&RawAudio>) -> CodecVerifyResult {
+pub fn verify_codec_integrity(
+    audio: &RawAudio,
+    codec: CodecType,
+    reference: Option<&RawAudio>,
+) -> CodecVerifyResult {
     let mut snr_db = None;
     let mut bit_exact = None;
     let mut frame_count_correct = true;
@@ -576,7 +606,10 @@ pub fn verify_codec_integrity(audio: &RawAudio, codec: CodecType, reference: Opt
 
         if (expected_frames as i64 - actual_frames as i64).abs() > 1 {
             frame_count_correct = false;
-            issues.push(format!("Frame count mismatch: expected {}, got {}", expected_frames, actual_frames));
+            issues.push(format!(
+                "Frame count mismatch: expected {}, got {}",
+                expected_frames, actual_frames
+            ));
         }
 
         match codec {
@@ -613,13 +646,29 @@ pub trait AudioCheck {
 impl AudioCheck for SineWaveResult {
     fn report(&self) -> String {
         format!(
-            "Amplitude:\n  Min sample: {}\tMax sample: {}\n  RMS: {:.1}\tPeak: {:.1}\n  Crest factor: {:.3}\tDynamic range: {}\n\nFrequency (left channel):\n  Measured estimate: {:.2} Hz\n  Error: {:.2}%\n\nContinuity:\n  Max silence run: {} samples ({:.2} ms)",
-            self.min_sample, self.max_sample, self.rms, self.peak, self.crest_factor, self.amplitude_range, self.measured_frequency, self.frequency_error_pct, self.max_silence_run_samples, self.max_silence_run_ms
+            "Amplitude:\n  Min sample: {}\tMax sample: {}\n  RMS: {:.1}\tPeak: {:.1}\n  Crest \
+             factor: {:.3}\tDynamic range: {}\n\nFrequency (left channel):\n  Measured estimate: \
+             {:.2} Hz\n  Error: {:.2}%\n\nContinuity:\n  Max silence run: {} samples ({:.2} ms)",
+            self.min_sample,
+            self.max_sample,
+            self.rms,
+            self.peak,
+            self.crest_factor,
+            self.amplitude_range,
+            self.measured_frequency,
+            self.frequency_error_pct,
+            self.max_silence_run_samples,
+            self.max_silence_run_ms
         )
     }
 }
 
-pub fn audio_diagnostic_report(audio: &RawAudio, filename: &str, checks: &[Box<dyn AudioCheck>], codec_res: Option<&CodecVerifyResult>) -> String {
+pub fn audio_diagnostic_report(
+    audio: &RawAudio,
+    filename: &str,
+    checks: &[Box<dyn AudioCheck>],
+    codec_res: Option<&CodecVerifyResult>,
+) -> String {
     let mut report = String::new();
     report.push_str("Audio Diagnostic Report\n");
     report.push_str("=======================\n");
@@ -634,8 +683,15 @@ pub fn audio_diagnostic_report(audio: &RawAudio, filename: &str, checks: &[Box<d
         2 => "stereo",
         _ => "multichannel",
     };
-    report.push_str(&format!("Format: {}-bit {} {} @ {} Hz\n", audio.bits_per_sample, endian_str, channels_str, audio.sample_rate));
-    report.push_str(&format!("Duration: {:.2}s ({} frames)\n", audio.duration().as_secs_f64(), audio.num_frames()));
+    report.push_str(&format!(
+        "Format: {}-bit {} {} @ {} Hz\n",
+        audio.bits_per_sample, endian_str, channels_str, audio.sample_rate
+    ));
+    report.push_str(&format!(
+        "Duration: {:.2}s ({} frames)\n",
+        audio.duration().as_secs_f64(),
+        audio.num_frames()
+    ));
     report.push_str(&format!("Data size: {} bytes\n\n", audio.data.len()));
 
     for check in checks {
@@ -646,16 +702,26 @@ pub fn audio_diagnostic_report(audio: &RawAudio, filename: &str, checks: &[Box<d
     if let Some(c_res) = codec_res {
         report.push_str(&format!("Codec: {:?}\n", c_res.codec));
         if let Some(be) = c_res.bit_exact {
-            report.push_str(&format!("  Bit-exact match: {}\n", if be { "yes" } else { "no" }));
+            report.push_str(&format!(
+                "  Bit-exact match: {}\n",
+                if be { "yes" } else { "no" }
+            ));
         }
         if let Some(snr) = c_res.snr_db {
             report.push_str(&format!("  SNR: {:.2} dB\n", snr));
         }
-        report.push_str(&format!("  Frame count correct: {}\n", if c_res.frame_count_correct { "yes" } else { "no" }));
+        report.push_str(&format!(
+            "  Frame count correct: {}\n",
+            if c_res.frame_count_correct {
+                "yes"
+            } else {
+                "no"
+            }
+        ));
         for issue in &c_res.issues {
             report.push_str(&format!("  Issue: {}\n", issue));
         }
-        report.push_str("\n");
+        report.push('\n');
     }
 
     report
@@ -766,10 +832,20 @@ impl RawAudio {
                 }
             } else if self.bits_per_sample == 24 {
                 if self.endianness == Endianness::Little {
-                    let val = i32::from_le_bytes([chunk[0], chunk[1], chunk[2], if chunk[2] & 0x80 != 0 { 0xFF } else { 0 }]);
+                    let val = i32::from_le_bytes([
+                        chunk[0],
+                        chunk[1],
+                        chunk[2],
+                        if chunk[2] & 0x80 != 0 { 0xFF } else { 0 },
+                    ]);
                     (val >> 8) as i16
                 } else {
-                    let val = i32::from_be_bytes([if chunk[0] & 0x80 != 0 { 0xFF } else { 0 }, chunk[0], chunk[1], chunk[2]]);
+                    let val = i32::from_be_bytes([
+                        if chunk[0] & 0x80 != 0 { 0xFF } else { 0 },
+                        chunk[0],
+                        chunk[1],
+                        chunk[2],
+                    ]);
                     (val >> 8) as i16
                 }
             } else {
@@ -794,9 +870,19 @@ impl RawAudio {
                 val as f32 / 32768.0
             } else if self.bits_per_sample == 24 {
                 let val = if self.endianness == Endianness::Little {
-                    i32::from_le_bytes([chunk[0], chunk[1], chunk[2], if chunk[2] & 0x80 != 0 { 0xFF } else { 0 }])
+                    i32::from_le_bytes([
+                        chunk[0],
+                        chunk[1],
+                        chunk[2],
+                        if chunk[2] & 0x80 != 0 { 0xFF } else { 0 },
+                    ])
                 } else {
-                    i32::from_be_bytes([if chunk[0] & 0x80 != 0 { 0xFF } else { 0 }, chunk[0], chunk[1], chunk[2]])
+                    i32::from_be_bytes([
+                        if chunk[0] & 0x80 != 0 { 0xFF } else { 0 },
+                        chunk[0],
+                        chunk[1],
+                        chunk[2],
+                    ])
                 };
                 val as f32 / 8388608.0
             } else {
@@ -813,6 +899,10 @@ impl RawAudio {
         if ch >= num_channels {
             return Vec::new();
         }
-        all_samples.into_iter().skip(ch).step_by(num_channels).collect()
+        all_samples
+            .into_iter()
+            .skip(ch)
+            .step_by(num_channels)
+            .collect()
     }
 }
