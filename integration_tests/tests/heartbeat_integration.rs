@@ -44,6 +44,7 @@ async fn test_device_presence_heartbeat() -> Result<(), Box<dyn std::error::Erro
                         if let (Some(initial), Some(current)) =
                             (initial_last_seen, device.last_seen)
                         {
+                            #[allow(clippy::collapsible_if)]
                             if current > initial {
                                 heartbeats_received += 1;
                                 // Update our initial last seen to the current one

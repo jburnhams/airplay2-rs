@@ -21,8 +21,10 @@ async fn test_retransmission_with_python_receiver() -> Result<(), Box<dyn std::e
 
     let device = receiver.device_config();
 
-    let mut config = AirPlayConfig::default();
-    config.audio_codec = AudioCodec::Pcm;
+    let config = AirPlayConfig {
+        audio_codec: AudioCodec::Pcm,
+        ..Default::default()
+    };
 
     let manager = Arc::new(ConnectionManager::new(config));
 

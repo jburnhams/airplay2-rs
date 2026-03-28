@@ -1,6 +1,7 @@
-use crate::common::audio_verify::*;
 use std::f32::consts::PI;
 use std::time::Duration;
+
+use crate::common::audio_verify::*;
 
 fn generate_sine_wave(
     frequency: f32,
@@ -55,15 +56,7 @@ fn generate_sine_wave(
 
 #[test]
 fn test_bit_exact_pcm() {
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     let comp = compare_audio_exact(&audio, &audio);
     assert!(comp.sample_count_match);
@@ -73,15 +66,7 @@ fn test_bit_exact_pcm() {
 
 #[test]
 fn test_align_audio_with_offset() {
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
     let original = audio.samples_f32();
 
     // Create a delayed version
@@ -96,15 +81,7 @@ fn test_align_audio_with_offset() {
 
 #[test]
 fn test_lossy_aac_snr() {
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     // Simulate lossy encoding by adding a tiny bit of noise
     let mut noisy_audio = audio.clone();
@@ -124,15 +101,7 @@ fn test_lossy_aac_snr() {
 
 #[test]
 fn test_diagnostic_report_format() {
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     let mut check = SineWaveCheck::new(440.0);
     check.frequency_tolerance_pct = 5.0;
@@ -157,15 +126,7 @@ fn test_diagnostic_report_format() {
 #[test]
 fn test_bit_exact_alac() {
     // We mock ALAC encoding/decoding as being bit-exact same as PCM
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     let codec_res = verify_codec_integrity(&audio, CodecType::Alac, Some(&audio));
     assert_eq!(codec_res.codec, CodecType::Alac);
@@ -176,15 +137,7 @@ fn test_bit_exact_alac() {
 
 #[test]
 fn test_sine_wave_verify_clean() {
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        2.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 2.0, 0.8, 2, 16, Endianness::Little);
 
     let check = SineWaveCheck::new(440.0);
     let result = check.verify(&audio).unwrap();
@@ -197,21 +150,18 @@ fn test_sine_wave_verify_clean() {
 
 #[test]
 fn test_sine_wave_wrong_frequency() {
-    let audio = generate_sine_wave(
-        880.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(880.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     let check = SineWaveCheck::new(440.0);
     let result = check.verify(&audio).unwrap();
 
     assert!(!result.passed);
-    assert!(result.failure_reasons.iter().any(|r| r.contains("Frequency error")));
+    assert!(
+        result
+            .failure_reasons
+            .iter()
+            .any(|r| r.contains("Frequency error"))
+    );
 }
 
 #[test]
@@ -230,20 +180,17 @@ fn test_sine_wave_low_amplitude() {
     let result = check.verify(&audio).unwrap();
 
     assert!(!result.passed);
-    assert!(result.failure_reasons.iter().any(|r| r.contains("Amplitude range")));
+    assert!(
+        result
+            .failure_reasons
+            .iter()
+            .any(|r| r.contains("Amplitude range"))
+    );
 }
 
 #[test]
 fn test_sine_wave_with_silence_gap() {
-    let mut audio = generate_sine_wave(
-        440.0,
-        44100,
-        2.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let mut audio = generate_sine_wave(440.0, 44100, 2.0, 0.8, 2, 16, Endianness::Little);
 
     // Inject a 500ms gap at 1s
     let gap_start = 44100 * 4; // 1s
@@ -256,20 +203,17 @@ fn test_sine_wave_with_silence_gap() {
     let result = check.verify(&audio).unwrap();
 
     assert!(!result.passed);
-    assert!(result.failure_reasons.iter().any(|r| r.contains("Max silence run")));
+    assert!(
+        result
+            .failure_reasons
+            .iter()
+            .any(|r| r.contains("Max silence run"))
+    );
 }
 
 #[test]
 fn test_sine_wave_leading_silence() {
-    let mut audio = generate_sine_wave(
-        440.0,
-        44100,
-        2.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let mut audio = generate_sine_wave(440.0, 44100, 2.0, 0.8, 2, 16, Endianness::Little);
 
     // 500ms of leading silence
     let silence_len = 44100 / 2 * 4;
@@ -379,15 +323,7 @@ fn test_very_short_audio() {
 
 #[test]
 fn test_raw_audio_format_cd() {
-    let audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     assert_eq!(audio.sample_rate, 44100);
     assert_eq!(audio.channels, 2);
@@ -401,15 +337,7 @@ fn test_raw_audio_format_cd() {
 
 #[test]
 fn test_raw_audio_24bit() {
-    let audio = generate_sine_wave(
-        440.0,
-        48000,
-        0.5,
-        0.5,
-        2,
-        24,
-        Endianness::Little,
-    );
+    let audio = generate_sine_wave(440.0, 48000, 0.5, 0.5, 2, 24, Endianness::Little);
 
     assert_eq!(audio.sample_rate, 48000);
     assert_eq!(audio.channels, 2);
@@ -428,15 +356,7 @@ fn test_raw_audio_24bit() {
 #[test]
 fn test_gap_detection() {
     // Generate 1s of audio
-    let mut audio = generate_sine_wave(
-        440.0,
-        44100,
-        1.0,
-        0.8,
-        2,
-        16,
-        Endianness::Little,
-    );
+    let mut audio = generate_sine_wave(440.0, 44100, 1.0, 0.8, 2, 16, Endianness::Little);
 
     // Inject 50ms gaps
     let sample_rate = 44100;
