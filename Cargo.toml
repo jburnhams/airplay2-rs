@@ -21,13 +21,14 @@ audio-cpal = ["dep:cpal"]
 audio-alsa = ["dep:alsa"]
 receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 decoders = ["dep:symphonia"]
+tokio = ["dep:tokio"]
 
 [dependencies]
 cpal = { version = "0.15.3", optional = true, default-features = false }
 bytes = "1.11.1"
 
 # Async
-tokio = { version = "1.43", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
+tokio = { version = "1.43", features = ["net", "sync", "time", "rt", "macros", "fs", "full"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
 async-trait = "0.1"
 futures = "0.3"
