@@ -121,11 +121,7 @@ async fn test_automatic_reconnection() -> Result<(), Box<dyn std::error::Error>>
     }
 
     if !connected {
-        tracing::error!("Failed to connect initially - skipping test to avoid failure");
-        // We return OK here because this is likely an environment issue (Errno 65)
-        // and we don't want to block CI on a flaky test.
-        // A dedicated fix for Errno 65 on macOS is required separately.
-        return Ok(());
+        return Err("Failed to connect player after retries".into());
     }
 
     assert!(player.is_connected().await);
