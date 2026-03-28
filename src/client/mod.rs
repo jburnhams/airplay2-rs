@@ -430,6 +430,22 @@ impl AirPlayClient {
         self.volume.get().await.as_f32()
     }
 
+    /// Fast forward
+    ///
+    /// # Errors
+    /// Returns error if network fails
+    pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
+        self.playback.fast_forward().await
+    }
+
+    /// Rewind
+    ///
+    /// # Errors
+    /// Returns error if network fails
+    pub async fn rewind(&self) -> Result<(), AirPlayError> {
+        self.playback.rewind().await
+    }
+
     /// Set volume (0.0 - 1.0)
     ///
     /// # Errors
