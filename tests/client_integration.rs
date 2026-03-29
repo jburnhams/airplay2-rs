@@ -159,13 +159,15 @@ async fn test_client_connect_failure() {
     // refused)
     match result {
         Ok(Err(_e)) => {
-            // Connection failed as expected
+            // Connection failed gracefully as expected due to the unreachable port.
+            // This verifies the client correctly surfaces the connection error.
         }
         Ok(Ok(_)) => {
-            panic!("Connection succeeded when it should have failed");
+            panic!("Connection succeeded to an unreachable port when it should have failed");
         }
         Err(_) => {
-            // Timeout is also an acceptable failure mode depending on OS
+            // A timeout is also an acceptable failure mode depending on the OS's networking stack
+            // behavior. We consider this a pass as long as it didn't succeed or panic.
         }
     }
 
