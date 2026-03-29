@@ -68,8 +68,9 @@ async fn test_raop_handshake_compliance() {
 
     println!("Received request 2: {}", request);
 
-    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
-    // double checks) The client implementation might differ, so we should be robust.
+    // Wait for the client to complete. Since we don't handle GET /info, Auth-Setup, etc.,
+    // the client connection might fail or timeout, which is expected for this partial test.
+    // For a compliance test that only tests OPTIONS, we either mock the rest or assert the failure.
     // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
 
     if request.starts_with("ANNOUNCE") {
@@ -111,14 +112,16 @@ async fn test_raop_handshake_compliance() {
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
-
+    // Since we don't handle GET /info, Auth-Setup, etc., the client connection might fail or
+    // timeout, which is expected for this partial test. We assert that it either connects
+    // (unlikely without full mocking) or fails with a known AirPlayError, but it shouldn't
+    // panic.
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => println!("Client failed as expected during partial handshake: {e}"),
+        Ok(Err(_)) => panic!("Client panic"),
+        Err(_) => println!("Timeout waiting for client as expected during partial handshake"),
     }
 }
