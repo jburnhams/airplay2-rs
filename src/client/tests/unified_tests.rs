@@ -93,6 +93,60 @@ async fn test_unified_client_force_protocol() {
 }
 
 #[tokio::test]
+async fn test_unified_client_playback_controls_disconnected() {
+    let mut client = UnifiedAirPlayClient::new();
+
+    assert!(matches!(
+        client.play().await,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+    assert!(matches!(
+        client.pause().await,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+    assert!(matches!(
+        client.stop().await,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+    assert!(matches!(
+        client.set_volume(0.5).await,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+    assert!(matches!(
+        client.stream_audio(b"some audio data").await,
+        Err(crate::error::AirPlayError::Disconnected { .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_unified_client_playback_controls_connected() {
+    let (device, _server) = create_device_with_server(false, true).await;
+    let config = ClientConfig {
+        preferred_protocol: PreferredProtocol::PreferRaop,
+        ..Default::default()
+    };
+    let mut client = UnifiedAirPlayClient::with_config(config);
+
+    client.connect(device).await.unwrap();
+
+    // RAOP session implementation of playback controls might just return Ok(()) or do network calls
+    // It should at least not return Disconnected error
+    let res = client.play().await;
+    assert!(
+        res.is_ok() || res.is_err(),
+        "should be Ok or some error other than Disconnected"
+    );
+    if let Err(e) = res {
+        assert!(!matches!(
+            e,
+            crate::error::AirPlayError::Disconnected { .. }
+        ));
+    }
+
+    client.disconnect().await.unwrap();
+}
+
+#[tokio::test]
 async fn test_connection_failure_handling() {
     let device = AirPlayDevice {
         id: "test".to_string(),
