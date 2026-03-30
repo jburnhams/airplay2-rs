@@ -246,3 +246,38 @@ async fn test_back_fails_disconnected() {
     let res = player.back().await;
     assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
 }
+
+#[tokio::test]
+async fn test_player_builder_chaining() {
+    let player = PlayerBuilder::new()
+        .device_name("Living Room")
+        .connection_timeout(Duration::from_secs(5))
+        .auto_reconnect(true)
+        .build();
+
+    assert_eq!(
+        player.target_device_name.read().await.as_deref(),
+        Some("Living Room")
+    );
+    assert!(player.auto_reconnect.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn test_player_connect_no_device_name() {
+    let player = AirPlayPlayer::new();
+
+    let device = crate::types::AirPlayDevice {
+        id: "fake".to_string(),
+        name: "Fake HomePod".to_string(),
+        model: None,
+        addresses: vec!["127.0.0.1".parse().unwrap()],
+        port: 1,
+        capabilities: crate::types::DeviceCapabilities::default(),
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
+    };
+    let res = player.connect(&device).await;
+    assert!(res.is_err());
+}
