@@ -68,57 +68,138 @@ async fn test_raop_handshake_compliance() {
 
     println!("Received request 2: {}", request);
 
-    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
-    // double checks) The client implementation might differ, so we should be robust.
-    // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
+    // Loop to handle robust handshake (it can send POST /auth-setup before ANNOUNCE)
+    let mut current_request = request.into_owned();
+    let mut step = 2;
 
-    if request.starts_with("ANNOUNCE") {
-        assert!(request.contains("Content-Type: application/sdp"));
+    loop {
+        if current_request.starts_with("ANNOUNCE") {
+            assert!(current_request.contains("Content-Type: application/sdp"));
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
+            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", step);
+            stream.write_all(response.as_bytes()).await.unwrap();
 
-        // --- Step 3: SETUP ---
-        let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 3: {}", request);
+            // --- Next Step: SETUP ---
+            let n = stream.read(&mut buffer).await.unwrap();
+            let req = String::from_utf8_lossy(&buffer[..n]);
+            step += 1;
+            println!("Received request {}: {}", step, req);
 
-        assert!(request.starts_with("SETUP"));
-        assert!(request.contains("Transport: RTP/AVP/UDP"));
+            assert!(req.starts_with("SETUP"));
+            assert!(req.contains("Transport: RTP/AVP/UDP"));
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nSession: CAFEBABE\r\nTransport: \
-                        RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                        timing_port=6002\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                step
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
 
-        // --- Step 4: RECORD ---
-        let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 4: {}", request);
+            // --- Next Step: RECORD ---
+            let n = stream.read(&mut buffer).await.unwrap();
+            let req = String::from_utf8_lossy(&buffer[..n]);
+            step += 1;
+            println!("Received request {}: {}", step, req);
 
-        assert!(request.starts_with("RECORD"));
-        assert!(request.contains("Session: CAFEBABE"));
-        assert!(request.contains("Range: npt=0-"));
+            assert!(req.starts_with("RECORD"));
+            assert!(req.contains("Session: CAFEBABE"));
+            assert!(req.contains("Range: npt=0-"));
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
-    } else if request.starts_with("POST") {
-        // Maybe pairing?
-        println!("Got POST instead of ANNOUNCE");
-        // For this test, we might stop here if we unexpected behavior, or handle it.
-        // This verifies that we at least got past the first step.
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                step
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+            break;
+        } else if current_request.starts_with("POST") {
+            println!("Got POST request");
+            let cseq = current_request
+                .lines()
+                .find(|l| l.starts_with("CSeq:"))
+                .and_then(|l| l.split(':').nth(1))
+                .unwrap_or("2")
+                .trim();
+
+            if current_request.contains("/auth-setup") {
+                // Return dummy 32 byte auth response
+                let body = vec![0u8; 32];
+                let response = format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                    cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                stream.write_all(&body).await.unwrap();
+            } else {
+                // Return generic 200 OK
+                let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
+
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            let n = stream.read(&mut buffer).await.unwrap();
+            current_request = String::from_utf8_lossy(&buffer[..n]).into_owned();
+            step += 1;
+            println!("Received request {}: {}", step, current_request);
+        } else if current_request.starts_with("GET") {
+            println!("Got GET request");
+            let cseq = current_request
+                .lines()
+                .find(|l| l.starts_with("CSeq:"))
+                .and_then(|l| l.split(':').nth(1))
+                .unwrap_or("2")
+                .trim();
+            // Return generic 200 OK
+            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
+            stream.write_all(response.as_bytes()).await.unwrap();
+
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            let n = stream.read(&mut buffer).await.unwrap();
+            current_request = String::from_utf8_lossy(&buffer[..n]).into_owned();
+            step += 1;
+            println!("Received request {}: {}", step, current_request);
+        } else {
+            // It might be a fragmented POST body (like pair-setup)
+            println!("Unexpected request or fragmented body: {}", current_request);
+            // Since this is just a compliance mock, we can just send a 200 OK to keep it moving
+            // or break and let it time out if we've gone far enough.
+            // The purpose of the test is just to check it handles the start of RAOP correctly.
+            // We got past OPTIONS, GET /info, POST /auth-setup, and some POST /pair-setup.
+            // We can just break and let the mock connection drop, causing client to error.
+            // But wait, the client is expected to panic on Err now.
+            // Let's just return a 200 OK for anything else until it stops.
+            let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes()).await;
+
+            // Give client a brief moment to process the final ok/break before dropping socket
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            break;
+        }
     }
 
     // Await client result (with timeout)
-    // The client might fail if we stopped early, but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
+    // Because we are a dummy mock server and dropped the connection or didn't provide correct
+    // crypto pairing, the client connection WILL fail, and that is EXPECTED.
+    // It shouldn't panic the test if it fails *as long as it fails with an AirPlayError*.
+    // However, it should not time out indefinitely or swallow the error silently.
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
+    // In some OS/CI environments, dropping the connection can still result in the client timing out
+    // internally rather than failing immediately if the socket hasn't fully closed.
+    // So if it times out, we accept it as long as we made it through the handshake above.
+    let result = tokio::time::timeout(Duration::from_secs(2), connect_handle).await;
 
     match result {
-        Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Ok(_))) => {
+            panic!("Client connected successfully, but mock didn't do full crypto pairing")
+        }
+        Ok(Ok(Err(e))) => println!("Client failed as expected: {}", e),
+        Ok(Err(e)) => panic!("Client task panicked: {:?}", e),
+        Err(_) => println!(
+            "Timeout waiting for client connection to complete, which is acceptable after \
+             dropping mock connection"
+        ),
     }
 }
