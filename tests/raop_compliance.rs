@@ -79,32 +79,49 @@ async fn test_raop_handshake_compliance() {
             .unwrap_or("0");
 
         if request.starts_with("GET /info") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\n\r\n", cseq_num);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/x-apple-binary-plist\r\n\r\n",
+                cseq_num
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // Mock server should respond with 32-byte binary to prevent client hang
-            let response_head = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\nContent-Type: application/octet-stream\r\n\r\n", cseq_num);
+            let response_head = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\nContent-Type: \
+                 application/octet-stream\r\n\r\n",
+                cseq_num
+            );
             stream.write_all(response_head.as_bytes()).await.unwrap();
             stream.write_all(&[0u8; 32]).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
             // The client expects to proceed to pairing after auth-setup
-        } else if request.starts_with("POST /pair-setup") || request.starts_with("POST /pair-verify") {
+        } else if request.starts_with("POST /pair-setup")
+            || request.starts_with("POST /pair-verify")
+        {
             // These can sometimes be HTTP/1.1 instead of RTSP/1.0
             let is_http = request.contains("HTTP/1.1");
             let protocol = if is_http { "HTTP/1.1" } else { "RTSP/1.0" };
 
-            let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", protocol, cseq_num);
+            let response = format!(
+                "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                protocol, cseq_num
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
 
             // On POST /pair-setup, we might get multiple requests
         } else if request.contains("POST /pair-setup") || request.contains("POST /pair-verify") {
-            // For requests that might be joined to body or have garbage like `\x06\x01\x01\x00\x01\x00\x13\x01\x10POST /pair-setup`
+            // For requests that might be joined to body or have garbage like
+            // `\x06\x01\x01\x00\x01\x00\x13\x01\x10POST /pair-setup`
             let is_http = request.contains("HTTP/1.1");
             let protocol = if is_http { "HTTP/1.1" } else { "RTSP/1.0" };
 
             // Send back a 200 OK response with content length 0
-            let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", protocol, cseq_num);
+            let response = format!(
+                "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                protocol, cseq_num
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -116,20 +133,29 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("SETUP") {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", cseq_num);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                cseq_num
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
             assert!(request.contains("Range: npt=0-"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq_num);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq_num
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             break; // Reached the end of handshake test
         } else if request.starts_with("OPTIONS") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
-                    TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
-                    GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n", cseq_num);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                 TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\nApple-Jack-Status: \
+                 connected; type=analog\r\n\r\n",
+                cseq_num
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         }
     }
