@@ -1590,7 +1590,10 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     // ── Simulate HomePod sending Sync + Follow_Up ────────────────────────────
     // We use a HomePod-style epoch: T1 = 1000 s from HomePod reference.
     // Unix epoch offset would be ~56 years; we pick something computable.
-    #[allow(clippy::no_effect_underscore_binding)]
+    #[allow(
+        clippy::no_effect_underscore_binding,
+        reason = "kept for documentation"
+    )]
     let _t1_homepod_ns: i128 = 1_000_000_000_000; // 1000 s in HomePod ns (kept for documentation)
 
     // Build a Sync message (transport_specific=1, messageType=0x00).

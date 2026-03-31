@@ -1,5 +1,5 @@
 //! Common test utilities and fixtures
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test utilities might not be used by all tests")]
 
 use std::sync::Once;
 use tracing_subscriber::{EnvFilter, fmt};

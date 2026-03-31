@@ -1,6 +1,6 @@
 //! Protocol module
 
-#![allow(missing_docs)]
+#![allow(missing_docs, reason = "Internal or work-in-progress protocols")]
 
 pub mod crypto;
 pub mod daap;

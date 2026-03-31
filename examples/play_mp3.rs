@@ -32,7 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg
     };
 
-    #[allow(unused_mut)]
+    #[allow(
+        unused_mut,
+        reason = "Variables might be conditionally mutated based on features"
+    )]
     let mut player = AirPlayPlayer::with_config(config);
     let mut retry_count = 0;
     let max_retries = 5;
