@@ -218,3 +218,54 @@ async fn test_player_disconnected_errors() {
     let res = player.seek(10.0).await;
     assert!(matches!(res, Err(AirPlayError::Disconnected { .. })));
 }
+
+#[tokio::test]
+async fn test_player_fast_forward_and_rewind() {
+    let config = MockServerConfig {
+        rtsp_port: 0,
+        ..Default::default()
+    };
+    let mut server = MockServer::new(config);
+    let addr = server.start().await.expect("Failed to start server");
+
+    let player = AirPlayPlayer::new();
+    let device = AirPlayDevice {
+        id: "player_test_ffwd_rewind".to_string(),
+        name: "FFwd Rewind Test Device".to_string(),
+        model: Some("Mock".to_string()),
+        addresses: vec![addr.ip()],
+        port: addr.port(),
+        capabilities: airplay2::types::DeviceCapabilities {
+            airplay2: true,
+            supports_audio: true,
+            ..Default::default()
+        },
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
+    };
+
+    player.connect(&device).await.expect("Connect failed");
+
+    // Fast Forward
+    player.fast_forward().await.expect("Fast forward failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let rate = server.rate().await;
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Rate should be 2.0 after fast forward"
+    );
+
+    // Rewind
+    player.rewind().await.expect("Rewind failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let rate = server.rate().await;
+    assert!(
+        (rate - (-2.0)).abs() < f64::EPSILON,
+        "Rate should be -2.0 after rewind"
+    );
+
+    player.disconnect().await.expect("Disconnect failed");
+    server.stop().await;
+}
