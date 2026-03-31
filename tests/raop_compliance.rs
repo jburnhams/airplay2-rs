@@ -67,7 +67,9 @@ async fn test_raop_handshake_compliance() {
     // before ANNOUNCE. We need to handle them robustly in a loop.
     let mut step = 2;
     loop {
-        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer))
+            .await
+        {
             Ok(Ok(n)) if n > 0 => n,
             _ => break,
         };
@@ -80,7 +82,7 @@ async fn test_raop_handshake_compliance() {
         // Extract CSeq
         let cseq = if let Some(idx) = request.find("CSeq: ") {
             let end = request[idx..].find("\r\n").unwrap_or(request.len() - idx);
-            request[idx..idx+end].to_string()
+            request[idx..idx + end].to_string()
         } else {
             format!("CSeq: {}", step)
         };
@@ -91,17 +93,22 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
 
             // For the test, we'll continue to let it finish the handshake completely.
-            break;
         } else if request.contains("SETUP") {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
-            let response = format!("{} 200 OK\r\n{}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", protocol, cseq);
+            let response = format!(
+                "{} 200 OK\r\n{}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                protocol, cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.contains("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
             assert!(request.contains("Range: npt=0-"));
-            let response = format!("{} 200 OK\r\n{}\r\nAudio-Latency: 2205\r\n\r\n", protocol, cseq);
+            let response = format!(
+                "{} 200 OK\r\n{}\r\nAudio-Latency: 2205\r\n\r\n",
+                protocol, cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
 
             // Add a small sleep then break to allow the client to process the response
@@ -118,11 +125,22 @@ async fn test_raop_handshake_compliance() {
                     </array>\n\
                 </dict>\n\
                 </plist>";
-            let response = format!("{} 200 OK\r\n{}\r\nContent-Type: text/x-apple-plist+xml\r\nContent-Length: {}\r\n\r\n{}", protocol, cseq, body.len(), body);
+            let response = format!(
+                "{} 200 OK\r\n{}\r\nContent-Type: text/x-apple-plist+xml\r\nContent-Length: \
+                 {}\r\n\r\n{}",
+                protocol,
+                cseq,
+                body.len(),
+                body
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.contains("POST /auth-setup") {
             let body = vec![0u8; 32];
-            let response = format!("{} 200 OK\r\n{}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n", protocol, cseq);
+            let response = format!(
+                "{} 200 OK\r\n{}\r\nContent-Type: application/octet-stream\r\nContent-Length: \
+                 32\r\n\r\n",
+                protocol, cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             stream.write_all(&body).await.unwrap();
         } else if request.contains("POST /pair-setup") || request.contains("POST /pair-verify") {
@@ -137,24 +155,27 @@ async fn test_raop_handshake_compliance() {
         step += 1;
 
         if step > 20 {
-             // Stop the test from infinitely looping when crypto requests continually retry.
-             break;
+            // Stop the test from infinitely looping when crypto requests continually retry.
+            break;
         }
     }
 
-    // Abort the task to prevent it from failing after test completes, since the mock doesn't support full crypto pairing.
-    // The main point is we didn't panic! on an error condition above.
+    // Abort the task to prevent it from failing after test completes, since the mock doesn't
+    // support full crypto pairing. The main point is we didn't panic! on an error condition
+    // above.
     connect_handle.abort();
     let result = connect_handle.await;
 
-    // Test succeeds if we aborted it gracefully or if it returned an auth failure (since we didn't fully mock pairing)
+    // Test succeeds if we aborted it gracefully or if it returned an auth failure (since we didn't
+    // fully mock pairing)
     match result {
-         Err(e) if e.is_cancelled() => (), // Cancelled successfully
-         Ok(Err(e)) => {
-             // It failed connection, likely auth failure, which is fine since we aren't mocking full auth
-             println!("Client failed connection: {}", e);
-         },
-         Ok(Ok(_)) => (), // Succeeded? that would be surprising without full auth mock, but fine.
-         Err(e) => panic!("Task panicked: {}", e), // Real panic inside the task
+        Err(e) if e.is_cancelled() => (), // Cancelled successfully
+        Ok(Err(e)) => {
+            // It failed connection, likely auth failure, which is fine since we aren't mocking full
+            // auth
+            println!("Client failed connection: {}", e);
+        }
+        Ok(Ok(_)) => (), // Succeeded? that would be surprising without full auth mock, but fine.
+        Err(e) => panic!("Task panicked: {}", e), // Real panic inside the task
     }
 }
