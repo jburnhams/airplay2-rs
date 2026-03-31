@@ -158,14 +158,21 @@ async fn test_client_connect_failure() {
     // We expect the connection to either timeout (if OS drops) or return an error (Connection
     // refused)
     match result {
-        Ok(Err(_e)) => {
-            // Connection failed as expected
+        Ok(Err(e)) => {
+            // Valid test condition: Connection failed as expected due to closed port
+            assert!(
+                matches!(e, airplay2::error::AirPlayError::NetworkError(_))
+                    || matches!(e, airplay2::error::AirPlayError::ConnectionFailed { .. }),
+                "Expected network error, got: {:?}",
+                e
+            );
         }
         Ok(Ok(_)) => {
             panic!("Connection succeeded when it should have failed");
         }
         Err(_) => {
-            // Timeout is also an acceptable failure mode depending on OS
+            // Valid test condition: Timeout is also an acceptable failure mode depending on OS
+            // It means the connection attempt hung because the port was unresponsive
         }
     }
 
