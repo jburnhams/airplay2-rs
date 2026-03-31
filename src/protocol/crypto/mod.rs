@@ -1,13 +1,14 @@
 //! Cryptographic primitives for `AirPlay` authentication and encryption
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(missing_docs)]
 #![allow(
+    dead_code,
+    unused_imports,
+    missing_docs,
     clippy::all,
     clippy::pedantic,
     clippy::nursery,
-    reason = "Legacy module"
+    reason = "Internal or work-in-progress cryptographic primitives where strict linting is \
+              currently relaxed"
 )]
 
 mod aes;

@@ -1,7 +1,10 @@
 //! Sans-IO RTSP protocol implementation for `AirPlay`
 
-#![allow(unused_imports)]
-#![allow(dead_code)]
+#![allow(
+    unused_imports,
+    dead_code,
+    reason = "Placeholder or experimental modules may have unused imports and dead code"
+)]
 
 pub mod codec;
 pub mod headers;

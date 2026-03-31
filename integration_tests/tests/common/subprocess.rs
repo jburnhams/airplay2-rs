@@ -15,7 +15,11 @@ use nix::sys::signal::Signal;
 /// never passed to kill() — see the `#[cfg(windows)]` block in `stop()`).
 #[cfg(windows)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-#[allow(non_camel_case_types, dead_code)]
+#[allow(
+    non_camel_case_types,
+    dead_code,
+    reason = "Windows dummy types might not be fully used or conform to standard casing"
+)]
 pub enum Signal {
     SIGTERM,
     SIGKILL,
