@@ -38,13 +38,21 @@ async fn test_raop_handshake_compliance() {
             let request = String::from_utf8_lossy(&request_bytes);
             let first_line = request.lines().next().unwrap_or("").to_string();
 
-            let content_len = request.lines().find_map(|l| {
-                if l.to_lowercase().starts_with("content-length:") {
-                    l.split(':').nth(1).unwrap_or("").trim().parse::<usize>().ok()
-                } else {
-                    None
-                }
-            }).unwrap_or(0);
+            let content_len = request
+                .lines()
+                .find_map(|l| {
+                    if l.to_lowercase().starts_with("content-length:") {
+                        l.split(':')
+                            .nth(1)
+                            .unwrap_or("")
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
 
             if read_buf.len() < pos + 4 + content_len {
                 break; // Need more data for body
@@ -54,42 +62,78 @@ async fn test_raop_handshake_compliance() {
             let request_str = request.to_string();
 
             // Extract CSeq if present
-            let cseq = request.lines().find_map(|l| {
-                if l.to_lowercase().starts_with("cseq:") {
-                    l.split(':').nth(1).unwrap_or("").trim().parse::<usize>().ok()
-                } else {
-                    None
-                }
-            }).unwrap_or(0);
+            let cseq = request
+                .lines()
+                .find_map(|l| {
+                    if l.to_lowercase().starts_with("cseq:") {
+                        l.split(':')
+                            .nth(1)
+                            .unwrap_or("")
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
 
             println!("Received request: {} (CSeq: {})", first_line, cseq);
 
-            let proto = if first_line.contains("HTTP/1.1") { "HTTP/1.1" } else { "RTSP/1.0" };
+            let proto = if first_line.contains("HTTP/1.1") {
+                "HTTP/1.1"
+            } else {
+                "RTSP/1.0"
+            };
 
             if request_str.starts_with("OPTIONS") {
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n", proto, cseq);
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                     TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
+                     GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n",
+                    proto, cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
             } else if request_str.starts_with("GET /info") {
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n", proto, cseq);
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
             } else if request_str.starts_with("POST /auth-setup") {
                 let body_res = [0u8; 32];
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n", proto, cseq, body_res.len());
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     application/octet-stream\r\nContent-Length: {}\r\n\r\n",
+                    proto,
+                    cseq,
+                    body_res.len()
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
                 stream.write_all(&body_res).await.unwrap();
                 tokio::time::sleep(Duration::from_millis(50)).await;
             } else if request_str.starts_with("POST /pair-setup") {
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", proto, cseq);
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 sent_pair_setup = true;
             } else if request_str.starts_with("POST /pair-verify") {
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", proto, cseq);
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
                 tokio::time::sleep(Duration::from_millis(50)).await;
             } else {
-                 let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", proto, cseq);
-                 stream.write_all(response.as_bytes()).await.unwrap();
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
             }
 
             // Remove processed request and body from buffer
@@ -100,7 +144,7 @@ async fn test_raop_handshake_compliance() {
             // "add a small sleep (e.g., 50ms) before dropping the socket"
             tokio::time::sleep(Duration::from_millis(50)).await;
             break; // Let's not drop the stream prematurely, maybe client needs to reconnect or fail correctly.
-                   // Let the stream drop by falling out of scope and breaking the loop.
+            // Let the stream drop by falling out of scope and breaking the loop.
         }
     }
 
@@ -114,7 +158,7 @@ async fn test_raop_handshake_compliance() {
         Ok(Ok(Ok(_))) => panic!("Client connected successfully without pairing"),
         Ok(Ok(Err(e))) => {
             println!("Client failed as expected: {}", e);
-        },
+        }
         Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
         Err(_) => panic!("Timeout waiting for client to fail"),
     }
