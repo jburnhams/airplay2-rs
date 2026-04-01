@@ -103,3 +103,126 @@ pub fn check_raop_encryption(caps: &RaopCapabilities) -> Result<(), ProtocolErro
         Err(ProtocolError::UnsupportedEncryption)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{AirPlayDevice, DeviceCapabilities, RaopCapabilities, RaopEncryption};
+
+    fn create_device(supports_ap2: bool, supports_raop: bool) -> AirPlayDevice {
+        let caps = DeviceCapabilities {
+            airplay2: supports_ap2,
+            ..Default::default()
+        };
+
+        AirPlayDevice {
+            id: "12:34:56:78:90:AB".to_string(),
+            name: "Test Device".to_string(),
+            model: Some("TestModel".to_string()),
+            port: 7000,
+            capabilities: caps,
+            raop_port: if supports_raop { Some(5000) } else { None },
+            raop_capabilities: Some(RaopCapabilities::default()),
+            txt_records: std::collections::HashMap::new(),
+            last_seen: Some(std::time::Instant::now()),
+            addresses: vec![],
+        }
+    }
+
+    #[test]
+    fn test_select_protocol_force_ap2() {
+        let device = create_device(true, false);
+        assert_eq!(
+            select_protocol(&device, PreferredProtocol::ForceAirPlay2).unwrap(),
+            SelectedProtocol::AirPlay2
+        );
+
+        let device_unsupported = create_device(false, true);
+        assert!(matches!(
+            select_protocol(&device_unsupported, PreferredProtocol::ForceAirPlay2),
+            Err(ProtocolError::AirPlay2NotSupported)
+        ));
+    }
+
+    #[test]
+    fn test_select_protocol_force_raop() {
+        let device = create_device(false, true);
+        assert_eq!(
+            select_protocol(&device, PreferredProtocol::ForceRaop).unwrap(),
+            SelectedProtocol::Raop
+        );
+
+        let device_unsupported = create_device(true, false);
+        assert!(matches!(
+            select_protocol(&device_unsupported, PreferredProtocol::ForceRaop),
+            Err(ProtocolError::RaopNotSupported)
+        ));
+    }
+
+    #[test]
+    fn test_select_protocol_prefer_ap2() {
+        let device_both = create_device(true, true);
+        assert_eq!(
+            select_protocol(&device_both, PreferredProtocol::PreferAirPlay2).unwrap(),
+            SelectedProtocol::AirPlay2
+        );
+
+        let device_raop_only = create_device(false, true);
+        assert_eq!(
+            select_protocol(&device_raop_only, PreferredProtocol::PreferAirPlay2).unwrap(),
+            SelectedProtocol::Raop
+        );
+
+        let device_none = create_device(false, false);
+        assert!(matches!(
+            select_protocol(&device_none, PreferredProtocol::PreferAirPlay2),
+            Err(ProtocolError::NoSupportedProtocol)
+        ));
+    }
+
+    #[test]
+    fn test_select_protocol_prefer_raop() {
+        let device_both = create_device(true, true);
+        assert_eq!(
+            select_protocol(&device_both, PreferredProtocol::PreferRaop).unwrap(),
+            SelectedProtocol::Raop
+        );
+
+        let device_ap2_only = create_device(true, false);
+        assert_eq!(
+            select_protocol(&device_ap2_only, PreferredProtocol::PreferRaop).unwrap(),
+            SelectedProtocol::AirPlay2
+        );
+
+        let device_none = create_device(false, false);
+        assert!(matches!(
+            select_protocol(&device_none, PreferredProtocol::PreferRaop),
+            Err(ProtocolError::NoSupportedProtocol)
+        ));
+    }
+
+    #[test]
+    fn test_check_raop_encryption() {
+        let mut caps = RaopCapabilities {
+            encryption_types: vec![],
+            ..Default::default()
+        };
+        // Empty encryption types -> Unsupported
+        assert!(matches!(
+            check_raop_encryption(&caps),
+            Err(ProtocolError::UnsupportedEncryption)
+        ));
+
+        caps.encryption_types = vec![RaopEncryption::Rsa];
+        assert!(check_raop_encryption(&caps).is_ok());
+
+        caps.encryption_types = vec![RaopEncryption::None];
+        assert!(check_raop_encryption(&caps).is_ok());
+
+        caps.encryption_types = vec![RaopEncryption::FairPlay];
+        assert!(matches!(
+            check_raop_encryption(&caps),
+            Err(ProtocolError::UnsupportedEncryption)
+        ));
+    }
+}
