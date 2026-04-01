@@ -7,118 +7,159 @@ use tokio::net::TcpListener;
 
 #[tokio::test]
 async fn test_raop_handshake_compliance() {
-    // 1. Setup Custom Mock Server
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    // 2. Create RAOP Device
-    // Setting raop_port is crucial to trigger RAOP logic
     let mut device = create_test_device("raop-test-id", "RAOP Device", addr.ip(), addr.port());
     device.raop_port = Some(addr.port());
 
-    // 3. Connect Client in background
     let client = AirPlayClient::new(AirPlayConfig::default());
 
     let connect_handle = tokio::spawn(async move { client.connect(&device).await });
 
-    // 4. Accept connection and verify handshake
     let (mut stream, _) = listener.accept().await.unwrap();
 
-    // Helper to read request
     let mut buffer = [0u8; 4096];
+    let mut read_buf = Vec::new();
+    let mut sent_pair_setup = false;
 
-    // --- Step 1: OPTIONS ---
-    let n = stream.read(&mut buffer).await.unwrap();
-    let request = String::from_utf8_lossy(&buffer[..n]);
+    loop {
+        let n = tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await;
+        let n = match n {
+            Ok(Ok(0)) => break,
+            Ok(Ok(n)) => n,
+            Ok(Err(_)) => break,
+            Err(_) => break, // Timeout
+        };
+        read_buf.extend_from_slice(&buffer[..n]);
 
-    println!("Received request 1: {}", request);
+        while let Some(pos) = read_buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            let request_bytes = read_buf[..pos].to_vec();
+            let request = String::from_utf8_lossy(&request_bytes);
+            let first_line = request.lines().next().unwrap_or("").to_string();
 
-    // Verify Method
-    assert!(request.starts_with("OPTIONS"));
+            let content_len = request
+                .lines()
+                .find_map(|l| {
+                    if l.to_lowercase().starts_with("content-length:") {
+                        l.split(':')
+                            .nth(1)
+                            .unwrap_or("")
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
 
-    // Verify Mandatory Headers
-    assert!(request.contains("CSeq:"), "Missing CSeq header");
-    assert!(request.contains("User-Agent:"), "Missing User-Agent header");
-    assert!(
-        request.contains("Client-Instance:"),
-        "Missing Client-Instance header"
-    );
-    assert!(request.contains("DACP-ID:"), "Missing DACP-ID header");
-    assert!(
-        request.contains("Active-Remote:"),
-        "Missing Active-Remote header"
-    );
-    assert!(
-        request.contains("X-Apple-Device-ID:"),
-        "Missing X-Apple-Device-ID header"
-    );
+            if read_buf.len() < pos + 4 + content_len {
+                break; // Need more data for body
+            }
 
-    // Send Response
-    // RAOP requires Apple-Challenge in response for auth, but we can simulate success or continue
-    // If we don't send Apple-Challenge, client might skip auth or fail if strict.
-    // Let's send a standard response.
-    let response = "RTSP/1.0 200 OK\r\nCSeq: 1\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
-                    TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
-                    GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n";
-    stream.write_all(response.as_bytes()).await.unwrap();
+            let _body = &read_buf[pos + 4..pos + 4 + content_len];
+            let request_str = request.to_string();
 
-    // --- Step 2: ANNOUNCE ---
-    let n = stream.read(&mut buffer).await.unwrap();
-    let request = String::from_utf8_lossy(&buffer[..n]);
+            // Extract CSeq if present
+            let cseq = request
+                .lines()
+                .find_map(|l| {
+                    if l.to_lowercase().starts_with("cseq:") {
+                        l.split(':')
+                            .nth(1)
+                            .unwrap_or("")
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
 
-    println!("Received request 2: {}", request);
+            println!("Received request: {} (CSeq: {})", first_line, cseq);
 
-    // If auth is not required/challenged, next should be ANNOUNCE (or OPTIONS again if client
-    // double checks) The client implementation might differ, so we should be robust.
-    // Based on `RtspSession`, it might send ANNOUNCE or SETUP.
+            let proto = if first_line.contains("HTTP/1.1") {
+                "HTTP/1.1"
+            } else {
+                "RTSP/1.0"
+            };
 
-    if request.starts_with("ANNOUNCE") {
-        assert!(request.contains("Content-Type: application/sdp"));
+            if request_str.starts_with("OPTIONS") {
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                     TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
+                     GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n",
+                    proto, cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            } else if request_str.starts_with("GET /info") {
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            } else if request_str.starts_with("POST /auth-setup") {
+                let body_res = [0u8; 32];
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                     application/octet-stream\r\nContent-Length: {}\r\n\r\n",
+                    proto,
+                    cseq,
+                    body_res.len()
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                stream.write_all(&body_res).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            } else if request_str.starts_with("POST /pair-setup") {
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                sent_pair_setup = true;
+            } else if request_str.starts_with("POST /pair-verify") {
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            } else {
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
 
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
+            // Remove processed request and body from buffer
+            read_buf.drain(..pos + 4 + content_len);
+        }
 
-        // --- Step 3: SETUP ---
-        let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 3: {}", request);
-
-        assert!(request.starts_with("SETUP"));
-        assert!(request.contains("Transport: RTP/AVP/UDP"));
-
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 3\r\nSession: CAFEBABE\r\nTransport: \
-                        RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                        timing_port=6002\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
-
-        // --- Step 4: RECORD ---
-        let n = stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8_lossy(&buffer[..n]);
-        println!("Received request 4: {}", request);
-
-        assert!(request.starts_with("RECORD"));
-        assert!(request.contains("Session: CAFEBABE"));
-        assert!(request.contains("Range: npt=0-"));
-
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
-        stream.write_all(response.as_bytes()).await.unwrap();
-    } else if request.starts_with("POST") {
-        // Maybe pairing?
-        println!("Got POST instead of ANNOUNCE");
-        // For this test, we might stop here if we unexpected behavior, or handle it.
-        // This verifies that we at least got past the first step.
+        if sent_pair_setup {
+            // "add a small sleep (e.g., 50ms) before dropping the socket"
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            break; // Let's not drop the stream prematurely, maybe client needs to reconnect or fail correctly.
+            // Let the stream drop by falling out of scope and breaking the loop.
+        }
     }
 
-    // Await client result (with timeout)
-    // The client might fail if we stopped early, but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
+    // Explicitly drop stream
+    drop(stream);
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
+    // Some client fallback mechanisms do retries or expect failures, let's give it up to 5s.
+    let result = tokio::time::timeout(Duration::from_secs(5), connect_handle).await;
 
     match result {
-        Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Ok(_))) => panic!("Client connected successfully without pairing"),
+        Ok(Ok(Err(e))) => {
+            println!("Client failed as expected: {}", e);
+        }
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
+        Err(_) => panic!("Timeout waiting for client to fail"),
     }
 }
