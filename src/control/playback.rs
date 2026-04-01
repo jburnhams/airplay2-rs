@@ -246,9 +246,7 @@ impl PlaybackController {
     ///
     /// Returns error if network fails
     pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip forward 10s
-        self.seek_relative(Duration::from_secs(10), true).await
+        self.send_rate(2.0).await
     }
 
     /// Rewind
@@ -257,9 +255,7 @@ impl PlaybackController {
     ///
     /// Returns error if network fails
     pub async fn rewind(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip backward 10s
-        self.seek_relative(Duration::from_secs(10), false).await
+        self.send_rate(-2.0).await
     }
 
     /// Set repeat mode
@@ -365,6 +361,25 @@ impl PlaybackController {
         Ok(())
     }
 
+    /// Internal: send rate command
+    async fn send_rate(&self, rate: f64) -> Result<(), AirPlayError> {
+        let body = DictBuilder::new().insert("rate", rate).build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Internal: send scrub command
     async fn send_scrub(&self, position: f64) -> Result<(), AirPlayError> {
         // AirPlay 2 uses progress parameter for scrub
@@ -437,5 +452,33 @@ impl PlaybackProgress {
     #[must_use]
     pub fn remaining(&self) -> Duration {
         self.duration.saturating_sub(self.position)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_playback_progress() {
+        let progress = PlaybackProgress {
+            position: Duration::from_secs(30),
+            duration: Duration::from_secs(120),
+            rate: 1.0,
+        };
+
+        assert!((progress.progress() - 0.25).abs() < f64::EPSILON);
+        assert_eq!(progress.remaining(), Duration::from_secs(90));
+    }
+
+    #[test]
+    fn test_progress_zero_duration() {
+        let progress = PlaybackProgress {
+            position: Duration::from_secs(0),
+            duration: Duration::from_secs(0),
+            rate: 0.0,
+        };
+
+        assert!((progress.progress() - 0.0).abs() < f64::EPSILON);
     }
 }

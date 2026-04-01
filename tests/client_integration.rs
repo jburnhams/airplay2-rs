@@ -108,10 +108,21 @@ async fn test_client_integration_flow() {
     );
     assert!((client.volume().await - 0.5).abs() < f32::EPSILON);
 
+    // Fast forward
+    client.fast_forward().await.expect("Fast forward failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!((server.rate().await - 2.0).abs() < f64::EPSILON);
+
+    // Rewind
+    client.rewind().await.expect("Rewind failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!((server.rate().await - -2.0).abs() < f64::EPSILON);
+
     // Pause
     client.pause().await.expect("Pause failed");
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert!(!server.is_streaming().await);
+    assert!((server.rate().await - 0.0).abs() < f64::EPSILON);
     assert!(!client.playback_state().await.is_playing);
 
     // 6. Disconnect
