@@ -456,7 +456,9 @@ async fn test_master_handler_clock_accessor() {
 async fn test_master_sends_delay_resp_on_general_port() {
     // Bind the client "general" socket to the expected PTP general port (320).
     // This simulates how a real PTP slave would listen.
-    let client_general = UdpSocket::bind(("127.0.0.1", PTP_GENERAL_PORT)).await.unwrap();
+    let client_general = UdpSocket::bind(("127.0.0.1", PTP_GENERAL_PORT))
+        .await
+        .unwrap();
 
     let master_event = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
     let master_general = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
