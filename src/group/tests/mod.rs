@@ -329,6 +329,39 @@ async fn test_add_device_group_not_found() {
 }
 
 #[tokio::test]
+async fn test_remove_leader_promotes_next() {
+    let mut group = DeviceGroup::new("Test Group");
+
+    group.add_member(test_device("device1"));
+    group.add_member(test_device("device2"));
+    group.add_member(test_device("device3"));
+
+    // Verify initial leader
+    assert!(group.member("device1").unwrap().is_leader);
+    assert!(!group.member("device2").unwrap().is_leader);
+    assert!(!group.member("device3").unwrap().is_leader);
+
+    // Remove leader
+    let removed = group.remove_member("device1").unwrap();
+    assert!(removed.is_leader);
+
+    // Verify promotion (device2 should now be leader)
+    assert_eq!(group.member_count(), 2);
+    assert!(group.member("device2").unwrap().is_leader);
+    assert!(!group.member("device3").unwrap().is_leader);
+    assert_eq!(group.leader().unwrap().device.id, "device2");
+
+    // Remove the new leader
+    let removed2 = group.remove_member("device2").unwrap();
+    assert!(removed2.is_leader);
+
+    // Verify promotion (device3 should now be leader)
+    assert_eq!(group.member_count(), 1);
+    assert!(group.member("device3").unwrap().is_leader);
+    assert_eq!(group.leader().unwrap().device.id, "device3");
+}
+
+#[tokio::test]
 async fn test_create_group_with_multiple_devices_success() {
     let manager = GroupManager::new();
     let devices = vec![test_device("d1"), test_device("d2"), test_device("d3")];
