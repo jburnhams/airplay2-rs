@@ -160,8 +160,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match tokio::time::timeout(Duration::from_secs(10), client.stream_audio(source)).await {
         Ok(Ok(())) => println!("Streaming completed successfully!"),
-        Ok(Err(e)) => println!("Streaming error: {:?}", e),
-        Err(_) => println!("Streaming timed out"),
+        Ok(Err(e)) => {
+            eprintln!("Streaming error: {:?}", e);
+            return Err(e.into());
+        }
+        Err(_) => {
+            eprintln!("Streaming timed out");
+            return Err("Streaming timed out".into());
+        }
     }
 
     // 5. Disconnect

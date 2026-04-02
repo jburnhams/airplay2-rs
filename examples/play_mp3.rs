@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!(" - '{}' ({:?}:{})", d.name, d.addresses.first(), d.port);
                         }
                     }
-                    Err(_) => println!("Scan failed."),
+                    Err(e) => eprintln!("Scan failed: {}", e),
                 }
 
                 retry_count += 1;

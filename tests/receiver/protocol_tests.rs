@@ -87,18 +87,21 @@ async fn test_volume_control() {
         loop {
             match events.recv().await {
                 Ok(ReceiverEvent::VolumeChanged { db, .. }) => {
-                    if (db - -15.0).abs() < 0.001 {
+                    if (db - -15.0).abs() < f32::EPSILON {
                         return true;
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => return false,
+                Err(_) => panic!("Channel closed before receiving VolumeChanged event"),
             }
         }
     })
     .await;
 
-    assert!(result.unwrap_or(false), "VolumeChanged event not received");
+    assert!(
+        result.expect("Timeout waiting for volume changed event"),
+        "VolumeChanged event not received"
+    );
 
     sender.teardown().await.unwrap();
     receiver.stop().await.unwrap();
