@@ -113,6 +113,35 @@ async fn test_playback_controller_play_pause_stop_not_connected() {
 }
 
 #[tokio::test]
+async fn test_playback_controller_seek_relative_disconnected() {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use crate::connection::ConnectionManager;
+    use crate::types::AirPlayConfig;
+
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    let res = controller
+        .seek_relative(Duration::from_secs(10), true)
+        .await;
+    assert!(
+        res.is_err(),
+        "seek_relative() should fail when disconnected"
+    );
+
+    let res = controller
+        .seek_relative(Duration::from_secs(5), false)
+        .await;
+    assert!(
+        res.is_err(),
+        "seek_relative() should fail when disconnected"
+    );
+}
+
+#[tokio::test]
 async fn test_playback_controller_set_shuffle_and_repeat() {
     use std::sync::Arc;
 

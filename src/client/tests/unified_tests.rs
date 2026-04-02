@@ -122,6 +122,22 @@ async fn test_connection_failure_handling() {
 }
 
 #[tokio::test]
+async fn test_unified_client_force_airplay2_fails_gracefully() {
+    let (device, _server) = create_device_with_server(false, true).await; // Only RAOP supported
+    let config = ClientConfig {
+        preferred_protocol: PreferredProtocol::ForceAirPlay2,
+        ..Default::default()
+    };
+
+    let mut client = UnifiedAirPlayClient::with_config(config);
+    let result = client.connect(device).await;
+
+    // Should fail cleanly, not panic or try to connect to non-existent AP2 server
+    assert!(result.is_err());
+    assert!(!client.is_connected());
+}
+
+#[tokio::test]
 async fn test_protocol_preference_e2e() {
     // Device with both, but only RAOP server running
     let (device, _server) = create_device_with_server(true, true).await;
