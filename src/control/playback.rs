@@ -75,7 +75,7 @@ impl PlaybackController {
         let mut state = self.state.write().await;
 
         if !state.is_playing {
-            self.send_rate(1.0).await?;
+            self.send_rate_i64(1).await?;
             state.is_playing = true;
         }
 
@@ -92,7 +92,7 @@ impl PlaybackController {
 
         // Send pause unconditionally. We might have started a stream in another task
         // and the state might not be synchronized, but it's safe to send a pause command.
-        self.send_rate(0.0).await?;
+        self.send_rate_i64(0).await?;
         state.is_playing = false;
 
         Ok(())
@@ -306,6 +306,54 @@ impl PlaybackController {
         Ok(())
     }
 
+    /// Internal: send rate command with an integer
+    async fn send_rate_i64(&self, rate: i64) -> Result<(), AirPlayError> {
+        let mut builder = DictBuilder::new()
+            .insert("rate", rate)
+            .insert("rtpTime", 0u64);
+
+        // Include PTP anchor timestamps so the device knows when to render
+        if rate != 0 {
+            if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
+                tracing::info!(
+                    "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} \
+                     (timeline=0x{:016X})",
+                    secs,
+                    // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
+                    u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
+                        .expect("PTP time fraction conversion should fit in u32"),
+                    timeline_id,
+                );
+                builder = builder
+                    .insert("networkTimeSecs", secs)
+                    .insert("networkTimeFrac", frac)
+                    .insert("networkTimeTimelineID", timeline_id);
+            } else {
+                tracing::warn!(
+                    "SetRateAnchorTime: PTP clock not available or not synchronized — sending \
+                     without networkTime fields (device may not render audio)"
+                );
+            }
+        }
+
+        let body = builder.build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+
+        Ok(())
+    }
+
     /// Internal: send rate command
     async fn send_rate(&self, rate: f64) -> Result<(), AirPlayError> {
         let mut builder = DictBuilder::new()
@@ -317,13 +365,12 @@ impl PlaybackController {
             if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
                 tracing::info!(
                     "SetRateAnchorTime: anchoring rtpTime=0 to PTP time {}.{:09} \
-                     (timeline=0x{:016X}) with rate {}",
+                     (timeline=0x{:016X}) with rate {rate}",
                     secs,
                     // Convert frac back to nanos for display: nanos = frac * 10^9 / 2^64
                     u32::try_from((u128::from(frac) * 1_000_000_000u128) >> 64)
                         .expect("PTP time fraction conversion should fit in u32"),
                     timeline_id,
-                    rate
                 );
                 builder = builder
                     .insert("networkTimeSecs", secs)
