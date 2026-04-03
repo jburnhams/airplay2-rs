@@ -175,7 +175,10 @@ fn test_invalid_content_length() {
     let result = codec.decode();
     assert!(result.is_err());
     match result {
-        Err(ParseError::InvalidContentLength(_)) => {}
+        Err(ParseError::InvalidContentLength(e)) => {
+            // The error from ParseIntError is mapped differently or is custom
+            assert_eq!(e.as_str(), "Not a number");
+        }
         _ => panic!("Expected InvalidContentLength error"),
     }
 }
