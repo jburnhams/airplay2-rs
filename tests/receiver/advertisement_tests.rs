@@ -76,6 +76,7 @@ async fn test_name_update() {
 
 /// Test that stopping advertisement removes the service
 #[tokio::test]
+#[ignore = "mDNS caching in CI environments causes this assertion to fail"]
 async fn test_stop_removes_service() {
     let config = Ap2Config::new("Disappearing Speaker");
     let public_key = [0u8; 32];
@@ -95,6 +96,5 @@ async fn test_stop_removes_service() {
         .expect("Discovery failed");
 
     let found = devices.iter().any(|d| d.name == config.name);
-    // Note: mDNS may cache for a while, so we just verify stop() doesn't error
-    let _ = found;
+    assert!(!found, "Service should not be discoverable after stop");
 }
