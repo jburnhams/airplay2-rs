@@ -69,6 +69,8 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+    /// The last received rate value
+    rate: Option<f64>,
 }
 
 /// A Mock `AirPlay` server.
@@ -103,6 +105,7 @@ impl MockServer {
                 volume: 0.0,
                 paired: false,
                 pairing_server,
+                rate: None,
             })),
             shutdown: None,
             address: None,
@@ -190,6 +193,11 @@ impl MockServer {
     /// Checks if the server is currently streaming.
     pub async fn is_streaming(&self) -> bool {
         self.state.read().await.streaming
+    }
+
+    /// Get the last received rate value.
+    pub async fn rate(&self) -> Option<f64> {
+        self.state.read().await.rate
     }
 
     /// Handles a single client connection.
@@ -422,12 +430,14 @@ impl MockServer {
             }
             Method::SetRateAnchorTime => {
                 // Parse body to check rate
+                let mut parsed_rate = None;
                 let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
                     if let Some(dict) = plist.as_dict() {
                         if let Some(rate) = dict
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
+                            parsed_rate = Some(rate);
                             rate.abs() > f64::EPSILON
                         } else {
                             true
@@ -439,7 +449,12 @@ impl MockServer {
                     true
                 };
 
-                state.write().await.streaming = streaming;
+                let mut state_guard = state.write().await;
+                state_guard.streaming = streaming;
+                if let Some(r) = parsed_rate {
+                    state_guard.rate = Some(r);
+                }
+
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {
