@@ -4,7 +4,9 @@ use crate::control::volume::Volume;
 use crate::group::manager::*;
 use crate::types::{AirPlayDevice, DeviceCapabilities};
 
-fn test_device(id: &str) -> AirPlayDevice {
+mod extra_tests;
+
+pub(crate) fn test_device(id: &str) -> AirPlayDevice {
     AirPlayDevice {
         id: id.to_string(),
         name: format!("Device {id}"),
