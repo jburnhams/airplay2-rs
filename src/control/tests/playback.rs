@@ -131,3 +131,64 @@ async fn test_playback_controller_set_shuffle_and_repeat() {
     // it returns an error, state might remain unchanged.
     assert!(res.is_err());
 }
+
+#[tokio::test]
+async fn test_playback_controller_fast_forward_rewind() {
+    use std::sync::Arc;
+
+    use crate::connection::ConnectionManager;
+    use crate::testing::mock_server::MockServer;
+    use crate::types::{AirPlayConfig, AirPlayDevice};
+
+    let mut server = MockServer::default_server();
+    let addr = server.start().await.expect("Failed to start mock server");
+
+    let config = AirPlayConfig::default();
+
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager.clone());
+
+    let device = AirPlayDevice {
+        id: "mock_device_playback".to_string(),
+        name: "Mock Device".to_string(),
+        model: Some("MockModel".to_string()),
+        addresses: vec![addr.ip()],
+        port: addr.port(),
+        capabilities: crate::types::DeviceCapabilities::default(),
+        raop_port: None,
+        raop_capabilities: None,
+        txt_records: std::collections::HashMap::new(),
+        last_seen: None,
+    };
+
+    manager.connect(&device).await.expect("Failed to connect");
+
+    // Give it a moment to connect
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Test fast_forward
+    controller
+        .fast_forward()
+        .await
+        .expect("Failed to fast forward");
+    // Wait for the server to process the request
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let rate = server.rate().await.expect("Server did not receive rate");
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Expected rate 2.0, got {rate}"
+    );
+
+    // Test rewind
+    controller.rewind().await.expect("Failed to rewind");
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let rate = server.rate().await.expect("Server did not receive rate");
+    assert!(
+        (rate - (-2.0)).abs() < f64::EPSILON,
+        "Expected rate -2.0, got {rate}"
+    );
+
+    // Clean up
+    manager.disconnect().await.unwrap_or(());
+    server.stop().await;
+}
