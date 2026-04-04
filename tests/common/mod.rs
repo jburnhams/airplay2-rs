@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use std::sync::Once;
+
 use tracing_subscriber::{EnvFilter, fmt};
 
 static INIT: Once = Once::new();
