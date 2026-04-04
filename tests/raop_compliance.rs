@@ -117,8 +117,11 @@ async fn test_raop_handshake_compliance() {
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        // Explicitly fail the test if the connection returns an error instead of succeeding.
+        Ok(Ok(Err(e))) => panic!("Handshake compliance test failed: Client reported error {}", e),
+        // Propagate thread panics that occur within the client task to fail the test loudly.
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
+        // Panic on timeout instead of swallowing it to ensure regressions are caught.
+        Err(_) => panic!("Handshake compliance test failed: Timeout waiting for client to connect"),
     }
 }

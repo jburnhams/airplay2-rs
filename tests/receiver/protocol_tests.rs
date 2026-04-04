@@ -92,7 +92,7 @@ async fn test_volume_control() {
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => return false,
+                Err(e) => panic!("Events channel closed: {:?}", e),
             }
         }
     })
