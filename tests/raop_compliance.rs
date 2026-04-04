@@ -120,10 +120,19 @@ async fn test_raop_handshake_compliance() {
         // The mock server doesn't implement full auth, so an auth failure is an acceptable end to the handshake test.
         Ok(Ok(Err(e))) => {
             let msg = format!("{}", e);
-            if msg.contains("authentication failed") || msg.contains("Connection reset by peer") || msg.contains("pairing methods") {
-                println!("Client failed gracefully after initial handshake steps (as expected for mock): {}", e);
+            if msg.contains("authentication failed")
+                || msg.contains("Connection reset by peer")
+                || msg.contains("pairing methods")
+            {
+                println!(
+                    "Client failed gracefully after initial handshake steps (as expected for mock): {}",
+                    e
+                );
             } else {
-                panic!("Handshake compliance test failed with unexpected error: {}", e);
+                panic!(
+                    "Handshake compliance test failed with unexpected error: {}",
+                    e
+                );
             }
         }
         Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),

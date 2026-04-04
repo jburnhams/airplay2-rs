@@ -1,6 +1,6 @@
-use std::time::Duration;
 use airplay2::testing::create_test_device;
 use airplay2::{AirPlayClient, AirPlayConfig};
+use std::time::Duration;
 
 /// Test that ensures connection timeouts correctly return an Error and are not swallowed
 /// internally.
@@ -9,7 +9,12 @@ async fn test_connection_timeout_propagates_error() {
     let client = AirPlayClient::new(AirPlayConfig::default());
 
     // Create a dummy device pointing to a non-existent host/port that will timeout
-    let device = create_test_device("timeout-test-id", "Timeout Device", "10.255.255.1".parse().unwrap(), 9999);
+    let device = create_test_device(
+        "timeout-test-id",
+        "Timeout Device",
+        "10.255.255.1".parse().unwrap(),
+        9999,
+    );
 
     // Try to connect with a short timeout to speed up the test
     let result = tokio::time::timeout(Duration::from_millis(100), client.connect(&device)).await;
