@@ -11,10 +11,7 @@ use airplay2::testing::packet_capture::{CaptureLoader, CaptureProtocol, CaptureR
 fn test_captured_info_request() {
     let capture_path = Path::new("tests/captures/info_request.hex");
 
-    if !capture_path.exists() {
-        eprintln!("Skipping: capture file not found");
-        return;
-    }
+    assert!(capture_path.exists(), "Capture file not found: {:?}", capture_path);
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
     let mut replay = CaptureReplay::new(packets);
@@ -42,10 +39,7 @@ fn test_captured_info_request() {
 fn test_captured_pairing() {
     let capture_path = Path::new("tests/captures/pairing_exchange.hex");
 
-    if !capture_path.exists() {
-        eprintln!("Skipping: capture file not found");
-        return;
-    }
+    assert!(capture_path.exists(), "Capture file not found: {:?}", capture_path);
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
 
