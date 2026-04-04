@@ -1,5 +1,7 @@
 //! Tests using captured real traffic
 
+use std::path::Path;
+
 use airplay2::protocol::rtsp::server_codec::RtspServerCodec;
 use airplay2::receiver::ap2::request_router::{Ap2Endpoint, Ap2RequestType};
 use airplay2::testing::packet_capture::{CaptureLoader, CaptureProtocol, CaptureReplay};
@@ -16,7 +18,7 @@ fn test_captured_info_request() {
         capture_path
     );
 
-    let packets = CaptureLoader::load_hex_dump(&capture_path).unwrap();
+    let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
     let mut replay = CaptureReplay::new(packets);
 
     // Get first inbound packet (should be GET /info)
@@ -49,7 +51,7 @@ fn test_captured_pairing() {
         capture_path
     );
 
-    let packets = CaptureLoader::load_hex_dump(&capture_path).unwrap();
+    let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
 
     // Process entire exchange
     for packet in &packets {
