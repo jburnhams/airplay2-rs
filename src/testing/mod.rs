@@ -4,6 +4,10 @@ pub mod mock_sender;
 pub mod mock_server;
 pub mod network_sim;
 pub mod packet_capture;
+
+#[cfg(test)]
+#[path = "packet_capture_tests.rs"]
+mod packet_capture_tests;
 pub mod test_utils;
 #[cfg(test)]
 /// Unit tests for the mock server.
