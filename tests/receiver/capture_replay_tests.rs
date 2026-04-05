@@ -27,14 +27,13 @@ fn test_captured_info_request() {
     let mut codec = RtspServerCodec::new();
     codec.feed(&packet.data);
 
-    if let Some(request) = codec.decode().unwrap() {
-        let request_type = Ap2RequestType::classify(&request);
-        // Verify classification
-        assert!(matches!(
-            request_type,
-            Ap2RequestType::Endpoint(Ap2Endpoint::Info)
-        ));
-    }
+    let request = codec.decode().unwrap().expect("Failed to decode request");
+    let request_type = Ap2RequestType::classify(&request);
+    // Verify classification
+    assert!(matches!(
+        request_type,
+        Ap2RequestType::Endpoint(Ap2Endpoint::Info)
+    ));
 }
 
 /// Test parsing real pairing exchange capture
@@ -49,12 +48,23 @@ fn test_captured_pairing() {
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
 
+    let mut found_post = false;
     // Process entire exchange
     for packet in &packets {
         if packet.inbound {
-            // Would feed to pairing server and verify responses
+            // Very simple validation that we can process the capture as strings
+            // (real verification would involve full pairing state machine which is complex here)
+            let data_str = String::from_utf8_lossy(&packet.data);
+            if data_str.contains("POST /pair-setup") || data_str.contains("POST /pair-verify") {
+                found_post = true;
+            }
         }
     }
+
+    assert!(
+        found_post,
+        "Pairing capture did not contain pairing POST requests"
+    );
 }
 
 /// Template for creating new capture test
