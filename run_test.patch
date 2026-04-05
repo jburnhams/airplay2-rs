@@ -1,0 +1,10 @@
+--- tests/raop_compliance.rs
++++ tests/raop_compliance.rs
+@@ -46,7 +46,7 @@
+     // Send Response
+     // RAOP requires Apple-Challenge in response for auth, but we can simulate success or continue
+     // If we don't send Apple-Challenge, client might skip auth or fail if strict.
+-    // Let's send a standard response.
+     let response = "RTSP/1.0 200 OK\r\nCSeq: 1\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
+                     TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
+                     GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n";

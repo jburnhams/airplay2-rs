@@ -1,0 +1,22 @@
+--- tests/receiver/capture_replay_tests.rs
++++ tests/receiver/capture_replay_tests.rs
+@@ -25,12 +25,10 @@
+     let mut codec = RtspServerCodec::new();
+     codec.feed(&packet.data);
+
+-    if let Some(request) = codec.decode().unwrap() {
+-        let request_type = Ap2RequestType::classify(&request);
+-        // Verify classification
+-        assert!(matches!(
+-            request_type,
+-            Ap2RequestType::Endpoint(Ap2Endpoint::Info)
+-        ));
+-    }
++    let request = codec.decode().unwrap().expect("Failed to decode request");
++    let request_type = Ap2RequestType::classify(&request);
++    // Verify classification
++    assert!(matches!(
++        request_type,
++        Ap2RequestType::Endpoint(Ap2Endpoint::Info)
++    ));
+ }
