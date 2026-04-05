@@ -179,6 +179,26 @@ async fn test_player_advanced_controls() {
 
     player.seek(15.0).await.expect("Seek failed");
 
+    // Test fast forward
+    player.fast_forward().await.expect("Fast forward failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let rate = server.rate().await;
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Expected rate 2.0, got {}",
+        rate
+    );
+
+    // Test rewind
+    player.rewind().await.expect("Rewind failed");
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let rate = server.rate().await;
+    assert!(
+        (rate + 2.0).abs() < f64::EPSILON,
+        "Expected rate -2.0, got {}",
+        rate
+    );
+
     player.disconnect().await.expect("Disconnect failed");
     server.stop().await;
 }
