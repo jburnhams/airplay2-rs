@@ -165,7 +165,7 @@ async fn test_client_connect_failure() {
             panic!("Connection succeeded when it should have failed");
         }
         Err(_) => {
-            // Timeout is also an acceptable failure mode depending on OS
+            panic!("Timeout waiting for client connection failure");
         }
     }
 
