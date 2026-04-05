@@ -61,7 +61,10 @@ fn test_captured_pairing() {
         }
     }
 
-    assert!(found_post, "Pairing capture did not contain pairing POST requests");
+    assert!(
+        found_post,
+        "Pairing capture did not contain pairing POST requests"
+    );
 }
 
 /// Template for creating new capture test
