@@ -62,14 +62,19 @@ async fn test_raop_handshake_compliance() {
     }
 
     // Send Response
-    let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, \
-                    TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, \
-                    GET\r\nApple-Jack-Status: connected; type=analog\r\n\r\n", cseq);
+    let response = format!(
+        "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, \
+         OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET\r\nApple-Jack-Status: connected; \
+         type=analog\r\n\r\n",
+        cseq
+    );
     stream.write_all(response.as_bytes()).await.unwrap();
 
     // Robust read loop
     for i in 2..=10 {
-        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer))
+            .await
+        {
             Ok(Ok(n)) if n > 0 => n,
             _ => break,
         };
@@ -80,7 +85,12 @@ async fn test_raop_handshake_compliance() {
         let mut cseq = i;
         for line in request.lines() {
             if line.starts_with("CSeq:") {
-                cseq = line.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0);
+                cseq = line
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or("0")
+                    .parse()
+                    .unwrap_or(0);
             }
         }
 
@@ -90,15 +100,24 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("SETUP") {
             assert!(request.starts_with("SETUP"));
-            assert!(request.contains("Transport: RTP/AVP/UDP") || request.contains("Transport: RTP/AVP/TCP"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", cseq);
+            assert!(
+                request.contains("Transport: RTP/AVP/UDP")
+                    || request.contains("Transport: RTP/AVP/TCP")
+            );
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.starts_with("RECORD"));
             assert!(request.contains("Session: CAFEBABE") || request.contains("Session: 1"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST") || request.contains("POST") {
             // Check protocol from request
@@ -110,14 +129,23 @@ async fn test_raop_handshake_compliance() {
             if request.contains("/auth-setup") {
                 // auth-setup expects a 32-byte binary response
                 let auth_response = vec![0u8; 32];
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\nContent-Type: application/octet-stream\r\n\r\n", proto, cseq);
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\nContent-Type: \
+                     application/octet-stream\r\n\r\n",
+                    proto, cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
                 stream.write_all(&auth_response).await.unwrap();
             } else if request.contains("/pair-setup") || request.contains("/pair-verify") {
-                // We shouldn't hang here forever. We're testing compliance up to this point. Let's just break successfully.
-                let response = format!("{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n", proto, cseq);
+                // We shouldn't hang here forever. We're testing compliance up to this point. Let's
+                // just break successfully.
+                let response = format!(
+                    "{} 200 OK\r\nCSeq: {}\r\nContent-Length: 0\r\n\r\n",
+                    proto, cseq
+                );
                 stream.write_all(response.as_bytes()).await.unwrap();
-                // Client may require pair-setup to finish to proceed or drop. For compliance test, reaching here is good enough if we simulate full success, or just drop safely.
+                // Client may require pair-setup to finish to proceed or drop. For compliance test,
+                // reaching here is good enough if we simulate full success, or just drop safely.
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 break;
             } else {
@@ -125,9 +153,6 @@ async fn test_raop_handshake_compliance() {
                 stream.write_all(response.as_bytes()).await.unwrap();
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
-        } else if request.starts_with("GET") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
-            stream.write_all(response.as_bytes()).await.unwrap();
         } else {
             let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", cseq);
             stream.write_all(response.as_bytes()).await.unwrap();
@@ -135,9 +160,9 @@ async fn test_raop_handshake_compliance() {
     }
 
     // Since we're breaking the loop early and not completing the full connection handshake,
-    // the client's connect task might hang forever, fail with a partial response, or wait for next step.
-    // So we don't strictly require it to succeed, we just ensure it doesn't panic and that the mock server
-    // loop successfully saw compliance requests.
+    // the client's connect task might hang forever, fail with a partial response, or wait for next
+    // step. So we don't strictly require it to succeed, we just ensure it doesn't panic and
+    // that the mock server loop successfully saw compliance requests.
 
     // Explicitly abort the connect handle since we don't finish the pairing
     connect_handle.abort();
