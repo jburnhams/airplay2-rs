@@ -498,8 +498,13 @@ impl PtpNode {
                 match pkt.message_type {
                     PtpMessageType::Sync => {
                         // Incoming Sync — we are acting as slave for this exchange.
+                        if self.pending_t3.is_some() {
+                            self.delay_req_unanswered += 1;
+                            self.delay_req_sent_at = None;
+                        }
                         self.pending_t1 = Some(pkt.timestamp);
                         self.pending_t2 = Some(receive_time);
+                        self.pending_t3 = None;
                     }
                     PtpMessageType::DelayReq => {
                         // Incoming Delay_Req — we respond as master.
