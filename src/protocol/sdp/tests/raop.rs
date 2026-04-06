@@ -1,5 +1,5 @@
-use super::parser::SdpParser;
-use super::raop::*;
+use crate::protocol::sdp::SdpParser;
+use crate::protocol::sdp::raop::*;
 use crate::receiver::session::AudioCodec;
 
 const SAMPLE_SDP: &str = r"v=0
