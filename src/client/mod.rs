@@ -785,9 +785,11 @@ impl AirPlayClient {
             match tokio::time::timeout(Duration::from_millis(500), self.connection.record()).await {
                 Ok(Ok(())) => tracing::info!("✓ RECORD accepted"),
                 Ok(Err(e)) => tracing::warn!("RECORD failed: {e}"),
-                Err(_) => {
+                Err(e) => {
                     tracing::debug!(
-                        "RECORD sent — HomePod will reply after first audio packets arrive"
+                        "RECORD sent but timed out ({}). HomePod will reply after first audio \
+                         packets arrive.",
+                        e
                     );
                 }
             }

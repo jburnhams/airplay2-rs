@@ -195,7 +195,8 @@ impl ConnectionManager {
                 });
                 Err(e)
             }
-            Err(_) => {
+            Err(e) => {
+                tracing::warn!("Connection to {} timed out: {}", device.name, e);
                 self.set_state(ConnectionState::Failed).await;
                 Err(AirPlayError::ConnectionTimeout {
                     duration: self.config.connection_timeout,
