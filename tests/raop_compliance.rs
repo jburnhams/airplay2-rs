@@ -65,7 +65,9 @@ async fn test_raop_handshake_compliance() {
     // Mock servers in tests should use a robust read loop to anticipate and handle
     // variable request sequences (GET /info, POST /auth-setup) before ANNOUNCE.
     loop {
-        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer)).await {
+        let n = match tokio::time::timeout(Duration::from_millis(500), stream.read(&mut buffer))
+            .await
+        {
             Ok(Ok(n)) if n > 0 => n,
             _ => break,
         };
@@ -73,13 +75,16 @@ async fn test_raop_handshake_compliance() {
         println!("Received request: {}", request);
 
         if request.starts_with("GET /info") {
-            let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/x-apple-binary-plist\r\n\r\n";
+            let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: \
+                            application/x-apple-binary-plist\r\n\r\n";
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // expects a 32-byte binary response
             let response = b"RTSP/1.0 200 OK\r\nCSeq: 3\r\nContent-Length: 32\r\n\r\n01234567890123456789012345678901";
             stream.write_all(response).await.unwrap();
-        } else if request.starts_with("POST /pair-setup") || request.starts_with("POST /pair-verify") {
+        } else if request.starts_with("POST /pair-setup")
+            || request.starts_with("POST /pair-verify")
+        {
             let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\n\r\n";
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("ANNOUNCE") {
