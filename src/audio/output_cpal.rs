@@ -185,7 +185,11 @@ mod implementation {
         fn run_command_loop(stream: &dyn StreamTrait, rx: &mpsc::Receiver<StreamCommand>) {
             loop {
                 match rx.recv() {
-                    Ok(StreamCommand::Stop) | Err(_) => break, // Channel closed
+                    Ok(StreamCommand::Stop) => break,
+                    Err(e) => {
+                        tracing::debug!("CPAL command channel closed: {}", e);
+                        break;
+                    }
                     Ok(StreamCommand::Pause) => {
                         let _ = stream.pause();
                     }

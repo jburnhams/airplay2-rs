@@ -327,7 +327,11 @@ impl MockRaopServer {
 
         loop {
             let n = match stream.read(&mut temp_buf).await {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
+                Err(e) => {
+                    tracing::debug!("Mock RAOP server connection error: {}", e);
+                    break;
+                }
                 Ok(n) => n,
             };
             buffer.extend_from_slice(&temp_buf[..n]);

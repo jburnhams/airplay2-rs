@@ -64,7 +64,8 @@ async fn test_raop_handshake_compliance() {
 
     // --- Step 2: ANNOUNCE ---
     let n = stream.read(&mut buffer).await.unwrap();
-    let request = String::from_utf8_lossy(&buffer[..n]);
+    let request_str = String::from_utf8_lossy(&buffer[..n]).into_owned();
+    let request = request_str.as_str();
 
     println!("Received request 2: {}", request);
 
@@ -102,23 +103,43 @@ async fn test_raop_handshake_compliance() {
 
         let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
-    } else if request.starts_with("POST") {
+    } else if request.starts_with("POST") || request.starts_with("GET") {
         // Maybe pairing?
-        println!("Got POST instead of ANNOUNCE");
+        println!("Got POST or GET instead of ANNOUNCE");
         // For this test, we might stop here if we unexpected behavior, or handle it.
         // This verifies that we at least got past the first step.
+
+        // In basic RAOP compliance tests where crypto pairing is not fully mocked,
+        // mock servers should gracefully handle GET or POST requests (like /info or /auth-setup)
+        // to prevent client connection hangs before safely aborting the connection.
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
+        // Slight delay to allow client to process
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
 
+    // Await client result (with timeout)
+    // The client might fail if we stopped early, but we verified the handshake start.
+    // If handshake completed, client.connect() should return Ok.
+
+    // We drop the stream so the client gets a disconnect rather than hanging
+    drop(stream);
+
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => println!(
+            "Client failed as expected because handshake stopped early: {}",
+            e
+        ),
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
+        Err(_) => {
+            println!("Timeout waiting for client connection - expected when stream is dropped")
+        }
     }
 }
