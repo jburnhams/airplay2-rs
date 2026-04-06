@@ -397,10 +397,11 @@ impl PlaybackController {
         }
 
         let body = builder.build();
-        let encoded = crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
-            message: format!("Failed to encode plist: {e}"),
-            status_code: None,
-        })?;
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
 
         self.connection
             .send_command(
