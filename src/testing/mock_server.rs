@@ -69,6 +69,8 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+    /// The current rate.
+    rate: f64,
 }
 
 /// A Mock `AirPlay` server.
@@ -103,6 +105,7 @@ impl MockServer {
                 volume: 0.0,
                 paired: false,
                 pairing_server,
+                rate: 1.0,
             })),
             shutdown: None,
             address: None,
@@ -185,6 +188,11 @@ impl MockServer {
     /// Returns the current volume level.
     pub async fn volume(&self) -> f32 {
         self.state.read().await.volume
+    }
+
+    /// Returns the current rate.
+    pub async fn rate(&self) -> f64 {
+        self.state.read().await.rate
     }
 
     /// Checks if the server is currently streaming.
@@ -422,24 +430,24 @@ impl MockServer {
             }
             Method::SetRateAnchorTime => {
                 // Parse body to check rate
-                let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
+                let mut is_streaming = true;
+                let mut rate_val = 1.0;
+                if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
                     if let Some(dict) = plist.as_dict() {
                         if let Some(rate) = dict
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
-                            rate.abs() > f64::EPSILON
-                        } else {
-                            true
+                            is_streaming = rate.abs() > f64::EPSILON;
+                            rate_val = rate;
                         }
-                    } else {
-                        true
                     }
-                } else {
-                    true
-                };
+                }
 
-                state.write().await.streaming = streaming;
+                let mut state_write = state.write().await;
+                state_write.streaming = is_streaming;
+                state_write.rate = rate_val;
+
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {
