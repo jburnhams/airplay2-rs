@@ -36,6 +36,9 @@ pub struct ReceiverConfig {
 
     /// Enable debug logging
     pub debug: bool,
+
+    /// Optional RSA private key for AES decryption
+    pub rsa_private_key: Option<Vec<u8>>,
 }
 
 impl Default for ReceiverConfig {
@@ -51,6 +54,7 @@ impl Default for ReceiverConfig {
             audio_device: None,
             initial_volume: 1.0,
             debug: false,
+            rsa_private_key: None,
         }
     }
 }
@@ -83,5 +87,30 @@ impl ReceiverConfig {
     pub fn audio_device(mut self, device: impl Into<String>) -> Self {
         self.audio_device = Some(device.into());
         self
+    }
+
+    /// Set RSA private key
+    #[must_use]
+    pub fn rsa_private_key(mut self, key: Vec<u8>) -> Self {
+        self.rsa_private_key = Some(key);
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rsa_private_key_builder() {
+        let key_data = vec![1, 2, 3, 4, 5];
+        let config = ReceiverConfig::default().rsa_private_key(key_data.clone());
+        assert_eq!(config.rsa_private_key, Some(key_data));
+    }
+
+    #[test]
+    fn test_default_rsa_private_key_is_none() {
+        let config = ReceiverConfig::default();
+        assert_eq!(config.rsa_private_key, None);
     }
 }

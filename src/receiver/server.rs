@@ -226,7 +226,9 @@ async fn handle_connection(
             let mut result = session_manager
                 .with_session(|session| {
                     crate::receiver::rtsp_handler::handle_request(
-                        &request, session, None, // rsa_private_key, pass if needed (TODO)
+                        &request,
+                        session,
+                        config.rsa_private_key.as_deref(),
                     )
                 })
                 .await
