@@ -293,18 +293,14 @@ impl JitterBuffer {
         let channels = self.config.channels as usize;
 
         // Determine the "end" timestamp (timestamp of the last sample + 1)
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Frame duration fits in u32"
+        )]
         let end_ts = if let Some((_, last_frame)) = self.frames.iter().next_back() {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Frame duration fits in u32"
-            )]
             let duration = (last_frame.samples.len() / channels) as u32;
             last_frame.timestamp.wrapping_add(duration)
         } else if let Some(ref frame) = self.current_frame {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Frame duration fits in u32"
-            )]
             let duration = (frame.samples.len() / channels) as u32;
             frame.timestamp.wrapping_add(duration)
         } else {

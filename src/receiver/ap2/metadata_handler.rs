@@ -66,6 +66,11 @@ impl MetadataController {
     }
 
     /// Recursively extract metadata fields from DMAP value
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "DMAP numeric values (time, track, disc) are non-negative and fit in u32"
+    )]
     fn extract_metadata(value: &DmapValue, metadata: &mut TrackMetadata) {
         if let DmapValue::Container(items) = value {
             for (tag, val) in items {
@@ -92,38 +97,17 @@ impl MetadataController {
                     }
                     DmapTag::SongTime => {
                         if let DmapValue::Int(i) = val {
-                            #[allow(
-                                clippy::cast_possible_truncation,
-                                clippy::cast_sign_loss,
-                                reason = "DMAP song time values are non-negative and fit in u32"
-                            )]
-                            {
-                                metadata.duration_ms = Some(*i as u32);
-                            }
+                            metadata.duration_ms = Some(*i as u32);
                         }
                     }
                     DmapTag::SongTrackNumber => {
                         if let DmapValue::Int(i) = val {
-                            #[allow(
-                                clippy::cast_possible_truncation,
-                                clippy::cast_sign_loss,
-                                reason = "DMAP track numbers are non-negative and fit in u32"
-                            )]
-                            {
-                                metadata.track_number = Some(*i as u32);
-                            }
+                            metadata.track_number = Some(*i as u32);
                         }
                     }
                     DmapTag::SongDiscNumber => {
                         if let DmapValue::Int(i) = val {
-                            #[allow(
-                                clippy::cast_possible_truncation,
-                                clippy::cast_sign_loss,
-                                reason = "DMAP disc numbers are non-negative and fit in u32"
-                            )]
-                            {
-                                metadata.disc_number = Some(*i as u32);
-                            }
+                            metadata.disc_number = Some(*i as u32);
                         }
                     }
                     _ => {

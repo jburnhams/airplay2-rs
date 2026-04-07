@@ -23,16 +23,13 @@ impl NtpTimestamp {
         let ntp_secs = duration.as_secs() + Self::NTP_UNIX_OFFSET;
         let fraction = (u64::from(duration.subsec_nanos()) << 32) / 1_000_000_000;
 
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "NTP timestamp seconds wrap around in 2036 (Year 2038 problem), and \
+                      fractional part fits within u32"
+        )]
         Self {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "NTP timestamp seconds wrap around in 2036 (Year 2038 problem)"
-            )]
             seconds: ntp_secs as u32,
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Fractional part calculation fits within u32"
-            )]
             fraction: fraction as u32,
         }
     }

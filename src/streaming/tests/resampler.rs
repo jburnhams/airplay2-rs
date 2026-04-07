@@ -143,12 +143,10 @@ fn test_resampling_48k_to_44k_sine() {
         clippy::cast_precision_loss,
         reason = "Precision loss in frequency estimation is acceptable for test verification"
     )]
-    let duration = samples.len() as f32 / 44100.0;
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "Precision loss in frequency estimation is acceptable for test verification"
-    )]
-    let frequency = (zero_crossings as f32 / duration) / 2.0;
+    let frequency = {
+        let d = samples.len() as f32 / 44100.0;
+        (zero_crossings as f32 / d) / 2.0
+    };
 
     println!("Estimated frequency: {frequency:.1} Hz");
     // Tolerance increased to 30Hz due to FFT resampling artifacts/phase shifts in block processing

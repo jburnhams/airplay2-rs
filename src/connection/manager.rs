@@ -2340,15 +2340,16 @@ impl ConnectionManager {
                         } else {
                             micros = micros.saturating_sub(offset_micros.unsigned_abs());
                         }
-                        ntp_time = crate::protocol::rtp::NtpTimestamp {
-                            #[allow(clippy::cast_possible_truncation, reason = "NTP seconds")]
-                            seconds: (micros / 1_000_000) as u32,
-                            #[allow(
-                                clippy::cast_possible_truncation,
-                                reason = "Fraction fits in 32 bits"
-                            )]
-                            fraction: (((micros % 1_000_000) << 32) / 1_000_000) as u32,
-                        };
+                        #[allow(
+                            clippy::cast_possible_truncation,
+                            reason = "NTP seconds and fraction fit in 32 bits"
+                        )]
+                        {
+                            ntp_time = crate::protocol::rtp::NtpTimestamp {
+                                seconds: (micros / 1_000_000) as u32,
+                                fraction: (((micros % 1_000_000) << 32) / 1_000_000) as u32,
+                            };
+                        }
                     }
                     let ntp_timestamp_64 =
                         (u64::from(ntp_time.seconds) << 32) | u64::from(ntp_time.fraction);
