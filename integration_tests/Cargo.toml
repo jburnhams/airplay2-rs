@@ -16,6 +16,7 @@ tempfile = "3.10"
 walkdir = "2.5.0"
 rand = "0.8"
 futures-util = "0.3.32"
+rsa = "0.9.10"
 
 [dev-dependencies]
 thiserror = "2.0.18"
