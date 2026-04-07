@@ -113,12 +113,25 @@ async fn test_raop_handshake_compliance() {
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
 
+    // In basic RAOP compliance tests where crypto pairing is not fully mocked,
+    // mock servers should gracefully handle POST and GET requests.
+    // However, if we don't mock it completely, the client will fail or hang.
+    // Here we gracefully shut down instead of panicking on timeout, but we explicitly abort the client
+    // if we don't plan to complete the full handshake.
+
+    connect_handle.abort();
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(_))) => println!("Client failed as expected (handshake incomplete)"),
+        Ok(Err(e)) => {
+            if e.is_cancelled() {
+                 println!("Client aborted");
+            } else {
+                 std::panic::resume_unwind(e.into_panic());
+            }
+        }
+        Err(e) => panic!("Timeout waiting for client: {}", e),
     }
 }
