@@ -100,25 +100,12 @@ impl RaopTimingResponse {
             reason = "Timestamp values converted to microseconds fit within i64 for typical \
                       operation"
         )]
-        let t1 = self.reference_time.to_micros() as i64;
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
-        let t2 = self.receive_time.to_micros() as i64;
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
-        let t3 = self.send_time.to_micros() as i64;
-        #[allow(
-            clippy::cast_possible_wrap,
-            reason = "Timestamp values converted to microseconds fit within i64 for typical \
-                      operation"
-        )]
-        let t4 = client_receive.to_micros() as i64;
+        let (t1, t2, t3, t4) = (
+            self.reference_time.to_micros() as i64,
+            self.receive_time.to_micros() as i64,
+            self.send_time.to_micros() as i64,
+            client_receive.to_micros() as i64,
+        );
 
         ((t2 - t1) + (t3 - t4)) / 2
     }
