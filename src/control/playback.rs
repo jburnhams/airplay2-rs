@@ -240,26 +240,68 @@ impl PlaybackController {
         Ok(())
     }
 
-    /// Fast forward
+    /// Fast forward playback.
+    ///
+    /// Sends `SetRateAnchorTime` with `rate=2.0` and a dummy `rtpTime`.
     ///
     /// # Errors
     ///
-    /// Returns error if network fails
+    /// Returns error if network fails or plist encoding fails.
     pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip forward 10s
-        self.seek_relative(Duration::from_secs(10), true).await
+        let body = DictBuilder::new()
+            .insert("rate", 2.0f64)
+            .insert("rtpTime", 0u64)
+            .build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+
+        // Update state
+        let mut state = self.state.write().await;
+        state.is_playing = true;
+        Ok(())
     }
 
-    /// Rewind
+    /// Rewind playback.
+    ///
+    /// Sends `SetRateAnchorTime` with `rate=-2.0` and a dummy `rtpTime`.
     ///
     /// # Errors
     ///
-    /// Returns error if network fails
+    /// Returns error if network fails or plist encoding fails.
     pub async fn rewind(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip backward 10s
-        self.seek_relative(Duration::from_secs(10), false).await
+        let body = DictBuilder::new()
+            .insert("rate", -2.0f64)
+            .insert("rtpTime", 0u64)
+            .build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+
+        // Update state
+        let mut state = self.state.write().await;
+        state.is_playing = true;
+        Ok(())
     }
 
     /// Set repeat mode
@@ -437,5 +479,96 @@ impl PlaybackProgress {
     #[must_use]
     pub fn remaining(&self) -> Duration {
         self.duration.saturating_sub(self.position)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::time::timeout;
+
+    use super::*;
+    use crate::client::AirPlayClient;
+    use crate::testing::mock_server::{MockServer, MockServerConfig};
+    use crate::types::AirPlayDevice;
+
+    fn default_mock_device(addr: std::net::SocketAddr) -> AirPlayDevice {
+        AirPlayDevice {
+            id: "mock_device".to_string(),
+            name: "Mock Device".to_string(),
+            model: None,
+            addresses: vec![addr.ip()],
+            port: addr.port(),
+            capabilities: crate::types::DeviceCapabilities {
+                airplay2: true,
+                supports_audio: true,
+                ..Default::default()
+            },
+            raop_port: None,
+            raop_capabilities: None,
+            txt_records: std::collections::HashMap::new(),
+            last_seen: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fast_forward_sends_correct_rate() {
+        let config = MockServerConfig {
+            rtsp_port: 0,
+            ..Default::default()
+        };
+        let mut server = MockServer::new(config);
+        let addr = server.start().await.expect("Failed to start server");
+
+        let client = AirPlayClient::default_client();
+        let device = default_mock_device(addr);
+
+        timeout(Duration::from_secs(2), client.connect(&device))
+            .await
+            .expect("Timeout")
+            .expect("Connection failed");
+
+        client.fast_forward().await.expect("Fast forward failed");
+
+        // Give a little time for the async processing
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let rate = server.rate().await;
+        assert!(
+            (rate - 2.0).abs() < f64::EPSILON,
+            "Expected rate 2.0, got {rate}"
+        );
+
+        server.stop().await;
+    }
+
+    #[tokio::test]
+    async fn test_rewind_sends_correct_rate() {
+        let config = MockServerConfig {
+            rtsp_port: 0,
+            ..Default::default()
+        };
+        let mut server = MockServer::new(config);
+        let addr = server.start().await.expect("Failed to start server");
+
+        let client = AirPlayClient::default_client();
+        let device = default_mock_device(addr);
+
+        timeout(Duration::from_secs(2), client.connect(&device))
+            .await
+            .expect("Timeout")
+            .expect("Connection failed");
+
+        client.rewind().await.expect("Rewind failed");
+
+        // Give a little time for the async processing
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let rate = server.rate().await;
+        assert!(
+            (rate - (-2.0)).abs() < f64::EPSILON,
+            "Expected rate -2.0, got {rate}"
+        );
+
+        server.stop().await;
     }
 }
