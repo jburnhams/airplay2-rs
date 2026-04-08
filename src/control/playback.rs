@@ -522,11 +522,12 @@ mod tests {
         let client = AirPlayClient::default_client();
         let device = default_mock_device(addr);
 
-        // Windows CI often requires more time for connection negotiation due to OS socket operations
+        // Windows CI often requires more time for connection negotiation due to OS socket
+        // operations
         match timeout(Duration::from_secs(5), client.connect(&device)).await {
             Ok(res) => res.expect("Connection failed"),
             Err(_) => return, // Accept timeout on slow CI as valid failure (as per memory)
-        };
+        }
 
         client.fast_forward().await.expect("Fast forward failed");
 
@@ -554,11 +555,12 @@ mod tests {
         let client = AirPlayClient::default_client();
         let device = default_mock_device(addr);
 
-        // Windows CI often requires more time for connection negotiation due to OS socket operations
+        // Windows CI often requires more time for connection negotiation due to OS socket
+        // operations
         match timeout(Duration::from_secs(5), client.connect(&device)).await {
             Ok(res) => res.expect("Connection failed"),
             Err(_) => return, // Accept timeout on slow CI as valid failure (as per memory)
-        };
+        }
 
         client.rewind().await.expect("Rewind failed");
 
