@@ -9,14 +9,9 @@ use airplay2::testing::packet_capture::{CaptureLoader, CaptureProtocol, CaptureR
 /// Test parsing real /info response capture
 #[test]
 fn test_captured_info_request() {
-    let capture_path = Path::new("tests/captures/info_request.hex");
+    let capture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/captures/info_request.hex");
 
-    if !capture_path.exists() {
-        eprintln!("Skipping: capture file not found");
-        return;
-    }
-
-    let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
+    let packets = CaptureLoader::load_hex_dump(&capture_path).unwrap();
     let mut replay = CaptureReplay::new(packets);
 
     // Get first inbound packet (should be GET /info)
@@ -40,14 +35,9 @@ fn test_captured_info_request() {
 /// Test parsing real pairing exchange capture
 #[test]
 fn test_captured_pairing() {
-    let capture_path = Path::new("tests/captures/pairing_exchange.hex");
+    let capture_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/captures/pairing_exchange.hex");
 
-    if !capture_path.exists() {
-        eprintln!("Skipping: capture file not found");
-        return;
-    }
-
-    let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
+    let packets = CaptureLoader::load_hex_dump(&capture_path).unwrap();
 
     // Process entire exchange
     for packet in &packets {

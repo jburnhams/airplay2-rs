@@ -215,11 +215,7 @@ async fn test_airplay_format_exchange() {
 
 #[tokio::test]
 async fn test_master_handler_responds_to_delay_req() {
-    let Ok(sock) = UdpSocket::bind("127.0.0.1:0").await else {
-        // Can't bind privileged port in this environment — skip test.
-        return;
-    };
-    let master_sock = Arc::new(sock);
+    let master_sock = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
 
     let client_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
