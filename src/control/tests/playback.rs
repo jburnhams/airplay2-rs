@@ -96,6 +96,24 @@ async fn test_playback_controller_next_prev_not_connected() {
 }
 
 #[tokio::test]
+async fn test_playback_controller_fast_forward_rewind_not_connected() {
+    use std::sync::Arc;
+
+    use crate::connection::ConnectionManager;
+    use crate::types::AirPlayConfig;
+
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    let res = controller.fast_forward().await;
+    assert!(res.is_err(), "fast_forward() should fail when disconnected");
+
+    let res = controller.rewind().await;
+    assert!(res.is_err(), "rewind() should fail when disconnected");
+}
+
+#[tokio::test]
 async fn test_playback_controller_play_pause_stop_not_connected() {
     use std::sync::Arc;
 
