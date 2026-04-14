@@ -11,8 +11,8 @@ pub struct X25519KeyPair {
 impl X25519KeyPair {
     /// Generate a new random key pair
     pub fn generate() -> Self {
-        use rand::rngs::OsRng;
-        let secret = StaticSecret::random_from_rng(OsRng);
+        use rand_core_10::CryptoRng;
+        let secret = StaticSecret::random_from_rng(rand::rngs::OsRng);
         let public = PublicKey::from(&secret);
         Self { secret, public }
     }

@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use airplay2::testing::create_test_device;
 use airplay2::{AirPlayClient, AirPlayConfig};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -102,6 +100,9 @@ async fn test_raop_handshake_compliance() {
 
         let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
+    } else if request.starts_with("GET /info") {
+        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n";
+        stream.write_all(response.as_bytes()).await.unwrap();
     } else if request.starts_with("POST") {
         // Maybe pairing?
         println!("Got POST instead of ANNOUNCE");
@@ -109,16 +110,8 @@ async fn test_raop_handshake_compliance() {
         // This verifies that we at least got past the first step.
     }
 
-    // Await client result (with timeout)
-    // The client might fail if we stopped early, but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
-
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
-
-    match result {
-        Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
-    }
+    // We shouldn't await the client handle and panic if it times out for incomplete handshake simulation tests.
+    // Basic test verifies that the client sends OPTIONS.
+    // Let's explicitly abort the connection and handle so we don't hang.
+    connect_handle.abort();
 }

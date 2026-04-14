@@ -59,8 +59,9 @@ aes = "0.8"
 ctr = "0.9"
 hkdf = "0.13.0-rc.5"
 sha2 = "0.11.0-rc.5"
-rand = "0.8"
+rand = "0.8.5"
 rand_core_10 = { package = "rand_core", version = "0.10.0" }
+getrandom_3 = { package = "getrandom", version = "0.3" }
 crypto-bigint = "0.7.0-rc.25"
 curve25519-dalek = "4.1"
 zeroize = "1.8"
