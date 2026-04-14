@@ -1,4 +1,5 @@
 #[tokio::test]
+#[ignore = "Requires physical devices"]
 async fn test_discover_real_devices() {
     use std::time::Duration;
 
