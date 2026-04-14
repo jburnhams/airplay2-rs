@@ -103,7 +103,8 @@ async fn test_raop_handshake_compliance() {
         let response = "RTSP/1.0 200 OK\r\nCSeq: 4\r\nAudio-Latency: 2205\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
     } else if request.starts_with("GET /info") {
-        let response = "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/x-apple-binary-plist\r\n\r\n";
+        let response =
+            "RTSP/1.0 200 OK\r\nCSeq: 2\r\nContent-Type: application/x-apple-binary-plist\r\n\r\n";
         stream.write_all(response.as_bytes()).await.unwrap();
     } else if request.starts_with("POST") {
         // Maybe pairing?

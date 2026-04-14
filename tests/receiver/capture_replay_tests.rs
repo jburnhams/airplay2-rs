@@ -12,7 +12,10 @@ fn test_captured_info_request() {
     let capture_path = Path::new("tests/captures/info_request.hex");
 
     if !capture_path.exists() {
-        panic!("Skipping: capture file not found. Ensure tests are run with capture fixtures generated.");
+        panic!(
+            "Skipping: capture file not found. Ensure tests are run with capture fixtures \
+             generated."
+        );
     }
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
@@ -42,7 +45,10 @@ fn test_captured_pairing() {
     let capture_path = Path::new("tests/captures/pairing_exchange.hex");
 
     if !capture_path.exists() {
-        panic!("Skipping: capture file not found. Ensure tests are run with capture fixtures generated.");
+        panic!(
+            "Skipping: capture file not found. Ensure tests are run with capture fixtures \
+             generated."
+        );
     }
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
