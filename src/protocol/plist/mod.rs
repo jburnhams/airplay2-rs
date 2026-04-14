@@ -1,8 +1,8 @@
 //! Binary plist codec for `AirPlay` protocol messages
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(missing_docs)]
 #![allow(
+    dead_code,
+    unused_imports,
+    missing_docs,
     clippy::all,
     clippy::pedantic,
     clippy::nursery,

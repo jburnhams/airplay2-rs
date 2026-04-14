@@ -1,6 +1,6 @@
 //! Protocol module
 
-#![allow(missing_docs)]
+#![allow(missing_docs, reason = "Protocol implementations are internal and mostly self-explanatory")]
 
 pub mod crypto;
 pub mod daap;
