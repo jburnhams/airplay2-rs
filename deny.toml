@@ -1,6 +1,7 @@
 [advisories]
 ignore = [
     "RUSTSEC-2023-0071", # RSA Marvin Attack - No fix available, required for AirPlay 1
+    "RUSTSEC-2026-0097", # rand: OsRng unsound in certain contexts (using deprecated APIs here)
 ]
 
 [licenses]
