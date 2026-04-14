@@ -1,7 +1,6 @@
 //! Audio handling module
 
-#![allow(unused_imports)]
-#![allow(dead_code)]
+#![allow(unused_imports, dead_code, reason = "Pending implementation features")]
 
 pub mod aac_encoder;
 pub mod buffer;
