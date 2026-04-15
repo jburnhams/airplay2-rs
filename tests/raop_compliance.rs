@@ -109,16 +109,26 @@ async fn test_raop_handshake_compliance() {
         // This verifies that we at least got past the first step.
     }
 
+    // Wait slightly to let client process the POST/GET response
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
     // Await client result (with timeout)
-    // The client might fail if we stopped early, but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
+    // We intentionally abort the background client task because the RAOP handshake
+    // is partially mocked here and would stall indefinitely. Timeout is expected logic.
+    connect_handle.abort();
 
     let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => panic!("Client failed: {}", e),
+        Ok(Err(e)) => {
+            if e.is_cancelled() {
+                // Expected, we cancelled it
+            } else {
+                std::panic::resume_unwind(e.into_panic())
+            }
+        }
+        Err(_) => panic!("Timeout waiting for client"),
     }
 }
