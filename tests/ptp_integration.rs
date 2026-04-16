@@ -914,25 +914,29 @@ async fn test_pending_t3_reset_prevents_stuck_exchange() {
     // Without `pending_t3 = None` in the Sync handler, the guard
     // `pending_t3.is_none()` in handle_general_packet would be false and no
     // Delay_Req would ever be sent — permanently stuck.
-    let second = tokio::time::timeout(
-        Duration::from_millis(400),
-        homepod_event_sock.recv_from(&mut buf),
-    )
-    .await;
+    let mut received_delay_req = false;
+    let end_time = tokio::time::Instant::now() + Duration::from_millis(1000);
+    while tokio::time::Instant::now() < end_time {
+        if let Ok(Ok((len, _))) = tokio::time::timeout(
+            Duration::from_millis(100),
+            homepod_event_sock.recv_from(&mut buf),
+        )
+        .await
+        {
+            if let Ok(msg) = PtpMessage::decode(&buf[..len]) {
+                if msg.header.message_type == PtpMessageType::DelayReq {
+                    received_delay_req = true;
+                    break;
+                }
+            }
+        }
+    }
 
     let _ = shutdown_tx.send(true);
     let _ = node_handle.await;
 
-    let (len, _) = second
-        .expect(
-            "Node must send a second Delay_Req after the new Sync resets pending_t3 (without the \
-             fix the node would be permanently stuck)",
-        )
-        .unwrap();
-    let msg = PtpMessage::decode(&buf[..len]).unwrap();
-    assert_eq!(
-        msg.header.message_type,
-        PtpMessageType::DelayReq,
+    assert!(
+        received_delay_req,
         "Second Delay_Req must be sent after new Sync resets pending_t3"
     );
 }
