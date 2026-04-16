@@ -381,7 +381,10 @@ async fn test_node_master_responds_to_delay_req() {
     assert_eq!(resp.header.sequence_id, 42);
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Node as Master: AirPlay format Delay_Req =====
@@ -430,7 +433,10 @@ async fn test_node_master_airplay_delay_req() {
     assert_eq!(resp.sequence_id, 7);
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Two PtpNodes: bidirectional sync over loopback (multi-round) =====
@@ -718,8 +724,14 @@ async fn test_sync_convergence_multiple_rounds() {
     a_shutdown_tx.send(true).unwrap();
     b_shutdown_tx.send(true).unwrap();
 
-    let _ = tokio::time::timeout(Duration::from_secs(2), a_handle).await;
-    let _ = tokio::time::timeout(Duration::from_secs(2), b_handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), a_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), b_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 
     // Verify convergence
     let b_clock_locked = b_clock.read().await;
@@ -908,7 +920,10 @@ async fn test_slave_handler_delay_resp_on_general_port() {
     }
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== One-way fallback: master ignores Delay_Req (like HomePod) =====
@@ -1350,7 +1365,10 @@ async fn test_apple_signaling_response_sent_on_apple_tlv() {
     );
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Full master-slave sync with offset verification =====
@@ -1725,6 +1743,9 @@ async fn test_delay_resp_correction_field_t4_extraction() {
     }
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
     let _ = recv; // suppress unused warning
 }

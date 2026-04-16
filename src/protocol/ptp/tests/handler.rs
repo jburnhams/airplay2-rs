@@ -264,7 +264,10 @@ async fn test_master_handler_responds_to_delay_req() {
 
     // Shutdown.
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Master handler AirPlay format =====
@@ -316,7 +319,10 @@ async fn test_master_handler_airplay_format() {
     assert_eq!(resp.sequence_id, 7);
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Slave handler with master simulation =====
@@ -515,7 +521,10 @@ async fn test_master_sends_delay_resp_on_general_port() {
     assert_eq!(resp.header.sequence_id, 55);
 
     let _ = shutdown_tx.send(true);
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Master handler without general socket falls back to event port =====
@@ -569,7 +578,10 @@ async fn test_master_delay_resp_falls_back_to_event_socket() {
     assert_eq!(resp.header.sequence_id, 77);
 
     let _ = shutdown_tx.send(true);
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Slave try_complete_timing via general port =====
@@ -672,5 +684,8 @@ async fn test_slave_completes_timing_via_general_port() {
     );
 
     shutdown_tx.send(true).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(1), handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }

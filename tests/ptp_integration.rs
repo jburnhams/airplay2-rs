@@ -257,8 +257,14 @@ async fn test_master_slave_handler_tasks() {
     master_shutdown_tx.send(true).unwrap();
     slave_shutdown_tx.send(true).unwrap();
 
-    let _ = tokio::time::timeout(Duration::from_secs(2), master_handle).await;
-    let _ = tokio::time::timeout(Duration::from_secs(2), slave_handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), master_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), slave_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Clock offset with known skew =====
@@ -998,8 +1004,14 @@ async fn test_two_node_end_to_end_clock_sync() {
 
     let _ = homepod_shutdown_tx.send(true);
     let _ = client_shutdown_tx.send(true);
-    let _ = tokio::time::timeout(Duration::from_secs(2), homepod_handle).await;
-    let _ = tokio::time::timeout(Duration::from_secs(2), client_handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), homepod_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), client_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 
     // ── Verify the client clock is synchronized ───────────────────────────────
     let clock = client_clock.read().await;
