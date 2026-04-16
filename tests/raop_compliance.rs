@@ -117,8 +117,8 @@ async fn test_raop_handshake_compliance() {
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
+        Ok(Ok(Err(e))) => panic!("Client failed: {}", e),
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
         Err(_) => println!("Timeout waiting for client"),
     }
 }

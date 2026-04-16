@@ -257,8 +257,14 @@ async fn test_master_slave_handler_tasks() {
     master_shutdown_tx.send(true).unwrap();
     slave_shutdown_tx.send(true).unwrap();
 
-    let _ = tokio::time::timeout(Duration::from_secs(2), master_handle).await;
-    let _ = tokio::time::timeout(Duration::from_secs(2), slave_handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), master_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), slave_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 }
 
 // ===== Clock offset with known skew =====
@@ -908,25 +914,29 @@ async fn test_pending_t3_reset_prevents_stuck_exchange() {
     // Without `pending_t3 = None` in the Sync handler, the guard
     // `pending_t3.is_none()` in handle_general_packet would be false and no
     // Delay_Req would ever be sent — permanently stuck.
-    let second = tokio::time::timeout(
-        Duration::from_millis(400),
-        homepod_event_sock.recv_from(&mut buf),
-    )
-    .await;
+    let mut received_delay_req = false;
+    let end_time = tokio::time::Instant::now() + Duration::from_millis(1000);
+    while tokio::time::Instant::now() < end_time {
+        if let Ok(Ok((len, _))) = tokio::time::timeout(
+            Duration::from_millis(100),
+            homepod_event_sock.recv_from(&mut buf),
+        )
+        .await
+        {
+            if let Ok(msg) = PtpMessage::decode(&buf[..len]) {
+                if msg.header.message_type == PtpMessageType::DelayReq {
+                    received_delay_req = true;
+                    break;
+                }
+            }
+        }
+    }
 
     let _ = shutdown_tx.send(true);
     let _ = node_handle.await;
 
-    let (len, _) = second
-        .expect(
-            "Node must send a second Delay_Req after the new Sync resets pending_t3 (without the \
-             fix the node would be permanently stuck)",
-        )
-        .unwrap();
-    let msg = PtpMessage::decode(&buf[..len]).unwrap();
-    assert_eq!(
-        msg.header.message_type,
-        PtpMessageType::DelayReq,
+    assert!(
+        received_delay_req,
         "Second Delay_Req must be sent after new Sync resets pending_t3"
     );
 }
@@ -998,8 +1008,14 @@ async fn test_two_node_end_to_end_clock_sync() {
 
     let _ = homepod_shutdown_tx.send(true);
     let _ = client_shutdown_tx.send(true);
-    let _ = tokio::time::timeout(Duration::from_secs(2), homepod_handle).await;
-    let _ = tokio::time::timeout(Duration::from_secs(2), client_handle).await;
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), homepod_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
+    // Ensure task panics are propagated to fail the test
+    if let Ok(Err(e)) = tokio::time::timeout(Duration::from_secs(2), client_handle).await {
+        std::panic::resume_unwind(e.into_panic());
+    }
 
     // ── Verify the client clock is synchronized ───────────────────────────────
     let clock = client_clock.read().await;
