@@ -89,17 +89,28 @@ async fn test_raop_handshake_compliance() {
         next_cseq += 1;
 
         if request.starts_with("GET /info") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/x-apple-binary-plist\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // Need 32 bytes response for auth-setup
-            let response_headers = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\n\r\n", cseq);
+            let response_headers = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Length: 32\r\n\r\n",
+                cseq
+            );
             let mut response = response_headers.into_bytes();
             response.extend_from_slice(&[0u8; 32]);
             stream.write_all(&response).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
         } else if request.starts_with("POST /pair-") {
-            let protocol = if request.contains("HTTP/1.1") { "HTTP/1.1" } else { "RTSP/1.0" };
+            let protocol = if request.contains("HTTP/1.1") {
+                "HTTP/1.1"
+            } else {
+                "RTSP/1.0"
+            };
             let response = format!("{} 200 OK\r\nCSeq: {}\r\n\r\n", protocol, cseq);
             stream.write_all(response.as_bytes()).await.unwrap();
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -113,15 +124,21 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("SETUP") {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             setup_done = true;
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
             assert!(request.contains("Range: npt=0-"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             record_done = true;
             break; // Finished the required handshake steps
