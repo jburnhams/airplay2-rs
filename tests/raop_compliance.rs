@@ -63,7 +63,8 @@ async fn test_raop_handshake_compliance() {
     stream.write_all(response.as_bytes()).await.unwrap();
 
     // Handle variable subsequent requests like GET /info, POST /auth-setup, or ANNOUNCE
-    // Mock servers in tests should use a robust read loop to anticipate and handle these variable request sequences
+    // Mock servers in tests should use a robust read loop to anticipate and handle these variable
+    // request sequences
     loop {
         let n = stream.read(&mut buffer).await.unwrap();
         if n == 0 {
@@ -82,21 +83,23 @@ async fn test_raop_handshake_compliance() {
 
         if request.starts_with("GET /info") {
             let response = format!(
-                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
                 cseq
             );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // Send 32-byte binary response
             let response_headers = format!(
-                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: \
+                 application/octet-stream\r\nContent-Length: 32\r\n\r\n",
                 cseq
             );
             stream.write_all(response_headers.as_bytes()).await.unwrap();
             stream.write_all(&[0u8; 32]).await.unwrap();
 
-            // Add a small sleep before dropping the socket to ensure the client actually receives the response
-            // and doesn't encounter a connection reset.
+            // Add a small sleep before dropping the socket to ensure the client actually receives
+            // the response and doesn't encounter a connection reset.
             tokio::time::sleep(Duration::from_millis(50)).await;
             break; // Stop here for basic compliance test
         } else if request.starts_with("POST /pair-setup") {
@@ -112,8 +115,8 @@ async fn test_raop_handshake_compliance() {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
             let response = format!(
                 "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
-                            RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n",
+                 RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
+                 timing_port=6002\r\n\r\n",
                 cseq
             );
             stream.write_all(response.as_bytes()).await.unwrap();
@@ -130,15 +133,16 @@ async fn test_raop_handshake_compliance() {
     }
 
     // Await client result (with timeout)
-    // The client might fail if we stopped early (e.g. after auth-setup), but we verified the handshake start.
-    // If handshake completed, client.connect() should return Ok.
+    // The client might fail if we stopped early (e.g. after auth-setup), but we verified the
+    // handshake start. If handshake completed, client.connect() should return Ok.
 
     let result = tokio::time::timeout(Duration::from_secs(12), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => {
-            // If we aborted early during pairing/auth, an AuthenticationFailed error is expected and acceptable.
+            // If we aborted early during pairing/auth, an AuthenticationFailed error is expected
+            // and acceptable.
             let err_str = e.to_string();
             if !err_str.contains("AuthenticationFailed") && !err_str.contains("timeout") {
                 panic!("Client failed unexpectedly: {}", e);
