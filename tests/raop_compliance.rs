@@ -81,11 +81,17 @@ async fn test_raop_handshake_compliance() {
         }
 
         if request.starts_with("GET /info") {
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: 0\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("POST /auth-setup") {
             // Send 32-byte binary response
-            let response_headers = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n", cseq);
+            let response_headers = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nContent-Type: application/octet-stream\r\nContent-Length: 32\r\n\r\n",
+                cseq
+            );
             stream.write_all(response_headers.as_bytes()).await.unwrap();
             stream.write_all(&[0u8; 32]).await.unwrap();
 
@@ -104,14 +110,20 @@ async fn test_raop_handshake_compliance() {
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("SETUP") {
             assert!(request.contains("Transport: RTP/AVP/UDP"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: CAFEBABE\r\nTransport: \
                             RTP/AVP/UDP;unicast;mode=record;server_port=6000;control_port=6001;\
-                            timing_port=6002\r\n\r\n", cseq);
+                            timing_port=6002\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
         } else if request.starts_with("RECORD") {
             assert!(request.contains("Session: CAFEBABE"));
             assert!(request.contains("Range: npt=0-"));
-            let response = format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n", cseq);
+            let response = format!(
+                "RTSP/1.0 200 OK\r\nCSeq: {}\r\nAudio-Latency: 2205\r\n\r\n",
+                cseq
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             break; // Finished handshake
         }
