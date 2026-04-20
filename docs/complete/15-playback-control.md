@@ -303,7 +303,7 @@ mod tests {
 
 - [ ] Play/Pause/Stop commands work
 - [ ] Next/Previous track work
-- [ ] Seeking works correctly
+- [x] Seeking works correctly
 - [ ] Repeat modes are supported
 - [ ] Shuffle modes are supported
 - [ ] State is tracked correctly

@@ -179,6 +179,9 @@ async fn test_player_advanced_controls() {
 
     player.seek(15.0).await.expect("Seek failed");
 
+    player.fast_forward().await.expect("Fast forward failed");
+    player.rewind().await.expect("Rewind failed");
+
     player.disconnect().await.expect("Disconnect failed");
     server.stop().await;
 }
