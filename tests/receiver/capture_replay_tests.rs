@@ -13,7 +13,8 @@ fn test_captured_info_request() {
 
     if !capture_path.exists() {
         panic!(
-            "Capture file not found. Ensure tests/captures/info_request.hex exists. This prevents silent test passes."
+            "Capture file not found. Ensure tests/captures/info_request.hex exists. \
+             This prevents silent test passes."
         );
     }
 
@@ -45,7 +46,8 @@ fn test_captured_pairing() {
 
     if !capture_path.exists() {
         panic!(
-            "Capture file not found. Ensure tests/captures/pairing_exchange.hex exists. This prevents silent test passes."
+            "Capture file not found. Ensure tests/captures/pairing_exchange.hex exists. \
+             This prevents silent test passes."
         );
     }
 
