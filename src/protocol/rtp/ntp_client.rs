@@ -111,15 +111,14 @@ impl NtpClient {
         let t3 = NtpTimestamp::decode(&buf[40..48]);
 
         #[allow(clippy::cast_possible_wrap, reason = "NTP micros fit in i64")]
-        let t1_micros = t1.to_micros() as i64;
-        #[allow(clippy::cast_possible_wrap, reason = "NTP micros fit in i64")]
-        let t2_micros = t2.to_micros() as i64;
-        #[allow(clippy::cast_possible_wrap, reason = "NTP micros fit in i64")]
-        let t3_micros = t3.to_micros() as i64;
-        #[allow(clippy::cast_possible_wrap, reason = "NTP micros fit in i64")]
-        let t4_micros = t4.to_micros() as i64;
+        {
+            let t1_micros = t1.to_micros() as i64;
+            let t2_micros = t2.to_micros() as i64;
+            let t3_micros = t3.to_micros() as i64;
+            let t4_micros = t4.to_micros() as i64;
 
-        let offset = ((t2_micros - t1_micros) + (t3_micros - t4_micros)) / 2;
-        Ok(offset)
+            let offset = ((t2_micros - t1_micros) + (t3_micros - t4_micros)) / 2;
+            Ok(offset)
+        }
     }
 }
