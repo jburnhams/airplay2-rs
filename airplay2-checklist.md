@@ -44,6 +44,10 @@
   - Confirmed `dmap.itemname`, `daap.songartist`, and `daap.songalbum` tags are correctly received by Python receiver.
   - Confirmed `text/parameters` progress updates are correctly received.
 
+**Work Done (Session 16):**
+- **AAC-ELD integration test**:
+  - ✅ **VERIFIED**: Verified that the `aac_eld_streaming` test passes successfully end-to-end after installing correct dependencies for the python-receiver script.
+
 **Work Done (Session 8):**
 - **AAC-ELD Codec Implementation**:
   - ✅ **VERIFIED**: `aac_eld_streaming` integration test verifies protocol exchange and RTP transmission.
@@ -136,7 +140,7 @@
   - Confirmed 440Hz sine wave decoding.
   - Correctly negotiates `mpeg4-generic/44100/2` with `mode=AAC-hbr`.
 - [x] **AAC-ELD** (Enhanced Low Delay) — real-time communication optimized
-  - ✅ **VERIFIED**: Protocol verified via `aac_eld_streaming`. Decoding pending compatible receiver.
+  - ✅ **VERIFIED**: Protocol verified via `aac_eld_streaming` test which is passing.
   - Correctly negotiates `mpeg4-generic/44100/2` with `mode=AAC-hbr`, `config=<ASC>` and `constantDuration`.
   - Uses `fdk-aac` for encoding (AOT 39).
 
