@@ -158,13 +158,13 @@ async fn test_client_connect_failure() {
     // We expect the connection to either timeout (if OS drops) or return an error (Connection
     // refused)
     match result {
-        Ok(Err(_e)) => {
+        Ok(Err(_e)) => { /* Connection failed as expected */
             // Connection failed as expected
         }
         Ok(Ok(_)) => {
             panic!("Connection succeeded when it should have failed");
         }
-        Err(_) => {
+        Err(_) => { /* Timeout is also an acceptable failure mode depending on OS */
             // Timeout is also an acceptable failure mode depending on OS
         }
     }
