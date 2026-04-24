@@ -92,7 +92,7 @@ async fn test_volume_control() {
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => std::panic!("Timeout waiting for volume event"),
+                Err(_) => return false,
             }
         }
     })
