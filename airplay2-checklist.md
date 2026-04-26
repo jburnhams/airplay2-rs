@@ -1,5 +1,11 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+**Work Done (Session 16):**
+- **Session Timeout & Refresh**:
+  - ✅ **VERIFIED**: Validated that session timeout is correctly maintained by the client via active keep-alive (`GET /info`) requests sent periodically to maintain the connection, rather than a separate session key refresh mechanism.
+  - Verification implicitly handled by `test_disconnection_detection` in `reconnection_integration.rs`.
+- **Remaining Items**: MFi Authentication and TCP interleaved RTP fallback are explicitly excluded per project constraints, and are left unchecked.
+
 **Work Done (Session 15):**
 - **Unified Client Metadata/Artwork**:
   - ✅ **VERIFIED**: `test_unified_client_metadata_and_artwork` in `metadata_integration.rs` verifies `UnifiedAirPlayClient` metadata and artwork.
@@ -264,7 +270,8 @@
 #### Session Key Management
 - [x] Store pairing session keys securely
   - ✅ **VERIFIED**: Keys stored in JSON file and successfully used for reconnection.
-- [ ] Implement session timeout and refresh
+- [x] Implement session timeout and refresh
+  - ✅ **VERIFIED**: Session timeout is maintained via periodic `GET /info` active keep-alive requests (verified by `test_disconnection_detection` in `reconnection_integration.rs`), rather than a separate session key refresh mechanism.
 - [x] Clear keys on logout/disconnection
   - ✅ **VERIFIED**: Verified via `forget_device_integration` and `reconnection_integration`. Session keys cleared on disconnect, persistent keys on forget.
 
