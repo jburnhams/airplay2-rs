@@ -1,5 +1,12 @@
 # AirPlay 2 Audio Client: Implementation Checklist
 
+
+**Work Done (Session 16):**
+- **Playback Rate Control**:
+  - ✅ **VERIFIED**: `rate_control_integration` test verifies `fast_forward` and `rewind`.
+  - Added `fast_forward` and `rewind` functions to `AirPlayClient` and `PlaybackController`.
+  - Implemented rate parameters `2.0` and `-2.0` respectively in `SetRateAnchorTime` commands, including proper PTP synchronization if available.
+
 **Work Done (Session 15):**
 - **Unified Client Metadata/Artwork**:
   - ✅ **VERIFIED**: `test_unified_client_metadata_and_artwork` in `metadata_integration.rs` verifies `UnifiedAirPlayClient` metadata and artwork.
@@ -353,6 +360,10 @@
 - [x] Pause command (pause at current position)
   - ✅ **VERIFIED**: `examples/verify_volume_pause.rs` successfully pauses and resumes playback
   - Receiver logs confirm `SETRATEANCHORTIME` with `rate: 0.0` (pause) and `rate: 1.0` (resume)
+- [x] Fast forward command (skip ahead)
+  - ✅ **VERIFIED**: Confirmed `SetRateAnchorTime` with `rate: 2.0` is sent and received.
+- [x] Rewind command (skip backward)
+  - ✅ **VERIFIED**: Confirmed `SetRateAnchorTime` with `rate: -2.0` is sent and received.
 - [x] Stop command (stop and close connection)
 - [x] Volume control (if device supports)
   - ✅ **VERIFIED**: Confirmed volume control works during playback stream
