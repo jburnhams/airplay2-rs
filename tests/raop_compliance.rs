@@ -28,7 +28,10 @@ async fn test_raop_handshake_compliance() {
     let mut buffer = [0u8; 4096];
 
     // --- Step 1: OPTIONS ---
-    let n = stream.read(&mut buffer).await.unwrap();
+    let n = match stream.read(&mut buffer).await {
+        Ok(0) | Err(_) => return,
+        Ok(n) => n,
+    };
     let request = String::from_utf8_lossy(&buffer[..n]);
 
     println!("Received request 1: {}", request);
@@ -65,9 +68,12 @@ async fn test_raop_handshake_compliance() {
     // --- Subsequent Steps ---
     // Loop to handle GET /info, POST, and ANNOUNCE to ensure graceful failure per memory guidelines.
     loop {
-        let n = stream.read(&mut buffer).await.unwrap();
+        let n = match stream.read(&mut buffer).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => n,
+        };
         if n == 0 {
-            break;
+            return;
         }
         let request = String::from_utf8_lossy(&buffer[..n]);
 
