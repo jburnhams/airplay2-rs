@@ -366,7 +366,6 @@ impl AirPlayClient {
         Ok(())
     }
 
-
     /// Toggle play/pause
     ///
     /// # Errors
