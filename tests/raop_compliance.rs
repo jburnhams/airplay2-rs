@@ -69,7 +69,7 @@ async fn test_raop_handshake_compliance() {
     // Loop to handle GET /info, POST, and ANNOUNCE to ensure graceful failure per memory guidelines.
     loop {
         let n = match stream.read(&mut buffer).await {
-            Ok(0) | Err(_) => break,
+            Ok(0) | Err(_) => return,
             Ok(n) => n,
         };
         if n == 0 {
