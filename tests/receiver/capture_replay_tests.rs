@@ -13,7 +13,6 @@ fn test_captured_info_request() {
 
     if !capture_path.exists() {
         panic!("Capture file not found");
-
     }
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();
@@ -44,7 +43,6 @@ fn test_captured_pairing() {
 
     if !capture_path.exists() {
         panic!("Capture file not found");
-
     }
 
     let packets = CaptureLoader::load_hex_dump(capture_path).unwrap();

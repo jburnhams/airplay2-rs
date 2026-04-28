@@ -119,7 +119,8 @@ async fn test_raop_handshake_compliance() {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => println!("Client failed: {}", e),
         Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
-        Err(_) => { // Expected timeout as server aborts connection early in test
+        Err(_) => {
+            // Expected timeout as server aborts connection early in test
             println!("Timeout waiting for client");
         }
     }
