@@ -1,3 +1,0 @@
-sed -i 's/let second = tokio::time::timeout(/let mut len = 0;\n    loop {\n        let res = tokio::time::timeout(\n            Duration::from_millis(400),\n            homepod_event_sock.recv_from(\&mut buf),\n        )\n        .await;\n        let (l, _) = res.expect("Node must send a second Delay_Req").unwrap();\n        let m = PtpMessage::decode(\&buf[..l]).unwrap();\n        if m.header.message_type == PtpMessageType::DelayReq {\n            len = l;\n            break;\n        }\n    }\n    \/\/ Dummy second/' tests/ptp_integration.rs
-sed -i 's/homepod_event_sock.recv_from(&mut buf),//' tests/ptp_integration.rs
-sed -i 's/let (len, _) = second/let (len, _) = (len, 0); \/\/ Dummy/' tests/ptp_integration.rs
