@@ -7,7 +7,7 @@ use airplay2::receiver::ap2::{Ap2Config, Ap2ServiceAdvertiser};
 
 /// Test that we can advertise and discover our own service
 #[tokio::test]
-#[ignore] // Integration tests often fail in restricted CI environments due to mDNS networking
+#[ignore = "Integration tests often fail in restricted CI environments due to mDNS networking"]
 async fn test_advertise_and_discover() {
     let config = Ap2Config::new("Integration Test Speaker");
     let public_key = [0u8; 32];
@@ -46,7 +46,7 @@ async fn test_advertise_and_discover() {
 
 /// Test that name updates are reflected in discovery
 #[tokio::test]
-#[ignore] // Integration tests often fail in restricted CI environments due to mDNS networking
+#[ignore = "Integration tests often fail in restricted CI environments due to mDNS networking"]
 async fn test_name_update() {
     let config = Ap2Config::new("Original Name");
     let public_key = [0u8; 32];
