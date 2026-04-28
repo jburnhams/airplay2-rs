@@ -1,14 +1,13 @@
+#![allow(dead_code, reason = "Utility file used across multiple integration tests")]
 use std::path::Path;
 use std::time::Duration;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Endianness {
     Little,
     Big,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SineWaveCheck {
     pub expected_frequency: f32,
@@ -36,7 +35,6 @@ impl Default for SineWaveCheck {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SineWaveResult {
     pub measured_frequency: f32,
@@ -343,7 +341,6 @@ pub fn measure_onset_latency(audio: &RawAudio, threshold: f32) -> Duration {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct GapInfo {
     pub start_frame: usize,
@@ -400,7 +397,6 @@ pub fn measure_gap_latency(audio: &RawAudio, gap_threshold_ms: f32) -> Vec<GapIn
     gaps
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CompareResult {
     pub sample_count_match: bool,
@@ -546,7 +542,6 @@ pub fn compute_snr(original: &RawAudio, received: &RawAudio) -> f64 {
     10.0 * (signal_power as f64 / noise_power as f64).log10()
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CodecType {
     Pcm,
@@ -661,7 +656,6 @@ pub fn audio_diagnostic_report(audio: &RawAudio, filename: &str, checks: &[Box<d
     report
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawAudioFormat {
     pub sample_rate: u32,
@@ -671,18 +665,15 @@ pub struct RawAudioFormat {
     pub signed: bool,
 }
 
-#[allow(dead_code)]
 impl RawAudioFormat {
-    #[allow(dead_code)]
-    pub const CD_QUALITY: Self = Self {
+        pub const CD_QUALITY: Self = Self {
         sample_rate: 44100,
         channels: 2,
         bits_per_sample: 16,
         endianness: Endianness::Little,
         signed: true,
     };
-    #[allow(dead_code)]
-    pub const HIRES: Self = Self {
+        pub const HIRES: Self = Self {
         sample_rate: 48000,
         channels: 2,
         bits_per_sample: 24,
@@ -691,7 +682,6 @@ impl RawAudioFormat {
     };
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RawAudio {
     pub data: Vec<u8>,
@@ -702,7 +692,6 @@ pub struct RawAudio {
     pub signed: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum AudioVerifyError {
     #[error("IO error: {0}")]
@@ -714,8 +703,7 @@ pub enum AudioVerifyError {
 }
 
 impl RawAudio {
-    #[allow(dead_code)]
-    pub fn from_file(path: &Path, format: RawAudioFormat) -> Result<Self, AudioVerifyError> {
+        pub fn from_file(path: &Path, format: RawAudioFormat) -> Result<Self, AudioVerifyError> {
         let data = std::fs::read(path)?;
         Ok(Self::from_bytes(data, format))
     }
