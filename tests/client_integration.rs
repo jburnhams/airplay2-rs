@@ -71,10 +71,15 @@ async fn test_client_integration_flow() {
     // Let's drain events to find Connected.
     let mut connected_event_found = false;
     while let Ok(event) = timeout(Duration::from_secs(2), events.recv()).await {
-        if let ClientEvent::Connected { device: d } = event.unwrap() {
-            assert_eq!(d.id, "mock_device_id");
-            connected_event_found = true;
-            break;
+        match event {
+            Ok(ClientEvent::Connected { device: d }) => {
+                assert_eq!(d.id, "mock_device_id");
+                connected_event_found = true;
+                break;
+            }
+            Ok(_) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => panic!("Channel closed unexpectedly"),
         }
     }
     assert!(connected_event_found, "Did not receive Connected event");
@@ -123,10 +128,15 @@ async fn test_client_integration_flow() {
     // Ignore other events like VolumeChanged
     let mut disconnected = false;
     while let Ok(event) = timeout(Duration::from_secs(1), events.recv()).await {
-        if let ClientEvent::Disconnected { reason, .. } = event.unwrap() {
-            assert!(reason.contains("UserRequested"));
-            disconnected = true;
-            break;
+        match event {
+            Ok(ClientEvent::Disconnected { reason, .. }) => {
+                assert!(reason.contains("UserRequested"));
+                disconnected = true;
+                break;
+            }
+            Ok(_) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => panic!("Channel closed unexpectedly"),
         }
     }
     assert!(disconnected, "Did not receive Disconnected event");
