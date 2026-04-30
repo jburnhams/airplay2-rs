@@ -118,7 +118,9 @@ async fn test_raop_handshake_compliance() {
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()), /* Propagate panics from
+                                                                   * background task */
+        Err(_) => println!("Timeout waiting for client"), /* Timeouts are acceptable here
+                                                           * depending on OS behavior */
     }
 }

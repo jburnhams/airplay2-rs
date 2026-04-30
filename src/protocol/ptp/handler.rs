@@ -263,6 +263,7 @@ impl PtpSlaveHandler {
         } else if let Ok(msg) = PtpMessage::decode(data) {
             match msg.body {
                 PtpMessageBody::Sync { origin_timestamp } => {
+                    self.pending_t3 = None;
                     let two_step = msg.header.flags & 0x0200 != 0;
                     self.sync_count += 1;
                     if self.sync_count <= 3 {
