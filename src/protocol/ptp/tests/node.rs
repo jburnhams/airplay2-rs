@@ -551,8 +551,8 @@ async fn test_two_nodes_bidirectional_sync_ieee1588() {
     );
 
     // On loopback, offset should be relatively small.
-    // In CI environments, this can fluctuate significantly due to CPU starvation and context switching,
-    // so we use a very generous threshold.
+    // In CI environments, this can fluctuate significantly due to CPU starvation and context
+    // switching, so we use a very generous threshold.
     let offset_ms = b_clock_locked.offset_millis().abs();
     assert!(
         offset_ms < 250.0,
