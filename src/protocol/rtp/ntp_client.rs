@@ -97,7 +97,9 @@ impl NtpClient {
                     valid_response = true;
                     break;
                 }
-                Ok(Err(_)) => {}                             // Ignore socket errors
+                Ok(Err(e)) => {
+                    tracing::debug!("NTP client socket receive error: {}", e);
+                }
                 Err(_) => return Err(AirPlayError::Timeout), // Timeout
             }
         }
