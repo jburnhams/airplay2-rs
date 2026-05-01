@@ -79,7 +79,9 @@ async fn test_client_integration_flow() {
             }
             Ok(_) => continue,
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => panic!("Event channel closed unexpectedly"),
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                panic!("Event channel closed unexpectedly")
+            }
         }
     }
     assert!(connected_event_found, "Did not receive Connected event");
@@ -136,7 +138,9 @@ async fn test_client_integration_flow() {
             }
             Ok(_) => continue,
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => panic!("Event channel closed unexpectedly"),
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                panic!("Event channel closed unexpectedly")
+            }
         }
     }
     assert!(disconnected, "Did not receive Disconnected event");
