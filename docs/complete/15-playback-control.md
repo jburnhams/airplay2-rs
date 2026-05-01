@@ -218,8 +218,7 @@ impl PlaybackController {
 
     /// Internal: send rate command
     async fn send_rate(&self, rate: f32) -> Result<(), AirPlayError> {
-        // TODO: Send RTSP SET_PARAMETER with rate
-        Ok(())
+        self.set_rate(rate as f64).await
     }
 
     /// Internal: send scrub command
