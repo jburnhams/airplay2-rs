@@ -118,8 +118,8 @@ async fn test_raop_handshake_compliance() {
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => {
-            // If the handshake succeeded but auth or another step failed, we verify it is an expected error type
-            // rather than swallowing all errors.
+            // If the handshake succeeded but auth or another step failed, we verify it is an
+            // expected error type rather than swallowing all errors.
             match e {
                 airplay2::AirPlayError::AuthenticationFailed { .. }
                 | airplay2::AirPlayError::ConnectionTimeout { .. }
