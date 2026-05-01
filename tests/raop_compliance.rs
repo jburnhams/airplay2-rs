@@ -117,8 +117,19 @@ async fn test_raop_handshake_compliance() {
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
+        Ok(Ok(Err(e))) => {
+            // If the handshake succeeded but auth or another step failed, we verify it is an expected error type
+            // rather than swallowing all errors.
+            match e {
+                airplay2::AirPlayError::AuthenticationFailed { .. }
+                | airplay2::AirPlayError::ConnectionTimeout { .. }
+                | airplay2::AirPlayError::Disconnected { .. } => {
+                    println!("Client failed as expected: {}", e);
+                }
+                _ => panic!("Client failed with unexpected error: {}", e),
+            }
+        }
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
         Err(_) => println!("Timeout waiting for client"),
     }
 }
