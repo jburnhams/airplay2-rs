@@ -131,3 +131,16 @@ async fn test_playback_controller_set_shuffle_and_repeat() {
     // it returns an error, state might remain unchanged.
     assert!(res.is_err());
 }
+
+#[tokio::test]
+async fn test_playback_controller_fast_forward_rewind() {
+    let config = AirPlayConfig::default();
+    let manager = Arc::new(ConnectionManager::new(config));
+    let controller = crate::control::playback::PlaybackController::new(manager);
+
+    let res = controller.fast_forward().await;
+    assert!(res.is_err(), "fast_forward() should fail when disconnected");
+
+    let res = controller.rewind().await;
+    assert!(res.is_err(), "rewind() should fail when disconnected");
+}

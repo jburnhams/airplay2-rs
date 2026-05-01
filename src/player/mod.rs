@@ -369,6 +369,22 @@ impl AirPlayPlayer {
         self.client.seek(Duration::from_secs_f64(seconds)).await
     }
 
+    /// Fast forward
+    ///
+    /// # Errors
+    /// Returns error if client is disconnected or playback command fails.
+    pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
+        self.client.fast_forward().await
+    }
+
+    /// Rewind
+    ///
+    /// # Errors
+    /// Returns error if client is disconnected or playback command fails.
+    pub async fn rewind(&self) -> Result<(), AirPlayError> {
+        self.client.rewind().await
+    }
+
     // === Volume ===
 
     /// Set volume (0.0 - 1.0)
