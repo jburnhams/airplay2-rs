@@ -115,7 +115,8 @@ async fn test_raop_handshake_compliance() {
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
-    // brute_force_pairing can take up to 4 seconds to fail completely. Default connect timeout is 10s.
+    // brute_force_pairing can take up to 4 seconds to fail completely. Default connect timeout is
+    // 10s.
     let result = tokio::time::timeout(Duration::from_secs(12), connect_handle).await;
 
     match result {
