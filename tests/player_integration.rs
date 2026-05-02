@@ -179,6 +179,30 @@ async fn test_player_advanced_controls() {
 
     player.seek(15.0).await.expect("Seek failed");
 
+    // Fast Forward
+    player.fast_forward().await.expect("Fast forward failed");
+    let rate = server.rate().await;
+    assert!(
+        (rate - 2.0).abs() < f64::EPSILON,
+        "Rate should be 2.0 for fast forward"
+    );
+
+    // Rewind
+    player.rewind().await.expect("Rewind failed");
+    let rate = server.rate().await;
+    assert!(
+        (rate - -2.0).abs() < f64::EPSILON,
+        "Rate should be -2.0 for rewind"
+    );
+
+    // Play again to restore rate to 1.0
+    player.play().await.expect("Play failed");
+    let rate = server.rate().await;
+    assert!(
+        (rate - 1.0).abs() < f64::EPSILON,
+        "Rate should be 1.0 for play"
+    );
+
     player.disconnect().await.expect("Disconnect failed");
     server.stop().await;
 }

@@ -69,6 +69,8 @@ struct ServerState {
     paired: bool,
     /// Pairing server instance
     pairing_server: PairingServer,
+    /// Playback rate
+    rate: f64,
 }
 
 /// A Mock `AirPlay` server.
@@ -103,6 +105,7 @@ impl MockServer {
                 volume: 0.0,
                 paired: false,
                 pairing_server,
+                rate: 0.0,
             })),
             shutdown: None,
             address: None,
@@ -185,6 +188,11 @@ impl MockServer {
     /// Returns the current volume level.
     pub async fn volume(&self) -> f32 {
         self.state.read().await.volume
+    }
+
+    /// Returns the current playback rate.
+    pub async fn rate(&self) -> f64 {
+        self.state.read().await.rate
     }
 
     /// Checks if the server is currently streaming.
@@ -422,24 +430,25 @@ impl MockServer {
             }
             Method::SetRateAnchorTime => {
                 // Parse body to check rate
-                let streaming = if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
+                let mut streaming = true;
+                let mut parsed_rate = 1.0;
+                if let Ok(plist) = crate::protocol::plist::decode(&request.body) {
                     if let Some(dict) = plist.as_dict() {
                         if let Some(rate) = dict
                             .get("rate")
                             .and_then(crate::protocol::plist::PlistValue::as_f64)
                         {
-                            rate.abs() > f64::EPSILON
-                        } else {
-                            true
+                            parsed_rate = rate;
+                            streaming = rate.abs() > f64::EPSILON;
                         }
-                    } else {
-                        true
                     }
-                } else {
-                    true
-                };
+                }
 
-                state.write().await.streaming = streaming;
+                let mut state_guard = state.write().await;
+                state_guard.streaming = streaming;
+                state_guard.rate = parsed_rate;
+                drop(state_guard);
+
                 Self::response(StatusCode::OK, cseq, None, None)
             }
             Method::Pause => {
