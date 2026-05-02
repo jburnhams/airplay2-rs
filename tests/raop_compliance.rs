@@ -113,12 +113,16 @@ async fn test_raop_handshake_compliance() {
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
+    // Await client result (with timeout)
+    // The client might fail if we stopped early, but we verified the handshake start.
+    // brute_force_pairing can take up to 4 seconds to fail completely. Default connect timeout is
+    // 10s.
+    let result = tokio::time::timeout(Duration::from_secs(12), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
-        Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
-        Err(_) => println!("Timeout waiting for client"),
+        Ok(Ok(Err(e))) => println!("Client failed as expected: {}", e),
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
+        Err(_) => panic!("Timeout waiting for client"),
     }
 }
