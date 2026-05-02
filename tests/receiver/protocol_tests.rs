@@ -93,7 +93,9 @@ async fn test_volume_control() {
                 }
                 Ok(_) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => panic!("Events channel closed"),
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    panic!("Events channel closed")
+                }
             }
         }
     })
