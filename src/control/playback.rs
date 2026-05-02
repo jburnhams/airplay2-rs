@@ -242,24 +242,61 @@ impl PlaybackController {
 
     /// Fast forward
     ///
+    /// Sends `SetRateAnchorTime` with `rate=2.0`
+    ///
     /// # Errors
     ///
     /// Returns error if network fails
     pub async fn fast_forward(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip forward 10s
-        self.seek_relative(Duration::from_secs(10), true).await
+        self.set_rate(2.0).await
     }
 
     /// Rewind
+    ///
+    /// Sends `SetRateAnchorTime` with `rate=-2.0`
     ///
     /// # Errors
     ///
     /// Returns error if network fails
     pub async fn rewind(&self) -> Result<(), AirPlayError> {
-        // TODO: Implement rate control properly
-        // For now just skip backward 10s
-        self.seek_relative(Duration::from_secs(10), false).await
+        self.set_rate(-2.0).await
+    }
+
+    /// Set playback rate
+    ///
+    /// Sends `SetRateAnchorTime` with the specified rate.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if state is invalid or network fails
+    async fn set_rate(&self, rate: f64) -> Result<(), AirPlayError> {
+        let mut builder = DictBuilder::new()
+            .insert("rate", rate)
+            .insert("rtpTime", 0u64);
+
+        if let Some((secs, frac, timeline_id)) = self.connection.get_ptp_network_time().await {
+            builder = builder
+                .insert("networkTimeSecs", secs)
+                .insert("networkTimeFrac", frac)
+                .insert("networkTimeTimelineID", timeline_id);
+        }
+
+        let body = builder.build();
+        let encoded =
+            crate::protocol::plist::encode(&body).map_err(|e| AirPlayError::RtspError {
+                message: format!("Failed to encode plist: {e}"),
+                status_code: None,
+            })?;
+
+        self.connection
+            .send_command(
+                Method::SetRateAnchorTime,
+                Some(encoded),
+                Some("application/x-apple-binary-plist".to_string()),
+            )
+            .await?;
+
+        Ok(())
     }
 
     /// Set repeat mode
