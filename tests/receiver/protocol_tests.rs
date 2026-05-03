@@ -92,7 +92,8 @@ async fn test_volume_control() {
                     }
                 }
                 Ok(_) => continue,
-                Err(_) => return false,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return false,
             }
         }
     })
