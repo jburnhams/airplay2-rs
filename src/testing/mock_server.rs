@@ -227,7 +227,11 @@ impl MockServer {
 
             // Read data from the stream
             let n = match stream.read(&mut temp_buf).await {
-                Ok(0) | Err(_) => break, // Connection closed or Error
+                Ok(0) => break, // Connection closed
+                Err(e) => {
+                    tracing::error!("Stream read error: {}", e);
+                    break;
+                }
                 Ok(n) => n,
             };
 

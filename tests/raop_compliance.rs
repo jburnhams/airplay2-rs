@@ -107,18 +107,20 @@ async fn test_raop_handshake_compliance() {
         println!("Got POST instead of ANNOUNCE");
         // For this test, we might stop here if we unexpected behavior, or handle it.
         // This verifies that we at least got past the first step.
+    } else if request.starts_with("GET /info") {
+        println!("Got GET /info instead of ANNOUNCE");
     }
 
     // Await client result (with timeout)
     // The client might fail if we stopped early, but we verified the handshake start.
     // If handshake completed, client.connect() should return Ok.
 
-    let result = tokio::time::timeout(Duration::from_secs(1), connect_handle).await;
+    let result = tokio::time::timeout(Duration::from_secs(5), connect_handle).await;
 
     match result {
         Ok(Ok(Ok(_))) => println!("Client connected successfully"),
         Ok(Ok(Err(e))) => println!("Client failed: {}", e),
-        Ok(Err(_)) => println!("Client panic"),
+        Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
         Err(_) => println!("Timeout waiting for client"),
     }
 }
