@@ -290,6 +290,7 @@ impl PtpSlaveHandler {
                     // this at least allows Delay_Req to be sent (keeping PTP alive).
                     self.pending_t1 = Some(origin_timestamp);
                     self.pending_t2 = Some(t2);
+                    self.pending_t3 = None;
                 }
                 PtpMessageBody::FollowUp {
                     precise_origin_timestamp,
