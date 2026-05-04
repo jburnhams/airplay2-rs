@@ -159,13 +159,15 @@ async fn test_client_connect_failure() {
     // refused)
     match result {
         Ok(Err(_e)) => {
-            // Connection failed as expected
+            // Connection failed as expected. Connection Refused errors are the standard
+            // result of attempting to connect to a port where no mock server is actively listening.
         }
         Ok(Ok(_)) => {
             panic!("Connection succeeded when it should have failed");
         }
         Err(_) => {
-            // Timeout is also an acceptable failure mode depending on OS
+            // Timeout is also an acceptable failure mode depending on OS network stack behavior
+            // when packets to localhost are silently dropped or retried infinitely.
         }
     }
 
