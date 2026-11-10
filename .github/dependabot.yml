@@ -1,0 +1,32 @@
+# Dependabot version updates: every ecosystem this repo uses, daily, as many PRs as it takes.
+# Written by github-dependabot (dotfiles). Minor and patch updates ride together; a major bump is its own PR.
+# No ignore rules: fix a breaking bump or record the pin as a decision in the repo, do not hide it.
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directories:
+      - "/"
+      - "/integration_tests"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 20
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 20
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "pip"
+    directories:
+      - "/airplay2-receiver"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 20
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
