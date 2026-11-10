@@ -8,4 +8,4 @@ hkdf
 # pynacl
 cryptography
 requests
-av>=10.0.0
+av>=19.0.2
