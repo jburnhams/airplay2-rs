@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use bytes::{BufMut, Bytes, BytesMut};
 
-use crate::protocol::crypto::Aes128Ctr;
 use crate::protocol::raop::RaopSessionKeys;
+use crate::protocol::raop::encryption::cbc_encrypt_payload;
 use crate::protocol::rtp::packet_buffer::{BufferedPacket, PacketBuffer};
 use crate::protocol::rtp::raop::{RaopAudioPacket, SyncPacket};
 use crate::protocol::rtp::raop_timing::TimingSync;
@@ -42,8 +42,10 @@ pub struct RaopStreamer {
     sequence: u16,
     /// Current RTP timestamp
     timestamp: u32,
-    /// AES-CTR stream cipher
-    cipher: Aes128Ctr,
+    /// AES key for the audio payloads
+    aes_key: [u8; 16],
+    /// AES IV, reused for every packet
+    aes_iv: [u8; 16],
     /// Packet buffer for retransmission
     buffer: PacketBuffer,
     /// Pool of encode buffers to avoid repeated allocations
@@ -74,11 +76,8 @@ impl RaopStreamer {
     /// Panics if the session keys have invalid length (must be 16 bytes for key and IV).
     #[must_use]
     pub fn new(keys: &RaopSessionKeys, config: RaopStreamConfig) -> Self {
-        // Initialize AES-CTR cipher with session keys
-        // We use expect() here because keys are guaranteed to be correct length
-        // by RaopSessionKeys::generate() or parsing logic
-        let cipher =
-            Aes128Ctr::new(keys.aes_key(), keys.aes_iv()).expect("Invalid session keys length");
+        let aes_key = *keys.aes_key();
+        let aes_iv = *keys.aes_iv();
 
         let pool_size = if config.enable_retransmit {
             // Pool size must be larger than retransmission buffer size
@@ -98,7 +97,8 @@ impl RaopStreamer {
             config,
             sequence: 0,
             timestamp: 0,
-            cipher,
+            aes_key,
+            aes_iv,
             buffer: PacketBuffer::new(PacketBuffer::DEFAULT_SIZE),
             encode_buffers,
             encode_buffer_index: 0,
@@ -148,21 +148,15 @@ impl RaopStreamer {
         // Append audio data
         encode_buffer.put_slice(audio_data);
 
-        // Encrypt payload in place
-        // The payload starts after HEADER_SIZE
-        // Access the just-written part of the buffer
+        // Encrypt the payload in place: AES-128-CBC from the session IV,
+        // whole blocks only (see protocol::raop::encryption).
         let len = encode_buffer.len();
         let payload_start = len - audio_data.len();
-
-        {
-            let data = &mut encode_buffer[payload_start..];
-
-            // Seek to the correct keystream offset based on RTP timestamp
-            // AirPlay 2 uses 16-bit stereo PCM (4 bytes/sample) for timing
-            let offset = u64::from(self.timestamp) * 4;
-            self.cipher.seek(offset);
-            self.cipher.apply_keystream(data);
-        }
+        cbc_encrypt_payload(
+            &self.aes_key,
+            &self.aes_iv,
+            &mut encode_buffer[payload_start..],
+        );
 
         // Extract the packet as Bytes
         // split() returns a new BytesMut containing [0, len), leaving self empty but with capacity
