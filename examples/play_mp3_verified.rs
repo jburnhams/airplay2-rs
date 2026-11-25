@@ -106,7 +106,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Step 4: Start playback
-    let file_path = "Eels - 01 - Susan's House.mp3";
+    let file_path = std::env::args()
+        .nth(1)
+        .expect("usage: pass the path of an audio file to play");
     println!("\n[4/6] Starting playback of '{}'...", file_path);
 
     #[cfg(feature = "decoders")]

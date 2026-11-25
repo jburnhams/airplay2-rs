@@ -1,57 +1,19 @@
 # airplay2-rs
 
-A pure Rust library for streaming audio to AirPlay 2 devices.
+An attempt at a pure Rust AirPlay 1 and 2 audio sender. **Not usable yet.**
 
-## Features
+## Status (2026-11-25)
 
-- **Device Discovery**: Find AirPlay 2 devices on your network via mDNS
-- **HomeKit Authentication**: Secure pairing with Apple devices
-- **Audio Streaming**: Stream PCM audio or URLs to devices
-- **Playback Control**: Play, pause, seek, volume, and queue management
-- **Multi-room Audio**: Synchronized playback across multiple devices
+- Streams PCM and ALAC to the [openairplay Python receiver](airplay2-receiver/) on
+  loopback, verified by the end-to-end tests in [`integration_tests/`](integration_tests/).
+- Has **never** played audio on a real speaker (HomePod, AirPort Express, Sonos and
+  others were tried).
+- Much of the code and many of the tests were machine-generated and are being
+  audited. Expect large parts to be rewritten or removed.
 
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-airplay2 = "0.1"
-```
-
-## Quick Start
-
-```rust
-use airplay2::{scan, AirPlayClient, TrackInfo};
-use std::time::Duration;
-
-#[tokio::main]
-async fn main() -> Result<(), airplay2::AirPlayError> {
-    // Discover devices on the network
-    let devices = scan(Duration::from_secs(5)).await?;
-
-    println!("Found {} devices", devices.len());
-
-    if let Some(device) = devices.first() {
-        println!("Connecting to: {}", device.name);
-
-        let mut client = AirPlayClient::connect(device).await?;
-
-        // Load a track
-        let track = TrackInfo {
-            url: "http://example.com/audio.mp3".to_string(),
-            title: "Example Track".to_string(),
-            artist: "Artist".to_string(),
-            ..Default::default()
-        };
-
-        client.load(&track).await?;
-        client.play().await?;
-    }
-
-    Ok(())
-}
-```
+The plan is to rebuild a small core that is tested against independent
+implementations (shairport-sync, OwnTone, pyatv) and real hardware before anything
+is called working. Device notes live in [`docs/devices/`](docs/devices/).
 
 ## License
 

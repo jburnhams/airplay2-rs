@@ -116,7 +116,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("=================================\n");
 
-    let file_path = "Eels - 01 - Susan's House.mp3";
+    let file_path = std::env::args()
+        .nth(1)
+        .expect("usage: pass the path of an audio file to play");
     println!("Playing file: {}", file_path);
 
     // NOTE: Do NOT call player.stop() here — doing so sends TEARDOWN which terminates
@@ -124,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Without the event channel, SETRATEANCHORTIME returns 400.
     // If you need to stop a previous session, disconnect and reconnect first.
 
-    play_mp3(player, file_path).await
+    play_mp3(player, &file_path).await
 }
 
 #[cfg(not(feature = "decoders"))]
