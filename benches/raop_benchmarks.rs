@@ -1,6 +1,8 @@
+use std::hint::black_box;
+
 use airplay2::protocol::raop::RaopSessionKeys;
 use airplay2::streaming::{RaopStreamConfig, RaopStreamer};
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 
 fn raop_encoding_benchmark(c: &mut Criterion) {
     // 1. Setup

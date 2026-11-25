@@ -85,10 +85,10 @@ fn test_buffer_clear_and_wrap() {
 
 #[test]
 fn test_buffer_wrapping_randomized() {
-    use rand::Rng;
+    use rand::RngExt;
 
     let buffer = AudioRingBuffer::new(100);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let mut current_val: u8 = 0;
     let mut expected_val: u8 = 0;
@@ -102,12 +102,12 @@ fn test_buffer_wrapping_randomized() {
         } else if buffer.free() == 0 {
             false
         } else {
-            rng.gen_bool(0.5)
+            rng.random_bool(0.5)
         };
 
         if should_write {
             let space = buffer.free();
-            let write_size = rng.gen_range(1..=space.max(1));
+            let write_size = rng.random_range(1..=space.max(1));
             let mut data = Vec::with_capacity(write_size);
             for _ in 0..write_size {
                 data.push(current_val);
@@ -116,7 +116,7 @@ fn test_buffer_wrapping_randomized() {
             buffer.write(&data);
         } else {
             let available = buffer.available();
-            let read_size = rng.gen_range(1..=available.max(1));
+            let read_size = rng.random_range(1..=available.max(1));
             let mut out = vec![0u8; read_size];
             let n = buffer.read(&mut out);
 

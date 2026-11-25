@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 /// Stored pairing keys for a device
@@ -187,7 +186,7 @@ impl FileStorage {
             let key = Key::from(key_bytes);
             let cipher = ChaCha20Poly1305::new(&key);
             let mut nonce_bytes = [0u8; 12];
-            rand::rngs::OsRng.fill(&mut nonce_bytes);
+            rand::fill(&mut nonce_bytes);
             let nonce = Nonce::from(nonce_bytes); // 96-bits; unique per message
 
             let ciphertext = cipher

@@ -11,10 +11,10 @@ pub const CHALLENGE_SIZE: usize = 16;
 /// Generate a random Apple-Challenge
 #[must_use]
 pub fn generate_challenge() -> [u8; CHALLENGE_SIZE] {
-    use rand::RngCore;
+    use rand::Rng;
 
     let mut challenge = [0u8; CHALLENGE_SIZE];
-    rand::thread_rng().fill_bytes(&mut challenge);
+    rand::rng().fill_bytes(&mut challenge);
     challenge
 }
 

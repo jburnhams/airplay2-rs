@@ -99,9 +99,9 @@ impl Ap2Config {
 
     /// Generate a random device ID in MAC address format
     fn generate_device_id() -> String {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        let bytes: [u8; 6] = rng.r#gen();
+        use rand::RngExt;
+        let mut rng = rand::rng();
+        let bytes: [u8; 6] = rng.random();
         format!(
             "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]

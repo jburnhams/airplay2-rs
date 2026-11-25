@@ -372,7 +372,7 @@ fn error_result(status: StatusCode, cseq: u32) -> HandleResult {
 
 /// Generate a random session ID
 fn generate_session_id() -> String {
-    use rand::Rng;
-    let id: u64 = rand::thread_rng().r#gen();
+    use rand::RngExt;
+    let id: u64 = rand::rng().random();
     format!("{id:016X}")
 }

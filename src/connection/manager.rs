@@ -930,8 +930,8 @@ impl ConnectionManager {
         let ek = self.encryption_key().await.unwrap_or([0u8; 32]);
 
         let eiv = {
-            use rand::RngCore;
-            let mut rng = rand::thread_rng();
+            use rand::Rng;
+            let mut rng = rand::rng();
             let mut iv = [0u8; 16];
             rng.fill_bytes(&mut iv);
             iv

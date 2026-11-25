@@ -5,10 +5,10 @@ use airplay2::receiver::session::SessionState;
 use airplay2::receiver::session_manager::{
     PreemptionPolicy, SessionEvent, SessionManager, SessionManagerConfig,
 };
-use rand::Rng;
+use rand::RngExt;
 
 fn random_base_port() -> u16 {
-    rand::thread_rng().gen_range(40000..60000)
+    rand::rng().random_range(40000..60000)
 }
 
 #[tokio::test]

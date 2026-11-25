@@ -21,11 +21,11 @@ impl DacpServiceConfig {
     /// Create new configuration with random identifiers
     #[must_use]
     pub fn new() -> Self {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
+        use rand::RngExt;
+        let mut rng = rand::rng();
 
-        let dacp_id = format!("{:016X}", rng.r#gen::<u64>());
-        let active_remote = rng.r#gen::<u32>().to_string();
+        let dacp_id = format!("{:016X}", rng.random::<u64>());
+        let active_remote = rng.random::<u32>().to_string();
 
         Self {
             dacp_id: dacp_id.clone(),

@@ -21,7 +21,10 @@ async fn test_persistent_pairing_end_to_end() -> Result<(), Box<dyn std::error::
     let temp_dir = std::env::temp_dir();
     let storage_path = temp_dir.join(format!(
         "airplay2_test_storage_{}.json",
-        chrono::Utc::now().timestamp_millis()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock before 1970")
+            .as_millis()
     ));
 
     // Ensure storage file doesn't exist

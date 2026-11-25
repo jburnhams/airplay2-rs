@@ -307,7 +307,7 @@ pub enum SessionError {
 }
 
 fn generate_session_id() -> String {
-    use rand::Rng;
-    let id: u64 = rand::thread_rng().r#gen();
+    use rand::RngExt;
+    let id: u64 = rand::rng().random();
     format!("{id:016X}")
 }

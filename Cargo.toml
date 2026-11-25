@@ -23,15 +23,15 @@ receiver-full = ["receiver", "audio-coreaudio", "audio-cpal"]
 decoders = ["dep:symphonia"]
 
 [dependencies]
-cpal = { version = "0.15.3", optional = true, default-features = false }
-bytes = "1.11.1"
+cpal = { version = "0.18.2", optional = true, default-features = false }
+bytes = "1.12.2"
 
 # Async
-tokio = { version = "1.43", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
+tokio = { version = "1.54", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
 async-trait = "0.1"
 futures = "0.3"
-socket2 = { version = "0.5", features = ["all"] }
+socket2 = { version = "0.6", features = ["all"] }
 
 # Error handling
 thiserror = "2.0"
@@ -40,30 +40,30 @@ thiserror = "2.0"
 tracing = "0.1"
 
 # Discovery
-mdns-sd = "0.17"
+mdns-sd = "0.22"
 hostname = "0.4"
 
 # Crypto
-rsa = { version = "0.10.0-rc.15", optional = true }
-sha1 = { version = "0.11.0-rc.5", features = ["oid"], optional = true }
-base64 = "0.22"
-srp = "0.7.0-rc.1"
-num-bigint = { version = "0.4", features = ["rand"] }
+rsa = { version = "0.10.0-rc.19", optional = true }
+sha1 = { version = "0.11.0", features = ["oid"], optional = true }
+base64 = "0.23"
+srp = "0.7.0-rc.3"
+num-bigint = "0.5"
 num-traits = "0.2"
 byteorder = "1.5"
-x25519-dalek = { version = "2.0", features = ["static_secrets"] }
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-chacha20poly1305 = "0.11.0-rc.3"
-aes-gcm = "0.11.0-rc.3"
-aes = "0.8"
-ctr = "0.9"
-hkdf = "0.13.0-rc.5"
-sha2 = "0.11.0-rc.5"
-rand = "0.8"
-rand_core_10 = { package = "rand_core", version = "0.10.0" }
-crypto-bigint = "0.7.0-rc.25"
-curve25519-dalek = "4.1"
-zeroize = "1.8"
+x25519-dalek = { version = "3.0", features = ["static_secrets"] }
+ed25519-dalek = { version = "3.0", features = ["rand_core"] }
+chacha20poly1305 = "0.11.0"
+aes-gcm = "0.11.1"
+aes = "0.9"
+ctr = "0.10"
+hkdf = "0.13.0"
+sha2 = "0.11.0"
+rand = "0.10"
+rand_core_10 = { package = "rand_core", version = "0.10.1" }
+crypto-bigint = "0.7.0-rc.28"
+curve25519-dalek = "5.0"
+zeroize = "1.9"
 
 # Serialization
 # bytes = "1.9" # Already defined above
@@ -72,26 +72,27 @@ zeroize = "1.8"
 alac-encoder = "0.3"      # ALAC encoding
 
 # Persistent storage (optional)
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 fdk-aac = "0.8.0"
+# Pinned: 0.6 rewrote the decoding API and src/streaming/file.rs is due for a rewrite anyway (audit 2026-11-25).
 symphonia = { version = "0.5.5", optional = true, features = ["mp3", "aac", "alac", "pcm", "isomp4"] }
 hex = "0.4.3"
 portpicker = "0.1.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-alsa = { version = "0.9", optional = true }
+# Pinned to the alsa version cpal uses: both link libasound, so only one alsa-sys may exist.
+alsa = { version = "0.11", optional = true }
 
 [dev-dependencies]
-tokio = { version = "1.43", features = ["full", "test-util"] }
+tokio = { version = "1.54", features = ["full", "test-util"] }
 tokio-test = "0.4"
-proptest = "1.6"
+proptest = "1.11"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-criterion = { version = "0.5", features = ["async_tokio"] }
-tempfile = "3.10.1"
+criterion = { version = "0.7", features = ["async_tokio"] }
+tempfile = "3.27.0"
 # Integration test dependencies
-chrono = "0.4"
-nix = { version = "0.29", features = ["signal"] }
+nix = { version = "0.32", features = ["signal"] }
 portpicker = "0.1.1"
 hex = "0.4.3"
 

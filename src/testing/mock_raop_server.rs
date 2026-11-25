@@ -531,11 +531,11 @@ impl MockRaopServer {
         state: &Arc<Mutex<MockRaopState>>,
         config: &MockRaopConfig,
     ) -> crate::protocol::rtsp::RtspResponse {
-        use rand::Rng;
+        use rand::RngExt;
 
         use crate::protocol::rtsp::{Headers, RtspResponse, StatusCode};
 
-        let session_id = format!("{:016X}", rand::thread_rng().r#gen::<u64>());
+        let session_id = format!("{:016X}", rand::rng().random::<u64>());
 
         {
             let mut state = state.lock().unwrap();

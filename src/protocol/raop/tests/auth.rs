@@ -105,24 +105,21 @@ fn test_session_key_generation() {
 #[test]
 fn test_session_keys_with_test_keypair() {
     // Generate AES key and IV
-    use rand::rngs::OsRng;
     use rsa::Oaep;
     use sha1::Sha1;
-
-    use crate::protocol::crypto::CompatibleOsRng;
 
     // Generate test key pair
     let private = RaopRsaPrivateKey::generate().unwrap();
 
     let mut aes_key = [0u8; AES_KEY_SIZE];
     let mut aes_iv = [0u8; AES_IV_SIZE];
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut aes_key);
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut aes_iv);
+    rand::Rng::fill_bytes(&mut rand::rng(), &mut aes_key);
+    rand::Rng::fill_bytes(&mut rand::rng(), &mut aes_iv);
 
     // Encrypt with public key
     let public = private.public_key();
     let padding = Oaep::<Sha1>::new();
-    let mut rng = CompatibleOsRng(OsRng);
+    let mut rng = rand::rng();
     let encrypted = public.encrypt(&mut rng, padding, &aes_key).unwrap();
 
     // Encode as SDP attributes

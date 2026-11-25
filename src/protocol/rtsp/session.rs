@@ -42,11 +42,11 @@ impl RtspSession {
     /// Create a new session
     #[must_use]
     pub fn new(device_address: &str, port: u16) -> Self {
-        use rand::Rng;
+        use rand::RngExt;
 
-        let mut rng = rand::thread_rng();
-        let device_id: u64 = rng.r#gen();
-        let session_id: u64 = rng.r#gen();
+        let mut rng = rand::rng();
+        let device_id: u64 = rng.random();
+        let session_id: u64 = rng.random();
 
         Self {
             state: SessionState::Init,

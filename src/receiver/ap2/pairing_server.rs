@@ -3,7 +3,7 @@
 //! This module implements the server side of `HomeKit` pairing, used by
 //! `AirPlay` 2 receivers to authenticate connecting senders.
 
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha512};
 use thiserror::Error;
 
@@ -98,7 +98,7 @@ impl PairingServer {
     pub fn new(identity: Ed25519KeyPair) -> Self {
         // Generate random salt
         let mut srp_salt = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut srp_salt);
+        rand::rng().fill_bytes(&mut srp_salt);
 
         Self {
             identity,
@@ -188,7 +188,7 @@ impl PairingServer {
         self.client_curve_public = None;
         // Do NOT regenerate salt here because srp_verifier depends on it
         // and we don't store the password to recompute the verifier.
-        // rand::thread_rng().fill_bytes(&mut self.srp_salt);
+        // rand::rng().fill_bytes(&mut self.srp_salt);
     }
 
     // === Internal handlers ===

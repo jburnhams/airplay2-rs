@@ -200,9 +200,9 @@ fn test_decode_lenient_whitespace() {
 
 #[test]
 fn test_random_garbage_robustness() {
-    use rand::RngCore;
+    use rand::Rng;
     let mut codec = RtspCodec::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut data = [0u8; 100];
 
     for _ in 0..100 {

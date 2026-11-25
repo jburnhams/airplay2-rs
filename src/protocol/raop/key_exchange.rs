@@ -28,12 +28,12 @@ impl RaopSessionKeys {
     ///
     /// Returns `CryptoError` if key generation or encryption fails.
     pub fn generate() -> Result<Self, CryptoError> {
-        use rand::RngCore;
+        use rand::Rng;
 
         let mut aes_key = [0u8; AES_KEY_SIZE];
         let mut aes_iv = [0u8; AES_IV_SIZE];
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         rng.fill_bytes(&mut aes_key);
         rng.fill_bytes(&mut aes_iv);
 
