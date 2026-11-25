@@ -140,8 +140,8 @@ impl MockAp2Sender {
     pub async fn pair_setup(&mut self) -> Result<(), MockSenderError> {
         // M1: Send method and state
         let m1 = TlvEncoder::new()
-            .add_state(1)  // State = 1
-            .add_byte(crate::protocol::pairing::tlv::TlvType::Method, 0)  // Method = pair-setup
+            .add_state(1) // State = 1
+            .add_byte(crate::protocol::pairing::tlv::TlvType::Method, 0) // Method = pair-setup
             .build();
 
         let request = self.build_request(Method::Post, "/pair-setup", Some(m1));
@@ -162,8 +162,11 @@ impl MockAp2Sender {
 
         // M1: Send our public key
         let m1 = TlvEncoder::new()
-            .add_state(1)  // State = 1
-            .add(crate::protocol::pairing::tlv::TlvType::PublicKey, keypair.public_key().as_bytes())
+            .add_state(1) // State = 1
+            .add(
+                crate::protocol::pairing::tlv::TlvType::PublicKey,
+                keypair.public_key().as_bytes(),
+            )
             .build();
 
         let request = self.build_request(Method::Post, "/pair-verify", Some(m1));

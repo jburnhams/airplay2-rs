@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::protocol::plist::{PlistDecodeError, PlistValue};
+use crate::protocol::plist::{PlistDecodeError, PlistValue, decode};
 
 #[test]
 fn test_decode_invalid_magic() {
@@ -293,4 +293,56 @@ fn test_decode_unknown_marker() {
         result,
         Err(PlistDecodeError::InvalidObjectMarker(0x70))
     ));
+}
+
+/// Build a binary plist with an arbitrary trailer (offset size, ref size,
+/// object count, root index, offset table offset) after `body`.
+fn with_trailer(
+    body: &[u8],
+    offset_size: u8,
+    ref_size: u8,
+    num_objects: u64,
+    table: u64,
+) -> Vec<u8> {
+    let mut data = b"bplist00".to_vec();
+    data.extend_from_slice(body);
+    data.extend_from_slice(&[0, 0, 0, 0, 0, 0, offset_size, ref_size]);
+    data.extend_from_slice(&num_objects.to_be_bytes());
+    data.extend_from_slice(&0u64.to_be_bytes());
+    data.extend_from_slice(&table.to_be_bytes());
+    data
+}
+
+/// Regression: `num_objects * offset_size` used to wrap past the bounds
+/// check and ask `Vec::with_capacity` for ~2^61 entries, aborting the process
+/// (found by mutation fuzzing on 2026-11-25).
+#[test]
+fn test_decode_offset_table_overflow_is_error_not_abort() {
+    let data = with_trailer(&[0u8; 8], 8, 1, 0x2000_0000_0000_0001, 8);
+    assert!(decode(&data).is_err());
+}
+
+/// Regression: an offset size of zero made any object count pass the bounds check.
+#[test]
+fn test_decode_zero_sizes_rejected() {
+    let data = with_trailer(&[0u8; 8], 0, 1, u64::MAX, 8);
+    assert!(matches!(
+        decode(&data),
+        Err(PlistDecodeError::InvalidTrailer)
+    ));
+    let data = with_trailer(&[0u8; 8], 1, 0, 1, 8);
+    assert!(matches!(
+        decode(&data),
+        Err(PlistDecodeError::InvalidTrailer)
+    ));
+}
+
+proptest::proptest! {
+    /// Arbitrary bytes after the magic must never panic or abort.
+    #[test]
+    fn prop_decode_never_panics(body in proptest::collection::vec(proptest::num::u8::ANY, 0..256)) {
+        let mut data = b"bplist00".to_vec();
+        data.extend_from_slice(&body);
+        let _ = decode(&data);
+    }
 }
