@@ -33,6 +33,9 @@ pub enum PlistDecodeError {
 
     #[error("integer overflow")]
     IntegerOverflow,
+
+    #[error("duplicate dictionary key: {0:?}")]
+    DuplicateKey(String),
 }
 
 /// Binary plist trailer (last 32 bytes)
@@ -133,9 +136,14 @@ struct Decoder<'a> {
 impl<'a> Decoder<'a> {
     fn new(data: &'a [u8], trailer: &Trailer) -> Result<Self, PlistDecodeError> {
         let offset_table = Self::parse_offset_table(data, trailer)?;
+        // Objects live between the header and the offset table. Decoding from
+        // this slice makes every object bounds check enforce that, as
+        // libplist and CoreFoundation do.
+        let table_start = usize::try_from(trailer.offset_table_offset)
+            .map_err(|_| PlistDecodeError::InvalidTrailer)?;
 
         Ok(Self {
-            data,
+            data: &data[..table_start],
             offset_table,
             object_ref_size: trailer.object_ref_size as usize,
         })
@@ -148,9 +156,15 @@ impl<'a> Decoder<'a> {
         let count =
             usize::try_from(trailer.num_objects).map_err(|_| PlistDecodeError::InvalidTrailer)?;
 
+        // The table must sit after the 8-byte header and end before the
+        // 32-byte trailer.
+        let trailer_start = data.len() - 32;
+        if start < 8 || start >= trailer_start {
+            return Err(PlistDecodeError::InvalidTrailer);
+        }
         ensure_len(
             checked_add(start, checked_mul(count, entry_size)?)?,
-            data.len(),
+            trailer_start,
         )?;
 
         let mut offsets = Vec::with_capacity(count);
@@ -193,7 +207,7 @@ impl<'a> Decoder<'a> {
             .ok_or(PlistDecodeError::InvalidOffset(index))?;
 
         let pos = usize::try_from(offset).map_err(|_| PlistDecodeError::InvalidOffset(offset))?;
-        if pos >= self.data.len() {
+        if pos < 8 || pos >= self.data.len() {
             return Err(PlistDecodeError::InvalidOffset(offset));
         }
         let marker = self.data[pos];
@@ -217,7 +231,8 @@ impl<'a> Decoder<'a> {
             0x0 => Self::decode_singleton(low_nibble),
             0x1 => self.decode_integer(pos, low_nibble),
             0x2 => self.decode_real(pos, low_nibble),
-            0x3 => self.decode_date(pos),
+            // Dates are always 8-byte floats: the marker must be exactly 0x33.
+            0x3 if low_nibble == 3 => self.decode_date(pos),
             0x4 => self.decode_data(pos, low_nibble),
             0x5 => self.decode_ascii_string(pos, low_nibble),
             0x6 => self.decode_utf16_string(pos, low_nibble),
@@ -230,7 +245,8 @@ impl<'a> Decoder<'a> {
 
     fn decode_singleton(nibble: u8) -> Result<PlistValue, PlistDecodeError> {
         match nibble {
-            0x0 | 0xF => Ok(PlistValue::Data(vec![])),
+            // 0x00 (null) and 0x0F (fill) have no PlistValue; they used to be
+            // turned into empty Data, inventing a value the sender never sent.
             0x8 => Ok(PlistValue::Boolean(false)),
             0x9 => Ok(PlistValue::Boolean(true)),
             _ => Err(PlistDecodeError::InvalidObjectMarker(nibble)),
@@ -242,16 +258,15 @@ impl<'a> Decoder<'a> {
         ensure_len(checked_add(pos, bytes_len)?, self.data.len())?;
         let int_bytes = &self.data[pos..pos + bytes_len];
 
+        // 1-, 2- and 4-byte integers are unsigned (CoreFoundation, libplist
+        // and Python's plistlib all write e.g. 44100 as the 2 bytes AC 44);
+        // only 8-byte integers carry a sign.
         match bytes_len {
-            #[allow(
-                clippy::cast_possible_wrap,
-                reason = "Integers in binary plist are signed"
-            )]
-            1 => Ok(PlistValue::Integer(i64::from(int_bytes[0] as i8))),
-            2 => Ok(PlistValue::Integer(i64::from(i16::from_be_bytes(
+            1 => Ok(PlistValue::Integer(i64::from(int_bytes[0]))),
+            2 => Ok(PlistValue::Integer(i64::from(u16::from_be_bytes(
                 int_bytes.try_into().unwrap(),
             )))),
-            4 => Ok(PlistValue::Integer(i64::from(i32::from_be_bytes(
+            4 => Ok(PlistValue::Integer(i64::from(u32::from_be_bytes(
                 int_bytes.try_into().unwrap(),
             )))),
             8 => Ok(PlistValue::Integer(i64::from_be_bytes(
@@ -387,12 +402,15 @@ impl<'a> Decoder<'a> {
         let len = (len_nibble + 1) as usize;
         ensure_len(checked_add(pos, len)?, self.data.len())?;
 
-        let mut val = 0u64;
+        // Up to 16 bytes, so accumulate in u128. UIDs are 32-bit in
+        // CoreFoundation and libplist; larger ones used to wrap silently.
+        let mut val = 0u128;
         for i in 0..len {
-            val = (val << 8) | u64::from(self.data[pos + i]);
+            val = (val << 8) | u128::from(self.data[pos + i]);
         }
+        let val = u32::try_from(val).map_err(|_| PlistDecodeError::IntegerOverflow)?;
 
-        Ok(PlistValue::Uid(val))
+        Ok(PlistValue::Uid(u64::from(val)))
     }
 
     fn decode_array(
@@ -463,6 +481,12 @@ impl<'a> Decoder<'a> {
             };
 
             let val_val = self.decode_object(val_index, seen)?;
+            // Reject rather than silently pick one: parsers disagree on which
+            // duplicate wins (libplist keeps both), so a sender could make
+            // two implementations see different values.
+            if dict.contains_key(&key_str) {
+                return Err(PlistDecodeError::DuplicateKey(key_str));
+            }
             dict.insert(key_str, val_val);
         }
 
