@@ -171,14 +171,13 @@ impl TlvDecoder {
     pub fn decode(data: &[u8]) -> Result<Self, TlvError> {
         let mut items: HashMap<u8, Vec<u8>> = HashMap::new();
         let mut pos = 0;
+        // Type and length of the previous item, to spot fragment continuations,
+        // and whether that item's value is the one we kept for its type.
+        let mut prev: Option<(u8, usize)> = None;
+        let mut prev_kept = false;
 
         while pos < data.len() {
             if pos + 2 > data.len() {
-                // If only 1 byte left (type), it's incomplete
-                // If type present but length missing, incomplete
-                // But wait, what if data is [type, 0] ? length is 2.
-                // pos=0. data.len()=2. pos+2=2 <= 2. OK.
-                // So this check is for at least 2 bytes remaining.
                 return Err(TlvError::BufferTooSmall);
             }
 
@@ -193,8 +192,21 @@ impl TlvDecoder {
             let value = &data[pos..pos + length];
             pos += length;
 
-            // Concatenate fragmented values
-            items.entry(tlv_type).or_default().extend_from_slice(value);
+            // HAP splits values over 255 bytes into consecutive items of the
+            // same type, every one but the last exactly 255 bytes long. Only
+            // join those. A later, separate item of a type already seen is a
+            // new item (e.g. in a list); `get` returns the first, as pair_ap does.
+            if prev == Some((tlv_type, 255)) {
+                if prev_kept {
+                    items.entry(tlv_type).or_default().extend_from_slice(value);
+                }
+            } else if let std::collections::hash_map::Entry::Vacant(e) = items.entry(tlv_type) {
+                e.insert(value.to_vec());
+                prev_kept = true;
+            } else {
+                prev_kept = false;
+            }
+            prev = Some((tlv_type, length));
         }
 
         Ok(Self { items })

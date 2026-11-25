@@ -14,6 +14,8 @@ An attempt at a pure Rust AirPlay 1 and 2 audio sender. **Not usable yet.**
 The plan is to rebuild a small core that is tested against independent
 implementations (shairport-sync, OwnTone, pyatv) and real hardware before anything
 is called working. Device notes live in [`docs/devices/`](docs/devices/).
+[`fuzz/`](fuzz/README.md) fuzzes the plist, TLV8, AirPlay 1 encryption and ALAC
+code against C implementations (libplist, pair_ap, Shairport Sync, Apple ALAC).
 
 ## License
 

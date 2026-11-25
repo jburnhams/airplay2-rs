@@ -346,3 +346,24 @@ proptest::proptest! {
         let _ = decode(&data);
     }
 }
+
+#[test]
+fn test_decode_small_ints_are_unsigned() {
+    // Written by Python's plistlib: {"sr": 44100, "ct": 200}. 44100 is the
+    // 2-byte int AC 44 and 200 the 1-byte int C8; both used to come back
+    // negative because 1/2/4-byte ints were sign-extended.
+    let data: Vec<u8> = (0..122)
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(
+                &"62706c6973743030d20102030452637452737210c811ac44080d1013150000000000000101000000000000000500000000000000000000000000000018"[i..i + 2],
+                16,
+            )
+            .unwrap()
+        })
+        .collect();
+    let value = decode(&data).unwrap();
+    let dict = value.as_dict().unwrap();
+    assert_eq!(dict.get("sr").and_then(PlistValue::as_i64), Some(44100));
+    assert_eq!(dict.get("ct").and_then(PlistValue::as_i64), Some(200));
+}

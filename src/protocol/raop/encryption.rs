@@ -1,6 +1,15 @@
-//! RAOP audio encryption using AES-128-CTR
+//! RAOP audio encryption: AES-128-CBC, IV reset for every packet.
+//!
+//! Each RTP audio payload is encrypted on its own with the session key and the
+//! session IV. Only the leading whole 16-byte blocks are encrypted; a trailing
+//! partial block is sent in the clear. This is what Shairport Sync
+//! (`player.c`), `OwnTone` and `AirPort` Express receivers expect, and what
+//! `fuzz/fuzz_targets/raop_audio_vs_shairport.rs` checks.
 
-use crate::protocol::crypto::{Aes128Ctr, CryptoError};
+use aes::Aes128;
+use aes::cipher::{BlockCipherDecrypt, BlockCipherEncrypt, KeyInit};
+
+use crate::protocol::crypto::CryptoError;
 use crate::protocol::raop::key_exchange::RaopSessionKeys;
 
 /// AES key size (128 bits)
@@ -10,10 +19,49 @@ pub const AES_IV_SIZE: usize = 16;
 /// Audio frame size (352 samples * 4 bytes)
 pub const FRAME_SIZE: usize = 352 * 4;
 
+/// Encrypt one RAOP audio payload in place (AES-128-CBC, whole blocks only).
+///
+/// # Panics
+///
+/// Never: `chunks_exact_mut(16)` only yields 16-byte chunks.
+pub fn cbc_encrypt_payload(key: &[u8; AES_KEY_SIZE], iv: &[u8; AES_IV_SIZE], data: &mut [u8]) {
+    let cipher = Aes128::new(key.into());
+    let mut prev = *iv;
+    for chunk in data.chunks_exact_mut(16) {
+        for (b, p) in chunk.iter_mut().zip(prev.iter()) {
+            *b ^= *p;
+        }
+        let mut block = aes::Block::try_from(&*chunk).expect("16-byte chunk");
+        cipher.encrypt_block(&mut block);
+        chunk.copy_from_slice(&block);
+        prev.copy_from_slice(chunk);
+    }
+}
+
+/// Decrypt one RAOP audio payload in place (AES-128-CBC, whole blocks only).
+///
+/// # Panics
+///
+/// Never: `chunks_exact_mut(16)` only yields 16-byte chunks.
+pub fn cbc_decrypt_payload(key: &[u8; AES_KEY_SIZE], iv: &[u8; AES_IV_SIZE], data: &mut [u8]) {
+    let cipher = Aes128::new(key.into());
+    let mut prev = *iv;
+    for chunk in data.chunks_exact_mut(16) {
+        let ciphertext: [u8; 16] = (&*chunk).try_into().expect("16-byte chunk");
+        let mut block = aes::Block::from(ciphertext);
+        cipher.decrypt_block(&mut block);
+        for (b, p) in block.iter_mut().zip(prev.iter()) {
+            *b ^= *p;
+        }
+        chunk.copy_from_slice(&block);
+        prev = ciphertext;
+    }
+}
+
 /// RAOP audio encryptor
 ///
-/// Handles AES-128-CTR encryption for audio packets.
-/// The counter is based on the IV and packet sequence/timestamp.
+/// Encrypts each audio payload independently with AES-128-CBC; see the module
+/// docs.
 pub struct RaopEncryptor {
     /// AES encryption key
     key: [u8; AES_KEY_SIZE],
@@ -54,27 +102,17 @@ impl RaopEncryptor {
     ///
     /// # Arguments
     /// * `audio_data` - Raw audio bytes (PCM or encoded)
-    /// * `packet_index` - Packet index for counter derivation
+    /// * `packet_index` - Unused: RAOP restarts CBC from the session IV for every packet. Kept for
+    ///   API compatibility.
     ///
     /// # Returns
     /// Encrypted audio data
     ///
     /// # Errors
-    /// Returns `CryptoError` if encryption fails
+    /// Never fails; the `Result` is kept for API compatibility.
     pub fn encrypt(&self, audio_data: &[u8], packet_index: u64) -> Result<Vec<u8>, CryptoError> {
-        if !self.enabled {
-            return Ok(audio_data.to_vec());
-        }
-
-        let mut cipher = Aes128Ctr::new(&self.key, &self.iv)?;
-
-        // Seek to the correct position in the keystream
-        // Each packet uses FRAME_SIZE bytes of keystream
-        cipher.seek(packet_index * FRAME_SIZE as u64);
-
         let mut output = audio_data.to_vec();
-        cipher.apply_keystream(&mut output);
-
+        self.encrypt_in_place(&mut output, packet_index)?;
         Ok(output)
     }
 
@@ -85,16 +123,11 @@ impl RaopEncryptor {
     pub fn encrypt_in_place(
         &self,
         audio_data: &mut [u8],
-        packet_index: u64,
+        _packet_index: u64,
     ) -> Result<(), CryptoError> {
-        if !self.enabled {
-            return Ok(());
+        if self.enabled {
+            cbc_encrypt_payload(&self.key, &self.iv, audio_data);
         }
-
-        let mut cipher = Aes128Ctr::new(&self.key, &self.iv)?;
-        cipher.seek(packet_index * FRAME_SIZE as u64);
-        cipher.apply_keystream(audio_data);
-
         Ok(())
     }
 
@@ -144,18 +177,11 @@ impl RaopDecryptor {
     ///
     /// # Errors
     /// Returns `CryptoError` if decryption fails
-    pub fn decrypt(&self, audio_data: &[u8], packet_index: u64) -> Result<Vec<u8>, CryptoError> {
-        if !self.enabled {
-            return Ok(audio_data.to_vec());
-        }
-
-        // AES-CTR decryption is the same as encryption
-        let mut cipher = Aes128Ctr::new(&self.key, &self.iv)?;
-        cipher.seek(packet_index * FRAME_SIZE as u64);
-
+    pub fn decrypt(&self, audio_data: &[u8], _packet_index: u64) -> Result<Vec<u8>, CryptoError> {
         let mut output = audio_data.to_vec();
-        cipher.apply_keystream(&mut output);
-
+        if self.enabled {
+            cbc_decrypt_payload(&self.key, &self.iv, &mut output);
+        }
         Ok(output)
     }
 }

@@ -19,19 +19,31 @@ fn test_encrypt_decrypt_roundtrip() {
 }
 
 #[test]
-fn test_different_packets_different_ciphertext() {
-    let key = [0x42u8; AES_KEY_SIZE];
-    let iv = [0x00u8; AES_IV_SIZE];
+fn test_cbc_matches_nist_vector_and_leaves_tail_clear() {
+    // NIST SP 800-38A F.2.1 (AES-128-CBC), two blocks, plus 5 trailing bytes
+    // that RAOP sends unencrypted.
+    let key: [u8; 16] = hex("2b7e151628aed2a6abf7158809cf4f3c").try_into().unwrap();
+    let iv: [u8; 16] = hex("000102030405060708090a0b0c0d0e0f").try_into().unwrap();
+    let mut plain = hex("6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51");
+    plain.extend_from_slice(b"tail!");
 
     let encryptor = RaopEncryptor::new(key, iv);
+    let encrypted = encryptor.encrypt(&plain, 0).unwrap();
+    assert_eq!(
+        encrypted[..32],
+        hex("7649abac8119b246cee98e9b12e9197d5086cb9b507219ee95db113a917678b2")[..]
+    );
+    assert_eq!(&encrypted[32..], b"tail!");
 
-    let data = vec![0xAA; FRAME_SIZE];
+    // Every packet restarts from the session IV.
+    assert_eq!(encryptor.encrypt(&plain, 7).unwrap(), encrypted);
+}
 
-    let encrypted1 = encryptor.encrypt(&data, 0).unwrap();
-    let encrypted2 = encryptor.encrypt(&data, 1).unwrap();
-
-    // Same plaintext, different packet index -> different ciphertext
-    assert_ne!(encrypted1, encrypted2);
+fn hex(s: &str) -> Vec<u8> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+        .collect()
 }
 
 #[test]
