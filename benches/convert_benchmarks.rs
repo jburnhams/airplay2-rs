@@ -1,6 +1,8 @@
+use std::hint::black_box;
+
 use airplay2::audio::ChannelConfig;
 use airplay2::audio::convert::{convert_channels, convert_channels_into};
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn benchmark_convert_channels(c: &mut Criterion) {
     let frames = 1024;

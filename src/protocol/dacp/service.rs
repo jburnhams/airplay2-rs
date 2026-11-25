@@ -21,11 +21,11 @@ impl DacpServiceConfig {
     /// Create new configuration with random identifiers
     #[must_use]
     pub fn new() -> Self {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
+        use rand::RngExt;
+        let mut rng = rand::rng();
 
-        let dacp_id = format!("{:016X}", rng.r#gen::<u64>());
-        let active_remote = rng.r#gen::<u32>().to_string();
+        let dacp_id = format!("{:016X}", rng.random::<u64>());
+        let active_remote = rng.random::<u32>().to_string();
 
         Self {
             dacp_id: dacp_id.clone(),
@@ -100,7 +100,11 @@ impl DacpService {
     /// # Errors
     ///
     /// Returns error if registration fails
-    #[allow(clippy::unused_async, reason = "Async required by trait or future use")]
+    #[allow(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "Async required by trait or future use"
+    )]
     pub async fn register(&mut self) -> Result<(), DacpError> {
         // Use mdns-sd to register service
         // Implementation depends on mDNS library
@@ -114,7 +118,11 @@ impl DacpService {
     /// # Errors
     ///
     /// Returns error if unregistration fails
-    #[allow(clippy::unused_async, reason = "Async required by trait or future use")]
+    #[allow(
+        clippy::unused_async,
+        clippy::unused_async_trait_impl,
+        reason = "Async required by trait or future use"
+    )]
     pub async fn unregister(&mut self) -> Result<(), DacpError> {
         self.registered = false;
         Ok(())

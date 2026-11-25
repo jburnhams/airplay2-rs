@@ -6,8 +6,7 @@
 use std::sync::Arc;
 
 use aes::Aes128;
-use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockDecrypt, KeyInit};
+use aes::cipher::{BlockCipherDecrypt, KeyInit};
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
@@ -96,7 +95,7 @@ impl AudioDecryptor {
             return Ok(encrypted.to_vec());
         }
 
-        let cipher = Aes128::new(GenericArray::from_slice(&self.key));
+        let cipher = Aes128::new(&self.key.into());
 
         let mut decrypted = Vec::with_capacity(encrypted.len());
 
@@ -104,12 +103,11 @@ impl AudioDecryptor {
         let mut prev_block = self.iv;
 
         for chunk in encrypted[..encrypted_len].chunks(block_size) {
-            let mut block = GenericArray::clone_from_slice(chunk);
-
             // Save ciphertext for next XOR
             let ciphertext: [u8; 16] = chunk
                 .try_into()
                 .map_err(|_| RtpReceiveError::DecryptionFailed("Invalid chunk size".to_string()))?;
+            let mut block = aes::Block::from(ciphertext);
 
             // Decrypt block
             cipher.decrypt_block(&mut block);

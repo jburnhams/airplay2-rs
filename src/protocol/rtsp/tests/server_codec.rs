@@ -224,7 +224,7 @@ fn test_codec_clear() {
     codec.feed(b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n");
     let _ = codec.decode();
 
-    assert!(codec.buffer_len() == 0);
+    assert_eq!(codec.buffer_len(), 0);
 
     codec.feed(b"PARTIAL");
     assert!(codec.buffer_len() > 0);
@@ -266,7 +266,7 @@ fn test_unsupported_chunked_encoding() {
 
     let decoded = codec.decode().unwrap().unwrap();
     // Should have parsed headers but body empty because no content-length
-    assert!(decoded.body.is_empty());
+    assert_eq!(decoded.body, [] as [u8; 0]);
 
     // The remaining bytes are still in buffer and will cause error on next decode
     let result = codec.decode();

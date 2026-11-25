@@ -7,7 +7,7 @@ fn test_session_creation() {
 
     assert_eq!(session.state(), RaopSessionState::Init);
     assert!(session.session_id.is_none());
-    assert!(!session.client_instance.is_empty());
+    assert_ne!(session.client_instance, "");
 }
 
 #[test]

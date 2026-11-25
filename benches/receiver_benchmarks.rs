@@ -1,10 +1,11 @@
 //! Performance benchmarks for receiver components
 
+use std::hint::black_box;
 use std::time::Instant;
 
 use airplay2::audio::jitter::{JitterBuffer, JitterBufferConfig};
 use airplay2::receiver::rtp_receiver::AudioPacket;
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn jitter_buffer_insert(c: &mut Criterion) {
     c.bench_function("jitter_insert", |b| {

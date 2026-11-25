@@ -341,6 +341,7 @@ impl PtpSlaveHandler {
 
     #[allow(
         clippy::unused_async,
+        clippy::unused_async_trait_impl,
         reason = "Async required for consistent trait/interface signature"
     )]
     async fn handle_general_packet(&mut self, data: &[u8], _src: SocketAddr) {

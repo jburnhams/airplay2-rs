@@ -5,9 +5,7 @@ use airplay2::protocol::raop::encryption::{
 
 #[test]
 fn test_key_exchange_simulation() {
-    use airplay2::protocol::crypto::CompatibleOsRng;
-    use rand::RngCore;
-    use rand::rngs::OsRng;
+    use rand::Rng;
     use rsa::Oaep;
     use sha1::Sha1;
 
@@ -17,7 +15,7 @@ fn test_key_exchange_simulation() {
     // Client generates session keys (Sender side)
     let mut client_aes_key = [0u8; 16];
     let mut client_aes_iv = [0u8; 16];
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     rng.fill_bytes(&mut client_aes_key);
     rng.fill_bytes(&mut client_aes_iv);
 
@@ -26,7 +24,7 @@ fn test_key_exchange_simulation() {
     let padding = Oaep::<Sha1>::new();
 
     // Using rsa::Encryptor trait method
-    let mut rng = CompatibleOsRng(OsRng);
+    let mut rng = rand::rng();
     let encrypted_key = public.encrypt(&mut rng, padding, &client_aes_key).unwrap();
 
     // Server decrypts to get AES key

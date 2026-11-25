@@ -23,13 +23,10 @@ fn test_oaep_encrypt_decrypt() {
 
     // Encrypt with public key
     use ::rsa::Oaep;
-    use rand::rngs::OsRng;
     use sha1::Sha1;
 
-    use crate::protocol::crypto::CompatibleOsRng;
-
     let padding = Oaep::<Sha1>::new();
-    let mut rng = CompatibleOsRng(OsRng);
+    let mut rng = rand::rng();
     let ciphertext = public.encrypt(&mut rng, padding, plaintext).unwrap();
 
     // Decrypt with private key

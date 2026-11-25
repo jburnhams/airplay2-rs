@@ -24,7 +24,10 @@ pub fn save_test_logs(
         target_dir = target_dir.parent().unwrap().to_path_buf();
     }
 
-    let timestamp = chrono::Utc::now().timestamp_millis();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock before 1970")
+        .as_millis();
     let log_dir = target_dir
         .join("target")
         .join("integration-tests")

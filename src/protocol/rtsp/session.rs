@@ -42,11 +42,11 @@ impl RtspSession {
     /// Create a new session
     #[must_use]
     pub fn new(device_address: &str, port: u16) -> Self {
-        use rand::Rng;
+        use rand::RngExt;
 
-        let mut rng = rand::thread_rng();
-        let device_id: u64 = rng.r#gen();
-        let session_id: u64 = rng.r#gen();
+        let mut rng = rand::rng();
+        let device_id: u64 = rng.random();
+        let session_id: u64 = rng.random();
 
         Self {
             state: SessionState::Init,
@@ -132,7 +132,8 @@ impl RtspSession {
         plist: &crate::protocol::plist::PlistValue,
         transport: Option<&str>,
     ) -> RtspRequest {
-        // Per airplay2-homepod.md, SETUP requires session ID in URL: rtsp://<host>/<session-id>
+        // Unverified (from deleted LLM-written notes): SETUP requires session ID in URL:
+        // rtsp://<host>/<session-id>
         let path = format!("/{}", self.client_session_id);
         let mut builder = self.request_builder(Method::Setup, &path).body_plist(plist);
 

@@ -259,7 +259,7 @@ impl PlaybackQueue {
     /// Enable shuffle mode
     pub fn shuffle(&mut self) {
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let mut order: Vec<usize> = (0..self.items.len()).collect();
 

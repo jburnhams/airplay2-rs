@@ -76,7 +76,7 @@ impl AppleRsaPublicKey {
         }
 
         let padding = Oaep::<Sha1>::new();
-        let mut rng = CompatibleOsRng(rand::rngs::OsRng);
+        let mut rng = rand::rng();
         self.inner
             .encrypt(&mut rng, padding, plaintext)
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))
@@ -110,7 +110,7 @@ pub struct RaopRsaPrivateKey {
 impl RaopRsaPrivateKey {
     /// Generate a new RSA key pair for testing
     pub fn generate() -> Result<Self, CryptoError> {
-        let mut rng = CompatibleOsRng(rand::rngs::OsRng);
+        let mut rng = rand::rng();
         let inner = rsa::RsaPrivateKey::new(&mut rng, sizes::MODULUS_BITS)
             .map_err(|_| CryptoError::RngError)?;
 
@@ -162,27 +162,3 @@ impl RaopRsaPrivateKey {
         self.inner.to_public_key()
     }
 }
-
-pub struct CompatibleOsRng(pub rand::rngs::OsRng);
-
-impl rand_core_10::TryRng for CompatibleOsRng {
-    type Error = core::convert::Infallible;
-
-    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-        use rand::RngCore;
-        Ok(self.0.next_u32())
-    }
-
-    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-        use rand::RngCore;
-        Ok(self.0.next_u64())
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
-        use rand::RngCore;
-        self.0.fill_bytes(dest); // Panics on error, satisfying Infallible
-        Ok(())
-    }
-}
-
-impl rand_core_10::TryCryptoRng for CompatibleOsRng {}

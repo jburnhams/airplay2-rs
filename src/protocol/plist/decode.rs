@@ -65,6 +65,12 @@ impl Trailer {
 
         let trailer = &data[data.len() - 32..];
 
+        // Reject sizes the format doesn't allow. A zero size would let a huge
+        // object count pass the bounds checks and trigger a giant allocation.
+        if ![1, 2, 4, 8].contains(&trailer[6]) || ![1, 2, 4, 8].contains(&trailer[7]) {
+            return Err(PlistDecodeError::InvalidTrailer);
+        }
+
         Ok(Self {
             _unused: [0; 5], // bytes 0-4
             _sort_version: trailer[5],
@@ -100,6 +106,24 @@ pub fn decode(data: &[u8]) -> Result<PlistValue, PlistDecodeError> {
     decoder.decode_object(trailer.root_object_index, &mut HashSet::new())
 }
 
+/// Overflow-safe `a + b` for offsets read from untrusted input.
+fn checked_add(a: usize, b: usize) -> Result<usize, PlistDecodeError> {
+    a.checked_add(b).ok_or(PlistDecodeError::InvalidTrailer)
+}
+
+/// Overflow-safe `a * b` for counts read from untrusted input.
+fn checked_mul(a: usize, b: usize) -> Result<usize, PlistDecodeError> {
+    a.checked_mul(b).ok_or(PlistDecodeError::InvalidTrailer)
+}
+
+/// Fail unless `needed` bytes fit in a buffer of length `have`.
+fn ensure_len(needed: usize, have: usize) -> Result<(), PlistDecodeError> {
+    if needed > have {
+        return Err(PlistDecodeError::BufferTooSmall { needed, have });
+    }
+    Ok(())
+}
+
 struct Decoder<'a> {
     data: &'a [u8],
     offset_table: Vec<u64>,
@@ -124,12 +148,10 @@ impl<'a> Decoder<'a> {
         let count =
             usize::try_from(trailer.num_objects).map_err(|_| PlistDecodeError::InvalidTrailer)?;
 
-        if start + count * entry_size > data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: start + count * entry_size,
-                have: data.len(),
-            });
-        }
+        ensure_len(
+            checked_add(start, checked_mul(count, entry_size)?)?,
+            data.len(),
+        )?;
 
         let mut offsets = Vec::with_capacity(count);
 
@@ -217,12 +239,7 @@ impl<'a> Decoder<'a> {
 
     fn decode_integer(&self, pos: usize, size_exp: u8) -> Result<PlistValue, PlistDecodeError> {
         let bytes_len = 1 << size_exp;
-        if pos + bytes_len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: pos + bytes_len,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(pos, bytes_len)?, self.data.len())?;
         let int_bytes = &self.data[pos..pos + bytes_len];
 
         match bytes_len {
@@ -256,12 +273,7 @@ impl<'a> Decoder<'a> {
 
     fn decode_real(&self, pos: usize, size_exp: u8) -> Result<PlistValue, PlistDecodeError> {
         let bytes_len = 1 << size_exp;
-        if pos + bytes_len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: pos + bytes_len,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(pos, bytes_len)?, self.data.len())?;
         let real_bytes = &self.data[pos..pos + bytes_len];
 
         match bytes_len {
@@ -278,12 +290,7 @@ impl<'a> Decoder<'a> {
     }
 
     fn decode_date(&self, pos: usize) -> Result<PlistValue, PlistDecodeError> {
-        if pos + 8 > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: pos + 8,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(pos, 8)?, self.data.len())?;
         let date_bytes = &self.data[pos..pos + 8];
         let val = f64::from_be_bytes(date_bytes.try_into().unwrap());
         Ok(PlistValue::Date(val))
@@ -305,12 +312,10 @@ impl<'a> Decoder<'a> {
             let size_exp = next_nibble;
             let bytes_len = 1 << size_exp;
 
-            if pos + 1 + bytes_len > self.data.len() {
-                return Err(PlistDecodeError::BufferTooSmall {
-                    needed: pos + 1 + bytes_len,
-                    have: self.data.len(),
-                });
-            }
+            ensure_len(
+                checked_add(checked_add(pos, 1)?, bytes_len)?,
+                self.data.len(),
+            )?;
 
             let int_val = match bytes_len {
                 1 => u64::from(self.data[pos + 1]),
@@ -334,12 +339,7 @@ impl<'a> Decoder<'a> {
     fn decode_data(&self, pos: usize, length_nibble: u8) -> Result<PlistValue, PlistDecodeError> {
         let (len, data_start) = self.decode_size(pos, length_nibble)?;
 
-        if data_start + len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: data_start + len,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(data_start, len)?, self.data.len())?;
 
         Ok(PlistValue::Data(
             self.data[data_start..data_start + len].to_vec(),
@@ -353,12 +353,7 @@ impl<'a> Decoder<'a> {
     ) -> Result<PlistValue, PlistDecodeError> {
         let (len, str_start) = self.decode_size(pos, len_nibble)?;
 
-        if str_start + len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: str_start + len,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(str_start, len)?, self.data.len())?;
 
         let s = std::str::from_utf8(&self.data[str_start..str_start + len])
             .map_err(|_| PlistDecodeError::InvalidUtf8)?;
@@ -373,14 +368,9 @@ impl<'a> Decoder<'a> {
     ) -> Result<PlistValue, PlistDecodeError> {
         let (len, str_start) = self.decode_size(pos, len_nibble)?;
 
-        let byte_len = len * 2;
+        let byte_len = checked_mul(len, 2)?;
 
-        if str_start + byte_len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: str_start + byte_len,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(str_start, byte_len)?, self.data.len())?;
 
         let bytes = &self.data[str_start..str_start + byte_len];
         let u16s: Vec<u16> = bytes
@@ -395,12 +385,7 @@ impl<'a> Decoder<'a> {
 
     fn decode_uid(&self, pos: usize, len_nibble: u8) -> Result<PlistValue, PlistDecodeError> {
         let len = (len_nibble + 1) as usize;
-        if pos + len > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: pos + len,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(checked_add(pos, len)?, self.data.len())?;
 
         let mut val = 0u64;
         for i in 0..len {
@@ -418,12 +403,10 @@ impl<'a> Decoder<'a> {
     ) -> Result<PlistValue, PlistDecodeError> {
         let (count, refs_start) = self.decode_size(pos, count_nibble)?;
 
-        if refs_start + count * self.object_ref_size > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: refs_start + count * self.object_ref_size,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(
+            checked_add(refs_start, checked_mul(count, self.object_ref_size)?)?,
+            self.data.len(),
+        )?;
 
         let mut items = Vec::with_capacity(count);
 
@@ -448,12 +431,13 @@ impl<'a> Decoder<'a> {
     ) -> Result<PlistValue, PlistDecodeError> {
         let (count, refs_start) = self.decode_size(pos, count_nibble)?;
 
-        if refs_start + count * 2 * self.object_ref_size > self.data.len() {
-            return Err(PlistDecodeError::BufferTooSmall {
-                needed: refs_start + count * 2 * self.object_ref_size,
-                have: self.data.len(),
-            });
-        }
+        ensure_len(
+            checked_add(
+                refs_start,
+                checked_mul(checked_mul(count, 2)?, self.object_ref_size)?,
+            )?,
+            self.data.len(),
+        )?;
 
         let mut dict = HashMap::with_capacity(count);
 

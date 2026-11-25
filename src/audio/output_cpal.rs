@@ -98,7 +98,7 @@ mod implementation {
             err_fn: E,
         ) -> Result<Box<dyn StreamTrait>, AudioOutputError>
         where
-            E: Fn(cpal::StreamError) + Send + 'static + Copy,
+            E: Fn(cpal::Error) + Send + 'static + Copy,
         {
             let StreamContext {
                 device,
@@ -112,7 +112,7 @@ mod implementation {
                 SampleFormat::I16 => {
                     let stream = device
                         .build_output_stream(
-                            &config,
+                            config,
                             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                                 let bytes: &mut [u8] = unsafe {
                                     std::slice::from_raw_parts_mut(
@@ -148,7 +148,7 @@ mod implementation {
                 SampleFormat::F32 => {
                     let stream = device
                         .build_output_stream(
-                            &config,
+                            config,
                             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                                 let bytes: &mut [u8] = unsafe {
                                     std::slice::from_raw_parts_mut(
@@ -199,10 +199,11 @@ mod implementation {
 
     impl AudioOutput for CpalOutput {
         fn enumerate_devices(&self) -> Result<Vec<AudioDevice>, AudioOutputError> {
-            let default_name = self
-                .host
-                .default_output_device()
-                .map(|d| d.name().unwrap_or_default());
+            let default_name = self.host.default_output_device().map(|d| {
+                d.description()
+                    .map(|d| d.name().to_string())
+                    .unwrap_or_default()
+            });
 
             let devices = self
                 .host
@@ -211,7 +212,9 @@ mod implementation {
 
             let mut result = Vec::new();
             for device in devices {
-                let name = device.name().unwrap_or_else(|_| "Unknown".to_string());
+                let name = device
+                    .description()
+                    .map_or_else(|_| "Unknown".to_string(), |d| d.name().to_string());
                 let is_default = default_name.as_ref() == Some(&name);
 
                 // Get supported configs
@@ -221,10 +224,10 @@ mod implementation {
                 if let Ok(configs) = device.supported_output_configs() {
                     for config in configs {
                         // Add min and max sample rates
-                        if let Some(rate) = SampleRate::from_hz(config.min_sample_rate().0) {
+                        if let Some(rate) = SampleRate::from_hz(config.min_sample_rate()) {
                             supported_rates.push(rate);
                         }
-                        if let Some(rate) = SampleRate::from_hz(config.max_sample_rate().0) {
+                        if let Some(rate) = SampleRate::from_hz(config.max_sample_rate()) {
                             supported_rates.push(rate);
                         }
                         if let Ok(channels) = u8::try_from(config.channels()) {
@@ -256,7 +259,9 @@ mod implementation {
                 .default_output_device()
                 .ok_or_else(|| AudioOutputError::DeviceNotFound("No default device".into()))?;
 
-            let name = device.name().unwrap_or_else(|_| "Default".to_string());
+            let name = device
+                .description()
+                .map_or_else(|_| "Default".to_string(), |d| d.name().to_string());
 
             Ok(AudioDevice {
                 id: name.clone(),
@@ -276,7 +281,7 @@ mod implementation {
                 self.host
                     .output_devices()
                     .map_err(|e| AudioOutputError::DeviceError(e.to_string()))?
-                    .find(|d| d.name().ok().as_deref() == Some(id))
+                    .find(|d| d.description().is_ok_and(|desc| desc.name() == id))
                     .ok_or_else(|| AudioOutputError::DeviceNotFound(id.to_string()))?
             } else {
                 self.host
@@ -313,7 +318,7 @@ mod implementation {
             // Configure stream
             let config = cpal::StreamConfig {
                 channels: u16::from(format.channels.channels()),
-                sample_rate: cpal::SampleRate(format.sample_rate.as_u32()),
+                sample_rate: format.sample_rate.as_u32(),
                 buffer_size: cpal::BufferSize::Default,
             };
 

@@ -123,7 +123,7 @@ fn test_spsc_stress() {
 
 #[test]
 fn test_spsc_randomized_stress() {
-    use rand::Rng;
+    use rand::RngExt;
 
     let capacity = 1024 * 64; // 64KB
     let buffer = Arc::new(AudioRingBuffer::new(capacity));
@@ -133,13 +133,13 @@ fn test_spsc_randomized_stress() {
     let total_bytes = 1024 * 1024 * 50;
 
     let writer_handle = thread::spawn(move || {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut written_total = 0;
         let mut val: u8 = 0;
 
         while written_total < total_bytes {
             // Randomize write size between 1 and 4096
-            let write_size = rng.gen_range(1..=4096);
+            let write_size = rng.random_range(1..=4096);
             let size = write_size.min(total_bytes - written_total);
 
             // Generate data
@@ -163,14 +163,14 @@ fn test_spsc_randomized_stress() {
     });
 
     let reader_handle = thread::spawn(move || {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut read_total = 0;
         let mut temp_buf = vec![0u8; 8192];
         let mut expected_val: u8 = 0;
 
         while read_total < total_bytes {
             // Randomize read size
-            let read_size = rng.gen_range(1..=temp_buf.len());
+            let read_size = rng.random_range(1..=temp_buf.len());
 
             let n = buffer_reader.read(&mut temp_buf[..read_size]);
             if n > 0 {

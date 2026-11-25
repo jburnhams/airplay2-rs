@@ -72,17 +72,17 @@ impl RaopRtspSession {
     /// Create a new RAOP session
     #[must_use]
     pub fn new(server_addr: &str, server_port: u16) -> Self {
-        use rand::Rng;
+        use rand::RngExt;
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         Self {
             state: RaopSessionState::Init,
             cseq: 0,
             session_id: None,
-            client_instance: format!("{:016X}", rng.r#gen::<u64>()),
-            dacp_id: format!("{:016X}", rng.r#gen::<u64>()),
-            active_remote: rng.r#gen::<u32>().to_string(),
+            client_instance: format!("{:016X}", rng.random::<u64>()),
+            dacp_id: format!("{:016X}", rng.random::<u64>()),
+            active_remote: rng.random::<u32>().to_string(),
             server_addr: server_addr.to_string(),
             server_port,
             authenticator: RaopAuthenticator::new(),

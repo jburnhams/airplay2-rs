@@ -930,8 +930,8 @@ impl ConnectionManager {
         let ek = self.encryption_key().await.unwrap_or([0u8; 32]);
 
         let eiv = {
-            use rand::RngCore;
-            let mut rng = rand::thread_rng();
+            use rand::Rng;
+            let mut rng = rand::rng();
             let mut iv = [0u8; 16];
             rng.fill_bytes(&mut iv);
             iv
@@ -1031,7 +1031,8 @@ impl ConnectionManager {
                     message: "No RTSP session".to_string(),
                     current_state: "None".to_string(),
                 })?;
-            // Per airplay2-homepod.md, SETUP #1 plist example doesn't show Transport header
+            // Unverified (from deleted LLM-written notes): SETUP #1 plist example doesn't show
+            // Transport header
             session.setup_session_request(&setup_plist_step1, None)
         };
         let response_step1 = self.send_rtsp_request(&setup_req_step1).await?;

@@ -1,6 +1,5 @@
 use aes::Aes128;
-use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockEncrypt, KeyInit};
+use aes::cipher::{BlockCipherEncrypt, KeyInit};
 
 use super::{CryptoError, lengths};
 
@@ -33,8 +32,10 @@ impl Aes128Ctr {
             });
         }
 
-        let key_generic = GenericArray::from_slice(key);
-        let cipher = Aes128::new(key_generic);
+        let cipher = Aes128::new_from_slice(key).map_err(|_| CryptoError::InvalidKeyLength {
+            expected: lengths::AES_128_KEY,
+            actual: key.len(),
+        })?;
 
         Ok(Self::new_internal(cipher, iv))
     }
@@ -83,8 +84,7 @@ impl Aes128Ctr {
         const CHUNK_SIZE: usize = PAR_BLOCKS * BLOCK_SIZE;
 
         if data.len() >= CHUNK_SIZE {
-            let mut blocks: [GenericArray<u8, aes::cipher::consts::U16>; PAR_BLOCKS] =
-                [GenericArray::default(); PAR_BLOCKS];
+            let mut blocks: [aes::Block; PAR_BLOCKS] = [aes::Block::default(); PAR_BLOCKS];
 
             while data.len() >= CHUNK_SIZE {
                 // Fill blocks with current counters
@@ -114,7 +114,7 @@ impl Aes128Ctr {
         while !data.is_empty() {
             // Refill buffer
             self.keystream_buffer.copy_from_slice(&self.counter_block);
-            let block = GenericArray::from_mut_slice(&mut self.keystream_buffer);
+            let block: &mut aes::Block = (&mut self.keystream_buffer).into();
             self.cipher.encrypt_block(block);
             self.increment_counter();
             self.keystream_pos = 0;
@@ -159,7 +159,7 @@ impl Aes128Ctr {
         if byte_offset > 0 {
             // Generate the block for the current position
             self.keystream_buffer.copy_from_slice(&self.counter_block);
-            let block = GenericArray::from_mut_slice(&mut self.keystream_buffer);
+            let block: &mut aes::Block = (&mut self.keystream_buffer).into();
             self.cipher.encrypt_block(block);
 
             // Increment counter for next block (prepare for next iteration)

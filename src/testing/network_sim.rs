@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use rand::Rng;
+use rand::RngExt;
 
 /// Network condition simulator
 #[derive(Clone, Debug)]
@@ -79,14 +79,14 @@ impl NetworkSimulator {
         if self.loss_rate <= 0.0 {
             return false;
         }
-        rand::thread_rng().gen_bool(self.loss_rate)
+        rand::rng().random_bool(self.loss_rate)
     }
 
     /// Get delay for this packet
     #[must_use]
     pub fn get_delay(&self) -> Duration {
         let jitter: u32 = if self.jitter_ms > 0 {
-            rand::thread_rng().gen_range(0..self.jitter_ms)
+            rand::rng().random_range(0..self.jitter_ms)
         } else {
             0
         };
@@ -100,6 +100,6 @@ impl NetworkSimulator {
         if self.reorder_rate <= 0.0 {
             return false;
         }
-        rand::thread_rng().gen_bool(self.reorder_rate)
+        rand::rng().random_bool(self.reorder_rate)
     }
 }

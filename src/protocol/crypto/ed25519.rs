@@ -10,8 +10,7 @@ pub struct Ed25519KeyPair {
 impl Ed25519KeyPair {
     /// Generate a new random key pair
     pub fn generate() -> Self {
-        use rand::rngs::OsRng;
-        let signing_key = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rng());
         Self { signing_key }
     }
 

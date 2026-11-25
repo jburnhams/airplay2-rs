@@ -1,6 +1,5 @@
-use num_bigint::{BigUint, RandomBits};
+use num_bigint::BigUint;
 use num_traits::One;
-use rand::Rng;
 use sha2::{Digest, Sha512};
 use zeroize::Zeroize;
 
@@ -80,8 +79,7 @@ impl SrpClient {
         // k = H(N, pad(g))
         let k = compute_k(&params);
 
-        let mut rng = rand::thread_rng();
-        let a: BigUint = rng.sample(RandomBits::new(256));
+        let a = BigUint::from_bytes_be(&rand::random::<[u8; 32]>());
         let a = a % &params.n;
 
         // A = g^a % n
@@ -214,8 +212,7 @@ impl SrpServer {
         let k = compute_k(&params);
         let v = BigUint::from_bytes_be(verifier);
 
-        let mut rng = rand::thread_rng();
-        let b: BigUint = rng.sample(RandomBits::new(256));
+        let b = BigUint::from_bytes_be(&rand::random::<[u8; 32]>());
         let b = b % &params.n;
 
         // B = k*v + g^b % N

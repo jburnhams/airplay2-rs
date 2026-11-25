@@ -71,7 +71,7 @@ fn test_process_request_unknown_command() {
 fn test_service_config() {
     let config = DacpServiceConfig::new();
 
-    assert!(!config.dacp_id.is_empty());
-    assert!(!config.active_remote.is_empty());
+    assert_ne!(config.dacp_id, "");
+    assert_ne!(config.active_remote, "");
     assert!(config.instance_name().starts_with("iTunes_Ctrl_"));
 }

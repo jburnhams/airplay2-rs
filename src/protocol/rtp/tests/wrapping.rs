@@ -13,7 +13,7 @@ fn test_wrap_basic() {
     assert!(missing.is_empty(), "Should handle wrap from 65535 to 0");
 
     let missing = detector.process(1);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn test_wrap_reorder_future_packet() {
     // (detector only tracks gaps forward).
     // The jitter buffer would handle the actual storage/retrieval.
     let missing = detector.process(0);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn test_multiple_wraps_simulation() {
     // Simulate 3 full wraps
     for _ in 0..(65536 * 3) {
         let missing = detector.process(current);
-        assert!(missing.is_empty());
+        assert_eq!(missing, [] as [u16; 0]);
         current = current.wrapping_add(1);
     }
 }
@@ -119,5 +119,5 @@ fn test_max_gap_limit() {
     // Jump to 101 (gap of 100 packets: 1..100)
     // Should be ignored/resynced without reporting loss
     let missing = detector.process(101);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 }

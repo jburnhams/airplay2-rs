@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use rand::Rng;
+use rand::RngExt;
 use tokio::sync::RwLock;
 
 use crate::control::volume::Volume;
@@ -17,7 +17,7 @@ impl GroupId {
     /// Create a new random group ID
     #[must_use]
     pub fn new() -> Self {
-        let id: u128 = rand::thread_rng().r#gen();
+        let id: u128 = rand::rng().random();
         Self(format!("{id:032X}"))
     }
 

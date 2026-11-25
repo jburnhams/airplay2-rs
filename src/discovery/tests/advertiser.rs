@@ -161,7 +161,7 @@ fn test_raop_capabilities_default() {
 #[test]
 fn test_txt_record_builder_empty() {
     let mut txt = TxtRecordBuilder::new();
-    assert!(txt.build().is_empty());
+    assert_eq!(txt.build(), [] as [std::string::String; 0]);
     assert!(txt.build_map().is_empty());
 
     txt.add("key", "value");

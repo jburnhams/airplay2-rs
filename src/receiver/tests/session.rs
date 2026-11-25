@@ -12,7 +12,7 @@ fn test_session_initial_state() {
     assert_eq!(session.state(), SessionState::Connected);
     assert_eq!(session.client_addr(), test_addr());
     assert!((session.volume() - 0.0).abs() < f32::EPSILON);
-    assert!(!session.id().is_empty());
+    assert_ne!(session.id(), "");
 }
 
 #[test]

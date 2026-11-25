@@ -140,8 +140,8 @@ fn test_setup_phase2_parsing() {
 fn test_pairing_tlv_format() {
     // Build M1 message
     let m1 = TlvEncoder::new()
-        .add_state(1)   // State = 1
-        .add_byte(TlvType::Method, 0)   // Method = 0 (pair-setup)
+        .add_state(1) // State = 1
+        .add_byte(TlvType::Method, 0) // Method = 0 (pair-setup)
         .build();
 
     // Parse back

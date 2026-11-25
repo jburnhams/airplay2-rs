@@ -34,3 +34,8 @@ pair_ap/
 debug*.txt
 
 __pycache__
+# Audio files (never commit music)
+*.mp3
+*.m4a
+*.flac
+*.wav
