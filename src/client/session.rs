@@ -437,6 +437,7 @@ impl AirPlaySession for RaopSessionImpl {
 pub struct AirPlay2SessionImpl {
     client: AirPlayClient,
     device: AirPlayDevice,
+    connected: bool,
 }
 
 impl AirPlay2SessionImpl {
@@ -446,6 +447,7 @@ impl AirPlay2SessionImpl {
         Self {
             client: AirPlayClient::new(config),
             device,
+            connected: false,
         }
     }
 }
@@ -453,28 +455,20 @@ impl AirPlay2SessionImpl {
 #[async_trait]
 impl AirPlaySession for AirPlay2SessionImpl {
     async fn connect(&mut self) -> Result<(), AirPlayError> {
-        self.client.connect(&self.device).await
+        self.client.connect(&self.device).await?;
+        self.connected = true;
+        Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), AirPlayError> {
+        self.connected = false;
         self.client.disconnect().await
     }
 
     fn is_connected(&self) -> bool {
-        // AirPlayClient doesn't expose synchronous is_connected easily without async
-        // But the method in AirPlayClient is async.
-        // The trait method is synchronous.
-        // We might need to change the trait or use a workaround.
-        // Since AirPlayClient uses Arc<StateContainer>, we can't easily peek synchronously if we
-        // need lock. But wait, AirPlayClient::is_connected() is async.
-        // The trait defines `fn is_connected(&self) -> bool;` (sync).
-
-        // As a workaround, we can't block_on here if we are in async context.
-        // We probably should assume true if we successfully connected, or track state locally.
-        // Let's track state locally or relax the trait requirement (change to async).
-        // The guide defined it as sync: `fn is_connected(&self) -> bool;`.
-        // So I should track it.
-        true // simplified
+        // Tracked locally because the trait method is sync and AirPlayClient's is async.
+        // This does not notice a connection the device drops on its own.
+        self.connected
     }
 
     async fn play(&mut self) -> Result<(), AirPlayError> {

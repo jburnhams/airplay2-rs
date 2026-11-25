@@ -1,6 +1,10 @@
 # AirPlay 2 Test Captures
 
-This directory contains packet captures for testing. To create new captures:
+**The two `.hex` files here are synthetic, not captures.** They were hand-built with this
+crate's own RTSP/TLV encoders, so they only check that the receiver accepts what our own
+sender code produces. Replace them with real captures from an Apple sender when available.
+
+To create real captures:
 
 ## Capturing from iOS/macOS
 
