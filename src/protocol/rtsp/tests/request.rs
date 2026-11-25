@@ -63,7 +63,7 @@ fn test_request_builder_defaults() {
     assert_eq!(request.method, Method::Options);
     assert_eq!(request.uri, "*");
     assert!(request.headers.is_empty());
-    assert!(request.body.is_empty());
+    assert_eq!(request.body, [] as [u8; 0]);
 }
 
 #[test]

@@ -59,9 +59,8 @@ fn test_adjustment_synced() {
 
     if let Some(PlaybackCommand::StartAt { .. }) = cmd {
         panic!("Should not require hard sync with 0 offset");
-    } else {
-        // Either None (in sync) or AdjustRate (small drift) is acceptable
     }
+    // Either None (in sync) or AdjustRate (small drift) is acceptable
 }
 
 #[test]

@@ -249,6 +249,7 @@ impl MockAp2Sender {
     /// Returns `MockSenderError` on protocol or connection failures.
     #[allow(
         clippy::unused_async,
+        clippy::unused_async_trait_impl,
         reason = "Mock signature to match real implementations"
     )]
     pub async fn send_audio(

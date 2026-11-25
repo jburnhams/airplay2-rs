@@ -47,7 +47,7 @@ fn test_password_only_mode() {
     // Should return 200 OK (M2)
     let response = parse_response(&result.response);
     assert_eq!(response.status, StatusCode::OK);
-    assert!(!response.body.is_empty());
+    assert_ne!(response.body, [] as [u8; 0]);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_homekit_only_mode() {
 
     let response = parse_response(&result.response);
     assert_eq!(response.status, StatusCode::OK);
-    assert!(!response.body.is_empty());
+    assert_ne!(response.body, [] as [u8; 0]);
 }
 
 #[test]
@@ -177,5 +177,5 @@ fn test_both_modes_fallback() {
 
     let response = parse_response(&result.response);
     assert_eq!(response.status, StatusCode::OK);
-    assert!(!response.body.is_empty());
+    assert_ne!(response.body, [] as [u8; 0]);
 }

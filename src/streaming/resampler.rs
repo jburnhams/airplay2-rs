@@ -162,8 +162,8 @@ impl ResamplingSource {
         let channels = self.input_format.channels.channels() as usize;
 
         // Clear input planar buffers
-        for ch in 0..channels {
-            self.input_planar[ch].clear();
+        for buf in self.input_planar.iter_mut().take(channels) {
+            buf.clear();
         }
 
         match self.input_format.sample_format {
@@ -218,8 +218,8 @@ impl ResamplingSource {
         let mut phase = self.input_phase;
 
         // Clear output planar buffers
-        for ch in 0..channels {
-            self.output_planar[ch].clear();
+        for buf in self.output_planar.iter_mut().take(channels) {
+            buf.clear();
         }
 
         // Process while phase < 0 (using last_samples)

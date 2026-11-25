@@ -69,7 +69,7 @@ fn test_packet_decode_empty_payload() {
         0x80, 0x60, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
     let packet = RtpPacket::decode(&data).unwrap();
-    assert!(packet.payload.is_empty());
+    assert_eq!(packet.payload, [] as [u8; 0]);
 }
 
 #[test]

@@ -71,7 +71,7 @@ fn test_parse_encryption_params() {
     assert!(enc.is_some());
 
     let enc = enc.unwrap();
-    assert!(!enc.encrypted_aes_key.is_empty());
+    assert_ne!(enc.encrypted_aes_key, [] as [u8; 0]);
     assert_eq!(enc.aes_iv.len(), 16);
 }
 

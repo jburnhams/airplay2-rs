@@ -59,7 +59,7 @@ fn test_authenticator_state_machine() {
 
     // Get challenge header
     let header = auth.challenge_header();
-    assert!(!header.is_empty());
+    assert_ne!(header, "");
 
     auth.mark_sent();
     assert_eq!(auth.state(), AuthState::ChallengeSent);

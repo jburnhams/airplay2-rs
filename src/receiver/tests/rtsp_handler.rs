@@ -224,7 +224,7 @@ fn test_get_parameter_empty() {
     let result = handle_request(&request, &session, None);
 
     assert_eq!(result.response.status, StatusCode::OK);
-    assert!(result.response.body.is_empty());
+    assert_eq!(result.response.body, [] as [u8; 0]);
 }
 
 #[test]

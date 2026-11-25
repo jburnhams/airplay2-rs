@@ -85,13 +85,11 @@ dependencies = [
  "sha1",
  "sha2",
  "socket2",
- "srp",
  "symphonia",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tokio-test",
- "tokio-util",
  "tracing",
  "tracing-subscriber",
  "x25519-dalek",
@@ -522,7 +520,6 @@ checksum = "914c195c4d7fbc5ed7f88d14cbf85914d5c664967658d43404b263913a477e82"
 dependencies = [
  "cpubits",
  "ctutils",
- "getrandom 0.4.3",
  "num-traits",
  "rand_core 0.10.1",
  "serdect",
@@ -1972,18 +1969,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "srp"
-version = "0.7.0-rc.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b5f622c2d21b826b3501f4c620ccc4696e4a09a6b51727fcb21036dec87c101"
-dependencies = [
- "crypto-bigint",
- "crypto-common",
- "digest",
- "subtle",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2314,20 +2299,6 @@ dependencies = [
  "futures-core",
  "tokio",
  "tokio-stream",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.7.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e464cf451ba96ebfc6f9b6542f17ee8b8956e33f1e40d9690624e59d7a7f8a4b"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
- "libc",
- "pin-project-lite",
- "tokio",
 ]
 
 [[package]]

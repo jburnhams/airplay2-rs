@@ -13,7 +13,7 @@ readme = "README.md"
 
 [features]
 default = ["tokio-runtime", "raop"]
-tokio-runtime = ["tokio", "tokio-util"]
+tokio-runtime = ["tokio"]
 raop = ["rsa", "sha1"]
 receiver = []
 audio-coreaudio = ["dep:coreaudio-rs"]
@@ -28,7 +28,6 @@ bytes = "1.12.2"
 
 # Async
 tokio = { version = "1.54", features = ["net", "sync", "time", "rt", "macros", "fs"], optional = true }
-tokio-util = { version = "0.7", features = ["codec"], optional = true }
 async-trait = "0.1"
 futures = "0.3"
 socket2 = { version = "0.6", features = ["all"] }
@@ -47,7 +46,6 @@ hostname = "0.4"
 rsa = { version = "0.10.0-rc.19", optional = true }
 sha1 = { version = "0.11.0", features = ["oid"], optional = true }
 base64 = "0.23"
-srp = "0.7.0-rc.3"
 num-bigint = "0.5"
 num-traits = "0.2"
 byteorder = "1.5"

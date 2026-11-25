@@ -297,7 +297,7 @@ fn test_track_info_builder() {
 #[test]
 fn test_track_info_default() {
     let track = TrackInfo::default();
-    assert!(track.url.is_empty());
+    assert_eq!(track.url, "");
     assert!(track.duration_secs.is_none());
 }
 

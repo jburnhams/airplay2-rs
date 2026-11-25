@@ -138,13 +138,13 @@ fn test_loss_detector_sequential() {
     let mut detector = PacketLossDetector::new();
 
     let missing = detector.process(100);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     let missing = detector.process(101);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     let missing = detector.process(102);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn test_loss_detector_wrapping() {
 
     // Wrap to 0
     let missing = detector.process(0);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     // Gap across wrap: 65535 -> (miss 0) -> 1
     // Reset
@@ -190,13 +190,13 @@ fn test_loss_detector_reorder() {
 
     // Receive old packet, should be ignored/empty
     let missing = detector.process(99);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     // Receive next expected packet (101)
     // If bug exists, expected_seq was reset to 100 by the reordered packet,
     // so it would report 100 as missing here.
     let missing = detector.process(101);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 }
 
 #[test]
@@ -209,7 +209,7 @@ fn test_loss_detector_large_gap() {
     let missing = detector.process(301);
 
     // Should NOT report 200 missing packets (threshold is 100)
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     // But should update expected to 302
     let missing = detector.process(303);

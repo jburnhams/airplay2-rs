@@ -19,7 +19,7 @@ fn test_decode_simple_response() {
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(response.reason, "OK");
     assert_eq!(response.cseq(), Some(1));
-    assert!(response.body.is_empty());
+    assert_eq!(response.body, [] as [u8; 0]);
 }
 
 #[test]

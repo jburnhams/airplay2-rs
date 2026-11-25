@@ -175,7 +175,7 @@ pub fn convert_channels_into(
             }
             (ChannelConfig::Stereo, ChannelConfig::Mono) => {
                 // Stereo to mono: average
-                output[out_start] = (input[in_start] + input[in_start + 1]) * 0.5;
+                output[out_start] = f32::midpoint(input[in_start], input[in_start + 1]);
             }
             _ => {
                 // Generic: copy what we can, zero the rest

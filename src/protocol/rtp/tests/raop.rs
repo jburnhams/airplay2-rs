@@ -123,11 +123,11 @@ fn test_loss_detector() {
 
     // First packet
     let missing = detector.process(100);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     // Sequential
     let missing = detector.process(101);
-    assert!(missing.is_empty());
+    assert_eq!(missing, [] as [u16; 0]);
 
     // Gap (102 missing)
     let missing = detector.process(103);
