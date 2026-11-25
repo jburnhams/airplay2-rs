@@ -1,0 +1,51 @@
+[package]
+name = "airplay2-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+airplay2 = { path = ".." }
+alac-encoder = "0.3"
+arbitrary = { version = "1", features = ["derive"] }
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"
+
+# Separate workspace: the C oracles need system libraries (libplist, OpenSSL)
+# that the main crate's CI does not install.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "plist_vs_libplist"
+path = "fuzz_targets/plist_vs_libplist.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "alac_vs_shairport"
+path = "fuzz_targets/alac_vs_shairport.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tlv8_vs_pair_ap"
+path = "fuzz_targets/tlv8_vs_pair_ap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "raop_audio_vs_shairport"
+path = "fuzz_targets/raop_audio_vs_shairport.rs"
+test = false
+doc = false
+bench = false
